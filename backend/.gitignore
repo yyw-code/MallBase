@@ -1,7 +1,6 @@
 *.log
 .env
 composer.phar
-composer.lock
 .DS_Store
 Thumbs.db
 /.idea
@@ -10,3 +9,4 @@ Thumbs.db
 /.settings
 /.buildpath
 /.project
+public/docs
