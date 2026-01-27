@@ -53,7 +53,7 @@ class CronManager
                 'worker_id' => $workerId,
             ]);
 
-        $log->info('CronManager boot');
+        $log->success('CronManager boot');
 
         foreach (config('cron.tasks', []) as $taskClass) {
             try {

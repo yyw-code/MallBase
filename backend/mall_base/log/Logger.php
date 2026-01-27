@@ -7,39 +7,8 @@ use think\facade\App;
 use Throwable;
 
 /**
- * 统一日志记录器
  *
- * 功能说明：
- * - 统一日志格式，解决日志乱七八糟、格式不统一的问题
- * - 自动根据 APP_DEBUG 环境调整日志级别和详细程度
- * - 自动集成 Trace ID、协程 ID 等上下文信息
- * - 支持不同模块的日志分类
- * - 提供友好的日志输出格式
- * - 支持协程级别的实例缓存，提升性能
- *
- * 使用场景：
- * - 队列任务日志（BaseJob）
- * - 驱动操作日志（BaseDriver）
- * - 业务逻辑日志
- * - 异常错误日志
- *
- * 设计理念：
- * - 统一的日志格式，便于查看和分析
- * - 开发环境显示详细信息，生产环境只记录关键信息
- * - 自动收集上下文信息，减少手动记录的工作量
- * - 支持结构化日志，便于日志分析工具处理
- * - 协程环境下缓存实例，避免重复创建，提升性能
- * - 高性能优化：避免 __callStatic，减少 array_merge，完整重置状态
- *
- * 日志格式示例：
- * ```
- * [2024-01-25 03:00:00] [INFO] [Job] [SendEmailJob] 开始发送邮件到: user@example.com
- * ├─ Trace ID: trace_65b0e8f0a1b2c
- * ├─ 协程 ID: 1
- * └─ 数据: {"email":"user@example.com"}
- * ```
- *
- *
+ * @method static void success(string|\Stringable $message, array $context = []) 记录成功信息
  * @method static void emergency(string|\Stringable $message, array $context = []) 记录emergency信息
  * @method static void alert(string|\Stringable $message, array $context = []) 记录警报信息
  * @method static void critical(string|\Stringable $message, array $context = []) 记录紧急情况
@@ -233,16 +202,95 @@ class Logger
         return $this;
     }
 
+
     /**
-     * 记录失败日志（内部方法）
+     * 记录emergency日志
      *
-     * @param string|\Stringable $message
+     * @param string|\Stringable $message 日志消息
      * @param array<string, mixed> $context 上下文数据
      * @return self
      */
-    public function fail(string|\Stringable $message, array $context = []): self
+    public function emergency(string|\Stringable $message, array $context = []): self
     {
-        $this->log('fail', $message, $context);
+        $this->log('emergency', $message, $context);
+        return $this;
+    }
+
+    /**
+     * 记录alert日志
+     *
+     * @param string|\Stringable $message 日志消息
+     * @param array<string, mixed> $context 上下文数据
+     * @return self
+     */
+    public function alert(string|\Stringable $message, array $context = []): self
+    {
+        $this->log('alert', $message, $context);
+        return $this;
+    }
+
+    /**
+     * 记录critical日志
+     *
+     * @param string|\Stringable $message 日志消息
+     * @param array<string, mixed> $context 上下文数据
+     * @return self
+     */
+    public function critical(string|\Stringable $message, array $context = []): self
+    {
+        $this->log('critical', $message, $context);
+        return $this;
+    }
+
+    /**
+     * 记录错误日志（内部方法）
+     *
+     * @param string|\Stringable $message 日志消息
+     * @param array<string, mixed> $context 上下文数据
+     * @return self
+     */
+    public function error(string|\Stringable $message, array $context = []): self
+    {
+        $this->log('error', $message, $context);
+        return $this;
+    }
+
+    /**
+     * 记录warning日志
+     *
+     * @param string|\Stringable $message 日志消息
+     * @param array<string, mixed> $context 上下文数据
+     * @return self
+     */
+    public function warning(string|\Stringable $message, array $context = []): self
+    {
+        $this->log('warning', $message, $context);
+        return $this;
+    }
+
+    /**
+     * 记录notice日志
+     *
+     * @param string|\Stringable $message 日志消息
+     * @param array<string, mixed> $context 上下文数据
+     * @return self
+     */
+    public function notice(string|\Stringable $message, array $context = []): self
+    {
+        $this->log('notice', $message, $context);
+        return $this;
+    }
+
+    /**
+     * 记录信息日志（实例方法，支持链式调用）
+     *
+     * @param string|\Stringable $message 日志消息
+     * @param array<string, mixed> $context 上下文数据
+     * @return self
+     */
+    public function info(string|\Stringable $message, array $context = []): self
+    {
+        $this->log('info', $message, $context);
         return $this;
     }
 
@@ -262,42 +310,15 @@ class Logger
     }
 
     /**
-     * 记录信息日志（实例方法，支持链式调用）
+     * 记录sql日志
      *
      * @param string|\Stringable $message 日志消息
      * @param array<string, mixed> $context 上下文数据
      * @return self
      */
-    public function info(string|\Stringable $message, array $context = []): self
+    public function sql(string|\Stringable $message, array $context = []): self
     {
-        $this->log('info', $message, $context);
-        return $this;
-    }
-
-
-    /**
-     * 记录警告日志（实例方法，支持链式调用）
-     *
-     * @param string|\Stringable $message
-     * @param array<string, mixed> $context 上下文数据
-     * @return self
-     */
-    public function warning(string|\Stringable $message, array $context = []): self
-    {
-        $this->log('warning', $message, $context);
-        return $this;
-    }
-
-    /**
-     * 记录错误日志（内部方法）
-     *
-     * @param string|\Stringable $message 日志消息
-     * @param array<string, mixed> $context 上下文数据
-     * @return self
-     */
-    public function error(string|\Stringable $message, array $context = []): self
-    {
-        $this->log('error', $message, $context);
+        $this->log('sql', $message, $context);
         return $this;
     }
 
@@ -489,6 +510,7 @@ class Logger
             Log::channel($this->channel)->$level($logMessage, $allContext);
         } else {
             Log::$level($logMessage, $allContext);
+            Log::error($message);
         }
     }
 
@@ -511,7 +533,7 @@ class Logger
         // 始终显示 data（业务数据）
         if (!empty($this->data)) {
             $jsonData = json_encode($this->data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-            $lines[] = sprintf('└─ 数据: %s', $jsonData);
+            $lines[] = sprintf('├─ 数据: %s', $jsonData);
         }
 
         // 调试模式下显示详细信息
