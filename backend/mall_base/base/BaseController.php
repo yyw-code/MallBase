@@ -2,7 +2,6 @@
 
 namespace mall_base\base;
 
-use mall_base\ServiceFactory;
 use think\facade\Request;
 use think\Response;
 
@@ -46,8 +45,6 @@ use think\Response;
  **/
 abstract class BaseController
 {
-    protected array $services = [];
-
     /**
      * 构造函数
      */
@@ -55,55 +52,7 @@ abstract class BaseController
     {
     }
 
-    /**
-     * 获取服务实例（延迟加载）
-     *
-     * 使用 ServiceFactory 创建服务实例，避免直接 new
-     *
-     * @param string $serviceName 服务类名
-     * @return BaseService 服务实例
-     */
-    protected function getService(string $serviceName): BaseService
-    {
-        if (!isset($this->services[$serviceName])) {
-            $this->services[$serviceName] = ServiceFactory::create($serviceName);
-        }
 
-        return $this->services[$serviceName];
-    }
-
-    /**
-     * 魔术方法：自动获取 Service 实例
-     *
-     * 当访问不存在的属性时，自动尝试创建对应的 Service 实例
-     *
-     * 属性命名规则：service 类名转驼峰
-     * - UserService -> $this->userService
-     * - OrderService -> $this->orderService
-     *
-     * @param string $name 属性名
-     * @return mixed
-     * @throws \Exception
-     */
-    public function __get(string $name)
-    {
-        if (str_ends_with($name, 'Service')) {
-            $className = str_replace('_', '', ucwords($name, '_'));
-            $serviceName = '\\app\\service\\' . $className;
-
-            if (!class_exists($serviceName)) {
-                throw new \Exception("Service 类不存在: {$serviceName}");
-            }
-
-            if (!isset($this->services[$serviceName])) {
-                $this->services[$serviceName] = ServiceFactory::create($serviceName);
-            }
-
-            return $this->services[$serviceName];
-        }
-
-        throw new \Exception("属性不存在: {$name}");
-    }
 
     /**
      * 成功响应

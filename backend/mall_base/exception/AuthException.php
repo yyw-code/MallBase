@@ -2,6 +2,8 @@
 
 namespace mall_base\exception;
 
+use mall_base\base\BaseException;
+
 /**
  * 授权异常类
  * 
@@ -15,7 +17,7 @@ namespace mall_base\exception;
  * throw new AuthException('权限不足', 1004);
  * ```
  */
-class AuthException extends \Exception
+class AuthException extends BaseException
 {
     /** @var int 业务状态码 */
     protected int $statusCode = 1000;

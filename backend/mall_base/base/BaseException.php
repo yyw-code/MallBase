@@ -1,23 +1,25 @@
 <?php
 
-namespace mall_base\exception;
-
-use mall_base\base\BaseException;
+namespace mall_base\base;
 
 /**
- * 业务异常类
+ * 异常基类
  * 
- * 用于业务逻辑中的错误处理，如验证失败、数据不存在等业务层面的异常
+ * 所有自定义异常的基类，提供统一的异常处理接口
  * 默认状态码：400
  * 
  * 使用示例：
  * ```php
- * throw new BusinessException('用户不存在');
- * throw new BusinessException('参数错误', 400);
- * throw new BusinessException('自定义错误', 500);
+ * class CustomException extends BaseException
+ * {
+ *     public function __construct(string $message = '自定义错误', int $statusCode = 400, int $code = 0)
+ *     {
+ *         parent::__construct($message, $statusCode, $code);
+ *     }
+ * }
  * ```
  */
-class BusinessException extends BaseException
+abstract class BaseException extends \Exception
 {
     /** @var int 业务状态码 */
     protected int $statusCode = 400;

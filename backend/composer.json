@@ -34,7 +34,7 @@
     "autoload": {
         "psr-4": {
             "app\\": "app",
-            "open_core\\": "mall_base/"
+            "mall_base\\": "mall_base/"
         },
         "psr-0": {
             "": "extend/"
