@@ -67,7 +67,13 @@ class LogContext
      */
     public static function getCoroutine(): array
     {
-        if (!extension_loaded('swoole') || !Co::exists()) {
+        if (!extension_loaded('swoole')) {
+            return self::getGlobal();
+        }
+        
+        // 新版 Swoole 需要传递协程 ID 给 exists()
+        $cid = Co::getCid();
+        if ($cid <= 0 || !Co::exists($cid)) {
             return self::getGlobal();
         }
 
@@ -83,7 +89,14 @@ class LogContext
      */
     public static function setCoroutine(array $context): void
     {
-        if (!extension_loaded('swoole') || !Co::exists()) {
+        if (!extension_loaded('swoole')) {
+            self::setGlobal($context);
+            return;
+        }
+        
+        // 新版 Swoole 需要传递协程 ID 给 exists()
+        $cid = Co::getCid();
+        if ($cid <= 0 || !Co::exists($cid)) {
             self::setGlobal($context);
             return;
         }
@@ -101,7 +114,14 @@ class LogContext
      */
     public static function addCoroutine(string $key, mixed $value): void
     {
-        if (!extension_loaded('swoole') || !Co::exists()) {
+        if (!extension_loaded('swoole')) {
+            self::addGlobal($key, $value);
+            return;
+        }
+        
+        // 新版 Swoole 需要传递协程 ID 给 exists()
+        $cid = Co::getCid();
+        if ($cid <= 0 || !Co::exists($cid)) {
             self::addGlobal($key, $value);
             return;
         }
@@ -126,17 +146,16 @@ class LogContext
         $context = array_merge($context, self::getGlobal());
 
         // 协程上下文
-        if (extension_loaded('swoole') && Co::exists()) {
-            $context = array_merge($context, self::getCoroutine());
+        if (extension_loaded('swoole')) {
+            $cid = Co::getCid();
+            if ($cid > 0 && Co::exists($cid)) {
+                $context = array_merge($context, self::getCoroutine());
+                $context['coroutine_id'] = $cid;
+            }
         }
 
         // 自动添加 Trace ID
         $context['trace_id'] = Trace::getCoroutineTraceId();
-
-        // 自动添加协程 ID
-        if (extension_loaded('swoole') && Co::exists()) {
-            $context['coroutine_id'] = Co::getCid();
-        }
 
         return $context;
     }
@@ -158,7 +177,13 @@ class LogContext
      */
     public static function clearCoroutine(): void
     {
-        if (extension_loaded('swoole') && Co::exists()) {
+        if (!extension_loaded('swoole')) {
+            return;
+        }
+        
+        // 新版 Swoole 需要传递协程 ID 给 exists()
+        $cid = Co::getCid();
+        if ($cid > 0 && Co::exists($cid)) {
             $context = Co::getContext();
             unset($context['log_context']);
         }

@@ -79,7 +79,14 @@ class Trace
      */
     public static function getCoroutineTraceId(): ?string
     {
-        if (!extension_loaded('swoole') || !Co::exists()) {
+        // 检查是否在协程环境中
+        if (!extension_loaded('swoole')) {
+            return self::id();
+        }
+        
+        // 新版 Swoole 需要传递协程 ID 给 exists()
+        $cid = Co::getCid();
+        if ($cid <= 0 || !Co::exists($cid)) {
             return self::id();
         }
 
@@ -95,7 +102,15 @@ class Trace
      */
     public static function setCoroutineTraceId(string $traceId): void
     {
-        if (extension_loaded('swoole') && Co::exists()) {
+        // 检查是否在协程环境中
+        if (!extension_loaded('swoole')) {
+            self::set($traceId);
+            return;
+        }
+        
+        // 新版 Swoole 需要传递协程 ID 给 exists()
+        $cid = Co::getCid();
+        if ($cid > 0 && Co::exists($cid)) {
             $context = Co::getContext();
             $context['trace_id'] = $traceId;
         } else {
