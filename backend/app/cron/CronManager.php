@@ -34,20 +34,6 @@ class CronManager
             return;
         }
 
-        // 环境限制（可选）
-        $onlyEnv = config('cron.only_env');
-        if ($onlyEnv && app()->env->get('APP_ENV') !== $onlyEnv) {
-            Logger::instance('Cron', static::class)
-                ->withData([
-                    'worker_id' => $workerId,
-                    'current_env' => app()->env->get('APP_ENV'),
-                ])
-                ->info('Cron skipped due to env limit');
-
-            return;
-        }
-
-
         $log = Logger::instance('Cron', static::class)
             ->withData([
                 'worker_id' => $workerId,

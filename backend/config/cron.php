@@ -5,9 +5,6 @@ return [
     // 是否启用 Cron
     'enable' => env('CRON_ENABLE', false),
 
-    // 只在哪些环境启用（可选）
-    'only_env' => env('CRON_ONLY_ENV', ''),
-
     // 只允许哪个 worker 启动
     'only_worker_id' => 0,
 

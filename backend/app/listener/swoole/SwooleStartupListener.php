@@ -1,8 +1,9 @@
 <?php
-declare (strict_types = 1);
+declare (strict_types=1);
 
 namespace app\listener\swoole;
 
+use Composer\InstalledVersions;
 use think\facade\Config;
 
 /**
@@ -14,16 +15,16 @@ class SwooleStartupListener
     {
         $httpConfig = Config::get('swoole.http', []);
         $swooleConfig = Config::get('swoole', []);
-        
+
         // 基本启动信息
-        $environment = app()->isDebug() ? 'Development' : 'Production';
+        $APP_DEBUG = app()->isDebug() ? 'Development' : 'Production';
         $phpVersion = PHP_VERSION;
         $swooleVersion = swoole_version();
-        $thinkphpVersion = \think\App::VERSION;
+        $thinkphpVersion = InstalledVersions::getPrettyVersion('topthink/framework');
         $workerNum = $httpConfig['worker_num'] ?? swoole_cpu_num();
         $host = $httpConfig['host'] ?? '0.0.0.0';
         $port = $httpConfig['port'] ?? 8080;
-        
+
         // 功能开关
         $features = [];
         if ($httpConfig['enable'] ?? false) {
@@ -38,7 +39,7 @@ class SwooleStartupListener
         if ($swooleConfig['queue']['enable'] ?? false) {
             $features[] = 'Queue Worker';
         }
-        
+
         // 连接池配置
         $poolConfig = $swooleConfig['pool'] ?? [];
         $pools = [];
@@ -48,31 +49,31 @@ class SwooleStartupListener
         if (!empty($poolConfig['cache']['enable'] ?? false)) {
             $pools[] = sprintf('Cache (max_active=%d)', $poolConfig['cache']['max_active'] ?? 3);
         }
-        
+
         // 其他配置
         $hotUpdate = $swooleConfig['hot_update']['enable'] ?? false;
         $ipcType = $swooleConfig['ipc']['type'] ?? 'unix_socket';
-        
+
         // 输出启动信息
         echo "\n";
         echo "=========================================\n";
         echo "     Swoole 服务启动成功\n";
         echo "=========================================\n";
-        echo "环境: {$environment}\n";
+        echo "APP_DEBUG: {$APP_DEBUG}\n";
         echo "PHP 版本: {$phpVersion}\n";
         echo "Swoole 版本: {$swooleVersion}\n";
         echo "ThinkPHP 版本: {$thinkphpVersion}\n";
         echo "Worker 数量: {$workerNum}\n";
         echo "监听地址: {$host}:{$port}\n";
-        
+
         if (!empty($features)) {
             echo "已启用功能: " . implode(', ', $features) . "\n";
         }
-        
+
         if (!empty($pools)) {
             echo "连接池: " . implode(', ', $pools) . "\n";
         }
-        
+
         echo "热更新: " . ($hotUpdate ? '启用' : '禁用') . "\n";
         echo "IPC 类型: {$ipcType}\n";
         echo "=========================================\n\n";
