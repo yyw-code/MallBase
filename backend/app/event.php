@@ -31,36 +31,20 @@ return [
             app\listener\swoole\WorkerBootListener::class,
         ],
 
-        // Swoole Worker 停止事件
-        // 触发时机：Worker 进程停止前触发
+        // Swoole 消息事件
+        // 触发时机：Worker 进程接收到 IPC 消息时
+        // 触发位置：Worker 进程
+        // 适用场景：记录进程间通信消息、调试热更新机制
+        'swoole.message' => [
+            app\listener\swoole\MessageListener::class, // 消息监听器
+        ],
+
+        // Swoole Worker 停止前事件
+        // 触发时机：Worker 进程停止前触发（think-swoole 自定义事件）
         // 触发位置：Worker 进程
         // 适用场景：清理 Worker 级别的资源、保存状态
-        'swoole.workerStop' => [
-            // app\listener\SwooleWorkerStopListener::class, // Worker 停止监听器
-        ],
-
-        // Swoole Worker 退出事件
-        // 触发时机：Worker 进程退出时触发
-        // 触发位置：Worker 进程
-        // 适用场景：记录退出日志、清理资源
-        'swoole.workerExit' => [
-            // app\listener\swoole\WorkerExitListener::class,, // Worker 退出监听器
-        ],
-
-        // Swoole Worker 错误事件
-        // 触发时机：Worker 进程发生错误时触发
-        // 触发位置：Worker 进程
-        // 适用场景：记录错误日志、错误报警
-        'swoole.workerError' => [
-            // \app\listener\SwooleWorkerErrorListener::class, // Worker 错误监听器
-        ],
-
-        // Swoole 关闭事件
-        // 触发时机：Swoole 服务关闭时触发
-        // 触发位置：主进程
-        // 适用场景：清理全局资源、记录关闭日志
-        'swoole.shutDown' => [
-            // \app\listener\SwooleShutdownListener::class, // Swoole 关闭监听器
+        'swoole.beforeWorkerStop' => [
+            app\listener\swoole\BeforeWorkerStopListener::class, // Worker 停止前监听器
         ],
     ],
 
