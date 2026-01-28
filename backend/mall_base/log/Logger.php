@@ -6,19 +6,6 @@ use think\facade\Log;
 use think\facade\App;
 use Throwable;
 
-/**
- *
- * @method static void success(string|\Stringable $message, array $context = []) 记录成功信息
- * @method static void emergency(string|\Stringable $message, array $context = []) 记录emergency信息
- * @method static void alert(string|\Stringable $message, array $context = []) 记录警报信息
- * @method static void critical(string|\Stringable $message, array $context = []) 记录紧急情况
- * @method static void error(string|\Stringable $message, array $context = []) 记录错误信息
- * @method static void warning(string|\Stringable $message, array $context = []) 记录warning信息
- * @method static void notice(string|\Stringable $message, array $context = []) 记录notice信息
- * @method static void info(string|\Stringable $message, array $context = []) 记录一般信息
- * @method static void debug(string|\Stringable $message, array $context = []) 记录调试信息
- * @method static void sql(string|\Stringable $message, array $context = []) 记录sql信息
- */
 class Logger
 {
     /** @var string 模块名称 */
@@ -65,30 +52,6 @@ class Logger
         if ($className !== null) {
             LogContext::addGlobal('class_name', $className);
         }
-    }
-
-    // ==================== 静态快捷方法（使用 __callStatic 魔术方法）====================
-
-    /**
-     * 静态方法调用魔术方法
-     *
-     * 支持：Logger::info(), Logger::error(), Logger::success(), Logger::exception() 等
-     *
-     * @param string $name 方法名
-     * @param array $arguments 参数
-     * @return void
-     */
-    public static function __callStatic(string $name, array $arguments): void
-    {
-        $instance = self::instance();
-        $methodName = '_' . $name;
-
-        if (method_exists($instance, $methodName)) {
-            call_user_func_array([$instance, $methodName], $arguments);
-            return;
-        }
-
-        throw new \BadMethodCallException("Method {$name} does not exist.");
     }
 
     // ==================== 静态工厂方法 ====================
@@ -510,7 +473,6 @@ class Logger
             Log::channel($this->channel)->$level($logMessage, $allContext);
         } else {
             Log::$level($logMessage, $allContext);
-            Log::error($message);
         }
     }
 

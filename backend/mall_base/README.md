@@ -29,7 +29,7 @@
 - ✅ 协程环境下的日志隔离
 - ✅ **自动识别调用类名和模块名** - 无需手动传递参数
 - ✅ **支持指定日志通道** - 可将日志写入不同通道（ES、Redis、文件等）
-- ✅ **高性能优化** - 避免魔术方法、减少上下文合并、完整重置状态
+- ✅ **高性能优化** - 协程级别的实例缓存、完整重置状态
 
 ### 3. 驱动管理（Drivers）
 
@@ -217,17 +217,13 @@ return [
 ```php
 use mall_base\log\Logger;
 
-// 方式1：在 Logger 中指定通道
+// 方式1：在 instance() 时指定通道
 Logger::instance('', null, 'elasticsearch')->info('这条日志写入 ES');
 
 // 方式2：使用链式调用指定通道
 Logger::instance()
     ->withChannel('elasticsearch')
-    ->info('这条日志也写入 ES');
-
-// 方式3：先指定通道，然后静态调用
-Logger::instance('', null, 'elasticsearch');
-Logger::info('所有后续日志都写入 ES');
+    ->info('这条也写入 ES');
 ```
 
 #### 配置 Redis 日志通道
@@ -416,7 +412,7 @@ return [
 
 #### 1. 自动识别调用类名和模块名 ✨
 
-Logger 现在支持自动识别调用类名和模块名，无需手动传递参数。
+Logger 支持自动识别调用类名和模块名，无需手动传递参数。
 
 **在 Service 类中：**
 ```php
@@ -429,11 +425,11 @@ class UserService
     public function login(int $userId)
     {
         // 自动识别：module='UserService', className='app\service\UserService'
-        Logger::info('用户登录', ['user_id' => $userId]);
+        Logger::instance()->info('用户登录', ['user_id' => $userId]);
         
         // 业务逻辑...
         
-        Logger::success('登录成功', ['user_id' => $userId]);
+        Logger::instance()->success('登录成功', ['user_id' => $userId]);
     }
 }
 ```
@@ -535,7 +531,7 @@ class AliyunSmsDriver extends BaseDriver
 
 #### 4. 在业务代码中使用
 
-##### 方式1：静态快捷方法（推荐，最简洁）✨
+##### 方式1：基础实例调用（推荐）
 
 ```php
 use mall_base\log\Logger;
@@ -547,19 +543,19 @@ LogContext::setGlobal([
     'request_id' => uniqid('req_'),
 ]);
 
-// 直接使用静态快捷方法，无需创建实例，自动识别类名和模块名
-Logger::debug('调试信息');          // 只在开发环境记录
-Logger::info('普通信息');
-Logger::warning('警告信息');
-Logger::error('错误信息');
-Logger::success('成功操作');
-Logger::fail('失败操作');
+// 创建 Logger 实例并记录日志，自动识别类名和模块名
+Logger::instance()->debug('调试信息');          // 只在开发环境记录
+Logger::instance()->info('普通信息');
+Logger::instance()->warning('警告信息');
+Logger::instance()->error('错误信息');
+Logger::instance()->success('成功操作');
+Logger::instance()->fail('失败操作');
 
 // 记录异常
 try {
     // 业务逻辑
 } catch (\Exception $e) {
-    Logger::exception($e, '操作失败');
+    Logger::instance()->exception($e, '操作失败');
 }
 
 // 输出日志（开发环境）：
@@ -569,11 +565,10 @@ try {
 ```
 
 **说明：**
-- ✅ 最简洁的使用方式
+- ✅ 简洁直观的实例调用方式
 - ✅ 自动识别类名和模块名
 - ✅ 默认模块名为类名（如 UserService）
 - ✅ 自动包含全局上下文
-- ✅ 无需手动创建 Logger 实例
 
 ##### 方式2：指定日志通道 ✨
 
@@ -587,12 +582,6 @@ Logger::instance('', null, 'elasticsearch')->info('这条日志写入 ES');
 Logger::instance()
     ->withChannel('elasticsearch')
     ->info('这条也写入 ES');
-
-// 方式3：先指定通道，然后静态调用
-Logger::instance('', null, 'elasticsearch');
-Logger::info('所有后续日志都写入 ES');
-Logger::success('操作成功');
-Logger::error('操作失败');
 ```
 
 **说明：**
@@ -641,22 +630,14 @@ Logger::instance()
 - ✅ 可以使用 `withContext()` 添加上下文
 - ✅ `start()` 和 `success()` 会自动记录执行时间
 
-##### 方式对比
-
-| 方式 | 优点 | 缺点 | 适用场景 |
-|------|------|------|----------|
-| **静态快捷方法** | 最简洁，无需创建实例，自动识别 | 不支持链式调用 | 简单的日志记录 |
-| **指定通道** | 灵活切换日志存储介质 | 需要手动指定通道 | 不同类型的日志需要不同存储 |
-| **链式调用** | 代码简洁，逻辑连贯 | 代码较长 | 复杂的业务流程 |
-
 ##### 使用建议
 
-**1. 简单场景：使用静态快捷方法**
+**1. 简单场景：使用基础实例调用**
 ```php
 // 简单记录一条日志，自动识别类名和模块名
-Logger::info('用户登录成功');
-Logger::error('订单创建失败', ['order_id' => 456]);
-Logger::success('邮件发送成功');
+Logger::instance()->info('用户登录成功');
+Logger::instance()->error('订单创建失败', ['order_id' => 456]);
+Logger::instance()->success('邮件发送成功');
 ```
 
 **2. 需要不同通道：使用通道参数**
@@ -752,118 +733,6 @@ class PaymentService
     }
 }
 ```
-
-### 性能优化 ✨
-
-Logger 针对高频日志场景进行了深度性能优化，确保在高并发下依然保持高性能。
-
-#### 优化 1：移除 __callStatic 魔术方法
-
-**问题：**
-- ❌ 无法被 opcode 内联
-- ❌ 每次调用包含：方法名字符串判断 + in_array + call_user_func_array
-- ❌ 高频路径性能损失严重
-
-**解决方案：**
-```php
-// 静态快捷方法（独立的静态方法，可以被 opcode 内联）
-public static function debug(string $message, array $context = []): void
-{
-    self::instance()->_debug($message, $context);
-}
-
-public static function info(string $message, array $context = []): void
-{
-    self::instance()->_info($message, $context);
-}
-
-// ... 其他方法同理
-```
-
-**性能提升：**
-- ✅ 可以被 opcode 内联，减少函数调用开销
-- ✅ 直接调用，无字符串判断、无 in_array、无 call_user_func_array
-- ✅ 高频日志调用性能提升约 30-50%
-
-#### 优化 2：统一合并上下文
-
-**问题：**
-- ❌ 多次 array_merge，成本 O(n) 放大
-- ❌ 上下文字段越多，成本越大
-
-**解决方案：**
-```php
-// 统一在 log() 中合并，便于未来优化 / 缓存
-protected function log(string $level, string $message, array $context = []): void
-{
-    // 优先级：调用时传入的 > 实例的 > 全局的
-    $allContext = array_merge(
-        LogContext::getAll(),  // 全局上下文（协程级别）
-        $this->context,         // 实例上下文
-        $context                // 调用时传入的上下文
-    );
-    
-    $logMessage = $this->formatMessage($message);
-    Log::$level($logMessage, $allContext);
-}
-```
-
-**性能提升：**
-- ✅ 收口逻辑，只在 log() 中合并一次
-- ✅ 便于未来优化（如缓存合并结果）
-- ✅ 减少了不必要的 array_merge 操作
-- ✅ 明确了上下文优先级：调用 > 实例 > 全局
-
-#### 优化 3：完整重置状态
-
-**问题：**
-- ❌ $startTime 被上一次调用污染
-- ❌ 链式调用时间统计异常
-- ❌ 状态不完整，可能产生 bug
-
-**解决方案：**
-```php
-protected function reset(): void
-{
-    $this->context = [];
-    $this->startTime = 0;
-    // 注意：不重置 className 和 module，因为这些是实例的固有属性
-}
-
-// 在复用实例时调用
-if (isset($context[$cacheKey])) {
-    $logger = $context[$cacheKey];
-    $logger->reset();  // 完全重置状态
-    return $logger;
-}
-```
-
-**性能提升：**
-- ✅ 完全重置实例状态，避免污染
-- ✅ 确保 startTime 独立，链式调用时间统计准确
-- ✅ 每次调用都是独立的状态
-
-#### 性能对比（高频场景）
-
-### 测试场景：单协程内调用 1000 次日志
-
-| 优化项 | 优化前 | 优化后 | 提升 |
-|--------|--------|--------|------|
-| __callStatic 开销 | 有（字符串判断+in_array+call_user_func_array） | 无（直接调用） | +30-50% |
-| array_merge 次数 | 2-3 次/调用 | 1 次/调用 | +20-30% |
-| 状态污染风险 | 高（startTime污染） | 无（完整reset） | 稳定性提升 |
-| 重复方法定义 | 有冲突 | 无冲突 | 代码质量提升 |
-| **综合性能** | 基准 | **基准** | **+40-60%** |
-
-### 性能优化效果
-
-**高频日志场景（如队列任务、驱动操作）：**
-- ✅ 静态调用性能提升 30-50%（移除 __callStatic）
-- ✅ 上下文合并成本降低 20-30%（统一 merge）
-- ✅ 协程缓存避免实例创建 99%（1000 次调用只创建 1 个实例）
-- ✅ 状态完全隔离，无污染风险
-
-**综合性能提升：40-60%**
 
 ### Trace ID 使用
 
@@ -1169,6 +1038,6 @@ backend/mall_base/
 3. **善用上下文** - 通过 LogContext 添加业务相关的上下文信息，便于分析
 4. **协程隔离** - 在协程环境中，使用协程级别的 Trace ID 和上下文，避免污染
 5. **统一错误处理** - 所有异常都应该被捕获并记录到日志
-6. **静态快捷调用** - 简单场景使用静态快捷方法，代码更简洁
+6. **实例调用** - 使用 Logger::instance() 创建实例，链式调用或单独记录
 7. **通道选择** - 不同类型的日志使用不同的通道（ES、Redis、文件等）
-8. **性能优化** - 高频日志场景利用协程缓存和静态快捷方法
+8. **性能优化** - 高频日志场景利用协程缓存
