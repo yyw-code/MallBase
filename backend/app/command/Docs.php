@@ -44,6 +44,12 @@ class Docs extends Command
      */
     protected $groupMap = [];
 
+    protected $sourceNameMap = [
+        'body' => 'Body 参数[multipart/form-data]',
+        'query' => 'Query 参数',
+        'path' => 'Path 参数',
+    ];
+
     /**
      * 配置命令
      */
@@ -265,10 +271,12 @@ class Docs extends Command
                 ];
             }
 
+            // 将 path 参数拼接到路由路径中
+            $path = $this->buildPathWithParams($rule, $params);
             // 添加路由（使用修改后的 rule，包含应用名前缀）
             $docs['apps'][$appName]['groups'][$groupName]['routes'][] = [
                 'method' => strtoupper($route['method']),
-                'path' => $rule,
+                'path' => $path,
                 'alias' => $option['_alias'] ?? $rule,
                 'description' => $option['_desc'] ?? '',
                 'controller' => $controllerClass,
@@ -346,10 +354,10 @@ class Docs extends Command
 
         /** 方法 => 参数来源 */
         $sourceMap = [
-            'param' => in_array($httpMethod, ['get', 'delete']) ? 'Query 参数' : 'Body 参数',
-            'get' => 'Query 参数',
-            'post' => 'Body 参数',
-            'route' => '路由参数',
+            'param' => in_array($httpMethod, ['get', 'delete']) ? 'query' : 'body',
+            'get' => 'query',
+            'post' => 'body',
+            'route' => 'path',
         ];
 
         /** 类型映射 */
@@ -376,9 +384,11 @@ class Docs extends Command
             [$name, $type] = $this->parseField($raw, $typeMap);
             $source = $sourceMap[$methodName];
 
+            $required = $default === null;
+            if ($source === 'path') $required = true;
             $params[$source][$name] = [
                 'type' => $type,
-                'required' => $default === null,
+                'required' => $required,
                 'default' => $default !== null ? $this->parsePhpValue($default) : 'null',
                 'desc' => '',
             ];
@@ -426,9 +436,11 @@ class Docs extends Command
                 [$name, $type] = $this->parseField($raw, $typeMap);
 
                 $source = $sourceMap[$methodName];
+                $required = $default === null;
+                if ($source === 'path') $required = true;
                 $params[$source][$name] = [
                     'type' => $type,
-                    'required' => $default === null,
+                    'required' => $required,
                     'default' => $default !== null ? $this->parsePhpValue($default) : 'null',
                     'desc' => '',
                 ];
@@ -481,14 +493,10 @@ class Docs extends Command
 
             // 参数来源
             if (preg_match('/\bsource=(path|query|body)\b/', $tail, $sm)) {
-                $source = match ($sm[1]) {
-                    'path' => '路由参数',
-                    'query' => 'Query 参数',
-                    'body' => 'Body 参数',
-                };
+                $source = $sm[1];
             } else {
                 // fallback：按 HTTP Method 推断
-                $source = in_array($httpMethod, ['get', 'delete']) ? 'Query 参数' : 'Body 参数';
+                $source = in_array($httpMethod, ['get', 'delete']) ? 'query' : 'body';
             }
             // 描述（把规则全部剥掉，剩下就是描述）
             $description = trim(
@@ -499,9 +507,11 @@ class Docs extends Command
                 )
             );
 
+            $required = $required && $default === null;
+            if ($source === 'path') $required = true;
             $params[$source][$name] = [
                 'type' => $type,
-                'required' => $required && $default === null,
+                'required' => $required,
                 'default' => (string)$default === null,
                 'desc' => $description,
             ];
@@ -561,6 +571,43 @@ class Docs extends Command
         }
 
         return (string)$value;
+    }
+
+    /**
+     * 将 path 参数拼接到路由路径中
+     *
+     * @param string $path 原始路由路径
+     * @param array $params 解析后的参数数组
+     * @return string
+     */
+    protected function buildPathWithParams(string $path, array $params): string
+    {
+        // 直接取 path 参数组
+        $pathParams = $params['path'] ?? [];
+
+        // 没有 path 参数，直接返回原路径
+        if (!$pathParams) {
+            return '/' . ltrim($path, '/');
+        }
+
+        // 去掉已有的 {...}
+        $path = rtrim('/' . ltrim($path, '/'), '/');
+
+        // 已存在的占位符，避免重复拼
+        preg_match_all('/\{(\w+)\}/', $path, $exists);
+        $exists = $exists[1] ?? [];
+
+        foreach ($pathParams as $name => $meta) {
+
+            // OpenAPI 规定：path 参数必须 required
+            if (in_array($name, $exists, true)) {
+                continue;
+            }
+
+            $path .= '/{' . $name . '}';
+        }
+
+        return $path;
     }
 
 
@@ -874,7 +921,6 @@ class Docs extends Command
             font-weight: bold;
             color: #2c3e50;
             margin: 15px 0 10px 0;
-            text-transform: uppercase;
             letter-spacing: 0.5px;
         }
         
@@ -920,9 +966,10 @@ class Docs extends Command
             font-style: italic;
         }
         
-        .param-source {
-            color: #27ae60;
+        .param-desc {
+            color: #a9adae;
             margin-left: 10px;
+            font-style: italic;
         }
         
         /* 滚动条样式 */
@@ -1025,7 +1072,7 @@ class Docs extends Command
 
                     if (!empty($route['params'])) {
                         foreach ($route['params'] as $source => $params) {
-                            $html .= '<div class="section-title">请求参数(' . $source . ')</div>
+                            $html .= '<div class="section-title">请求参数(' . $this->sourceNameMap[$source] . ')</div>
                                           <div class="params-block">';
                             foreach ($params as $param => $paramData) {
                                 $html .= '<div class="param-item">
@@ -1204,37 +1251,62 @@ class Docs extends Command
                     $bodyProps = [];
                     $bodyRequired = [];
 
-                    foreach ($params as $name => $raw) {
-                        if (!is_string($raw)) {
+                    foreach ($params as $source => $sourceParams) {
+                        if (!is_array($sourceParams)) {
                             continue;
                         }
+                        foreach ($sourceParams as $name => $meta) {
+                            if (!is_array($meta)) {
+                                continue;
+                            }
+                            $type = $this->mapType($meta['type'] ?? 'string');
+                            $required = (bool)($meta['required'] ?? false);
+                            $desc = (string)($meta['desc'] ?? '');
+                            $default = $meta['default'] ?? null;
 
-                        [$type, $desc] = array_pad(explode('|', $raw, 2), 2, '');
-                        $type = $this->mapType(trim($type));
+                            switch ($source) {
+                                case 'query':
+                                    $queryParam = [
+                                        'name' => $name,
+                                        'in' => 'query',
+                                        'required' => $required,
+                                        'description' => $desc,
+                                        'schema' => [
+                                            'type' => $type,
+                                        ],
+                                    ];
 
-                        // 是否必填
-                        $required = str_contains($desc, '必填');
-
-                        // 参数位置由 HTTP 方法决定
-                        if (in_array($method, ['get', 'delete'])) {
-                            $queryParams[] = [
-                                'name' => $name,
-                                'in' => 'query',
-                                'required' => $required,
-                                'description' => $desc,
-                                'schema' => ['type' => $type],
-                            ];
-                        } else {
-                            $bodyProps[$name] = [
-                                'type' => $type,
-                                'description' => $desc,
-                            ];
-                            if ($required) {
-                                $bodyRequired[] = $name;
+                                    if ($default !== null && $default !== 'null') {
+                                        $queryParam['schema']['default'] = $default;
+                                    }
+                                    $queryParams[] = $queryParam;
+                                    break;
+                                case 'body':
+                                    $bodyProps[$name] = [
+                                        'type' => $type,
+                                        'description' => $desc,
+                                    ];
+                                    if ($default !== null && $default !== 'null') {
+                                        $bodyProps[$name]['default'] = $default;
+                                    }
+                                    if ($required) {
+                                        $bodyRequired[] = $name;
+                                    }
+                                    break;
+                                case 'path':
+                                    $queryParams[] = [
+                                        'name' => $name,
+                                        'in' => 'path',
+                                        'required' => true, // path 参数 OpenAPI 规定必须 true
+                                        'description' => $desc,
+                                        'schema' => [
+                                            'type' => $type,
+                                        ],
+                                    ];
+                                    break;
                             }
                         }
                     }
-
                     if ($queryParams) {
                         $operation['parameters'] = $queryParams;
                     }
