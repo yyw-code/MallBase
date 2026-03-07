@@ -1,6 +1,6 @@
 import type { Directive, DirectiveBinding } from 'vue';
 
-import { useAccessStore } from '@vben/stores';
+import { useAccessStore } from '#/modules/access';
 
 /**
  * 权限指令
@@ -50,7 +50,7 @@ function checkPermission(
 
   // 如果没有权限，移除元素
   if (!hasPermission) {
-    el.parentNode?.removeChild(el);
+    el.remove();
   }
 }
 

@@ -8,14 +8,17 @@ import '@vben/styles';
 import '@vben/styles/antd';
 
 import { useTitle } from '@vueuse/core';
+import Antd from 'ant-design-vue';
 
 import { $t, setupI18n } from '#/locales';
 
 import { initComponentAdapter } from './adapter/component';
 import { initSetupVbenForm } from './adapter/form';
 import App from './app.vue';
-import { router } from './router';
 import permissionDirective from './directives/permission';
+import { router } from './router';
+
+import 'ant-design-vue/dist/reset.css';
 
 async function bootstrap(namespace: string) {
   // 初始化组件适配器
@@ -34,6 +37,9 @@ async function bootstrap(namespace: string) {
   // });
 
   const app = createApp(App);
+
+  // 全局注册 ant-design-vue
+  app.use(Antd);
 
   // 注册v-loading指令
   registerLoadingDirective(app, {

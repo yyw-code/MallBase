@@ -41,11 +41,12 @@ class RoleService extends BaseService
             $query->where('status', $status);
         }
 
+        $total = $query->count();
         $list = $query->order('sort', 'asc')
             ->order('id', 'desc')
-            ->page($page, $limit);
+            ->page($page, $limit)->select();
 
-        return $list->toArray();
+        return compact('total', 'list');
     }
 
     /**

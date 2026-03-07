@@ -11,10 +11,10 @@ import {
   errorMessageResponseInterceptor,
   RequestClient,
 } from '@vben/request';
-import { useAccessStore } from '@vben/stores';
 
 import { message } from 'ant-design-vue';
 
+import { useAccessStore } from '#/modules/access';
 import { useAuthStore } from '#/store';
 
 import { refreshTokenApi } from './core';

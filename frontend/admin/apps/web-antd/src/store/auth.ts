@@ -11,7 +11,7 @@ import { notification } from 'ant-design-vue';
 import { defineStore } from 'pinia';
 
 import { loginApi, logoutApi } from '#/api/core';
-import { getAdminInfoApi } from '#/api/core/auth';
+import { getCurrentAdminInfoApi } from '#/api/core/auth';
 import { $t } from '#/locales';
 import { useAccessStore } from '#/modules/access';
 import { useUserStore } from '#/modules/user';
@@ -34,7 +34,7 @@ export const useAuthStore = defineStore('auth', () => {
     onSuccess?: () => Promise<void> | void,
   ) {
     // 异步处理用户登录操作并获取 accessToken
-    let adminInfo: AuthApi.AdminInfo | null = null;
+    let adminInfo: AuthApi.CurrentAdminInfo | null = null;
     try {
       loginLoading.value = true;
       const loginResult = await loginApi(params as AuthApi.LoginParams);
@@ -46,7 +46,7 @@ export const useAuthStore = defineStore('auth', () => {
         accessStore.setAccessToken(accessToken);
 
         // 获取用户信息
-        adminInfo = await getAdminInfoApi();
+        adminInfo = await getCurrentAdminInfoApi();
 
         // 如果有权限信息，设置权限码
         if (adminInfo?.permissions) {
@@ -101,9 +101,9 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function fetchUserInfo() {
-    let adminInfo: AuthApi.AdminInfo | null = null;
+    let adminInfo: AuthApi.CurrentAdminInfo | null = null;
     try {
-      adminInfo = await getAdminInfoApi();
+      adminInfo = await getCurrentAdminInfoApi();
 
       // 转换为 BasicUserInfo 格式
       if (adminInfo) {

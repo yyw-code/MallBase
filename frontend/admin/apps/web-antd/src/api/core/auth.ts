@@ -10,6 +10,7 @@ export namespace AuthApi {
   /** 登录接口返回值 */
   export interface LoginResult {
     access_token: string;
+    refresh_token: string;
     token_type?: string;
     expires_in?: number;
   }
@@ -17,12 +18,13 @@ export namespace AuthApi {
   /** 刷新token返回值 */
   export interface RefreshTokenResult {
     access_token: string;
+    refresh_token: string;
     token_type?: string;
     expires_in?: number;
   }
 
-  /** 用户信息 */
-  export interface AdminInfo {
+  /** 当前登录用户信息 */
+  export interface CurrentAdminInfo {
     id: number;
     username: string;
     nickname: string;
@@ -68,13 +70,10 @@ export async function logoutApi() {
 }
 
 /**
- * 获取管理员信息
- * 如果不传 id，则获取当前登录管理员的信息
+ * 获取当前登录管理员信息
  */
-export async function getAdminInfoApi(id?: number) {
-  return requestClient.get<AuthApi.AdminInfo>('/auth/admin/info', {
-    params: id ? { id } : {},
-  });
+export async function getCurrentAdminInfoApi() {
+  return requestClient.get<AuthApi.CurrentAdminInfo>('/auth/admin/info');
 }
 
 /**

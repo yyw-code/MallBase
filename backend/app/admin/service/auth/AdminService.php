@@ -47,7 +47,7 @@ class AdminService extends BaseService
 
         // 生成 JWT Token
         $jwtService = new JwtService();
-        
+
         // 生成 access_token（短有效期）
         $accessToken = $jwtService->encode([
             'admin_id' => $admin->id,
@@ -55,7 +55,7 @@ class AdminService extends BaseService
             'nickname' => $admin->nickname,
             'type' => 'access',
         ]);
-        
+
         // 生成 refresh_token（长有效期，30天）
         $refreshToken = $jwtService->encodeWithExpire([
             'admin_id' => $admin->id,
@@ -94,15 +94,16 @@ class AdminService extends BaseService
             $query->where('status', $status);
         }
 
+        $total = $query->count();
         $list = $query->order('id', 'desc')
-            ->page($page, $limit);
+            ->page($page, $limit)->select();
 
         // 隐藏密码
         foreach ($list as $item) {
             unset($item['password']);
         }
 
-        return $list->toArray();
+        return compact('total', 'list');
     }
 
     /**
@@ -389,7 +390,7 @@ class AdminService extends BaseService
     public function refreshToken(string $refreshToken): array
     {
         $jwtService = new JwtService();
-        
+
         // 解析 refresh_token
         try {
             $decoded = $jwtService->decode($refreshToken);

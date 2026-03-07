@@ -10,14 +10,31 @@ export namespace RoleApi {
     sort: number;
     remark: string;
     permission_ids?: number[];
+    permissions?: PermissionItem[];
     create_time?: string;
     update_time?: string;
   }
 
+  /** 权限信息 */
+  export interface PermissionItem {
+    id: number;
+    parent_id: number;
+    name: string;
+    code: string;
+    type: number; // 1=菜单, 2=按钮
+    path?: string;
+    icon?: string;
+    component?: string;
+    sort: number;
+    status: number;
+    is_show: number;
+    remark?: string;
+    children?: PermissionItem[];
+  }
+
   /** 获取列表参数 */
   export interface ListParams {
-    name?: string;
-    code?: string;
+    keyword?: string;
     status?: number;
     page?: number;
     limit?: number;
@@ -40,14 +57,17 @@ export namespace RoleApi {
 }
 
 /**
- * 获取角色列表
+ * 获取角色列表（分页）
  */
 export async function getRoleListApi(params?: RoleApi.ListParams) {
-  return requestClient.get<RoleApi.RoleItem[]>('/auth/role/list', { params });
+  return requestClient.get<{
+    list: RoleApi.RoleItem[];
+    total: number;
+  }>('/auth/role/list', { params });
 }
 
 /**
- * 获取所有角色
+ * 获取所有角色（不分页）
  */
 export async function getAllRolesApi() {
   return requestClient.get<RoleApi.RoleItem[]>('/auth/role/all');
@@ -57,7 +77,7 @@ export async function getAllRolesApi() {
  * 获取角色详情
  */
 export async function getRoleInfoApi(id: number) {
-  return requestClient.get<RoleApi.RoleItem>('/auth/role/info', { params: { id } });
+  return requestClient.get<RoleApi.RoleItem>(`/auth/role/info/${id}`);
 }
 
 /**
@@ -70,13 +90,13 @@ export async function createRoleApi(data: RoleApi.CreateParams) {
 /**
  * 更新角色
  */
-export async function updateRoleApi(data: RoleApi.UpdateParams) {
-  return requestClient.post('/auth/role/update', data);
+export async function updateRoleApi(id: number, data: Omit<RoleApi.UpdateParams, 'id'>) {
+  return requestClient.put(`/auth/role/update/${id}`, data);
 }
 
 /**
  * 删除角色
  */
 export async function deleteRoleApi(id: number) {
-  return requestClient.post('/auth/role/delete', { id });
+  return requestClient.delete(`/auth/role/delete/${id}`);
 }

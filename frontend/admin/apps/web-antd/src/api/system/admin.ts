@@ -6,19 +6,21 @@ export namespace AdminApi {
     id: number;
     username: string;
     nickname: string;
-    avatar: string;
-    email: string;
-    mobile: string;
+    avatar?: string;
+    email?: string;
+    mobile?: string;
     status: number;
-    remark: string;
     role_ids?: number[];
-    roles?: RoleInfo[];
+    roles?: RoleItem[];
+    last_login_time?: string;
+    last_login_ip?: string;
+    remark?: string;
     create_time?: string;
     update_time?: string;
   }
 
   /** 角色信息 */
-  export interface RoleInfo {
+  export interface RoleItem {
     id: number;
     name: string;
     code: string;
@@ -26,7 +28,7 @@ export namespace AdminApi {
 
   /** 获取列表参数 */
   export interface ListParams {
-    username?: string;
+    keyword?: string;
     status?: number;
     page?: number;
     limit?: number;
@@ -36,8 +38,7 @@ export namespace AdminApi {
   export interface CreateParams {
     username: string;
     password: string;
-    password_confirm?: string;
-    nickname: string;
+    nickname?: string;
     avatar?: string;
     email?: string;
     mobile?: string;
@@ -47,36 +48,26 @@ export namespace AdminApi {
   }
 
   /** 更新管理员参数 */
-  export interface UpdateParams {
+  export interface UpdateParams extends CreateParams {
     id: number;
-    username?: string;
-    nickname?: string;
-    avatar?: string;
-    email?: string;
-    mobile?: string;
-    status?: number;
-    remark?: string;
-    role_ids?: number[];
   }
 }
 
 /**
- * 获取管理员列表
+ * 获取管理员列表（分页）
  */
 export async function getAdminListApi(params?: AdminApi.ListParams) {
-  return requestClient.get<AdminApi.AdminItem[]>('/auth/admin/list', {
-    params,
-  });
+  return requestClient.get<{
+    list: AdminApi.AdminItem[];
+    total: number;
+  }>('/auth/admin/list', { params });
 }
 
 /**
  * 获取管理员详情
- * 如果不传 id，则获取当前登录管理员的信息
  */
-export async function getAdminInfoApi(id?: number) {
-  return requestClient.get<AdminApi.AdminItem>('/auth/admin/info', {
-    params: id ? { id } : {},
-  });
+export async function getAdminInfoApi(id: number) {
+  return requestClient.get<AdminApi.AdminItem>(`/auth/admin/info/${id}`);
 }
 
 /**
@@ -89,13 +80,20 @@ export async function createAdminApi(data: AdminApi.CreateParams) {
 /**
  * 更新管理员
  */
-export async function updateAdminApi(data: AdminApi.UpdateParams) {
-  return requestClient.post('/auth/admin/update', data);
+export async function updateAdminApi(id: number, data: Omit<AdminApi.UpdateParams, 'id'>) {
+  return requestClient.put(`/auth/admin/update/${id}`, data);
 }
 
 /**
  * 删除管理员
  */
 export async function deleteAdminApi(id: number) {
-  return requestClient.post('/auth/admin/delete', { id });
+  return requestClient.delete(`/auth/admin/delete/${id}`);
+}
+
+/**
+ * 重置密码
+ */
+export async function resetPasswordApi(id: number, password: string) {
+  return requestClient.post(`/auth/admin/reset-password/${id}`, { password });
 }

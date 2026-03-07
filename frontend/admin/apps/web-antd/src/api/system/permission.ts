@@ -1,38 +1,30 @@
 import { requestClient } from '#/api/request';
 
 export namespace PermissionApi {
-  /** 权限类型 */
-  export type PermissionType = 'menu' | 'button';
-
   /** 权限列表项 */
   export interface PermissionItem {
     id: number;
     parent_id: number;
     name: string;
     code: string;
-    type: PermissionType;
-    path: string;
-    icon: string;
-    component: string;
+    type: number; // 1=菜单, 2=按钮
+    path?: string;
+    icon?: string;
+    component?: string;
     sort: number;
     status: number;
     is_show: number;
-    remark: string;
-    children?: PermissionItem[];
+    remark?: string;
     create_time?: string;
     update_time?: string;
-  }
-
-  /** 获取树形列表参数 */
-  export interface TreeParams {
-    name?: string;
-    code?: string;
-    type?: PermissionType;
-    status?: number;
+    children?: PermissionItem[];
   }
 
   /** 获取列表参数 */
-  export interface ListParams extends TreeParams {
+  export interface ListParams {
+    keyword?: string;
+    type?: number;
+    status?: number;
     page?: number;
     limit?: number;
   }
@@ -42,8 +34,8 @@ export namespace PermissionApi {
     parent_id?: number;
     name: string;
     code: string;
-    type: PermissionType;
-    path: string;
+    type?: number;
+    path?: string;
     icon?: string;
     component?: string;
     sort?: number;
@@ -61,28 +53,31 @@ export namespace PermissionApi {
 /**
  * 获取权限树形列表
  */
-export async function getPermissionTreeApi(params?: PermissionApi.TreeParams) {
+export async function getPermissionTreeApi(params?: PermissionApi.ListParams) {
   return requestClient.get<PermissionApi.PermissionItem[]>('/auth/permission/tree', {
     params,
   });
 }
 
 /**
- * 获取权限列表
+ * 获取权限列表（分页）
  */
 export async function getPermissionListApi(params?: PermissionApi.ListParams) {
-  return requestClient.get<PermissionApi.PermissionItem[]>('/auth/permission/list', {
-    params,
-  });
+  return requestClient.get<{
+    data: PermissionApi.PermissionItem[];
+    total: number;
+    page: number;
+    limit: number;
+  }>('/auth/permission/list', { params });
 }
 
 /**
  * 获取权限详情
  */
 export async function getPermissionInfoApi(id: number) {
-  return requestClient.get<PermissionApi.PermissionItem>('/auth/permission/info', {
-    params: { id },
-  });
+  return requestClient.get<PermissionApi.PermissionItem>(
+    `/auth/permission/info/${id}`,
+  );
 }
 
 /**
@@ -95,13 +90,16 @@ export async function createPermissionApi(data: PermissionApi.CreateParams) {
 /**
  * 更新权限
  */
-export async function updatePermissionApi(data: PermissionApi.UpdateParams) {
-  return requestClient.post('/auth/permission/update', data);
+export async function updatePermissionApi(
+  id: number,
+  data: Omit<PermissionApi.UpdateParams, 'id'>,
+) {
+  return requestClient.put(`/auth/permission/update/${id}`, data);
 }
 
 /**
  * 删除权限
  */
 export async function deletePermissionApi(id: number) {
-  return requestClient.post('/auth/permission/delete', { id });
+  return requestClient.delete(`/auth/permission/delete/${id}`);
 }
