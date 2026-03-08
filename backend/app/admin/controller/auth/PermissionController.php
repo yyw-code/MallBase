@@ -24,7 +24,7 @@ class PermissionController extends BaseController
      */
     public function tree()
     {
-        $where = $this->request->param(['name', 'code', 'type', 'status']);
+        $where = $this->request->param(['keyword', 'type', 'status']);
 
         try {
             $tree = $this->service()->getTree($where);
@@ -39,7 +39,7 @@ class PermissionController extends BaseController
      */
     public function list()
     {
-        $where = $this->request->param(['name', 'code', 'type', 'status']);
+        $where = $this->request->param(['keyword', 'type', 'status']);
 
         // 获取分页参数
         [$page, $limit] = $this->getPagination(1, 15);

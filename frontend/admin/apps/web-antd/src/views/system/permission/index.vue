@@ -1,5 +1,8 @@
 <script lang="ts" setup>
-import { ref } from 'vue';
+import { h, ref } from 'vue';
+
+import { IconPicker } from '@vben/common-ui';
+import { IconifyIcon } from '@vben/icons';
 
 import { message, Modal } from 'ant-design-vue';
 
@@ -21,11 +24,24 @@ const tableData = ref<any[]>([]);
 const loading = ref(false);
 const treeExpandedKeys = ref<number[]>([]);
 
+// 权限树数据（用于上级权限选择）
+const permissionTreeData = ref<any[]>([]);
+
+// 图标集前缀
+const iconPrefix = ref('ant-design');
+
+// 搜索参数
+const searchParams = ref({
+  keyword: '',
+  type: undefined as number | undefined,
+  status: undefined as number | undefined,
+});
+
 // 加载数据
 const loadData = async () => {
   loading.value = true;
   try {
-    const result = await getPermissionTreeApi();
+    const result = await getPermissionTreeApi(searchParams.value);
     tableData.value = result;
     // 默认展开所有节点
     const expandAll = (nodes: any[]) => {
@@ -37,11 +53,24 @@ const loadData = async () => {
       });
     };
     expandAll(result);
+
+    // 转换为树形选择器的数据格式
+    permissionTreeData.value = transformToTreeData(result);
   } catch (error) {
     console.error(error);
   } finally {
     loading.value = false;
   }
+};
+
+// 重置搜索
+const resetSearch = () => {
+  searchParams.value = {
+    keyword: '',
+    type: undefined,
+    status: undefined,
+  };
+  loadData();
 };
 
 // 使用表单弹窗 composable
@@ -102,6 +131,41 @@ const handleDelete = (row: any) => {
   });
 };
 
+// 转换权限树数据为树形选择器格式
+interface TreeNode {
+  label: string;
+  title: string;
+  value: number;
+  children?: TreeNode[];
+}
+
+const transformToTreeData = (nodes: any[], isRoot = true): TreeNode[] => {
+  const rootOption: TreeNode[] = isRoot
+    ? [
+        {
+          label: '顶级',
+          title: '顶级',
+          value: 0,
+        },
+      ]
+    : [];
+
+  // 添加所有权限节点
+  return [
+    ...rootOption,
+    ...nodes.map(
+      (node): TreeNode => ({
+        label: node.name,
+        title: node.name,
+        value: node.id,
+        children: node.children
+          ? transformToTreeData(node.children, false)
+          : undefined,
+      }),
+    ),
+  ];
+};
+
 // 表格列定义
 const columns = [
   { title: 'ID', dataIndex: 'id', width: 80 },
@@ -118,7 +182,18 @@ const columns = [
     },
   },
   { title: '路由路径', dataIndex: 'path', width: 200 },
-  { title: '图标', dataIndex: 'icon', width: 80 },
+  {
+    title: '图标',
+    dataIndex: 'icon',
+    width: 80,
+    customRender: ({ record }: any) => {
+      if (!record.icon) return '-';
+      return h(IconifyIcon, {
+        icon: record.icon,
+        class: 'text-lg',
+      });
+    },
+  },
   { title: '排序', dataIndex: 'sort', width: 80 },
   {
     title: '状态',
@@ -149,6 +224,44 @@ loadData();
       <a-button type="primary" @click="handleCreate"> 新增权限 </a-button>
       <a-button class="ml-2" @click="loadData"> 刷新 </a-button>
     </div>
+
+    <!-- 搜索表单 -->
+    <a-form layout="inline" class="mb-4">
+      <a-form-item label="关键词">
+        <a-input
+          v-model:value="searchParams.keyword"
+          placeholder="权限名称/编码"
+          allow-clear
+          style="width: 200px"
+        />
+      </a-form-item>
+      <a-form-item label="类型">
+        <a-select
+          v-model:value="searchParams.type"
+          placeholder="请选择"
+          allow-clear
+          style="width: 150px"
+        >
+          <a-select-option :value="1">菜单</a-select-option>
+          <a-select-option :value="2">按钮</a-select-option>
+        </a-select>
+      </a-form-item>
+      <a-form-item label="状态">
+        <a-select
+          v-model:value="searchParams.status"
+          placeholder="请选择"
+          allow-clear
+          style="width: 150px"
+        >
+          <a-select-option :value="1">启用</a-select-option>
+          <a-select-option :value="0">禁用</a-select-option>
+        </a-select>
+      </a-form-item>
+      <a-form-item>
+        <a-button type="primary" @click="loadData"> 搜索 </a-button>
+        <a-button class="ml-2" @click="resetSearch"> 重置 </a-button>
+      </a-form-item>
+    </a-form>
 
     <a-table
       :columns="columns"
@@ -192,11 +305,18 @@ loadData();
         :wrapper-col="{ span: 16 }"
       >
         <a-form-item label="上级权限" name="parent_id">
-          <a-input-number
+          <a-tree-select
             v-model:value="formData.parent_id"
-            :min="0"
-            placeholder="0 表示顶级"
-            style="width: 100%"
+            :tree-data="permissionTreeData"
+            :dropdown-style="{ maxHeight: '400px', overflow: 'auto' }"
+            placeholder="0 表示顶级，不选则默认顶级"
+            allow-clear
+            tree-default-expand-all
+            :field-names="{
+              label: 'title',
+              value: 'value',
+              children: 'children',
+            }"
           />
         </a-form-item>
         <a-form-item
@@ -223,7 +343,32 @@ loadData();
           <a-input v-model:value="formData.path" placeholder="请输入路由路径" />
         </a-form-item>
         <a-form-item label="图标" name="icon">
-          <a-input v-model:value="formData.icon" placeholder="请输入图标" />
+          <div class="flex flex-col" style="width: 100%">
+            <div class="mb-2">
+              <a-select
+                v-model:value="iconPrefix"
+                style="width: 200px"
+                placeholder="选择图标集"
+              >
+                <a-select-option value="ant-design">
+                  Ant Design
+                </a-select-option>
+                <a-select-option value="lucide">Lucide</a-select-option>
+                <a-select-option value="mdi">Material Design</a-select-option>
+                <a-select-option value="carbon">Carbon</a-select-option>
+                <a-select-option value="mdi-light">MDI Light</a-select-option>
+              </a-select>
+              <span class="sm ml-2 text-gray-400">
+                也可直接输入，如：lucide:shield
+              </span>
+            </div>
+            <IconPicker
+              v-model="formData.icon"
+              :prefix="iconPrefix"
+              placeholder="请选择图标"
+              style="width: 100%"
+            />
+          </div>
         </a-form-item>
         <a-form-item label="组件路径" name="component">
           <a-input
