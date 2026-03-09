@@ -34,22 +34,6 @@ class Admin extends BaseModel
     }
 
     /**
-     * 获取角色列表
-     */
-    public function roles()
-    {
-        return $this->belongsToMany(Role::class, 'admin_role', 'admin_id', 'role_id');
-    }
-
-    /**
-     * 获取所有权限
-     */
-    public function permissions()
-    {
-        return $this->hasManyThrough(Permission::class, Role::class, AdminRole::class, RolePermission::class);
-    }
-
-    /**
      * 验证密码
      */
     public function checkPassword(string $password): bool

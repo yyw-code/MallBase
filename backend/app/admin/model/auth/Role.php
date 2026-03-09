@@ -18,20 +18,4 @@ class Role extends BaseModel
     protected $autoWriteTimestamp = true;
     protected $createTime = 'create_time';
     protected $updateTime = 'update_time';
-
-    /**
-     * 获取管理员列表
-     */
-    public function admins()
-    {
-        return $this->belongsToMany(Admin::class, 'admin_role', 'role_id', 'admin_id');
-    }
-
-    /**
-     * 获取权限列表
-     */
-    public function permissions()
-    {
-        return $this->belongsToMany(Permission::class, 'role_permission', 'role_id', 'permission_id');
-    }
 }

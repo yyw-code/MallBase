@@ -54,6 +54,11 @@ export namespace RoleApi {
   export interface UpdateParams extends CreateParams {
     id: number;
   }
+
+  /** 更新状态 */
+  export interface UpdateStatus {
+    status: 0 | 1;
+  }
 }
 
 /**
@@ -90,8 +95,21 @@ export async function createRoleApi(data: RoleApi.CreateParams) {
 /**
  * 更新角色
  */
-export async function updateRoleApi(id: number, data: Omit<RoleApi.UpdateParams, 'id'>) {
+export async function updateRoleApi(
+  id: number,
+  data: Omit<RoleApi.UpdateParams, 'id'>,
+) {
   return requestClient.put(`/auth/role/update/${id}`, data);
+}
+
+/**
+ * 更新角色
+ */
+export async function updateRoleStatusApi(
+  id: number,
+  data: Omit<RoleApi.UpdateStatus, 'id'>,
+) {
+  return requestClient.put(`/auth/role/changeStatus/${id}`, data);
 }
 
 /**

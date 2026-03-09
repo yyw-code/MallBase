@@ -87,6 +87,20 @@ class RoleController extends BaseController
         return $this->success(null, '更新成功');
     }
 
+    public function changeStatus($id)
+    {
+        $status = $this->request->param('status');
+        if (empty($id)) {
+            return $this->error('ID不能为空');
+        }
+        if (!in_array($status, [0, 1])) {
+            return $this->error('状态值错误');
+        }
+        $this->service()->changeStatus((int)$id, $status);
+        return $this->success(null, '更新成功');
+
+    }
+
     /**
      * 删除
      */

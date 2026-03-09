@@ -1,15 +1,17 @@
 <script lang="ts" setup>
-import { message, Modal } from 'ant-design-vue';
-import { ref } from 'vue';
+import { h, ref } from 'vue';
 
+import { message, Switch } from 'ant-design-vue';
+
+import { getPermissionTreeApi } from '#/api/system/permission';
 import {
   createRoleApi,
   deleteRoleApi,
   getRoleInfoApi,
   getRoleListApi,
   updateRoleApi,
+  updateRoleStatusApi,
 } from '#/api/system/role';
-import { getPermissionTreeApi } from '#/api/system/permission';
 import { useFormModal, useTableCrud } from '#/composables/useTableCrud';
 
 defineOptions({
@@ -17,14 +19,15 @@ defineOptions({
 });
 
 // 使用表格 CRUD composable
-const { tableData, loading, pagination, loadData, refresh, handleDelete } = useTableCrud(
-  {
-    list: getRoleListApi,
-    delete: deleteRoleApi,
-    getInfo: getRoleInfoApi,
-  },
-  { immediateLoad: false },
-);
+const { tableData, loading, pagination, loadData, refresh, handleDelete } =
+  useTableCrud(
+    {
+      list: getRoleListApi,
+      delete: deleteRoleApi,
+      getInfo: getRoleInfoApi,
+    },
+    { immediateLoad: false },
+  );
 
 // 使用表单弹窗 composable
 const {
@@ -88,8 +91,18 @@ const columns = [
     title: '状态',
     dataIndex: 'status',
     width: 80,
-    customRender: ({ record }: any) =>
-      record.status === 1 ? '启用' : '禁用',
+    customRender: ({ record }: any) => {
+      return h(Switch, {
+        checked: record.status === 1,
+        onChange: async (checked: any) => {
+          await updateRoleStatusApi(record.id, {
+            status: checked ? 1 : 0,
+          });
+          message.success('更新成功');
+          await loadData();
+        },
+      });
+    },
   },
   { title: '排序', dataIndex: 'sort', width: 80 },
   {
@@ -106,12 +119,8 @@ loadData();
 <template>
   <div class="p-4">
     <div class="mb-4">
-      <a-button type="primary" @click="handleCreate">
-        新增角色
-      </a-button>
-      <a-button class="ml-2" @click="refresh">
-        刷新
-      </a-button>
+      <a-button type="primary" @click="handleCreate"> 新增角色 </a-button>
+      <a-button class="ml-2" @click="refresh"> 刷新 </a-button>
     </div>
 
     <a-table
@@ -170,7 +179,11 @@ loadData();
           <a-input v-model:value="formData.code" placeholder="请输入角色编码" />
         </a-form-item>
         <a-form-item label="排序" name="sort">
-          <a-input-number v-model:value="formData.sort" :min="0" style="width: 100%" />
+          <a-input-number
+            v-model:value="formData.sort"
+            :min="0"
+            style="width: 100%"
+          />
         </a-form-item>
         <a-form-item label="状态" name="status">
           <a-radio-group v-model:value="formData.status">

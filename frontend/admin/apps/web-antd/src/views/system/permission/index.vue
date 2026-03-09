@@ -516,18 +516,16 @@ loadData();
           />
         </a-form-item>
         <a-form-item label="固定标签" name="affix_tab">
-          <a-switch
-            v-model:checked="formData.affix_tab"
-            checked-children="固定"
-            un-checked-children="不固定"
-          />
+          <a-radio-group v-model:value="formData.affix_tab">
+            <a-radio :value="1">固定</a-radio>
+            <a-radio :value="0">不固定</a-radio>
+          </a-radio-group>
         </a-form-item>
         <a-form-item label="基础布局" name="no_basic_layout">
-          <a-switch
-            v-model:checked="formData.no_basic_layout"
-            checked-children="不需要"
-            un-checked-children="需要"
-          />
+          <a-radio-group v-model:value="formData.no_basic_layout">
+            <a-radio :value="1">不需要</a-radio>
+            <a-radio :value="0">需要</a-radio>
+          </a-radio-group>
         </a-form-item>
         <a-form-item label="排序" name="sort">
           <a-input-number
@@ -537,18 +535,16 @@ loadData();
           />
         </a-form-item>
         <a-form-item label="状态" name="status">
-          <a-switch
-            v-model:checked="formData.status"
-            checked-children="启用"
-            un-checked-children="禁用"
-          />
+          <a-radio-group v-model:value="formData.status">
+            <a-radio :value="1">启用</a-radio>
+            <a-radio :value="0">禁用</a-radio>
+          </a-radio-group>
         </a-form-item>
         <a-form-item label="是否显示" name="is_show">
-          <a-switch
-            v-model:checked="formData.is_show"
-            checked-children="显示"
-            un-checked-children="隐藏"
-          />
+          <a-radio-group v-model:value="formData.is_show">
+            <a-radio :value="1">显示</a-radio>
+            <a-radio :value="0">隐藏</a-radio>
+          </a-radio-group>
         </a-form-item>
         <a-form-item label="备注" name="remark">
           <a-textarea

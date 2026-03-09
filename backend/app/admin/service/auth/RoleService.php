@@ -29,7 +29,7 @@ class RoleService extends BaseService
         $keyword = $where['keyword'] ?? '';
         $status = $where['status'] ?? null;
 
-        $query = $this->model()->with(['permissions']);
+        $query = $this->model();
 
         // 关键字搜索
         if ($keyword) {
@@ -44,7 +44,38 @@ class RoleService extends BaseService
         $total = $query->count();
         $list = $query->order('sort', 'asc')
             ->order('id', 'desc')
-            ->page($page, $limit)->select();
+            ->page($page, $limit)->select()
+            ->toArray();
+
+        // 手动加载权限列表
+        foreach ($list as &$role) {
+            $role['permissions'] = [];
+            $role['permission_ids'] = [];
+
+            $rolePermissions = $this->model(RolePermission::class)
+                ->alias('rp')
+                ->leftJoin('permission p', 'rp.permission_id = p.id')
+                ->where('rp.role_id', $role['id'])
+                ->field('rp.id as pivot_id, rp.role_id, rp.permission_id, rp.create_time as pivot_create_time, p.*')
+                ->order('rp.id', 'asc')
+                ->select()
+                ->toArray();
+
+            foreach ($rolePermissions as $item) {
+                if (!empty($item['id'])) {
+                    $permission = $item;
+                    $permission['pivot'] = [
+                        'id' => $item['pivot_id'],
+                        'role_id' => $item['role_id'],
+                        'permission_id' => $item['permission_id'],
+                        'create_time' => $item['pivot_create_time'],
+                    ];
+                    unset($permission['pivot_id'], $permission['role_id'], $permission['pivot_create_time']);
+                    $role['permissions'][] = $permission;
+                }
+            }
+            $role['permission_ids'] = array_column($role['permissions'], 'id');
+        }
 
         return compact('total', 'list');
     }
@@ -54,16 +85,42 @@ class RoleService extends BaseService
      */
     public function getInfo(int $id): array
     {
-        $role = $this->model()->with(['permissions'])->find($id);
-
+        // 获取角色基本信息
+        $role = $this->model()->find($id);
         if (!$role) {
             throw new BusinessException('角色不存在');
         }
 
         $info = $role->toArray();
 
-        // 获取权限ID列表
-        $info['permission_ids'] = array_column($info['permissions'] ?? [], 'id');
+        // 以 role_permission 为主表，使用 left join 查询获取权限列表
+        $rolePermissions = $this->model(RolePermission::class)
+            ->alias('rp')
+            ->leftJoin('permission p', 'rp.permission_id = p.id')
+            ->where('rp.role_id', $id)
+            ->field('rp.id as pivot_id, rp.role_id, rp.permission_id, rp.create_time as pivot_create_time, p.*')
+            ->order('rp.id', 'asc')
+            ->select()
+            ->toArray();
+
+        // 组装 pivot 数据
+        $permissions = [];
+        foreach ($rolePermissions as $item) {
+            if (!empty($item['id'])) {
+                $permission = $item;
+                $permission['pivot'] = [
+                    'id' => $item['pivot_id'],
+                    'role_id' => $item['role_id'],
+                    'permission_id' => $item['permission_id'],
+                    'create_time' => $item['pivot_create_time'],
+                ];
+                unset($permission['pivot_id'], $permission['role_id'], $permission['pivot_create_time']);
+                $permissions[] = $permission;
+            }
+        }
+
+        $info['permissions'] = $permissions;
+        $info['permission_ids'] = array_column($permissions, 'id');
 
         return $info;
     }
@@ -135,6 +192,17 @@ class RoleService extends BaseService
 
             return true;
         });
+    }
+
+    public function changeStatus(int $id, int $status): bool
+    {
+        $role = $this->model()->find($id);
+        if (!$role) {
+            throw new BusinessException('角色不存在');
+        }
+
+        $this->model()->updateById($id, ['status' => $status]);
+        return true;
     }
 
     /**

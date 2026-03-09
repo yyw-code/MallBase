@@ -82,7 +82,7 @@ class AdminService extends BaseService
         $keyword = $params['keyword'] ?? '';
         $status = $params['status'] ?? null;
 
-        $query = $this->model()->with(['roles']);
+        $query = $this->model();
 
         // 关键字搜索
         if ($keyword) {
@@ -96,11 +96,38 @@ class AdminService extends BaseService
 
         $total = $query->count();
         $list = $query->order('id', 'desc')
-            ->page($page, $limit)->select();
+            ->page($page, $limit)->select()
+            ->toArray();
 
-        // 隐藏密码
-        foreach ($list as $item) {
-            unset($item['password']);
+        // 手动加载角色列表
+        foreach ($list as &$admin) {
+            unset($admin['password']);
+            $admin['roles'] = [];
+            $admin['role_ids'] = [];
+
+            $adminRoles = $this->model(AdminRole::class)
+                ->alias('ar')
+                ->leftJoin('role r', 'ar.role_id = r.id')
+                ->where('ar.admin_id', $admin['id'])
+                ->field('ar.id as pivot_id, ar.admin_id, ar.role_id, ar.create_time as pivot_create_time, r.*')
+                ->order('ar.id', 'asc')
+                ->select()
+                ->toArray();
+
+            foreach ($adminRoles as $item) {
+                if (!empty($item['id'])) {
+                    $role = $item;
+                    $role['pivot'] = [
+                        'id' => $item['pivot_id'],
+                        'admin_id' => $item['admin_id'],
+                        'role_id' => $item['role_id'],
+                        'create_time' => $item['pivot_create_time'],
+                    ];
+                    unset($role['pivot_id'], $role['admin_id'], $role['pivot_create_time']);
+                    $admin['roles'][] = $role;
+                }
+            }
+            $admin['role_ids'] = array_column($admin['roles'], 'id');
         }
 
         return compact('total', 'list');
@@ -111,7 +138,7 @@ class AdminService extends BaseService
      */
     public function getInfo(int $id): array
     {
-        $admin = $this->model()->with(['roles'])->find($id);
+        $admin = $this->model()->find($id);
 
         if (!$admin) {
             throw new BusinessException('管理员不存在');
@@ -119,6 +146,33 @@ class AdminService extends BaseService
 
         $info = $admin->toArray();
         unset($info['password']);
+
+        // 手动加载角色列表
+        $admin['roles'] = [];
+        $admin['role_ids'] = [];
+
+        $adminRoles = $this->model(AdminRole::class)
+            ->alias('ar')
+            ->leftJoin('role r', 'ar.role_id = r.id')
+            ->where('ar.admin_id', $id)
+            ->field('ar.id as pivot_id, ar.admin_id, ar.role_id, ar.create_time as pivot_create_time, r.*')
+            ->order('ar.id', 'asc')
+            ->select()
+            ->toArray();
+
+        foreach ($adminRoles as $item) {
+            if (!empty($item['id'])) {
+                $role = $item;
+                $role['pivot'] = [
+                    'id' => $item['pivot_id'],
+                    'admin_id' => $item['admin_id'],
+                    'role_id' => $item['role_id'],
+                    'create_time' => $item['pivot_create_time'],
+                ];
+                unset($role['pivot_id'], $role['admin_id'], $role['pivot_create_time']);
+                $info['roles'][] = $role;
+            }
+        }
 
         // 获取角色ID列表
         $info['role_ids'] = array_column($info['roles'] ?? [], 'id');
@@ -274,18 +328,22 @@ class AdminService extends BaseService
      */
     public function getAccessCodes(int $adminId): array
     {
-        $admin = $this->model()->with(['roles.permissions'])->find($adminId);
+        // 获取管理员的角色ID
+        $roleIds = $this->model(AdminRole::class)
+            ->where('admin_id', $adminId)
+            ->column('role_id');
 
-        if (!$admin) {
-            throw new BusinessException('管理员不存在');
+        if (empty($roleIds)) {
+            return [];
         }
 
-        $codes = [];
-        foreach ($admin['roles'] ?? [] as $role) {
-            foreach ($role['permissions'] ?? [] as $permission) {
-                $codes[] = $permission['code'];
-            }
-        }
+        // 获取这些角色的所有权限码
+        $codes = $this->model(\app\admin\model\auth\RolePermission::class)
+            ->alias('rp')
+            ->leftJoin('permission p', 'rp.permission_id = p.id')
+            ->whereIn('rp.role_id', $roleIds)
+            ->where('p.status', 1)
+            ->column('p.code');
 
         return array_values(array_unique($codes));
     }
@@ -295,21 +353,26 @@ class AdminService extends BaseService
      */
     public function getAccessMenus(int $adminId): array
     {
-        $admin = $this->model()->with(['roles.permissions'])->find($adminId);
+        // 获取管理员的角色ID
+        $roleIds = $this->model(AdminRole::class)
+            ->where('admin_id', $adminId)
+            ->column('role_id');
 
-        if (!$admin) {
-            throw new BusinessException('管理员不存在');
+        if (empty($roleIds)) {
+            return [];
         }
 
         // 获取所有菜单类型权限
-        $menus = [];
-        foreach ($admin['roles'] ?? [] as $role) {
-            foreach ($role['permissions'] ?? [] as $permission) {
-                if ($permission['status'] == 1 && $permission['type'] == 1) {
-                    $menus[] = $permission;
-                }
-            }
-        }
+        $menus = $this->model(\app\admin\model\auth\RolePermission::class)
+            ->alias('rp')
+            ->leftJoin('permission p', 'rp.permission_id = p.id')
+            ->whereIn('rp.role_id', $roleIds)
+            ->where('p.status', 1)
+            ->where('p.type', 1)
+            ->field('p.*')
+            ->distinct()
+            ->select()
+            ->toArray();
 
         // 构建树形结构
         return $this->buildMenuTree($menus);
@@ -320,20 +383,29 @@ class AdminService extends BaseService
      */
     public function getAccessRoutes(int $adminId): array
     {
-        $admin = $this->model()->with(['roles.permissions'])->find($adminId);
+        // 获取管理员的角色ID
+        $roleIds = $this->model(AdminRole::class)
+            ->where('admin_id', $adminId)
+            ->column('role_id');
 
-        if (!$admin) {
-            throw new BusinessException('管理员不存在');
+        if (empty($roleIds)) {
+            return [];
         }
 
         // 获取所有路由权限
+        $permissions = $this->model(\app\admin\model\auth\RolePermission::class)
+            ->alias('rp')
+            ->leftJoin('permission p', 'rp.permission_id = p.id')
+            ->whereIn('rp.role_id', $roleIds)
+            ->where('p.status', 1)
+            ->field('p.*')
+            ->distinct()
+            ->select()
+            ->toArray();
+
         $routes = [];
-        foreach ($admin['roles'] ?? [] as $role) {
-            foreach ($role['permissions'] ?? [] as $permission) {
-                if ($permission['status'] == 1) {
-                    $routes[] = $this->convertToRoute($permission);
-                }
-            }
+        foreach ($permissions as $permission) {
+            $routes[] = $this->convertToRoute($permission);
         }
 
         return $routes;

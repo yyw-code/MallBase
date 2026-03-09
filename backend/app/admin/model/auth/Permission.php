@@ -20,14 +20,6 @@ class Permission extends BaseModel
     protected $updateTime = 'update_time';
 
     /**
-     * 获取角色列表
-     */
-    public function roles()
-    {
-        return $this->belongsToMany(Role::class, 'role_permission', 'permission_id', 'role_id');
-    }
-
-    /**
      * 获取子权限
      */
     public function children()

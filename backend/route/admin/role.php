@@ -15,6 +15,8 @@ Route::group('auth/role', function () {
     Route::post('create', 'create')->option(['_alias' => '创建', '_desc' => '创建角色', '_auth' => true]);
     // 更新
     Route::put('update/:id', 'update')->option(['_alias' => '更新', '_desc' => '更新角色', '_auth' => true]);
+    // 更新状态
+    Route::put('changeStatus/:id', 'changeStatus')->option(['_alias' => '更新状态', '_desc' => '更新角色状态', '_auth' => true]);
     // 删除
     Route::delete('delete/:id', 'delete')->option(['_alias' => '删除', '_desc' => '删除角色', '_auth' => true]);
 })->prefix('auth/RoleController/')
