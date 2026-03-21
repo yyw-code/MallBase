@@ -299,15 +299,20 @@ loadData();
         <a-form-item label="头像">
           <a-upload v-bind="uploadProps">
             <img
-              v-if="formData.avatar"
+              v-if="!formData.avatar"
               :src="formData.full_url"
               style="width: 100%"
               alt="头像"
             />
 
             <div v-else>
-              <span class="text-xl">+</span>
-              <div class="mt-2 text-xs">上传头像</div>
+              <div>
+                <img :src="formData.avatar" alt="头像" style="width: 100%" />
+              </div>
+              <div>
+                <span class="text-xl">+</span>
+                <div class="mt-2 text-xs">上传头像</div>
+              </div>
             </div>
           </a-upload>
         </a-form-item>
