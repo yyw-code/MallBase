@@ -1,6 +1,4 @@
 <script lang="ts" setup>
-import type { UploadProps } from 'ant-design-vue';
-
 import type { AdminApi } from '#/api/system/admin';
 
 import { computed, ref } from 'vue';
@@ -17,6 +15,7 @@ import {
   updateAdminApi,
 } from '#/api/system/admin';
 import { getAllRolesApi } from '#/api/system/role';
+import Upload from '#/components/upload/index.vue';
 import { useFormModal, useTableCrud } from '#/composables/useTableCrud';
 
 defineOptions({ name: 'SystemAdmin' });
@@ -66,6 +65,7 @@ const handleCreate = async () => {
     password_confirm: '',
     nickname: '',
     avatar: '',
+    avatar_full_url: '',
     email: '',
     mobile: '',
     status: 1,
@@ -114,42 +114,15 @@ const handleResetPassword = (row: AdminApi.AdminItem) => {
 
 /* ---------------- 头像上传 ---------------- */
 
-const uploadProps: UploadProps = {
-  name: 'file',
-  maxCount: 1,
-  listType: 'picture-card',
+const handleAvatarUpload = async (file: File) => {
+  const res = await uploadImageApi(file);
+  formData.value.avatar = res.url;
+  formData.value.avatar_full_url = res.full_url;
+};
 
-  beforeUpload(file) {
-    if (!file.type.startsWith('image/')) {
-      message.error('只能上传图片');
-      return false;
-    }
-
-    if (file.size / 1024 / 1024 > 2) {
-      message.error('图片不能超过2MB');
-      return false;
-    }
-
-    return true;
-  },
-  async customRequest({ file, onSuccess, onError }) {
-    try {
-      const res = await uploadImageApi(file as File);
-      formData.value.avatar = res.url;
-      // 用于组件显示
-      onSuccess?.({
-        url: res.full_url,
-      });
-      message.success('上传成功');
-    } catch (error) {
-      onError?.(error as Error);
-      message.error('上传失败');
-    }
-  },
-
-  onRemove() {
-    formData.value.avatar = '';
-  },
+const handleAvatarRemove = async () => {
+  formData.value.avatar = '';
+  formData.value.avatar_full_url = '';
 };
 
 /* ---------------- 表格列 ---------------- */
@@ -297,24 +270,12 @@ loadData();
         </a-form-item>
 
         <a-form-item label="头像">
-          <a-upload v-bind="uploadProps">
-            <img
-              v-if="!formData.avatar"
-              :src="formData.full_url"
-              style="width: 100%"
-              alt="头像"
-            />
-
-            <div v-else>
-              <div>
-                <img :src="formData.avatar" alt="头像" style="width: 100%" />
-              </div>
-              <div>
-                <span class="text-xl">+</span>
-                <div class="mt-2 text-xs">上传头像</div>
-              </div>
-            </div>
-          </a-upload>
+          <Upload
+            :value="formData.avatar_full_url"
+            type="image"
+            :custom-upload="handleAvatarUpload"
+            :custom-remove="handleAvatarRemove"
+          />
         </a-form-item>
 
         <a-form-item label="手机号">

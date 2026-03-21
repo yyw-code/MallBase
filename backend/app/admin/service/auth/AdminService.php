@@ -7,6 +7,7 @@ namespace app\admin\service\auth;
 use app\admin\model\auth\Admin as AdminModel;
 use app\admin\model\auth\AdminRole;
 use app\admin\model\auth\Role;
+use app\admin\model\auth\RolePermission;
 use mall_base\base\BaseService;
 use mall_base\exception\AuthException;
 use mall_base\exception\BusinessException;
@@ -235,10 +236,12 @@ class AdminService extends BaseService
             }
         }
         return $this->transaction(function () use ($id, $data) {
+            $role_ids = $data['role_ids'] ?? [];
+            unset($data['role_ids']);
             $this->model()->updateById($id, $data);
             // 重新分配角色
-            if (!empty($data['role_ids'])) {
-                $this->assignRoles($id, $data['role_ids']);
+            if (!empty($role_ids)) {
+                $this->assignRoles($id, $role_ids);
             }
 
             return true;
@@ -275,7 +278,7 @@ class AdminService extends BaseService
     public function assignRoles(int $adminId, array $roleIds): void
     {
         // 删除原有角色
-        think\facade\Db::name('admin_role')->where('admin_id', $adminId)->delete();
+        $this->model(AdminRole::class)->where('admin_id', $adminId)->delete();
 
         // 批量分配新角色
         if (!empty($roleIds)) {
@@ -287,7 +290,7 @@ class AdminService extends BaseService
                     'create_time' => date('Y-m-d H:i:s'),
                 ];
             }
-            think\facade\Db::name('admin_role')->insertAll($insertData);
+            $this->model(AdminRole::class)->insertAll($insertData);
         }
     }
 
@@ -338,7 +341,7 @@ class AdminService extends BaseService
         }
 
         // 获取这些角色的所有权限码
-        $codes = $this->model(\app\admin\model\auth\RolePermission::class)
+        $codes = $this->model(RolePermission::class)
             ->alias('rp')
             ->leftJoin('permission p', 'rp.permission_id = p.id')
             ->whereIn('rp.role_id', $roleIds)
@@ -363,7 +366,7 @@ class AdminService extends BaseService
         }
 
         // 获取所有菜单类型权限
-        $menus = $this->model(\app\admin\model\auth\RolePermission::class)
+        $menus = $this->model(RolePermission::class)
             ->alias('rp')
             ->leftJoin('permission p', 'rp.permission_id = p.id')
             ->whereIn('rp.role_id', $roleIds)
@@ -393,7 +396,7 @@ class AdminService extends BaseService
         }
 
         // 获取所有路由权限
-        $permissions = $this->model(\app\admin\model\auth\RolePermission::class)
+        $permissions = $this->model(RolePermission::class)
             ->alias('rp')
             ->leftJoin('permission p', 'rp.permission_id = p.id')
             ->whereIn('rp.role_id', $roleIds)

@@ -22,6 +22,10 @@ class Admin extends BaseModel
     // 密码加密器
     protected $passwordHash = 'password_hash';
 
+    protected array $append = [
+        'avatar_full_url'
+    ];
+
     /**
      * 隐藏密码字段
      */
@@ -55,5 +59,10 @@ class Admin extends BaseModel
     public function needsRehash(): bool
     {
         return password_needs_rehash($this->password, PASSWORD_DEFAULT);
+    }
+
+    public function getAvatarFullUrlAttr($value, $data)
+    {
+        return getUploadDomain() . $data['avatar'];
     }
 }
