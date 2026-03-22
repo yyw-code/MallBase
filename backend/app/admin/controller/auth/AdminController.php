@@ -56,7 +56,7 @@ class AdminController extends BaseController
      */
     public function list()
     {
-        $where = $this->request->param(['username', 'status']);
+        $where = $this->request->param(['keyword', 'status']);
 
         // 获取分页参数
         [$page, $limit] = $this->getPagination(1, 15);

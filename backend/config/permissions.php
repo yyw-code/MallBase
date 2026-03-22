@@ -141,7 +141,7 @@ return [
                     'code' => 'SystemPermissionManagement',
                     'type' => 1,
                     'path' => null,
-                    'icon' => 'lucide:settings',
+                    'icon' => 'ant-design:lock-filled',
                     'component' => null,
                     'redirect' => null,
                     'sort' => 0,

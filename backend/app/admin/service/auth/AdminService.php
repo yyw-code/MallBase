@@ -78,22 +78,18 @@ class AdminService extends BaseService
     /**
      * 获取管理员列表
      */
-    public function getList(array $params = [], int $page = 1, int $limit = 10): array
+    public function getList(array $where = [], int $page = 1, int $limit = 10): array
     {
-        $keyword = $params['keyword'] ?? '';
-        $status = $params['status'] ?? null;
+        $keyword = $where['keyword'] ?? '';
+        $status = $where['status'] ?? null;
 
-        $query = $this->model();
-
-        // 关键字搜索
-        if ($keyword) {
-            $query->whereLike('username|nickname|mobile|email', "%{$keyword}%");
-        }
-
-        // 状态筛选
-        if ($status !== null) {
-            $query->where('status', $status);
-        }
+        $query = $this->model()
+            ->when($keyword, function ($q) use ($keyword) {
+                $q->whereLike('username|nickname|mobile|email', "%{$keyword}%");
+            })
+            ->when($status !== null, function ($q) use ($status) {
+                $q->where('status', $status);
+            });
 
         $total = $query->count();
         $list = $query->order('id', 'desc')

@@ -96,7 +96,7 @@ const handleFormSubmit = async () => {
       create: createAdminApi,
       update: updateAdminApi,
     },
-    () => loadData(),
+    () => loadData(searchParams.value),
   );
 };
 
@@ -124,6 +124,21 @@ const handleAvatarUpload = async (file: File) => {
 const handleAvatarRemove = async () => {
   formData.value.avatar = '';
   formData.value.avatar_full_url = '';
+};
+
+// 搜索参数
+const searchParams = ref({
+  keyword: '',
+  status: undefined as number | undefined,
+});
+
+// 重置搜索
+const resetSearch = () => {
+  searchParams.value = {
+    keyword: '',
+    status: undefined,
+  };
+  loadData(searchParams.value);
 };
 
 /* ---------------- 表格列 ---------------- */
@@ -156,7 +171,7 @@ const columns = [
             status: checked ? 1 : 0,
           });
           message.success('更新成功');
-          await loadData();
+          await loadData(searchParams.value);
         },
       });
     },
@@ -173,7 +188,7 @@ const columns = [
 
 /* ---------------- 初始化 ---------------- */
 
-loadData();
+loadData(searchParams.value);
 </script>
 
 <template>
@@ -183,6 +198,33 @@ loadData();
       <a-button class="ml-2" @click="refresh">刷新</a-button>
     </div>
 
+    <!-- 搜索表单 -->
+    <a-form layout="inline" class="mb-4">
+      <a-form-item label="关键词">
+        <a-input
+          v-model:value="searchParams.keyword"
+          placeholder="用户名/昵称/手机号/邮箱"
+          allow-clear
+          style="width: 200px"
+        />
+      </a-form-item>
+      <a-form-item label="状态">
+        <a-select
+          v-model:value="searchParams.status"
+          placeholder="请选择"
+          allow-clear
+          style="width: 150px"
+        >
+          <a-select-option :value="1">启用</a-select-option>
+          <a-select-option :value="0">禁用</a-select-option>
+        </a-select>
+      </a-form-item>
+      <a-form-item>
+        <a-button type="primary" @click="loadData(searchParams)"> 搜索 </a-button>
+        <a-button class="ml-2" @click="resetSearch"> 重置 </a-button>
+      </a-form-item>
+    </a-form>
+
     <a-table
       :columns="columns"
       :data-source="tableData"
@@ -190,7 +232,7 @@ loadData();
       :pagination="pagination"
       :scroll="{ x: 1200 }"
       row-key="id"
-      @change="loadData"
+      @change="() => loadData(searchParams.value)"
     >
       <template #bodyCell="{ column, record }">
         <template v-if="column.title === '头像'">
