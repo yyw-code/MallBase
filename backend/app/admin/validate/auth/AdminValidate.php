@@ -38,7 +38,8 @@ class AdminValidate extends Validate
         'login' => ['username', 'password'],
         'create' => ['username', 'password', 'password_confirm', 'nickname', 'avatar', 'email', 'mobile', 'status', 'remark', 'role_ids'],
         'update' => ['username', 'nickname', 'avatar', 'email', 'mobile', 'status', 'remark', 'role_ids'],
-        'resetPassword' => ['password', 'password_confirm'],
+        'resetPassword' => ['password'],
+        'changePassword' => ['password', 'password_confirm'],
     ];
 
     /**

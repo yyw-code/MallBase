@@ -112,6 +112,21 @@ class AdminController extends BaseController
         return $this->success(null, '更新成功');
     }
 
+
+    public function changeStatus($id)
+    {
+        $status = $this->request->param('status');
+        if (empty($id)) {
+            return $this->error('ID不能为空');
+        }
+        if (!in_array($status, [0, 1])) {
+            return $this->error('状态值错误');
+        }
+        $this->service()->changeStatus((int)$id, $status);
+        return $this->success(null, '更新成功');
+
+    }
+
     /**
      * 删除
      */
@@ -131,7 +146,29 @@ class AdminController extends BaseController
      * @param string $password required source=body 新密码
      * @param string $password_confirm required source=body 确认密码
      */
-    public function resetPassword()
+    public function resetPassword($id)
+    {
+        $data = $this->request->param(['password']);
+
+        if (empty($id)) {
+            return $this->error('ID不能为空');
+        }
+
+        // 验证重置密码参数
+        $this->validate($data, AdminValidate::class . '.resetPassword');
+
+        $this->service()->resetPassword((int)$id, $data['password']);
+        return $this->success(null, '密码重置成功');
+    }
+
+
+    /**
+     * 修改密码
+     * @param int $id required source=body 管理员ID
+     * @param string $password required source=body 新密码
+     * @param string $password_confirm required source=body 确认密码
+     */
+    public function changePassword()
     {
         $data = $this->request->param(['password', 'password_confirm']);
         $id = $this->request->admin_id;
@@ -141,7 +178,7 @@ class AdminController extends BaseController
         }
 
         // 验证重置密码参数
-        $this->validate($data, AdminValidate::class . '.resetPassword');
+        $this->validate($data, AdminValidate::class . '.changePassword');
 
         $this->service()->resetPassword((int)$id, $data['password']);
         return $this->success(null, '密码重置成功');

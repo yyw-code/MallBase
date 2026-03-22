@@ -24,7 +24,8 @@ Route::group('auth/permission', function () {
 })->prefix('auth/PermissionController/')
     ->name('SystemPermission')
     ->option([
-        '_group_name' => '权限',
+        '_group_name' => '权限设置',
+        '_group_code' => 'SystemPermission',
         '_path' => '/permission',
         '_auth' => true,
         '_icon' => 'lucide:lock',

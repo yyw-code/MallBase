@@ -51,6 +51,17 @@ export namespace AdminApi {
   export interface UpdateParams extends CreateParams {
     id: number;
   }
+
+  /** 更新状态 */
+  export interface UpdateStatus {
+    status: 0 | 1;
+  }
+
+  /** 更新状态 */
+  export interface ChangePassword {
+    password: string;
+    password_confirm: string;
+  }
 }
 
 /**
@@ -88,6 +99,16 @@ export async function updateAdminApi(
 }
 
 /**
+ * 更新管理员状态
+ */
+export async function updateAdminStatusApi(
+  id: number,
+  data: Omit<AdminApi.UpdateStatus, 'id'>,
+) {
+  return requestClient.put(`/auth/admin/changeStatus/${id}`, data);
+}
+
+/**
  * 删除管理员
  */
 export async function deleteAdminApi(id: number) {
@@ -98,5 +119,15 @@ export async function deleteAdminApi(id: number) {
  * 重置密码
  */
 export async function resetPasswordApi(id: number, password: string) {
-  return requestClient.post(`/auth/admin/reset-password/${id}`, { password });
+  return requestClient.post(`/auth/admin/resetPassword/${id}`, { password });
+}
+
+/**
+ * 重置密码
+ */
+export async function changePasswordApi(
+  id: number,
+  data: AdminApi.ChangePassword,
+) {
+  return requestClient.post(`/auth/admin/changePassword/${id}`, data);
 }

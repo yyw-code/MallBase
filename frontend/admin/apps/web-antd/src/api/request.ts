@@ -88,8 +88,8 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
 
       // 检查 401 未授权错误，让 authenticateResponseInterceptor 处理
       if (responseData && responseData.code === 401) {
-        console.log(response);
-        throw response;
+        // eslint-disable-next-line no-throw-literal
+        throw { response };
       }
 
       if (status >= 200 && status < 400) {

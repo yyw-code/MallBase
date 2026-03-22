@@ -4,6 +4,7 @@ declare (strict_types=1);
 
 namespace app\admin\middleware;
 
+use app\admin\model\auth\Permission;
 use Closure;
 use mall_base\exception\AuthException;
 use think\facade\Cache;
@@ -83,6 +84,8 @@ class CheckPermission
     {
         // 从路由规则中获取权限标识
         $route = $request->rule();
+
+        $options = $route->getOption();
         if ($route) {
             // 路由规则示例：admin/auth/admin/list
             $rule = $route->getRule();
@@ -106,6 +109,7 @@ class CheckPermission
         // 获取用户的所有权限
         $permissions = $this->getUserPermissions($adminId);
 
+        var_dump($permissions, $permissionCode);
         // 检查是否包含当前权限
         return in_array($permissionCode, $permissions);
     }
@@ -120,30 +124,29 @@ class CheckPermission
     {
         $cacheKey = $this->cachePrefix . $adminId;
 
-        // 尝试从缓存获取
-        if ($this->enableCache) {
-            $cached = Cache::get($cacheKey);
-            if ($cached !== false) {
-                return $cached;
-            }
-        }
+//        // 尝试从缓存获取
+//        if ($this->enableCache) {
+//            $cached = Cache::get($cacheKey);
+//            if ($cached !== false) {
+//                return $cached;
+//            }
+//        }
 
         // 查询数据库获取用户权限
-        $permissions = \app\admin\model\auth\Permission::alias('p')
-            ->join('admin_role_permission arp', 'arp.permission_id = p.id')
-            ->join('admin_role r', 'r.id = arp.role_id')
-            ->join('admin_admin_role aar', 'aar.role_id = r.id')
-            ->where('aar.admin_id', $adminId)
+        $permissions = Permission::alias('p')
+            ->join('role_permission rp', 'rp.permission_id = p.id')
+            ->join('admin_role ar', 'ar.id = rp.role_id')
+            ->where('ar.admin_id', $adminId)
             ->where('p.status', 1)
-            ->where('r.status', 1)
             ->column('p.code');
+
 
         // 存入缓存
         if ($this->enableCache) {
             Cache::set($cacheKey, $permissions, $this->cacheExpire);
         }
 
-        return $permissions;
+        return $permissions ?: [];
     }
 
     /**

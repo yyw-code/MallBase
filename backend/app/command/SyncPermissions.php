@@ -66,6 +66,12 @@ class SyncPermissions extends Command
     protected $routeData = [];
 
     /**
+     * 已创建的路由组（用于去重）
+     * @var array
+     */
+    protected $createdGroups = [];
+
+    /**
      * 基础菜单数据
      * @var array
      */
@@ -100,6 +106,12 @@ class SyncPermissions extends Command
      * @var array
      */
     protected $toDelete = [];
+
+    /**
+     * 菜单 code 到父级 code 的映射
+     * @var array
+     */
+    protected $menuParentMap = [];
 
     /**
      * 配置命令
@@ -202,43 +214,97 @@ class SyncPermissions extends Command
             // 获取路由列表
             $routeList = $this->app->route->getRuleList();
 
+            // 构建路由父子关系映射
+            $routeMap = [];
+            foreach ($routeList as $route) {
+                $routeName = $route['name'] ?? '';
+                if (!empty($routeName)) {
+                    $routeMap[$routeName] = $route;
+                }
+            }
+
             // 处理所有路由
             foreach ($routeList as $route) {
-                $option = $route['option'] ?? [];
+                $routeName = $route['name'] ?? '';
 
-                // 只处理有 _alias 的路由
-                if (!isset($option['_alias'])) {
+                // 合并父级路由的 option（向上递归查找）
+                $option = $this->mergeParentOptions($route, $routeMap);
+
+                // 检查是否有 _group_code（路由组标识）
+                $hasGroupCode = isset($option['_group_code']);
+                $isRouteGroup = empty($route['rule']) || $route['rule'] === '/';
+
+                // 如果有 _group_code，创建路由组菜单（路由组本身不在 getRuleList 中，需要从子路由创建）
+                if ($hasGroupCode) {
+                    $groupCode = $option['_group_code'];
+                    $groupName = $option['_group_name'] ?? '';
+
+                    // 如果还没有创建过这个路由组
+                    if (!isset($this->createdGroups[$groupCode]) && !empty($groupName)) {
+                        // 创建路由组菜单
+                        $groupOption = array_merge($option, [
+                            '_alias' => $groupName,
+                            '_type' => 'menu', // 强制为菜单类型
+                        ]);
+                        $this->routeData[$groupCode] = $this->parseRouteOption($groupCode, $route, $groupOption);
+                        $this->createdGroups[$groupCode] = true;
+                    }
+
+                    // 修改子路由的 _parent 为路由组 code，这样子路由会挂在路由组菜单下
+                    $option['_parent'] = $groupCode;
+                }
+
+                // 处理有 _alias 或 _group_name 的路由
+                $hasAlias = isset($option['_alias']);
+                $hasGroupName = isset($option['_group_name']);
+
+                if (!$hasAlias && !$hasGroupName) {
                     continue;
                 }
 
-                // 获取路由 name
-                $routeName = $route['name'] ?? '';
+                // 有 name 的路由才处理（子路由）
                 if (empty($routeName)) {
                     continue;
                 }
 
-                // 过滤：只处理 _auth 为 true 或类型为菜单的路由
-                $type = $option['_type'] ?? null;
-
-                // 检查是否有 without_middleware（排除了 JwtAuth 和 CheckPermission 的路由不需要权限控制）
-                $withoutMiddleware = $option['without_middleware'] ?? [];
-                $hasNoAuthMiddleware = in_array('app\\admin\\middleware\\JwtAuth', $withoutMiddleware) ||
-                    in_array('app\\admin\\middleware\\CheckPermission', $withoutMiddleware);
-
-                if ($type === null && !($option['_auth'] ?? false)) {
-                    // 既不是菜单，也没有 _auth=true，跳过
-                    continue;
-                }
-
-                // 如果路由排除了权限中间件，则不应该同步到权限表
-                if ($hasNoAuthMiddleware) {
-                    continue;
+                // 对于路由组（没有实际 rule），使用 _group_name 作为 _alias
+                if ($isRouteGroup && $hasGroupName && !$hasAlias) {
+                    $option['_alias'] = $option['_group_name'];
                 }
 
                 // 构建路由数据
                 $this->routeData[$routeName] = $this->parseRouteOption($routeName, $route, $option);
             }
         }
+    }
+
+    /**
+     * 合并父级路由的 option（向上递归查找）
+     *
+     * 注意：子路由的 option 优先级高于父级，避免父级覆盖子级
+     *
+     * @param array $route 当前路由
+     * @param array $routeMap 路由映射
+     * @return array 合并后的 option
+     */
+    protected function mergeParentOptions($route, $routeMap)
+    {
+        $option = $route['option'] ?? [];
+        $parentName = $route['parent'] ?? '';
+
+        if (empty($parentName)) {
+            return $option;
+        }
+
+        // 递归合并父级的 option
+        $parentRoute = $routeMap[$parentName] ?? null;
+        if ($parentRoute) {
+            $parentOption = $this->mergeParentOptions($parentRoute, $routeMap);
+            // 父级 option 被子级 option 覆盖（子级优先级更高）
+            $option = array_merge($parentOption, $option);
+        }
+
+        return $option;
     }
 
     /**
@@ -285,7 +351,7 @@ class SyncPermissions extends Command
             // 接口类型：也使用 _parent 字段（路由组的 _parent）
             // 这样接口可以直接挂在路由组的父级菜单下
             $parentCode = $option['_parent'] ?? '';
-            
+
             // 如果没有 _parent，尝试使用 _group_name 查找
             if (empty($parentCode)) {
                 $groupName = $option['_group_name'] ?? '';
@@ -317,6 +383,7 @@ class SyncPermissions extends Command
             '_no_basic_layout' => 'no_basic_layout',
             '_remark' => 'remark',
             '_desc' => 'remark', // _desc 别名
+            '_group_name_desc' => 'remark', // _group_name_desc 用于路由组备注
         ];
 
         foreach ($fieldMap as $routeKey => $dbField) {
@@ -341,7 +408,7 @@ class SyncPermissions extends Command
     /**
      * 根据名称查找菜单的 code（递归）
      * 先在 base_menus 中查找，再在 routeData 中查找
-     * 
+     *
      * @param string $name 菜单名称
      * @param array $menus 菜单数组
      * @return string
@@ -378,6 +445,36 @@ class SyncPermissions extends Command
     }
 
     /**
+     * 根据 code 查找菜单（递归）
+     *
+     * @param string $code 菜单 code
+     * @param array $menus 菜单数组
+     * @return array|null
+     */
+    protected function findMenuByCode($code, $menus = null)
+    {
+        if ($menus === null) {
+            $menus = $this->baseMenus;
+        }
+
+        foreach ($menus as $menu) {
+            if ($menu['code'] === $code) {
+                return $menu;
+            }
+
+            // 递归查找子菜单
+            if (isset($menu['children']) && !empty($menu['children'])) {
+                $found = $this->findMenuByCode($code, $menu['children']);
+                if ($found) {
+                    return $found;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * 加载数据库权限
      */
     protected function loadDbPermissions()
@@ -405,8 +502,11 @@ class SyncPermissions extends Command
      */
     protected function compareData()
     {
+        // 清空菜单父子映射
+        $this->menuParentMap = [];
+
         // 先遍历 base_menus，标记哪些需要创建或更新
-        $this->compareMenuData($this->baseMenus, '');
+        $this->compareMenuData($this->baseMenus, '', []);
 
         // 再遍历路由数据，标记哪些需要创建或更新
         foreach ($this->routeData as $code => $route) {
@@ -441,15 +541,19 @@ class SyncPermissions extends Command
 
     /**
      * 比对菜单数据（递归）
-     * 
+     *
      * @param array $menus 菜单数组
      * @param string $parentCode 父级 code
+     * @param array $parentMenus 父级菜单路径
      */
-    protected function compareMenuData($menus, $parentCode)
+    protected function compareMenuData($menus, $parentCode, $parentMenus = [])
     {
         foreach ($menus as $menu) {
             $code = $menu['code'];
             $dbPermission = $this->dbPermissions[$code] ?? null;
+
+            // 构建菜单父子映射
+            $this->menuParentMap[$code] = $parentCode;
 
             if ($dbPermission) {
                 // 数据库中已存在，需要更新
@@ -468,7 +572,8 @@ class SyncPermissions extends Command
 
             // 递归处理子菜单
             if (isset($menu['children']) && !empty($menu['children'])) {
-                $this->compareMenuData($menu['children'], $code);
+                $newParentMenus = array_merge($parentMenus, [$menu]);
+                $this->compareMenuData($menu['children'], $code, $newParentMenus);
             }
         }
     }
@@ -499,6 +604,7 @@ class SyncPermissions extends Command
             'no_basic_layout' => $menu['no_basic_layout'] ?? 0,
             'remark' => $menu['remark'] ?? null,
             'parent_id' => 0,
+            'parent_code' => $parentCode, // 保存 parent_code，用于预览显示
         ];
 
         if ($setParentId && !empty($parentCode)) {
@@ -509,6 +615,11 @@ class SyncPermissions extends Command
 
         // 添加更新时间
         $data['update_time'] = date('Y-m-d H:i:s');
+
+        // 实际同步时移除 parent_code（数据库表中没有这个字段）
+        if ($setParentId) {
+            unset($data['parent_code']);
+        }
 
         return $data;
     }
@@ -522,13 +633,42 @@ class SyncPermissions extends Command
      */
     protected function buildRoutePermissionData($route, $setParentId = true)
     {
-        // 构建数据，保留路由中定义的字段，未定义的用数据库默认值
-        $data = array_merge(self::DB_DEFAULTS, $route);
+        // 保留关键字段（name、code、type、parent_code）
+        $data = [
+            'code' => $route['code'] ?? '',
+            'name' => $route['name'] ?? '',
+            'type' => $route['type'] ?? self::TYPE_MENU,
+            'parent_code' => $route['parent_code'] ?? '',
+        ];
+
+        // 根据 type 确定允许的字段
+        $dbFields = array_keys(self::DB_DEFAULTS);
+
+        // type=2(按钮) 和 type=3(接口) 不包含 icon、component、redirect
+        if ($route['type'] === self::TYPE_BUTTON || $route['type'] === self::TYPE_API) {
+            // 排除这些字段
+            $excludeFields = ['path', 'icon', 'component', 'redirect'];
+            $dbFields = array_diff($dbFields, $excludeFields);
+        }
+
+        // 添加其他允许的字段
+        foreach ($dbFields as $field) {
+            if (isset($route[$field])) {
+                $data[$field] = $route[$field];
+            }
+        }
+
+        // 未定义的字段用数据库默认值
+        foreach (self::DB_DEFAULTS as $field => $defaultValue) {
+            if (!isset($data[$field])) {
+                $data[$field] = $defaultValue;
+            }
+        }
 
         if ($setParentId) {
             // 查找父级权限
             $parentPermission = null;
-            $parentCode = $route['parent_code'] ?? '';
+            $parentCode = $data['parent_code'];
 
             if (!empty($parentCode)) {
                 $parentPermission = $this->dbPermissions[$parentCode] ?? null;
@@ -540,11 +680,13 @@ class SyncPermissions extends Command
             $data['parent_id'] = 0;
         }
 
-        // 移除不需要的字段
-        unset($data['parent_code']);
-
         // 添加更新时间
         $data['update_time'] = date('Y-m-d H:i:s');
+
+        // 实际同步时移除 parent_code（数据库表中没有这个字段）
+        if ($setParentId) {
+            unset($data['parent_code']);
+        }
 
         return $data;
     }
@@ -569,13 +711,9 @@ class SyncPermissions extends Command
         // 辅助函数：获取父级名称
         $getParentName = function ($item) use ($codeToName) {
             $code = $item['code'];
-            $data = $this->routeData[$code] ?? null;
+            $data = $item['data'];
 
-            if ($data === null) {
-                // 可能是菜单数据
-                return '无';
-            }
-
+            // 直接使用 data 中的 parent_code
             $parentCode = $data['parent_code'] ?? '';
             if (empty($parentCode)) {
                 return '无';
@@ -632,27 +770,114 @@ class SyncPermissions extends Command
             $updatedCount = 0;
             $deletedCount = 0;
 
-            // 1. 创建新权限
+            // 1. 创建新权限（按顺序创建，先父后子）
             if (!empty($this->toCreate)) {
                 $output->writeln('<comment>1. 创建新权限...</comment>');
-                foreach ($this->toCreate as $item) {
-                    // 添加创建时间
-                    $item['data']['create_time'] = date('Y-m-d H:i:s');
 
-                    $insertId = Db::name('permission')->insertGetId($item['data']);
-                    $output->writeln("   - 创建: {$item['code']} (ID: {$insertId})");
+                // 按 type 排序：菜单(1) -> 按钮(2) -> 接口(3)，确保父级先创建
+                usort($this->toCreate, function ($a, $b) {
+                    return $a['data']['type'] - $b['data']['type'];
+                });
+
+                foreach ($this->toCreate as $item) {
+                    // 重新构建数据，这次设置 parent_id
+                    $code = $item['code'];
+                    $routeOrMenu = $this->routeData[$code] ?? null;
+
+                    if ($routeOrMenu) {
+                        // 路由数据
+                        $data = $this->buildRoutePermissionData($routeOrMenu, true);
+                    } else {
+                        // 菜单数据，需要从 base_menus 中查找
+                        $menu = $this->findMenuByCode($code, $this->baseMenus);
+                        if ($menu) {
+                            // 使用 menuParentMap 中的 parentCode
+                            $parentCode = $this->menuParentMap[$code] ?? '';
+                            $data = $this->buildMenuPermissionData($menu, $parentCode, true);
+                        } else {
+                            $data = $item['data'];
+                        }
+                    }
+
+                    // 添加创建时间
+                    $data['create_time'] = date('Y-m-d H:i:s');
+
+                    $insertId = Db::name('permission')->insertGetId($data);
+
+                    // 更新内存中的数据，让后续的子权限能找到父级
+                    $data['id'] = $insertId;
+                    $this->dbPermissions[$code] = $data;
+
+                    $output->writeln("   - 创建: {$code} (ID: {$insertId}, parent_id: {$data['parent_id']})");
                     $createdCount++;
                 }
             }
 
-            // 2. 更新现有权限
+            // 2. 更新现有权限（先菜单，后接口）
             if (!empty($this->toUpdate)) {
                 $output->writeln('<comment>2. 更新现有权限...</comment>');
+
+                // 按 type 分组：先处理菜单，再处理接口
+                $menusToUpdate = [];
+                $routesToUpdate = [];
                 foreach ($this->toUpdate as $item) {
+                    if (isset($this->routeData[$item['code']])) {
+                        $routesToUpdate[] = $item;
+                    } else {
+                        $menusToUpdate[] = $item;
+                    }
+                }
+
+                // 先更新菜单（按层级排序）
+                usort($menusToUpdate, function ($a, $b) {
+                    $levelA = $this->getMenuLevel($a['code']);
+                    $levelB = $this->getMenuLevel($b['code']);
+                    return $levelA - $levelB;
+                });
+
+                foreach ($menusToUpdate as $item) {
+                    $code = $item['code'];
+                    $menu = $this->findMenuByCode($code, $this->baseMenus);
+                    if ($menu) {
+                        // 使用 menuParentMap 中的 parentCode
+                        $parentCode = $this->menuParentMap[$code] ?? '';
+                        $data = $this->buildMenuPermissionData($menu, $parentCode, true);
+                    } else {
+                        $data = $item['data'];
+                    }
+
                     Db::name('permission')
                         ->where('id', $item['db_id'])
-                        ->update($item['data']);
-                    $output->writeln("   - 更新: {$item['code']}");
+                        ->update($data);
+
+                    // 更新内存中的数据
+                    $data['id'] = $item['db_id'];
+                    $this->dbPermissions[$code] = $data;
+
+                    $output->writeln("   - 更新: {$code} (parent_id: {$data['parent_id']})");
+                    $updatedCount++;
+                }
+
+                // 再更新接口
+                foreach ($routesToUpdate as $item) {
+                    $code = $item['code'];
+                    $routeOrMenu = $this->routeData[$code] ?? null;
+
+                    if ($routeOrMenu) {
+                        $data = $this->buildRoutePermissionData($routeOrMenu, true);
+                    } else {
+                        $data = $item['data'];
+                    }
+
+                    Db::name('permission')
+                        ->where('id', $item['db_id'])
+                        ->update($data);
+
+                    // 更新内存中的数据
+                    $data['id'] = $item['db_id'];
+                    $this->dbPermissions[$code] = $data;
+
+                    $output->writeln("   - 更新: {$code} (parent_id: {$data['parent_id']})");
                     $updatedCount++;
                 }
             }
@@ -703,59 +928,106 @@ class SyncPermissions extends Command
     }
 
     /**
-     * 构建菜单树（基于 base_menus，递归）
-     * 
-     * @param array $menus 菜单数组
-     * @return array
+     * 获取菜单层级
+     *
+     * @param string $code 菜单 code
+     * @return int
      */
-    protected function buildMenuTree($menus = null)
+    protected function getMenuLevel($code)
     {
-        if ($menus === null) {
-            $menus = $this->baseMenus;
+        if (!isset($this->menuParentMap[$code])) {
+            return 0;
         }
 
+        $parentCode = $this->menuParentMap[$code];
+        if (empty($parentCode)) {
+            return 0;
+        }
+
+        return 1 + $this->getMenuLevel($parentCode);
+    }
+
+    /**
+     * 构建菜单树
+     *
+     * @return array
+     */
+    protected function buildMenuTree()
+    {
         $tree = [];
 
-        foreach ($menus as $menu) {
-            $node = [
-                'name' => $menu['name'],
-                'code' => $menu['code'],
-                'type' => $menu['type'],
-                'path' => $menu['path'] ?? null,
-                'icon' => $menu['icon'] ?? null,
-                'component' => $menu['component'] ?? null,
-                'redirect' => $menu['redirect'] ?? null,
-                'sort' => $menu['sort'] ?? 0,
-                'status' => $menu['status'] ?? 1,
-                'is_show' => $menu['is_show'] ?? 1,
-                'affix_tab' => $menu['affix_tab'] ?? 0,
-                'no_basic_layout' => $menu['no_basic_layout'] ?? 0,
-                'remark' => $menu['remark'] ?? null,
-            ];
+        // 添加基础菜单
+        foreach ($this->baseMenus as $menu) {
+            $node = $this->buildMenuNode($menu);
+            $tree[] = $node;
+        }
 
-            // 查找该菜单下的路由
-            $children = $this->findRouteChildren($menu['code']);
-            if (!empty($children)) {
-                $node['children'] = $children;
-            }
-
-            // 如果有子菜单，递归处理
-            if (isset($menu['children']) && !empty($menu['children'])) {
-                $subMenuChildren = $this->buildMenuTree($menu['children']);
-                if (!empty($subMenuChildren)) {
-                    $node['children'] = isset($node['children']) ? array_merge($node['children'], $subMenuChildren) : $subMenuChildren;
+        // 添加路由菜单（没有父级的）
+        foreach ($this->routeData as $code => $route) {
+            if ($route['type'] === self::TYPE_MENU) {
+                $parentCode = $route['parent_code'] ?? '';
+                if (empty($parentCode)) {
+                    $node = [
+                        'name' => $route['name'],
+                        'code' => $route['code'],
+                        'type' => $route['type'],
+                        'children' => $this->findRouteChildren($code),
+                    ];
+                    $tree[] = $node;
                 }
             }
-
-            $tree[] = $node;
         }
 
         return $tree;
     }
 
     /**
+     * 构建菜单节点
+     *
+     * @param array $menu 菜单数据
+     * @return array
+     */
+    protected function buildMenuNode($menu)
+    {
+        $node = [
+            'name' => $menu['name'],
+            'code' => $menu['code'],
+            'type' => $menu['type'],
+            'path' => $menu['path'] ?? null,
+            'icon' => $menu['icon'] ?? null,
+            'component' => $menu['component'] ?? null,
+            'redirect' => $menu['redirect'] ?? null,
+            'sort' => $menu['sort'] ?? 0,
+            'status' => $menu['status'] ?? 1,
+            'is_show' => $menu['is_show'] ?? 1,
+            'affix_tab' => $menu['affix_tab'] ?? 0,
+            'no_basic_layout' => $menu['no_basic_layout'] ?? 0,
+            'remark' => $menu['remark'] ?? null,
+        ];
+
+        // 递归处理子菜单
+        if (isset($menu['children']) && !empty($menu['children'])) {
+            $node['children'] = [];
+            foreach ($menu['children'] as $child) {
+                $node['children'][] = $this->buildMenuNode($child);
+            }
+        }
+
+        // 查找菜单下的路由
+        $routeChildren = $this->findRouteChildren($menu['code']);
+        if (!empty($routeChildren)) {
+            if (!isset($node['children'])) {
+                $node['children'] = [];
+            }
+            $node['children'] = array_merge($node['children'], $routeChildren);
+        }
+
+        return $node;
+    }
+
+    /**
      * 查找菜单下的路由
-     * 
+     *
      * @param string $menuCode 菜单 code
      * @return array
      */
@@ -789,23 +1061,23 @@ class SyncPermissions extends Command
 
     /**
      * 显示菜单树
-     * 
+     *
      * @param Output $output
      */
     protected function showMenuTree($output)
     {
         $tree = $this->buildMenuTree();
-        
+
         $output->writeln('');
         $output->writeln('<info>=== 路由树结构 ===</info>');
         $output->writeln('');
-        
+
         $this->printTree($tree, 0, $output);
     }
 
     /**
      * 打印树结构
-     * 
+     *
      * @param array $tree 树数据
      * @param int $level 层级
      * @param Output $output
@@ -816,9 +1088,9 @@ class SyncPermissions extends Command
             $indent = str_repeat('  ', $level);
             $typeName = $this->getTypeName($node['type']);
             $prefix = $node['type'] === self::TYPE_MENU ? '📁 ' : '🔗 ';
-            
+
             $output->writeln("{$indent}{$prefix}[{$typeName}] {$node['name']} ({$node['code']})");
-            
+
             if (isset($node['children']) && !empty($node['children'])) {
                 $this->printTree($node['children'], $level + 1, $output);
             }

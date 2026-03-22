@@ -248,6 +248,17 @@ class AdminService extends BaseService
         });
     }
 
+    public function changeStatus(int $id, int $status): bool
+    {
+        $role = $this->model()->find($id);
+        if (!$role) {
+            throw new BusinessException('管理员不存在');
+        }
+
+        $this->model()->updateById($id, ['status' => $status]);
+        return true;
+    }
+
     /**
      * 删除管理员
      */

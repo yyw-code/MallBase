@@ -174,16 +174,17 @@ const transformToTreeData = (nodes: any[], isRoot = true): TreeNode[] => {
 
 // 表格列定义
 const columns = [
-  { title: 'ID', dataIndex: 'id', width: 80 },
+  { title: 'ID', dataIndex: 'id', width: 180 },
   { title: '权限名称', dataIndex: 'name', width: 200 },
   { title: '权限编码', dataIndex: 'code', width: 180 },
   {
-    title: '类型',
+    title: '权限类型',
     dataIndex: 'type',
     width: 100,
     customRender: ({ record }: any) => {
       if (record.type === 1) return '菜单';
       if (record.type === 2) return '按钮';
+      if (record.type === 3) return '接口';
       return '-';
     },
   },
@@ -470,6 +471,7 @@ loadData();
           <a-radio-group v-model:value="formData.type">
             <a-radio :value="1">菜单</a-radio>
             <a-radio :value="2">按钮</a-radio>
+            <a-radio :value="3">接口</a-radio>
           </a-radio-group>
         </a-form-item>
         <a-form-item label="路由路径" name="path">

@@ -9,6 +9,8 @@ export const overridesPreferences = defineOverridesPreferences({
   // overrides
   app: {
     name: import.meta.env.VITE_APP_TITLE,
-    accessMode: 'mixed',
+    // accessMode: 'mixed',  // 混合模式
+    // accessMode: 'frontend',  // 前端模式
+    accessMode: 'backend', // 后端模式
   },
 });

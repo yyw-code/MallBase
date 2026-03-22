@@ -1,9 +1,9 @@
 <script lang="ts" setup>
 import type { AdminApi } from '#/api/system/admin';
 
-import { computed, ref } from 'vue';
+import { computed, h, ref } from 'vue';
 
-import { message, Modal } from 'ant-design-vue';
+import { message, Modal, Switch } from 'ant-design-vue';
 
 import { uploadImageApi } from '#/api/core/upload';
 import {
@@ -13,6 +13,7 @@ import {
   getAdminListApi,
   resetPasswordApi,
   updateAdminApi,
+  updateAdminStatusApi,
 } from '#/api/system/admin';
 import { getAllRolesApi } from '#/api/system/role';
 import Upload from '#/components/upload/index.vue';
@@ -129,6 +130,7 @@ const handleAvatarRemove = async () => {
 
 const columns = [
   { title: 'ID', dataIndex: 'id', width: 80 },
+  { title: '头像', width: 100 },
   { title: '用户名', dataIndex: 'username', width: 120 },
   { title: '昵称', dataIndex: 'nickname', width: 120 },
   { title: '手机号', dataIndex: 'mobile', width: 120 },
@@ -146,7 +148,18 @@ const columns = [
     title: '状态',
     dataIndex: 'status',
     width: 80,
-    customRender: ({ record }: any) => (record.status ? '启用' : '禁用'),
+    customRender: ({ record }: any) => {
+      return h(Switch, {
+        checked: record.status === 1,
+        onChange: async (checked: any) => {
+          await updateAdminStatusApi(record.id, {
+            status: checked ? 1 : 0,
+          });
+          message.success('更新成功');
+          await loadData();
+        },
+      });
+    },
   },
 
   { title: '最后登录时间', dataIndex: 'last_login_time', width: 180 },
@@ -180,6 +193,17 @@ loadData();
       @change="loadData"
     >
       <template #bodyCell="{ column, record }">
+        <template v-if="column.title === '头像'">
+          <a-image
+            v-if="record.avatar_full_url"
+            :src="record.avatar_full_url"
+            :width="60"
+            :height="60"
+            :style="{ objectFit: 'cover', borderRadius: '50%' }"
+          />
+          <span v-else>-</span>
+        </template>
+
         <template v-if="column.key === 'action'">
           <a-space>
             <a-button type="link" size="small" @click="handleEdit(record)">

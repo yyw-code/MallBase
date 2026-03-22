@@ -8,9 +8,9 @@ use think\facade\Route;
 Route::group('auth/admin', function () {
     Route::group('', function () {
         // 登录
-        Route::post('login', 'login')->option(['_alias' => '登录', '_desc' => '管理员登录']);
+        Route::post('login', 'login')->option(['_alias' => '登录', '_desc' => '管理员登录', '_auth' => false]);
         // 刷新 Token
-        Route::post('refreshToken', 'refreshToken')->option(['_alias' => '刷新Token', '_desc' => '刷新访问令牌']);
+        Route::post('refreshToken', 'refreshToken')->option(['_alias' => '刷新Token', '_desc' => '刷新访问令牌', '_auth' => false]);
     })->option([
         '_alias' => '无需授权',
     ])->withoutMiddleware([JwtAuth::class, CheckPermission::class]);
@@ -34,9 +34,9 @@ Route::group('auth/admin', function () {
     // 获取权限信息
     Route::get('getAccessInfo', 'getAccessInfo')->name('SystemAdminGetAccessInfo')->option(['_alias' => '权限信息', '_desc' => '获取权限信息', '_auth' => true]);
 })->prefix('auth/AdminController/')
-    ->name('SystemAdmin')
     ->option([
         '_group_name' => '管理员管理',
+        '_group_code' => 'SystemAdmin',
         '_path' => '/admin',
         '_auth' => true,
         '_icon' => 'lucide:users',
