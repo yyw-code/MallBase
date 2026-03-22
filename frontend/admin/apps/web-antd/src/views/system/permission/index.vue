@@ -180,13 +180,7 @@ const columns = [
   {
     title: '权限类型',
     dataIndex: 'type',
-    width: 100,
-    customRender: ({ record }: any) => {
-      if (record.type === 1) return '菜单';
-      if (record.type === 2) return '按钮';
-      if (record.type === 3) return '接口';
-      return '-';
-    },
+    width: 120,
   },
   { title: '路由路径', dataIndex: 'path', width: 200 },
   {
@@ -378,6 +372,7 @@ loadData();
         >
           <a-select-option :value="1">菜单</a-select-option>
           <a-select-option :value="2">按钮</a-select-option>
+          <a-select-option :value="3">接口</a-select-option>
         </a-select>
       </a-form-item>
       <a-form-item label="状态">
@@ -407,6 +402,19 @@ loadData();
       row-key="id"
     >
       <template #bodyCell="{ column, record }">
+        <template v-if="column.dataIndex === 'type'">
+          <a-tag v-if="record.type === 1" color="blue">
+            <span class="mr-1">📋</span>菜单
+          </a-tag>
+          <a-tag v-else-if="record.type === 2" color="green">
+            <span class="mr-1">🔘</span>按钮
+          </a-tag>
+          <a-tag v-else-if="record.type === 3" color="purple">
+            <span class="mr-1">🔗</span>接口
+          </a-tag>
+          <span v-else>-</span>
+        </template>
+
         <template v-if="column.key === 'action'">
           <a-space>
             <a-button type="link" size="small" @click="handleEdit(record)">
