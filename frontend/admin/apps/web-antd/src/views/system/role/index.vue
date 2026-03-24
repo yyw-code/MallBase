@@ -46,6 +46,9 @@ const permissionTree = ref<any[]>([]);
 // 菜单 ID 到名称的映射
 const menuNameMap = ref<Record<number, string>>({});
 
+// 菜单 ID 到父菜单 ID 的映射
+const menuParentMap = ref<Record<number, number>>({});
+
 // 菜单 ID 到按钮权限 ID 列表的映射
 const menuButtonPermissionMap = ref<Record<number, number[]>>({});
 
@@ -95,6 +98,8 @@ const loadPermissionData = async () => {
   permissionTree.value = filterMenuTree(result);
   // 构建菜单 ID 到名称的映射
   menuNameMap.value = buildMenuNameMap(result);
+  // 构建菜单 ID 到父菜单 ID 的映射
+  menuParentMap.value = buildMenuParentMap(result);
   // 构建菜单到按钮权限的映射
   menuButtonPermissionMap.value = buildMenuPermissionMap(result, 2);
   // 构建菜单到接口权限的映射
@@ -162,6 +167,57 @@ function buildMenuNameMap(permissions: any[]): Record<number, string> {
 
   traverse(permissions);
   return map;
+}
+
+/**
+ * 构建菜单 ID 到父菜单 ID 的映射
+ */
+function buildMenuParentMap(permissions: any[]): Record<number, number> {
+  const map: Record<number, number> = {};
+
+  function traverse(nodes: any[]) {
+    for (const node of nodes) {
+      if (node.type === 1 && node.parent_id !== undefined) {
+        // 只映射菜单节点
+        map[node.id] = node.parent_id;
+      }
+      if (node.children?.length > 0) {
+        traverse(node.children);
+      }
+    }
+  }
+
+  traverse(permissions);
+  return map;
+}
+
+/**
+ * 获取某个菜单的所有父级菜单 ID
+ */
+function getAllParentMenuIds(
+  menuId: number,
+  parentIds: number[] = [],
+): number[] {
+  const parentId = menuParentMap.value[menuId];
+  if (parentId && parentId !== 0) {
+    parentIds.push(parentId);
+    return getAllParentMenuIds(parentId, parentIds);
+  }
+  return parentIds;
+}
+
+/**
+ * 补全所有选中菜单的父级菜单
+ */
+function ensureParentMenus(menuIds: number[]): number[] {
+  const allIds = new Set(menuIds);
+  menuIds.forEach((menuId) => {
+    const parentIds = getAllParentMenuIds(menuId);
+    parentIds.forEach((parentId) => {
+      allIds.add(parentId);
+    });
+  });
+  return [...allIds];
 }
 
 /**
@@ -435,6 +491,13 @@ const handleEdit = async (row: any) => {
 
 // 提交表单
 const handleFormSubmit = async () => {
+  // 补全所有选中菜单的父级菜单
+  if (formData.value.menu_permission_ids) {
+    formData.value.menu_permission_ids = ensureParentMenus(
+      formData.value.menu_permission_ids,
+    );
+  }
+
   await handleSubmit(
     {
       create: createRoleApi,

@@ -93,7 +93,7 @@ class RoleService extends BaseService
             ->alias('rp')
             ->leftJoin('permission p', 'rp.permission_id = p.id')
             ->where('rp.role_id', $id)
-            ->field('rp.id as pivot_id, rp.role_id, rp.permission_id, rp.create_time as pivot_create_time, p.*')
+            ->field('p.*')
             ->order('rp.id', 'asc')
             ->select()
             ->toArray();
@@ -107,12 +107,6 @@ class RoleService extends BaseService
         foreach ($rolePermissions as $item) {
             if (!empty($item['id'])) {
                 $permission = $item;
-                $permission['pivot'] = [
-                    'id' => $item['pivot_id'],
-                    'role_id' => $item['role_id'],
-                    'permission_id' => $item['permission_id'],
-                    'create_time' => $item['pivot_create_time'],
-                ];
                 unset($permission['pivot_id'], $permission['role_id'], $permission['pivot_create_time']);
                 switch ($item['type']) {
                     case PermissionModel::TYPE_MENU:
@@ -129,11 +123,8 @@ class RoleService extends BaseService
             }
         }
 
-        $info['menu_permissions'] = $menuPermissions;
         $info['menu_permission_ids'] = array_column($menuPermissions, 'id');
-        $info['button_permissions'] = $buttonPermissions;
         $info['button_permission_ids'] = array_column($buttonPermissions, 'id');
-        $info['api_permissions'] = $apiPermissions;
         $info['api_permission_ids'] = array_column($apiPermissions, 'id');
 
         return $info;
@@ -170,9 +161,10 @@ class RoleService extends BaseService
                 'sort' => $data['sort'] ?? 0,
             ]);
 
+            $permissionIds = array_merge($data['menu_permission_ids'], $data['button_permission_ids'], $data['api_permission_ids']);
             // 分配权限
-            if (!empty($data['permission_ids'])) {
-                $this->assignPermissions($role->id, $data['permission_ids']);
+            if (!empty($permissionIds)) {
+                $this->assignPermissions($role->id, $permissionIds);
             }
 
             return $role->id;
@@ -195,10 +187,14 @@ class RoleService extends BaseService
                 throw new BusinessException('角色编码已存在');
             }
         }
-        return $this->transaction(function () use ($id, $data) {
-            // 重新分配权限
-            $this->assignPermissions($id, $data['permission_ids']);
-            unset($data['permission_ids']);
+
+        // 重新分配权限
+        $permissionIds = array_merge($data['menu_permission_ids'], $data['button_permission_ids'], $data['api_permission_ids']);
+        unset($data['menu_permission_ids'], $data['button_permission_ids'], $data['api_permission_ids']);
+        return $this->transaction(function () use ($id, $data, $permissionIds) {
+
+            $this->assignPermissions($id, $permissionIds);
+
             $this->model()->updateById($id, $data);
 
             // 清除拥有该角色的用户权限缓存
