@@ -681,69 +681,71 @@ loadData(searchParams.value);
             </div>
           </template>
           <a-form-item-rest>
-            <div class="permission-list">
-              <div
-                v-for="(buttons, menuName) in buttonPermissionsGrouped"
-                :key="menuName"
-                class="permission-group"
-              >
-                <a-form-item no-style>
-                  <div class="permission-group-header">
-                    <div
-                      class="permission-group-header-left"
-                      @click="toggleButtonGroupCollapsed(menuName)"
-                    >
-                      <span class="collapse-icon">
-                        {{ buttonGroupCollapsed[menuName] ? '▶' : '▼' }}
-                      </span>
-                      <span class="permission-group-title">
-                        {{ menuName }}
-                      </span>
-                    </div>
-                    <div class="permission-group-actions">
-                      <a-space>
-                        <a-button
-                          size="small"
-                          @click="selectButtonPermissionsByMenu(menuName)"
-                        >
-                          全选
-                        </a-button>
-                        <a-button
-                          size="small"
-                          @click="clearButtonPermissionsByMenu(menuName)"
-                        >
-                          清空
-                        </a-button>
-                      </a-space>
-                      <span class="permission-count">
-                        已选择
-                        {{ getButtonPermissionSelectedCount(menuName) }} /
-                        {{ buttons.length }} 项
-                      </span>
-                    </div>
-                  </div>
-                </a-form-item>
+            <a-checkbox-group v-model:value="formData.button_permission_ids">
+              <div class="permission-list">
                 <div
-                  v-show="!buttonGroupCollapsed[menuName]"
-                  class="permission-items"
+                  v-for="(buttons, menuName) in buttonPermissionsGrouped"
+                  :key="menuName"
+                  class="permission-group"
                 >
-                  <a-checkbox
-                    v-for="btn in buttons"
-                    :key="btn.id"
-                    :value="btn.id"
+                  <a-form-item no-style>
+                    <div class="permission-group-header">
+                      <div
+                        class="permission-group-header-left"
+                        @click="toggleButtonGroupCollapsed(menuName)"
+                      >
+                        <span class="collapse-icon">
+                          {{ buttonGroupCollapsed[menuName] ? '▶' : '▼' }}
+                        </span>
+                        <span class="permission-group-title">
+                          {{ menuName }}
+                        </span>
+                      </div>
+                      <div class="permission-group-actions">
+                        <a-space>
+                          <a-button
+                            size="small"
+                            @click="selectButtonPermissionsByMenu(menuName)"
+                          >
+                            全选
+                          </a-button>
+                          <a-button
+                            size="small"
+                            @click="clearButtonPermissionsByMenu(menuName)"
+                          >
+                            清空
+                          </a-button>
+                        </a-space>
+                        <span class="permission-count">
+                          已选择
+                          {{ getButtonPermissionSelectedCount(menuName) }} /
+                          {{ buttons.length }} 项
+                        </span>
+                      </div>
+                    </div>
+                  </a-form-item>
+                  <div
+                    v-show="!buttonGroupCollapsed[menuName]"
+                    class="permission-items"
                   >
-                    <Tag color="blue" class="mr-1">{{ btn.code }}</Tag>
-                    {{ btn.name }}
-                  </a-checkbox>
+                    <a-checkbox
+                      v-for="btn in buttons"
+                      :key="btn.id"
+                      :value="btn.id"
+                    >
+                      <Tag color="blue" class="mr-1">{{ btn.code }}</Tag>
+                      {{ btn.name }}
+                    </a-checkbox>
+                  </div>
+                </div>
+                <div
+                  v-if="Object.keys(buttonPermissionsGrouped).length === 0"
+                  class="w-full py-8 text-center text-gray-400"
+                >
+                  暂无按钮权限
                 </div>
               </div>
-              <div
-                v-if="Object.keys(buttonPermissionsGrouped).length === 0"
-                class="w-full py-8 text-center text-gray-400"
-              >
-                暂无按钮权限
-              </div>
-            </div>
+            </a-checkbox-group>
           </a-form-item-rest>
         </a-form-item>
 
@@ -777,52 +779,52 @@ loadData(searchParams.value);
             </div>
           </template>
           <a-form-item-rest>
-            <div class="permission-list">
-              <div
-                v-for="(apis, menuName) in apiPermissionsGrouped"
-                :key="menuName"
-                class="permission-group"
-              >
-                <a-form-item no-style>
-                  <div class="permission-group-header">
-                    <div
-                      class="permission-group-header-left"
-                      @click="toggleApiGroupCollapsed(menuName)"
-                    >
-                      <span class="collapse-icon">
-                        {{ apiGroupCollapsed[menuName] ? '▶' : '▼' }}
-                      </span>
-                      <span class="permission-group-title">
-                        {{ menuName }}
-                      </span>
-                    </div>
-                    <div class="permission-group-actions">
-                      <a-space>
-                        <a-button
-                          size="small"
-                          @click="selectApiPermissionsByMenu(menuName)"
-                        >
-                          全选
-                        </a-button>
-                        <a-button
-                          size="small"
-                          @click="clearApiPermissionsByMenu(menuName)"
-                        >
-                          清空
-                        </a-button>
-                      </a-space>
-                      <span class="permission-count">
-                        已选择 {{ getApiPermissionSelectedCount(menuName) }} /
-                        {{ apis.length }} 项
-                      </span>
-                    </div>
-                  </div>
-                </a-form-item>
+            <a-checkbox-group v-model:value="formData.api_permission_ids">
+              <div class="permission-list">
                 <div
-                  v-show="!apiGroupCollapsed[menuName]"
-                  class="permission-items"
+                  v-for="(apis, menuName) in apiPermissionsGrouped"
+                  :key="menuName"
+                  class="permission-group"
                 >
-                  <a-checkbox-group v-model:value="formData.api_permission_ids">
+                  <a-form-item no-style>
+                    <div class="permission-group-header">
+                      <div
+                        class="permission-group-header-left"
+                        @click="toggleApiGroupCollapsed(menuName)"
+                      >
+                        <span class="collapse-icon">
+                          {{ apiGroupCollapsed[menuName] ? '▶' : '▼' }}
+                        </span>
+                        <span class="permission-group-title">
+                          {{ menuName }}
+                        </span>
+                      </div>
+                      <div class="permission-group-actions">
+                        <a-space>
+                          <a-button
+                            size="small"
+                            @click="selectApiPermissionsByMenu(menuName)"
+                          >
+                            全选
+                          </a-button>
+                          <a-button
+                            size="small"
+                            @click="clearApiPermissionsByMenu(menuName)"
+                          >
+                            清空
+                          </a-button>
+                        </a-space>
+                        <span class="permission-count">
+                          已选择 {{ getApiPermissionSelectedCount(menuName) }} /
+                          {{ apis.length }} 项
+                        </span>
+                      </div>
+                    </div>
+                  </a-form-item>
+                  <div
+                    v-show="!apiGroupCollapsed[menuName]"
+                    class="permission-items"
+                  >
                     <a-checkbox
                       v-for="api in apis"
                       :key="api.id"
@@ -831,16 +833,16 @@ loadData(searchParams.value);
                       <Tag color="green" class="mr-1">{{ api.code }}</Tag>
                       {{ api.name }}
                     </a-checkbox>
-                  </a-checkbox-group>
+                  </div>
+                </div>
+                <div
+                  v-if="Object.keys(apiPermissionsGrouped).length === 0"
+                  class="w-full py-8 text-center text-gray-400"
+                >
+                  暂无接口权限
                 </div>
               </div>
-              <div
-                v-if="Object.keys(apiPermissionsGrouped).length === 0"
-                class="w-full py-8 text-center text-gray-400"
-              >
-                暂无接口权限
-              </div>
-            </div>
+            </a-checkbox-group>
           </a-form-item-rest>
         </a-form-item>
 
