@@ -29,6 +29,7 @@ export namespace AuthApi {
     username: string;
     nickname: string;
     avatar: string;
+    avatar_full_url: string;
     email: string;
     mobile: string;
     status: number;

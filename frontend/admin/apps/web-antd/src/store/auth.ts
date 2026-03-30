@@ -118,11 +118,12 @@ export const useAuthStore = defineStore('auth', () => {
       // 转换为 BasicUserInfo 格式
       if (adminInfo) {
         const userInfo = {
-          avatar: adminInfo.avatar || '',
+          avatar: adminInfo.avatar_full_url || '',
           id: String(adminInfo.id),
-          nickname: adminInfo.nickname || adminInfo.username,
+          nickname: adminInfo.nickname || '',
           roles: adminInfo.roles?.map((role) => role.code) || [],
-          username: adminInfo.username,
+          username: adminInfo.username || '',
+          email: adminInfo.email || '',
         };
         userStore.setUserInfo(userInfo);
       }

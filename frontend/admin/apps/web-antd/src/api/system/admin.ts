@@ -123,7 +123,7 @@ export async function resetPasswordApi(id: number, password: string) {
 }
 
 /**
- * 重置密码
+ * 修改密码
  */
 export async function changePasswordApi(
   id: number,

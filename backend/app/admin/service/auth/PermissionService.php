@@ -50,13 +50,13 @@ class PermissionService extends BaseService
     {
         if ($adminId === Admin::SUPER_ADMIN_ID) {
             $query = $this->model()->alias('p')
-                ->where(['status' => 1, 'is_show' => 1, 'type' => 1])->order(['sort' => 'asc', 'id' => 'asc']);
+                ->where(['status' => 1, 'type' => 1])->order(['sort' => 'asc', 'id' => 'asc']);
         } else {
             $query = $this->model()->alias('p')
                 ->join('role_permission rp', 'rp.permission_id = p.id')
                 ->join('admin_role ar', 'ar.role_id = rp.role_id')
                 ->where('ar.admin_id', $adminId)
-                ->where(['p.status' => 1, 'p.is_show' => 1, 'p.type' => 1])->order(['p.sort' => 'asc', 'p.id' => 'asc']);
+                ->where(['p.status' => 1, 'p.type' => 1])->order(['p.sort' => 'asc', 'p.id' => 'asc']);
         }
 
         $list = $query->field('p.*')->select()->toArray();
@@ -293,6 +293,7 @@ class PermissionService extends BaseService
                 'path' => $node['path'] ?: '/' . strtolower($node['code']),
                 'meta' => [
                     'title' => $node['name'],
+                    'hideInMenu' => $node['is_show'] === 0,
                 ],
             ];
 
