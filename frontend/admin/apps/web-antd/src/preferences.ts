@@ -13,6 +13,6 @@ export const overridesPreferences = defineOverridesPreferences({
     // accessMode: 'frontend',  // 前端模式
     accessMode: 'backend', // 后端模式
     enableRefreshToken: true, // 启用双 token 机制
-    loginExpiredMode: 'modal', //
+    // loginExpiredMode: 'modal', //
   },
 });

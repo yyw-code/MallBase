@@ -57,28 +57,31 @@ class ExceptionHandle extends Handle
             case $e instanceof BusinessException:
             case $e instanceof AuthException:
             case $e instanceof ValidateException:
-                // 根据环境返回不同详细程度的信息
-                if (env('app_debug')) {
-                    $details = [
-                        'file' => $e->getFile(),
-                        'line' => $e->getLine(),
-                        'trace' => $e->getTrace(),
-                    ];
-                } else {
-                    $details = [];
-                }
-                $message = $e->getMessage();
                 $code = $e->getCode() ?: 400;
-                return json([
-                    'success' => false,
-                    'code' => $code,
-                    'message' => $message,
-                    'data' => [],
-                    'details' => $details,
-                ]);
+                break;
             default:
-                // 其他错误交给系统处理
-                return parent::render($request, $e);
+                $code = 400;
+            // 其他错误交给系统处理
+//                return parent::render($request, $e);
         }
+
+        // 根据环境返回不同详细程度的信息
+        if (env('app_debug')) {
+            $details = [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTrace(),
+            ];
+        } else {
+            $details = [];
+        }
+        $message = $e->getMessage();
+        return json([
+            'success' => false,
+            'code' => $code,
+            'message' => $message,
+            'data' => [],
+            'details' => $details,
+        ]);
     }
 }

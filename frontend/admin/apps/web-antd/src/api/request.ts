@@ -60,7 +60,9 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
 
     // 检查刷新接口是否成功（后端可能返回 code: 400 表示 refresh_token 也过期了）
     if (!body || body.code !== 200 || !body.data?.access_token) {
-      throw new Error('REFRESH_TOKEN_FAILED');
+      const error: any = new Error('REFRESH_TOKEN_FAILED');
+      error.backendMessage = body?.message || '刷新令牌无效或已过期';
+      throw error;
     }
 
     const tokenData = body.data;
@@ -91,9 +93,9 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
   client.addResponseInterceptor({
     fulfilled: (response) => {
       const responseData = response.data;
-      if (responseData && responseData.code === 401) {
+      if (responseData && responseData.code) {
         // 修改 response.status 为 401，让后续拦截器按 HTTP 401 处理
-        response.status = 401;
+        response.status = responseData.code;
       }
       return response;
     },
@@ -124,8 +126,9 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
   // 通用的错误处理
   client.addResponseInterceptor(
     errorMessageResponseInterceptor((msg: string, error) => {
-      // 跳过刷新 token 失败的错误（已在 doReAuthenticate 中处理跳转登录页）
+      // 刷新 token 失败时，显示后端返回的错误消息（跳转登录页已由 doReAuthenticate 处理）
       if (error?.message === 'REFRESH_TOKEN_FAILED') {
+        message.error(error.backendMessage || '刷新令牌无效或已过期');
         return;
       }
       const responseData = error?.response?.data;
@@ -134,9 +137,23 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
           ? (responseData?.error ?? responseData?.message ?? '')
           : '';
       // 如果没有错误信息，则会根据状态码进行提示
+
       message.error(errorMessage || msg);
     }),
   );
+
+  // 刷新 token 失败后，阻止错误继续传播到业务层
+  // 此时 doReAuthenticate() 已跳转登录页，业务层无需再处理该错误
+  client.addResponseInterceptor({
+    rejected: (error: any) => {
+      if (error?.message === 'REFRESH_TOKEN_FAILED') {
+        // 返回永远 pending 的 Promise，阻止错误传播到 useTableCrud 等业务层
+        // 页面即将跳转到登录页，该 Promise 会被垃圾回收
+        return new Promise(() => {});
+      }
+      return Promise.reject(error);
+    },
+  });
 
   return client;
 }
