@@ -3,6 +3,8 @@ import type { SettingApi } from '#/api/setting';
 
 import { computed, ref, watch } from 'vue';
 
+import { IconPicker } from '@vben/common-ui';
+
 import { message } from 'ant-design-vue';
 
 import {
@@ -13,8 +15,8 @@ import {
 import { getPermissionTreeApi } from '#/api/system/permission';
 
 const props = defineProps<{
+  editData?: null | SettingApi.SettingGroup;
   visible: boolean;
-  editData?: SettingApi.SettingGroup | null;
 }>();
 
 const emit = defineEmits<{
@@ -25,6 +27,9 @@ const emit = defineEmits<{
 const isEdit = computed(() => !!props.editData);
 const modalTitle = computed(() => (isEdit.value ? '编辑分组' : '新增分组'));
 const saving = ref(false);
+
+// 图标集前缀
+const iconPrefix = ref('ant-design');
 
 // 表单数据
 const formData = ref({
@@ -66,29 +71,42 @@ const loadPermissionTree = async () => {
   }
 };
 
-/** 树形数据转换为 TreeSelect 格式 */
-const convertGroupToTreeSelect = (
-  data: SettingApi.SettingGroup[],
-): any[] => {
-  return data.map((item) => ({
-    title: item.name,
-    value: item.id,
-    key: item.id,
-    children: item.children
-      ? convertGroupToTreeSelect(item.children)
-      : undefined,
-  }));
+/** 树形数据转换为 TreeSelect 格式（带"顶级"选项） */
+const convertGroupToTreeSelect = (data: SettingApi.SettingGroup[]): any[] => {
+  return [
+    {
+      title: '顶级',
+      value: 0,
+      key: 0,
+    },
+    ...data.map((item) => ({
+      title: item.name,
+      value: item.id,
+      key: item.id,
+      children: item.children
+        ? convertGroupToTreeSelect(item.children)
+        : undefined,
+    })),
+  ];
 };
 
+/** 权限树转换为 TreeSelect 格式（带"顶级"选项） */
 const convertPermissionToTreeSelect = (data: any[]): any[] => {
-  return data.map((item) => ({
-    title: item.name,
-    value: item.id,
-    key: item.id,
-    children: item.children
-      ? convertPermissionToTreeSelect(item.children)
-      : undefined,
-  }));
+  return [
+    {
+      title: '顶级',
+      value: 0,
+      key: 0,
+    },
+    ...data.map((item) => ({
+      title: item.name,
+      value: item.id,
+      key: item.id,
+      children: item.children
+        ? convertPermissionToTreeSelect(item.children)
+        : undefined,
+    })),
+  ];
 };
 
 /** 打开弹窗时初始化 */
@@ -99,29 +117,27 @@ watch(
       loadGroupTree();
       loadPermissionTree();
 
-      if (props.editData) {
-        formData.value = {
-          parent_id: props.editData.parent_id,
-          menu_parent_permission_id: undefined,
-          name: props.editData.name,
-          code: props.editData.code,
-          icon: props.editData.icon || '',
-          description: props.editData.description || '',
-          sort: props.editData.sort,
-          status: props.editData.status,
-        };
-      } else {
-        formData.value = {
-          parent_id: 0,
-          menu_parent_permission_id: undefined,
-          name: '',
-          code: '',
-          icon: '',
-          description: '',
-          sort: 0,
-          status: 1,
-        };
-      }
+      formData.value = props.editData
+        ? {
+            parent_id: props.editData.parent_id,
+            menu_parent_permission_id: undefined,
+            name: props.editData.name,
+            code: props.editData.code,
+            icon: props.editData.icon || '',
+            description: props.editData.description || '',
+            sort: props.editData.sort,
+            status: props.editData.status,
+          }
+        : {
+            parent_id: 0,
+            menu_parent_permission_id: undefined,
+            name: '',
+            code: '',
+            icon: '',
+            description: '',
+            sort: 0,
+            status: 1,
+          };
     }
   },
 );
@@ -171,17 +187,12 @@ const handleOk = async () => {
     @ok="handleOk"
     @cancel="handleCancel"
   >
-    <a-form
-      :label-col="{ span: 6 }"
-      :wrapper-col="{ span: 16 }"
-      class="mt-4"
-    >
+    <a-form :label-col="{ span: 6 }" :wrapper-col="{ span: 16 }" class="mt-4">
       <a-form-item label="父分组" name="parent_id">
         <a-tree-select
           v-model:value="formData.parent_id"
           :tree-data="convertGroupToTreeSelect(groupTreeData)"
-          placeholder="无（顶级分组）"
-          allow-clear
+          placeholder="请选择父分组"
           tree-default-expand-all
         />
       </a-form-item>
@@ -195,10 +206,9 @@ const handleOk = async () => {
           v-model:value="formData.menu_parent_permission_id"
           :tree-data="convertPermissionToTreeSelect(permissionTreeData)"
           placeholder="请选择父菜单"
-          allow-clear
           tree-default-expand-all
         />
-        <div class="text-gray-400 mt-1 text-xs">
+        <div class="mt-1 text-xs text-gray-400">
           顶级分组需要选择在菜单树中的挂载位置
         </div>
       </a-form-item>
@@ -216,10 +226,30 @@ const handleOk = async () => {
       </a-form-item>
 
       <a-form-item label="图标" name="icon">
-        <a-input
-          v-model:value="formData.icon"
-          placeholder="如：lucide:message-circle"
-        />
+        <div class="flex w-full flex-col">
+          <div class="mb-2">
+            <a-select
+              v-model:value="iconPrefix"
+              style="width: 200px"
+              placeholder="选择图标集"
+            >
+              <a-select-option value="ant-design"> Ant Design </a-select-option>
+              <a-select-option value="lucide">Lucide</a-select-option>
+              <a-select-option value="mdi">Material Design</a-select-option>
+              <a-select-option value="carbon">Carbon</a-select-option>
+              <a-select-option value="mdi-light">MDI Light</a-select-option>
+            </a-select>
+            <span class="ml-2 text-xs text-gray-400">
+              也可直接输入，如：lucide:shield
+            </span>
+          </div>
+          <IconPicker
+            v-model="formData.icon"
+            :prefix="iconPrefix"
+            placeholder="请选择图标"
+            style="width: 100%"
+          />
+        </div>
       </a-form-item>
 
       <a-form-item label="描述" name="description">
@@ -231,11 +261,7 @@ const handleOk = async () => {
       </a-form-item>
 
       <a-form-item label="排序" name="sort">
-        <a-input-number
-          v-model:value="formData.sort"
-          :min="0"
-          class="w-full"
-        />
+        <a-input-number v-model:value="formData.sort" :min="0" class="w-full" />
       </a-form-item>
 
       <a-form-item label="状态" name="status">

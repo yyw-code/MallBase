@@ -360,7 +360,7 @@ class SettingService extends BaseService
 
         $permission->save([
             'parent_id' => $permissionParentId,
-            'name'      => $group->code,
+            'name'      => $group->name,
             'path'      => $this->makePermissionPath($group),
             'icon'      => $group->icon ?: null,
             'sort'      => $group->sort ?? 0,
