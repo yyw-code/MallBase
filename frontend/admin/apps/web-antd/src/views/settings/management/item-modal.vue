@@ -5,15 +5,12 @@ import { computed, ref, watch } from 'vue';
 
 import { message } from 'ant-design-vue';
 
-import {
-  createSettingItemApi,
-  updateSettingItemApi,
-} from '#/api/setting';
+import { createSettingItemApi, updateSettingItemApi } from '#/api/setting';
 
 const props = defineProps<{
-  visible: boolean;
+  editData?: null | SettingApi.SettingItem;
   groupId: number;
-  editData?: SettingApi.SettingItem | null;
+  visible: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -45,7 +42,7 @@ const typeOptions = [
 
 /** 需要配置选项的类型 */
 const needOptions = computed(() =>
-  ['select', 'radio', 'checkbox'].includes(formData.value.type),
+  ['checkbox', 'radio', 'select'].includes(formData.value.type),
 );
 
 // 表单数据
@@ -164,16 +161,9 @@ const handleOk = async () => {
     @ok="handleOk"
     @cancel="handleCancel"
   >
-    <a-form
-      :label-col="{ span: 5 }"
-      :wrapper-col="{ span: 18 }"
-      class="mt-4"
-    >
+    <a-form :label-col="{ span: 5 }" :wrapper-col="{ span: 18 }" class="mt-4">
       <a-form-item label="名称" name="name" required>
-        <a-input
-          v-model:value="formData.name"
-          placeholder="如：AppID"
-        />
+        <a-input v-model:value="formData.name" placeholder="如：AppID" />
       </a-form-item>
 
       <a-form-item label="编码" name="code" required>
@@ -193,26 +183,17 @@ const handleOk = async () => {
       </a-form-item>
 
       <a-form-item label="默认值" name="value">
-        <a-input
-          v-model:value="formData.value"
-          placeholder="默认值"
-        />
+        <a-input v-model:value="formData.value" placeholder="默认值" />
       </a-form-item>
 
-      <a-form-item
-        v-if="needOptions"
-        label="选项"
-        name="options"
-      >
+      <a-form-item v-if="needOptions" label="选项" name="options">
         <a-textarea
           v-model:value="formData.options"
           placeholder='[{"label":"启用","value":"1"},{"label":"禁用","value":"0"}]'
           :rows="4"
           class="font-mono"
         />
-        <div class="text-gray-400 mt-1 text-xs">
-          请输入 JSON 数组格式
-        </div>
+        <div class="mt-1 text-xs text-gray-400">请输入 JSON 数组格式</div>
       </a-form-item>
 
       <a-form-item label="占位提示" name="placeholder">
@@ -231,17 +212,13 @@ const handleOk = async () => {
       </a-form-item>
 
       <a-form-item label="排序" name="sort">
-        <a-input-number
-          v-model:value="formData.sort"
-          :min="0"
-          class="w-full"
-        />
+        <a-input-number v-model:value="formData.sort" :min="0" class="w-full" />
       </a-form-item>
 
       <a-form-item label="必填" name="is_required">
         <a-switch
           :checked="formData.is_required === 1"
-          @change="(val: boolean) => formData.is_required = val ? 1 : 0"
+          @change="(val: boolean) => (formData.is_required = val ? 1 : 0)"
         />
       </a-form-item>
     </a-form>
