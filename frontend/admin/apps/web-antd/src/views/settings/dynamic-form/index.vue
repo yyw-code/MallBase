@@ -4,6 +4,8 @@ import type { SettingApi } from '#/api/setting';
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 
+import { JsonViewer } from '@vben/common-ui';
+
 import { message, Spin } from 'ant-design-vue';
 
 import { uploadFileApi, uploadImageApi } from '#/api/core/upload';
@@ -18,6 +20,39 @@ const saving = ref(false);
 const groupInfo = ref<SettingApi.ConfigResponse['group']>();
 const settings = ref<SettingApi.SettingItem[]>([]);
 const formValues = ref<Record<string, any>>({});
+
+/** API 基础地址，用于图片/文件回显 */
+const apiBaseUrl = import.meta.env.VITE_GLOB_API_URL || '';
+
+/** 将相对路径转为完整 URL（用于回显） */
+const toFullUrl = (path: string) => {
+  if (!path) return '';
+  if (path.startsWith('http://') || path.startsWith('https://')) return path;
+  return `${apiBaseUrl}${path}`;
+};
+
+/**
+ * 将 formValues 中媒体值转为 Upload 组件可显示的 URL
+ * 内部存储格式: { url, full_url, name } 或 { url, full_url, name }[]
+ * Upload 组件需要: string 或 string[]
+ */
+const getUploadValue = (value: any) => {
+  if (!value) return value;
+  // 多文件/多图: [{ url, full_url, name }, ...]
+  if (Array.isArray(value)) {
+    return value.map((item: any) => {
+      if (typeof item === 'object' && item?.full_url) return item.full_url;
+      if (typeof item === 'object' && item?.url) return toFullUrl(item.url);
+      if (typeof item === 'string') return toFullUrl(item);
+      return '';
+    });
+  }
+  // 单文件/单图: { url, full_url, name }
+  if (typeof value === 'object' && value?.full_url) return value.full_url;
+  if (typeof value === 'object' && value?.url) return toFullUrl(value.url);
+  // 兜底: 纯字符串
+  return toFullUrl(value);
+};
 
 /** 从路由路径中提取 groupCode */
 const groupCode = computed(() => {
@@ -51,6 +86,18 @@ const mediaSettings = computed(() =>
 const advancedSettings = computed(() =>
   settings.value.filter((s) => ['editor', 'json'].includes(s.type)),
 );
+
+/** 解析 JSON 字符串为对象（给 JsonViewer 用） */
+const getJsonObject = (code: string) => {
+  const val = formValues.value[code];
+  if (!val) return {};
+  if (typeof val === 'object') return val;
+  try {
+    return JSON.parse(val);
+  } catch {
+    return {};
+  }
+};
 
 /** 加载配置 */
 const loadConfig = async () => {
@@ -90,11 +137,29 @@ const convertValue = (value: string, type: string) => {
       }
       return value ? value.split(',') : [];
     }
+    case 'file':
+    case 'image': {
+      // 单文件：存为 { url, full_url, name } 对象，方便回显和保存
+      if (value) {
+        return {
+          url: value,
+          full_url: toFullUrl(value),
+          name: value.split('/').pop() || 'file',
+        };
+      }
+      return undefined;
+    }
     case 'files':
     case 'images': {
+      // 多文件：存为 [{ url, full_url, name }, ...] 数组
       if (typeof value === 'string' && value.startsWith('[')) {
         try {
-          return JSON.parse(value);
+          const urls: string[] = JSON.parse(value);
+          return urls.map((u) => ({
+            url: u,
+            full_url: toFullUrl(u),
+            name: u.split('/').pop() || 'file',
+          }));
         } catch {
           return [];
         }
@@ -114,7 +179,7 @@ const convertValue = (value: string, type: string) => {
   }
 };
 
-/** 序列化值 */
+/** 序列化值（提交给后端） */
 const serializeValue = (value: any, type: string): any => {
   if (value === undefined || value === null) return '';
 
@@ -125,10 +190,20 @@ const serializeValue = (value: any, type: string): any => {
       }
       return String(value);
     }
+    case 'file':
+    case 'image': {
+      // 单文件：从对象中取 url（相对路径）
+      if (typeof value === 'object' && value?.url) return value.url;
+      return String(value);
+    }
     case 'files':
     case 'images': {
+      // 多文件：从对象数组中取 url 数组
       if (Array.isArray(value)) {
-        return JSON.stringify(value);
+        const urls = value.map((item: any) =>
+          typeof item === 'object' ? item.url : item,
+        );
+        return JSON.stringify(urls);
       }
       return String(value);
     }
@@ -157,12 +232,20 @@ const parseOptions = (options: any) => {
   return options;
 };
 
+/** 获取上传组件类型 */
+const getUploadType = (type: string): 'file' | 'files' | 'image' | 'images' => {
+  return type as 'file' | 'files' | 'image' | 'images';
+};
+
+/** JSON 编辑器占位符 */
+const jsonPlaceholder = '{"key": "value"}';
+
 /** 获取 editor 预览内容 */
 const getEditorHtml = (code: string) => {
   return formValues.value[code] || '';
 };
 
-/** 上传处理 */
+/** 上传处理 —— 存储完整信息 { url, full_url, name } */
 const handleUpload = (code: string, type: string) => {
   return async (file: File) => {
     try {
@@ -170,13 +253,18 @@ const handleUpload = (code: string, type: string) => {
       const res = isImage
         ? await uploadImageApi(file)
         : await uploadFileApi(file);
-      const url = res?.url || res?.data?.url || '';
+
+      const fileInfo = {
+        url: res?.url || '',
+        full_url: res?.full_url || '',
+        name: res?.name || file.name,
+      };
 
       if (['files', 'images'].includes(type)) {
         const current = formValues.value[code] || [];
-        formValues.value[code] = [...current, url];
+        formValues.value[code] = [...current, fileInfo];
       } else {
-        formValues.value[code] = url;
+        formValues.value[code] = fileInfo;
       }
     } catch (error) {
       console.error('上传失败:', error);
@@ -291,21 +379,18 @@ onMounted(loadConfig);
                 >
               </div>
 
-              <!-- input -->
               <a-input
                 v-if="item.type === 'input'"
                 v-model:value="formValues[item.code]"
                 :placeholder="item.placeholder || `请输入${item.name}`"
               />
 
-              <!-- password -->
               <a-input-password
                 v-else-if="item.type === 'password'"
                 v-model:value="formValues[item.code]"
                 :placeholder="item.placeholder || `请输入${item.name}`"
               />
 
-              <!-- textarea -->
               <a-textarea
                 v-else-if="item.type === 'textarea'"
                 v-model:value="formValues[item.code]"
@@ -313,7 +398,6 @@ onMounted(loadConfig);
                 :rows="3"
               />
 
-              <!-- number -->
               <a-input-number
                 v-else-if="item.type === 'number'"
                 v-model:value="formValues[item.code]"
@@ -321,7 +405,6 @@ onMounted(loadConfig);
                 class="w-full"
               />
 
-              <!-- switch -->
               <div v-else-if="item.type === 'switch'" class="switch-wrapper">
                 <a-switch v-model:checked="formValues[item.code]" />
                 <span class="switch-label">
@@ -329,7 +412,6 @@ onMounted(loadConfig);
                 </span>
               </div>
 
-              <!-- select -->
               <a-select
                 v-else-if="item.type === 'select'"
                 v-model:value="formValues[item.code]"
@@ -338,14 +420,12 @@ onMounted(loadConfig);
                 class="w-full"
               />
 
-              <!-- radio -->
               <a-radio-group
                 v-else-if="item.type === 'radio'"
                 v-model:value="formValues[item.code]"
                 :options="parseOptions(item.options)"
               />
 
-              <!-- checkbox -->
               <a-checkbox-group
                 v-else-if="item.type === 'checkbox'"
                 v-model:value="formValues[item.code]"
@@ -375,11 +455,13 @@ onMounted(loadConfig);
             >
               <div class="form-label">
                 <span class="label-text">{{ item.name }}</span>
-                <span v-if="item.is_required === 1" class="required-star">*</span>
+                <span v-if="item.is_required === 1" class="required-star"
+                  >*</span
+                >
               </div>
               <Upload
-                :type="item.type as any"
-                :value="formValues[item.code]"
+                :type="getUploadType(item.type)"
+                :value="getUploadValue(formValues[item.code])"
                 :custom-upload="handleUpload(item.code, item.type)"
                 :custom-remove="handleUploadRemove(item.code, item.type)"
               />
@@ -411,7 +493,7 @@ onMounted(loadConfig);
                 >
               </div>
 
-              <!-- editor -->
+              <!-- editor: HTML 编辑器 + 预览 -->
               <template v-if="item.type === 'editor'">
                 <a-tabs type="card" size="small" class="editor-tabs">
                   <a-tab-pane key="edit" tab="编辑">
@@ -434,14 +516,29 @@ onMounted(loadConfig);
                 </a-tabs>
               </template>
 
-              <!-- json -->
+              <!-- json: 编辑 + JsonViewer 预览 -->
               <template v-else-if="item.type === 'json'">
-                <a-textarea
-                  v-model:value="formValues[item.code]"
-                  placeholder='{"key": "value"}'
-                  :rows="6"
-                  class="font-mono text-sm"
-                />
+                <a-tabs type="card" size="small" class="editor-tabs">
+                  <a-tab-pane key="edit" tab="编辑">
+                    <a-textarea
+                      v-model:value="formValues[item.code]"
+                      :placeholder="jsonPlaceholder"
+                      :rows="6"
+                      class="font-mono text-sm"
+                    />
+                  </a-tab-pane>
+                  <a-tab-pane key="preview" tab="预览">
+                    <div class="json-preview">
+                      <JsonViewer
+                        :value="getJsonObject(item.code)"
+                        :expand-depth="3"
+                        :copyable="true"
+                        :boxed="true"
+                        theme="default-json-theme"
+                      />
+                    </div>
+                  </a-tab-pane>
+                </a-tabs>
               </template>
 
               <div v-if="item.remark" class="form-remark">
@@ -624,6 +721,13 @@ onMounted(loadConfig);
 .editor-preview :deep(img) {
   max-width: 100%;
   border-radius: 4px;
+}
+
+.json-preview {
+  min-height: 120px;
+  padding: 12px 16px;
+  background: #fafafa;
+  border-radius: 0 0 8px 8px;
 }
 
 .empty-state {
