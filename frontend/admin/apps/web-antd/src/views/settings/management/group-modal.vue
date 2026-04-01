@@ -1,7 +1,9 @@
 <script lang="ts" setup>
+import type { FormInstance, Rule } from 'ant-design-vue/es/form';
+
 import type { SettingApi } from '#/api/setting';
 
-import { computed, ref, watch } from 'vue';
+import { computed, reactive, ref, watch } from 'vue';
 
 import { IconPicker } from '@vben/common-ui';
 
@@ -10,9 +12,10 @@ import { message } from 'ant-design-vue';
 import {
   createSettingGroupApi,
   getSettingGroupAllApi,
+  getSettingGroupInfoApi,
+  getSettingPermissionTreeApi,
   updateSettingGroupApi,
 } from '#/api/setting';
-import { getPermissionTreeApi } from '#/api/system/permission';
 
 const props = defineProps<{
   editData?: null | SettingApi.SettingGroup;
@@ -20,8 +23,8 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-  (e: 'update:visible', value: boolean): void;
   (e: 'success'): void;
+  (e: 'update:visible', value: boolean): void;
 }>();
 
 const isEdit = computed(() => !!props.editData);
@@ -32,7 +35,7 @@ const saving = ref(false);
 const iconPrefix = ref('ant-design');
 
 // 表单数据
-const formData = ref({
+const formData = reactive({
   parent_id: 0 as number,
   menu_parent_permission_id: undefined as number | undefined,
   name: '',
@@ -43,14 +46,30 @@ const formData = ref({
   status: 1,
 });
 
+// 表单 ref
+const formRef = ref<FormInstance>();
+
+// 表单验证规则
+const formRules: Record<string, Rule[]> = {
+  name: [
+    { required: true, message: '请输入分组名称', whitespace: true },
+    { max: 50, message: '分组名称不能超过50个字符' },
+  ],
+  code: [
+    { required: true, message: '请输入分组编码', whitespace: true },
+    {
+      pattern: /^[a-z]\w*$/i,
+      message: '编码只能包含英文字母、数字和下划线，且以字母开头',
+    },
+    { max: 50, message: '分组编码不能超过50个字符' },
+  ],
+};
+
 // 父分组树形数据
 const groupTreeData = ref<SettingApi.SettingGroup[]>([]);
 
 // 父菜单权限树形数据（type=1 的菜单权限）
 const permissionTreeData = ref<any[]>([]);
-
-// 是否为顶级分组（parent_id === 0 时需要选择父菜单权限）
-const isTopLevel = computed(() => formData.value.parent_id === 0);
 
 /** 加载父分组数据 */
 const loadGroupTree = async () => {
@@ -64,80 +83,83 @@ const loadGroupTree = async () => {
 /** 加载菜单权限树 */
 const loadPermissionTree = async () => {
   try {
-    const tree = await getPermissionTreeApi({ type: 1 });
-    permissionTreeData.value = tree;
+    permissionTreeData.value = await getSettingPermissionTreeApi();
   } catch {
     console.error('加载权限树失败');
   }
 };
 
-/** 树形数据转换为 TreeSelect 格式（带"顶级"选项） */
-const convertGroupToTreeSelect = (data: SettingApi.SettingGroup[]): any[] => {
-  return [
-    {
-      title: '顶级',
-      value: 0,
-      key: 0,
-    },
-    ...data.map((item) => ({
+/** 分组树转换为 TreeSelect 格式（只在根级加一个"顶级"选项） */
+const groupTreeSelectData = computed(() => {
+  const convert = (items: SettingApi.SettingGroup[]): any[] =>
+    items.map((item) => ({
       title: item.name,
       value: item.id,
       key: item.id,
-      children: item.children
-        ? convertGroupToTreeSelect(item.children)
-        : undefined,
-    })),
-  ];
-};
+      children: item.children ? convert(item.children) : undefined,
+    }));
 
-/** 权限树转换为 TreeSelect 格式（带"顶级"选项） */
-const convertPermissionToTreeSelect = (data: any[]): any[] => {
   return [
-    {
-      title: '顶级',
-      value: 0,
-      key: 0,
-    },
-    ...data.map((item) => ({
+    { title: '顶级（无父分组）', value: 0, key: 0 },
+    ...convert(groupTreeData.value),
+  ];
+});
+
+/** 权限树转换为 TreeSelect 格式（只在根级加一个"顶级"选项） */
+const permissionTreeSelectData = computed(() => {
+  const convert = (items: any[]): any[] =>
+    items.map((item) => ({
       title: item.name,
       value: item.id,
       key: item.id,
-      children: item.children
-        ? convertPermissionToTreeSelect(item.children)
-        : undefined,
-    })),
+      children: item.children ? convert(item.children) : undefined,
+    }));
+
+  return [
+    { title: '顶级（无父菜单）', value: 0, key: 0 },
+    ...convert(permissionTreeData.value),
   ];
-};
+});
 
 /** 打开弹窗时初始化 */
 watch(
   () => props.visible,
-  (val) => {
+  async (val) => {
     if (val) {
       loadGroupTree();
       loadPermissionTree();
+      formRef.value?.clearValidate();
 
-      formData.value = props.editData
-        ? {
-            parent_id: props.editData.parent_id,
-            menu_parent_permission_id: undefined,
-            name: props.editData.name,
-            code: props.editData.code,
-            icon: props.editData.icon || '',
-            description: props.editData.description || '',
-            sort: props.editData.sort,
-            status: props.editData.status,
-          }
-        : {
-            parent_id: 0,
-            menu_parent_permission_id: undefined,
-            name: '',
-            code: '',
-            icon: '',
-            description: '',
-            sort: 0,
-            status: 1,
-          };
+      if (props.editData) {
+        // 通过 info 接口获取最新详情数据回显
+        try {
+          const detail = await getSettingGroupInfoApi(props.editData.id);
+          Object.assign(formData, {
+            parent_id: detail.parent_id,
+            menu_parent_permission_id: detail.permission_id,
+            name: detail.name,
+            code: detail.code,
+            icon: detail.icon || '',
+            description: detail.description || '',
+            sort: detail.sort,
+            status: detail.status,
+          });
+        } catch (error) {
+          console.error('获取分组详情失败:', error);
+          message.error('获取分组详情失败');
+        }
+      } else {
+        Object.assign(formData, {
+          parent_id: 0,
+          menu_parent_permission_id: undefined,
+          name: '',
+          code: '',
+          icon: '',
+          description: '',
+          sort: 0,
+          status: 1,
+        });
+      }
     }
   },
 );
@@ -149,22 +171,19 @@ const handleCancel = () => {
 
 /** 提交 */
 const handleOk = async () => {
-  if (!formData.value.name) {
-    message.warning('请输入分组名称');
-    return;
-  }
-  if (!formData.value.code) {
-    message.warning('请输入分组编码');
+  try {
+    await formRef.value?.validate();
+  } catch {
     return;
   }
 
   saving.value = true;
   try {
     if (isEdit.value && props.editData) {
-      await updateSettingGroupApi(props.editData.id, formData.value);
+      await updateSettingGroupApi(props.editData.id, formData);
       message.success('更新成功');
     } else {
-      await createSettingGroupApi(formData.value);
+      await createSettingGroupApi(formData);
       message.success('创建成功');
     }
     emit('update:visible', false);
@@ -187,41 +206,43 @@ const handleOk = async () => {
     @ok="handleOk"
     @cancel="handleCancel"
   >
-    <a-form :label-col="{ span: 6 }" :wrapper-col="{ span: 16 }" class="mt-4">
+    <a-form
+      ref="formRef"
+      :model="formData"
+      :rules="formRules"
+      :label-col="{ span: 6 }"
+      :wrapper-col="{ span: 16 }"
+      class="mt-4"
+    >
       <a-form-item label="父分组" name="parent_id">
         <a-tree-select
           v-model:value="formData.parent_id"
-          :tree-data="convertGroupToTreeSelect(groupTreeData)"
+          :tree-data="groupTreeSelectData"
           placeholder="请选择父分组"
           tree-default-expand-all
         />
       </a-form-item>
 
-      <a-form-item
-        v-if="isTopLevel"
-        label="父菜单权限"
-        name="menu_parent_permission_id"
-      >
+      <a-form-item label="父菜单权限" name="menu_parent_permission_id">
         <a-tree-select
           v-model:value="formData.menu_parent_permission_id"
-          :tree-data="convertPermissionToTreeSelect(permissionTreeData)"
+          :tree-data="permissionTreeSelectData"
           placeholder="请选择父菜单"
           tree-default-expand-all
         />
         <div class="mt-1 text-xs text-gray-400">
-          顶级分组需要选择在菜单树中的挂载位置
+          选择在菜单树中的挂载位置，决定左侧菜单中显示的位置
         </div>
       </a-form-item>
 
-      <a-form-item label="分组名称" name="name" required>
+      <a-form-item label="分组名称" name="name">
         <a-input v-model:value="formData.name" placeholder="如：微信设置" />
       </a-form-item>
 
-      <a-form-item label="分组编码" name="code" required>
+      <a-form-item label="分组编码" name="code">
         <a-input
           v-model:value="formData.code"
           placeholder="如：wechat（英文+数字）"
-          :disabled="isEdit"
         />
       </a-form-item>
 

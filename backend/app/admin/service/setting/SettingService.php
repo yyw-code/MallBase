@@ -267,6 +267,19 @@ class SettingService extends BaseService
         return false;
     }
 
+    /**
+     * 获取分组详情（用于编辑回显）
+     */
+    public function getGroupInfo(int $id): array
+    {
+        $group = $this->model()->find($id);
+        if (!$group) {
+            throw new BusinessException('分组不存在');
+        }
+
+        return $group->toArray();
+    }
+
     // ==================== 权限同步 ====================
 
     /**
@@ -448,7 +461,8 @@ class SettingService extends BaseService
 
         $setting->save($data);
 
-        // 清除分组缓存
+        // 清除单项缓存和分组缓存
+        $this->cacheService->clearSettingValue($setting->code);
         $group = $this->model()->find($setting->group_id);
         if ($group) {
             $this->cacheService->clearGroup($group->code);
@@ -467,15 +481,42 @@ class SettingService extends BaseService
             throw new BusinessException('设置项不存在');
         }
 
+        $code = $setting->code;
+        $groupId = $setting->group_id;
         $setting->delete();
 
-        // 清除分组缓存
-        $group = $this->model()->find($setting->group_id);
+        // 清除单项缓存和分组缓存
+        $this->cacheService->clearSettingValue($code);
+        $group = $this->model()->find($groupId);
         if ($group) {
             $this->cacheService->clearGroup($group->code);
         }
 
         return true;
+    }
+
+    // ==================== 公共配置读取 ====================
+
+    /**
+     * 获取单个设置项的值（公共方法，带缓存，供其他服务/模块调用）
+     *
+     * @param string $code 设置项编码（如 wechat_appid）
+     * @param mixed $default 默认值（设置项不存在或值为空时返回）
+     * @return mixed
+     */
+    public function getSettingValue(string $code, mixed $default = null): mixed
+    {
+        return $this->cacheService->getSettingValue($code, function () use ($code, $default) {
+            $setting = $this->model(Setting::class)
+                ->where('code', $code)
+                ->find();
+
+            if (!$setting || $setting->value === null || $setting->value === '') {
+                return $default;
+            }
+
+            return $setting->value;
+        });
     }
 
     // ==================== 配置读取/保存 ====================

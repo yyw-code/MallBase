@@ -1,4 +1,6 @@
 <script lang="ts" setup>
+import type { FormInstance, Rule } from 'ant-design-vue/es/form';
+
 import type { SettingApi } from '#/api/setting';
 
 import { computed, ref, watch } from 'vue';
@@ -21,6 +23,26 @@ const emit = defineEmits<{
 const isEdit = computed(() => !!props.editData);
 const modalTitle = computed(() => (isEdit.value ? '编辑设置项' : '新增设置项'));
 const saving = ref(false);
+
+// 表单 ref
+const formRef = ref<FormInstance>();
+
+// 表单验证规则
+const formRules: Record<string, Rule[]> = {
+  name: [
+    { required: true, message: '请输入设置项名称', whitespace: true },
+    { max: 50, message: '名称不能超过50个字符' },
+  ],
+  code: [
+    { required: true, message: '请输入设置项编码', whitespace: true },
+    {
+      pattern: /^[a-z]\w*$/i,
+      message: '编码只能包含英文字母、数字和下划线，且以字母开头',
+    },
+    { max: 50, message: '编码不能超过50个字符' },
+  ],
+  type: [{ required: true, message: '请选择表单类型' }],
+};
 
 /** 支持的表单类型列表 */
 const typeOptions = [
@@ -63,6 +85,8 @@ watch(
   () => props.visible,
   (val) => {
     if (val) {
+      formRef.value?.clearValidate();
+
       if (props.editData) {
         const item = props.editData;
         formData.value = {
@@ -70,7 +94,6 @@ watch(
           code: item.code,
           value: item.value || '',
           type: item.type,
-          // options 可能是数组或字符串，统一转为字符串编辑
           options:
             typeof item.options === 'string'
               ? item.options || ''
@@ -106,12 +129,9 @@ const handleCancel = () => {
 
 /** 提交 */
 const handleOk = async () => {
-  if (!formData.value.name) {
-    message.warning('请输入设置项名称');
-    return;
-  }
-  if (!formData.value.code) {
-    message.warning('请输入设置项编码');
+  try {
+    await formRef.value?.validate();
+  } catch {
     return;
   }
 
@@ -129,7 +149,6 @@ const handleOk = async () => {
   try {
     const submitData: any = {
       ...formData.value,
-      // 将空字符串的 options 设为 null
       options: formData.value.options || null,
     };
 
@@ -161,20 +180,23 @@ const handleOk = async () => {
     @ok="handleOk"
     @cancel="handleCancel"
   >
-    <a-form :label-col="{ span: 5 }" :wrapper-col="{ span: 18 }" class="mt-4">
-      <a-form-item label="名称" name="name" required>
+    <a-form
+      ref="formRef"
+      :model="formData"
+      :rules="formRules"
+      :label-col="{ span: 5 }"
+      :wrapper-col="{ span: 18 }"
+      class="mt-4"
+    >
+      <a-form-item label="名称" name="name">
         <a-input v-model:value="formData.name" placeholder="如：AppID" />
       </a-form-item>
 
-      <a-form-item label="编码" name="code" required>
-        <a-input
-          v-model:value="formData.code"
-          placeholder="如：wechat_appid"
-          :disabled="isEdit"
-        />
+      <a-form-item label="编码" name="code">
+        <a-input v-model:value="formData.code" placeholder="如：wechat_appid" />
       </a-form-item>
 
-      <a-form-item label="表单类型" name="type" required>
+      <a-form-item label="表单类型" name="type">
         <a-select
           v-model:value="formData.type"
           :options="typeOptions"

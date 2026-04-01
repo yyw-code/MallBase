@@ -4,6 +4,7 @@ declare (strict_types=1);
 
 namespace app\admin\controller\setting;
 
+use app\admin\service\auth\PermissionService;
 use app\admin\service\setting\SettingService;
 use mall_base\base\BaseController;
 
@@ -17,6 +18,19 @@ class SettingController extends BaseController
      * 默认 Service 类名
      */
     protected string $serviceClass = SettingService::class;
+
+    // ==================== 权限菜单树（设置模块用） ====================
+
+    /**
+     * 获取菜单权限树（仅纯目录，排除有 component 的菜单）
+     * 用于设置分组选择父菜单挂载位置
+     */
+    public function menuTree()
+    {
+        $permissionService = app()->make(PermissionService::class);
+        $tree = $permissionService->getTree(['type' => 1, 'status' => 1, 'component_empty' => 1]);
+        return $this->success($tree, '获取成功');
+    }
 
     // ==================== 分组管理 ====================
 
@@ -49,6 +63,19 @@ class SettingController extends BaseController
     {
         $list = $this->service()->getAllGroups();
         return $this->success($list, '获取成功');
+    }
+
+    /**
+     * 分组详情（用于编辑回显）
+     */
+    public function groupInfo($id)
+    {
+        if (empty($id)) {
+            return $this->error('ID不能为空');
+        }
+
+        $info = $this->service()->getGroupInfo((int)$id);
+        return $this->success($info, '获取成功');
     }
 
     /**

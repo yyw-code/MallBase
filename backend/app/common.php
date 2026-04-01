@@ -1,6 +1,8 @@
 <?php
 // 应用公共文件
 
+use app\admin\service\setting\SettingService;
+
 if (!function_exists('load_routes')) {
     function load_routes(string $name): void
     {
@@ -42,5 +44,24 @@ if (!function_exists('getUploadDomain')) {
             'cos' => $config['cos']['urlPrefix'] ?? '',
             default => '',
         };
+    }
+}
+
+if (!function_exists('getSystemSetting')) {
+    /**
+     * 获取系统设置项的值（带缓存）
+     *
+     * 使用示例：
+     *   getSystemSetting('wechat_appid')                    // 不存在返回 null
+     *   getSystemSetting('wechat_appid', 'default_value')   // 不存在时返回 'default_value'
+     *
+     * @param string $code 设置项编码
+     * @param mixed $default 默认值（设置项不存在或值为空时返回）
+     * @return mixed
+     */
+    function getSystemSetting(string $code, mixed $default = null): mixed
+    {
+        return app()->make(SettingService::class)
+            ->getSettingValue($code, $default);
     }
 }

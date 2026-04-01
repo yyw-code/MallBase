@@ -73,4 +73,25 @@ class SettingCacheService
     {
         return Cache::remember($this->allKey, $callback, 86400);
     }
+
+    /**
+     * 获取单个设置项值（先走缓存，未命中则回调获取并缓存）
+     *
+     * @param string $code 设置项编码
+     * @param callable $callback 回调函数
+     * @return mixed
+     */
+    public function getSettingValue(string $code, callable $callback): mixed
+    {
+        $cacheKey = 'setting:value:' . $code;
+        return Cache::remember($cacheKey, $callback, 86400);
+    }
+
+    /**
+     * 清除单个设置项缓存
+     */
+    public function clearSettingValue(string $code): void
+    {
+        Cache::delete('setting:value:' . $code);
+    }
 }

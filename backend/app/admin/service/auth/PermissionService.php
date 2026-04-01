@@ -41,6 +41,11 @@ class PermissionService extends BaseService
             ->when(($where['source'] ?? null) !== null, function ($q) use ($where) {
                 $q->where('source', $where['source']);
             })
+            ->when(!empty($where['component_empty']), function ($q) {
+                $q->where(function ($q) {
+                    $q->whereNull('component')->whereOr('component', '');
+                });
+            })
             ->order('sort', 'asc')->order('id', 'asc')->select()->toArray();
 
         return $this->buildTree($list);

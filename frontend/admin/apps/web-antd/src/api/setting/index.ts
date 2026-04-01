@@ -1,6 +1,24 @@
 import { requestClient } from '#/api/request';
 
 export namespace SettingApi {
+  /** 权限列表项 */
+  export interface PermissionItem {
+    id: number;
+    parent_id: number;
+    name: string;
+    code: string;
+    type: number; // 1=菜单, 2=按钮
+    path?: string;
+    icon?: string;
+    component?: string;
+    sort: number;
+    status: number;
+    is_show: number;
+    remark?: string;
+    create_time?: string;
+    update_time?: string;
+    children?: PermissionItem[];
+  }
   /** 设置分组 */
   export interface SettingGroup {
     id: number;
@@ -25,7 +43,7 @@ export namespace SettingApi {
     code: string;
     value: string;
     type: string;
-    options?: OptionItem[] | string | null;
+    options?: null | OptionItem[] | string;
     placeholder?: string;
     remark?: string;
     sort: number;
@@ -35,7 +53,7 @@ export namespace SettingApi {
   /** 选项项 */
   export interface OptionItem {
     label: string;
-    value: string | number;
+    value: number | string;
   }
 
   /** 分组列表参数 */
@@ -71,7 +89,7 @@ export namespace SettingApi {
     code: string;
     value?: string;
     type: string;
-    options?: OptionItem[] | string | null;
+    options?: null | OptionItem[] | string;
     placeholder?: string;
     remark?: string;
     sort?: number;
@@ -79,24 +97,37 @@ export namespace SettingApi {
   }
 
   /** 更新设置项参数 */
-  export interface UpdateSettingParams
-    extends Omit<Partial<CreateSettingParams>, 'group_id'> {
+  export interface UpdateSettingParams extends Omit<
+    Partial<CreateSettingParams>,
+    'group_id'
+  > {
     id: number;
   }
 
   /** 配置响应（动态表单页面使用） */
   export interface ConfigResponse {
     group: {
-      id: number;
       code: string;
-      name: string;
       icon?: string;
+      id: number;
+      name: string;
     };
     settings: SettingItem[];
   }
 
   /** 保存配置参数 */
   export type SaveConfigParams = Record<string, any>;
+}
+
+// ==================== 权限菜单树 API ====================
+
+/**
+ * 获取设置模块可用的权限菜单树
+ */
+export async function getSettingPermissionTreeApi() {
+  return requestClient.get<SettingApi.PermissionItem[]>(
+    '/setting/permission/tree',
+  );
 }
 
 // ==================== 分组管理 API ====================
@@ -120,10 +151,9 @@ export async function getSettingGroupTreeApi(params?: {
   keyword?: string;
   status?: number;
 }) {
-  return requestClient.get<SettingApi.SettingGroup[]>(
-    '/setting/group/tree',
-    { params },
-  );
+  return requestClient.get<SettingApi.SettingGroup[]>('/setting/group/tree', {
+    params,
+  });
 }
 
 /**
@@ -131,6 +161,15 @@ export async function getSettingGroupTreeApi(params?: {
  */
 export async function getSettingGroupAllApi() {
   return requestClient.get<SettingApi.SettingGroup[]>('/setting/group/all');
+}
+
+/**
+ * 获取分组详情
+ */
+export async function getSettingGroupInfoApi(id: number) {
+  return requestClient.get<SettingApi.SettingGroup>(
+    `/setting/group/info/${id}`,
+  );
 }
 
 /**

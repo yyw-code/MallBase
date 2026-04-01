@@ -118,6 +118,14 @@ const loadGroupTree = async () => {
   try {
     groupTree.value = await getSettingGroupTreeApi();
     expandedKeys.value = getAllKeys(groupTree.value);
+
+    // 默认选中第一个节点
+    if (!selectedGroupId.value && groupTree.value.length > 0) {
+      const first = groupTree.value[0]!;
+      selectedGroupId.value = first.id;
+      selectedGroupName.value = first.name;
+      loadItems(first.id);
+    }
   } catch (error) {
     console.error('加载分组树失败:', error);
     message.error('加载分组树失败');

@@ -8,6 +8,11 @@ use think\facade\Route;
 // 系统设置路由
 Route::group('setting', function () {
 
+    // ==================== 权限菜单树 ====================
+
+    // 菜单权限树（仅纯目录，排除有 component 的菜单，设置模块专用）
+    Route::get('permission/tree', 'menuTree')->name('SettingPermissionTree')->option(['_alias' => '菜单权限树', '_desc' => '菜单权限树（仅纯目录，设置模块用）', '_auth' => false]);
+
     // ==================== 分组管理 ====================
 
     // 分组列表（分页）
@@ -16,6 +21,8 @@ Route::group('setting', function () {
     Route::get('group/tree', 'groupTree')->name('SettingGroupTree')->option(['_alias' => '分组树', '_desc' => '设置分组树形结构', '_auth' => true]);
     // 所有启用的分组（树形结构）
     Route::get('group/all', 'groupAll')->name('SettingGroupAll')->option(['_alias' => '全部分组', '_desc' => '所有启用的设置分组', '_auth' => true]);
+    // 分组详情（编辑回显）
+    Route::get('group/info/:id', 'groupInfo')->name('SettingGroupInfo')->option(['_alias' => '分组详情', '_desc' => '分组详情', '_auth' => true]);
     // 创建分组
     Route::post('group/create', 'groupCreate')->name('SettingGroupCreate')->option(['_alias' => '创建分组', '_desc' => '创建设置分组', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     // 更新分组
