@@ -74,7 +74,10 @@ export namespace SettingApi {
     group_id: number;
     name: string;
     code: string;
+    /** 存储的相对路径 */
     value: string;
+    /** 后端返回的完整预览 URL（含域名），用于图片/文件回显 */
+    preview_url?: string;
     type: string;
     options?: null | OptionItem[] | string;
     placeholder?: string;
@@ -242,9 +245,7 @@ export async function deleteSettingGroupApi(id: number) {
  * 后端维护，新增规则类型只需后端添加，前端自动渲染
  */
 export async function getSettingRuleTypesApi() {
-  return requestClient.get<SettingApi.RuleTypeItem[]>(
-    '/setting/rule/types',
-  );
+  return requestClient.get<SettingApi.RuleTypeItem[]>('/setting/rule/types');
 }
 
 // ==================== 设置项管理 API ====================

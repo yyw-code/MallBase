@@ -22,10 +22,10 @@ const settings = ref<SettingApi.SettingItem[]>([]);
 const formValues = ref<Record<string, any>>({});
 const formErrors = reactive<Record<string, string>>({});
 
-/** API 基础地址，用于图片/文件回显 */
+/** API 基础地址，用于图片/文件回显兜底 */
 const apiBaseUrl = import.meta.env.VITE_GLOB_API_URL || '';
 
-/** 将相对路径转为完整 URL（用于回显） */
+/** 将相对路径转为完整 URL（兜底用，优先使用后端返回的 preview_url） */
 const toFullUrl = (path: string) => {
   if (!path) return '';
   if (path.startsWith('http://') || path.startsWith('https://')) return path;
@@ -34,22 +34,24 @@ const toFullUrl = (path: string) => {
 
 /**
  * 将 formValues 中媒体值转为 Upload 组件可显示的 URL
- * 内部存储格式: { url, full_url, name } 或 { url, full_url, name }[]
+ * 内部存储格式: { url, preview_url, name } 或 { url, preview_url, name }[]
  * Upload 组件需要: string 或 string[]
  */
 const getUploadValue = (value: any) => {
   if (!value) return value;
-  // 多文件/多图: [{ url, full_url, name }, ...]
+  // 多文件/多图: [{ url, preview_url, name }, ...]
   if (Array.isArray(value)) {
     return value.map((item: any) => {
-      if (typeof item === 'object' && item?.full_url) return item.full_url;
+      if (typeof item === 'object' && item?.preview_url)
+        return item.preview_url;
       if (typeof item === 'object' && item?.url) return toFullUrl(item.url);
       if (typeof item === 'string') return toFullUrl(item);
       return '';
     });
   }
-  // 单文件/单图: { url, full_url, name }
-  if (typeof value === 'object' && value?.full_url) return value.full_url;
+  // 单文件/单图: { url, preview_url, name }
+  if (typeof value === 'object' && value?.preview_url)
+    return value.preview_url;
   if (typeof value === 'object' && value?.url) return toFullUrl(value.url);
   // 兜底: 纯字符串
   return toFullUrl(value);
@@ -104,17 +106,17 @@ const getJsonObject = (code: string) => {
 
 /** 常用验证正则 */
 const REGEX_MAP: Record<string, RegExp> = {
-  email: /^[^\s@]+@[^\s@][^\s.@]*\.[^\s@]+$/,
-  url: /^https?:\/\/([\w-]+\.)+[\w-]+(\/[\w\-./?%&=@]*)?$/,
-  phone: /^1[3-9]\d{9}$/,
-  idCard: /^\d{17}[\dXx]$/,
-  integer: /^-?\d+$/,
-  float: /^-?\d+(\.\d+)?$/,
-  digits: /^\d+$/,
+  alphaNum: /^[a-z0-9]+$/i,
   chinese: /^[\u4e00-\u9fa5]+$/,
-  english: /^[A-Za-z]+$/,
-  alphaNum: /^[A-Za-z0-9]+$/,
+  digits: /^\d+$/,
+  email: /^[^\s@]+@[^\s@][^\s.@]*\.[^\s@]+$/,
+  english: /^[a-z]+$/i,
+  float: /^-?\d+(\.\d+)?$/,
+  idCard: /^\d{17}[\dX]$/i,
+  integer: /^-?\d+$/,
   ip: /^(\d{1,3}\.){3}\d{1,3}$/,
+  phone: /^1[3-9]\d{9}$/,
+  url: /^https?:\/\/([\w-]+\.)+[\w-]+(\/[\w\-./?%&=@]*)?$/,
 };
 
 /**
@@ -171,27 +173,25 @@ const applyRule = (
     (Array.isArray(value) && value.length === 0);
 
   switch (rule.type) {
-    case 'required': {
-      if (isEmpty) {
-        return rule.message || `请填写「${item.name}」`;
+    case 'json': {
+      if (!isEmpty) {
+        try {
+          JSON.parse(strVal);
+        } catch {
+          return rule.message || `「${item.name}」JSON 格式不正确`;
+        }
       }
       break;
     }
-    case 'minLength': {
-      if (!isEmpty && strVal.length < Number(rule.value)) {
-        return (
-          rule.message ||
-          `「${item.name}」最少输入 ${rule.value} 个字符`
-        );
+    case 'max': {
+      if (!isEmpty && Number(value) > Number(rule.value)) {
+        return rule.message || `「${item.name}」最大值为 ${rule.value}`;
       }
       break;
     }
     case 'maxLength': {
       if (!isEmpty && strVal.length > Number(rule.value)) {
-        return (
-          rule.message ||
-          `「${item.name}」最多输入 ${rule.value} 个字符`
-        );
+        return rule.message || `「${item.name}」最多输入 ${rule.value} 个字符`;
       }
       break;
     }
@@ -201,9 +201,9 @@ const applyRule = (
       }
       break;
     }
-    case 'max': {
-      if (!isEmpty && Number(value) > Number(rule.value)) {
-        return rule.message || `「${item.name}」最大值为 ${rule.value}`;
+    case 'minLength': {
+      if (!isEmpty && strVal.length < Number(rule.value)) {
+        return rule.message || `「${item.name}」最少输入 ${rule.value} 个字符`;
       }
       break;
     }
@@ -217,13 +217,9 @@ const applyRule = (
       }
       break;
     }
-    case 'json': {
-      if (!isEmpty) {
-        try {
-          JSON.parse(strVal);
-        } catch {
-          return rule.message || `「${item.name}」JSON 格式不正确`;
-        }
+    case 'required': {
+      if (isEmpty) {
+        return rule.message || `请填写「${item.name}」`;
       }
       break;
     }
@@ -295,7 +291,7 @@ const loadConfig = async () => {
 
     const values: Record<string, any> = {};
     for (const item of res.settings) {
-      values[item.code] = convertValue(item.value, item.type);
+      values[item.code] = convertValue(item.value, item.type, item.preview_url);
     }
     formValues.value = values;
 
@@ -312,7 +308,7 @@ const loadConfig = async () => {
 };
 
 /** 根据类型转换值 */
-const convertValue = (value: string, type: string) => {
+const convertValue = (value: string, type: string, previewUrl?: string) => {
   if (value === undefined || value === null) return undefined;
 
   switch (type) {
@@ -331,7 +327,7 @@ const convertValue = (value: string, type: string) => {
       if (value) {
         return {
           url: value,
-          full_url: toFullUrl(value),
+          preview_url: previewUrl || toFullUrl(value),
           name: value.split('/').pop() || 'file',
         };
       }
@@ -344,7 +340,7 @@ const convertValue = (value: string, type: string) => {
           const urls: string[] = JSON.parse(value);
           return urls.map((u) => ({
             url: u,
-            full_url: toFullUrl(u),
+            preview_url: toFullUrl(u),
             name: u.split('/').pop() || 'file',
           }));
         } catch {
@@ -430,7 +426,7 @@ const getEditorHtml = (code: string) => {
   return formValues.value[code] || '';
 };
 
-/** 上传处理 —— 存储完整信息 { url, full_url, name } */
+/** 上传处理 —— 存储完整信息 { url, preview_url, name } */
 const handleUpload = (code: string, type: string) => {
   return async (file: File) => {
     try {
@@ -441,7 +437,7 @@ const handleUpload = (code: string, type: string) => {
 
       const fileInfo = {
         url: res?.url || '',
-        full_url: res?.full_url || '',
+        preview_url: res?.preview_url || res?.full_url || toFullUrl(res?.url || ''),
         name: res?.name || file.name,
       };
 
@@ -547,10 +543,7 @@ onMounted(loadConfig);
               <div class="form-label">
                 <span class="label-text">{{ item.name }}</span>
                 <span
-                  v-if="
-                    item.rules &&
-                      item.rules.some((r) => r.type === 'required')
-                  "
+                  v-if="item.rules?.some((r) => r.type === 'required')"
                   class="required-star"
                 >
                   *
@@ -652,10 +645,7 @@ onMounted(loadConfig);
               <div class="form-label">
                 <span class="label-text">{{ item.name }}</span>
                 <span
-                  v-if="
-                    item.rules &&
-                      item.rules.some((r) => r.type === 'required')
-                  "
+                  v-if="item.rules?.some((r) => r.type === 'required')"
                   class="required-star"
                 >
                   *
@@ -696,10 +686,7 @@ onMounted(loadConfig);
               <div class="form-label">
                 <span class="label-text">{{ item.name }}</span>
                 <span
-                  v-if="
-                    item.rules &&
-                      item.rules.some((r) => r.type === 'required')
-                  "
+                  v-if="item.rules?.some((r) => r.type === 'required')"
                   class="required-star"
                 >
                   *
