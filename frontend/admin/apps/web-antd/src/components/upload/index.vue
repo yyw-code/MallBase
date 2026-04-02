@@ -1,23 +1,102 @@
 <script lang="ts" setup>
 import type { UploadFile, UploadProps } from 'ant-design-vue';
 
-import { computed, ref, watch } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 
 import { message } from 'ant-design-vue';
 
-import { getUploadConfig } from '#/config/upload';
+import { getUploadConfigApi } from '#/api/core/upload';
 
 /** 文件信息对象 */
 export interface FileInfo {
-  /** 存储路径（相对路径） */
   url: string;
-  /** 完整预览/下载 URL（含域名） */
   full_url?: string;
-  /** 原始文件名 */
   name: string;
 }
 
-/** 根据 URL 提取文件名 */
+interface Props {
+  type?: 'file' | 'files' | 'image' | 'images';
+  value?: FileInfo | FileInfo[] | string;
+  disabled?: boolean;
+  maxSize?: number;
+  maxCount?: number;
+  accept?: string[];
+  showUploadList?: boolean;
+  customUpload: (file: File) => Promise<void>;
+  customRemove?: (index?: number) => Promise<void>;
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  type: 'image',
+  disabled: false,
+  showUploadList: true,
+});
+
+// ==================== 后端配置 ====================
+
+const remoteConfig = ref<null | {
+  acceptTypes: string[];
+  fileIcons: Record<string, string>;
+  maxCount: number;
+  maxSize: number;
+}>(null);
+
+const loadRemoteConfig = async () => {
+  try {
+    const res = await getUploadConfigApi(props.type);
+    if (res) {
+      const iconMap: Record<string, string> = {};
+      if (res.file_icons && Array.isArray(res.file_icons)) {
+        for (const item of res.file_icons) {
+          iconMap[item.ext] = item.icon;
+        }
+      }
+      remoteConfig.value = {
+        maxSize: res.max_size,
+        maxCount: res.max_count,
+        acceptTypes: res.accept_types,
+        fileIcons: iconMap,
+      };
+    }
+  } catch (error) {
+    console.warn('获取上传配置失败，使用前端兜底配置:', error);
+  }
+};
+
+onMounted(loadRemoteConfig);
+
+// ==================== 合并后的配置 ====================
+
+const fallbackConfig: Record<string, { maxCount: number; maxSize: number }> = {
+  file: { maxCount: 1, maxSize: 10 },
+  files: { maxCount: 5, maxSize: 10 },
+  image: { maxCount: 1, maxSize: 2 },
+  images: { maxCount: 9, maxSize: 5 },
+};
+
+const effectiveMaxSize = computed(() => {
+  if (props.maxSize !== undefined) return props.maxSize;
+  return (
+    remoteConfig.value?.maxSize ?? fallbackConfig[props.type]?.maxSize ?? 5
+  );
+});
+
+const effectiveMaxCount = computed(() => {
+  if (props.maxCount !== undefined) return props.maxCount;
+  return (
+    remoteConfig.value?.maxCount ?? fallbackConfig[props.type]?.maxCount ?? 1
+  );
+});
+
+const effectiveAcceptTypes = computed(() => {
+  if (props.accept) return props.accept;
+  return remoteConfig.value?.acceptTypes ?? [];
+});
+
+const isImageType = computed(() => ['image', 'images'].includes(props.type));
+
+// ==================== 工具函数 ====================
+
 const extractFileName = (url: string): string => {
   if (!url) return '未知文件';
   const decoded = decodeURIComponent(url);
@@ -31,10 +110,13 @@ const extractFileName = (url: string): string => {
   return name || '未知文件';
 };
 
-/** 根据文件扩展名获取图标 */
 const getFileIcon = (name: string): string => {
   const ext = name.includes('.') ? name.split('.').pop()?.toLowerCase() : '';
-  const iconMap: Record<string, string> = {
+  if (!ext) return '📎';
+  if (remoteConfig.value?.fileIcons?.[ext]) {
+    return remoteConfig.value.fileIcons[ext];
+  }
+  const fallback: Record<string, string> = {
     csv: '📊',
     doc: '📝',
     docx: '📝',
@@ -51,59 +133,23 @@ const getFileIcon = (name: string): string => {
     xlsx: '📊',
     zip: '📦',
   };
-  return iconMap[ext || ''] || '📎';
+  return fallback[ext] || '📎';
 };
 
-interface Props {
-  /** 上传类型：image, images, file, files */
-  type?: 'file' | 'files' | 'image' | 'images';
-  /** 显示的值：支持 URL 字符串或 FileInfo 对象 */
-  value?: FileInfo | FileInfo[] | string;
-  /** 是否只读 */
-  disabled?: boolean;
-  /** 自定义文件大小限制（MB） */
-  maxSize?: number;
-  /** 自定义最大上传数量 */
-  maxCount?: number;
-  /** 自定义接受的文件类型 */
-  accept?: string[];
-  /** 是否显示上传列表 */
-  showUploadList?: boolean;
-  /** 自定义上传方法（必须） */
-  customUpload: (file: File) => Promise<void>;
-  /** 自定义删除方法（可选） */
-  customRemove?: (index?: number) => Promise<void>;
-}
+// ==================== 上传配置 ====================
 
-const props = withDefaults(defineProps<Props>(), {
-  type: 'image',
-  disabled: false,
-  showUploadList: true,
-});
+const uploadProps = computed<UploadProps>(() => ({
+  name: 'file',
+  maxCount: effectiveMaxCount.value,
+  listType: isImageType.value ? 'picture-card' : 'text',
+  showUploadList: props.showUploadList
+    ? { showDownloadIcon: false, showPreviewIcon: true, showRemoveIcon: true }
+    : false,
+  beforeUpload: handleBeforeUpload,
+  customRequest: handleCustomRequest,
+  onRemove: handleRemove,
+}));
 
-// 获取配置
-const config = computed(() => getUploadConfig(props.type));
-
-// 判断是否为图片类型
-const isImageType = computed(() => ['image', 'images'].includes(props.type));
-
-// 上传配置
-const uploadProps = computed<UploadProps>(() => {
-  const cfg = config.value;
-  return {
-    name: 'file',
-    maxCount: props.maxCount ?? cfg.maxCount,
-    listType: isImageType.value ? 'picture-card' : 'text',
-    showUploadList: props.showUploadList
-      ? { showDownloadIcon: false, showPreviewIcon: true, showRemoveIcon: true }
-      : false,
-    beforeUpload: handleBeforeUpload,
-    customRequest: handleCustomRequest,
-    onRemove: handleRemove,
-  };
-});
-
-/** 将 value 转为 UploadFile 列表 */
 const buildFileList = (): UploadFile[] => {
   const val = props.value;
   if (!val) return [];
@@ -128,7 +174,6 @@ const buildFileList = (): UploadFile[] => {
     ];
   }
 
-  // 兜底：纯字符串
   return [
     {
       uid: '0',
@@ -139,7 +184,6 @@ const buildFileList = (): UploadFile[] => {
   ];
 };
 
-// 文件列表
 const fileList = ref<UploadFile[]>([]);
 
 watch(
@@ -150,30 +194,22 @@ watch(
   { immediate: true, deep: true },
 );
 
-// 上传前验证
-const handleBeforeUpload = (file: File) => {
-  const cfg = config.value;
-  const maxSize = props.maxSize ?? cfg.maxSize;
+// ==================== 事件处理 ====================
 
+const handleBeforeUpload = (file: File) => {
+  const maxSize = effectiveMaxSize.value;
   if (file.size / 1024 / 1024 > maxSize) {
     message.error(`文件大小不能超过 ${maxSize}MB`);
     return false;
   }
-
-  if (props.accept) {
-    if (!props.accept.includes(file.type)) {
-      message.error('不支持的文件类型');
-      return false;
-    }
-  } else if (!cfg.acceptTypes.includes(file.type)) {
+  const acceptTypes = effectiveAcceptTypes.value;
+  if (acceptTypes.length > 0 && !acceptTypes.includes(file.type)) {
     message.error('不支持的文件类型');
     return false;
   }
-
   return true;
 };
 
-// 自定义上传
 const handleCustomRequest = async ({
   file,
   onSuccess,
@@ -193,7 +229,6 @@ const handleCustomRequest = async ({
   }
 };
 
-// 删除文件
 const handleRemove = async (file: UploadFile) => {
   if (props.customRemove) {
     const index = fileList.value.findIndex((item) => item.uid === file.uid);
@@ -201,18 +236,15 @@ const handleRemove = async (file: UploadFile) => {
   }
 };
 
-// 是否显示上传按钮
 const showUploadButton = computed(() => {
   if (props.disabled) return false;
   const val = props.value;
   if (Array.isArray(val)) {
-    const max = props.maxCount ?? config.value.maxCount;
-    return val.length < max;
+    return val.length < effectiveMaxCount.value;
   }
   return !val;
 });
 
-/** 预览/下载文件 */
 const handlePreview = (file: UploadFile) => {
   if (file.url) {
     window.open(file.url, '_blank');
@@ -227,7 +259,7 @@ const handlePreview = (file: UploadFile) => {
     :disabled="disabled"
     @preview="handlePreview"
   >
-    <!-- 图片类型上传按钮 -->
+    <!-- 图片类型：缩略图卡片 -->
     <template v-if="isImageType && showUploadButton">
       <div>
         <span>+</span>
@@ -237,7 +269,7 @@ const handlePreview = (file: UploadFile) => {
       </div>
     </template>
 
-    <!-- 文件类型上传按钮 -->
+    <!-- 文件类型：按钮上传 -->
     <template v-else-if="showUploadButton">
       <a-button>
         <template #icon>
@@ -247,10 +279,87 @@ const handlePreview = (file: UploadFile) => {
       </a-button>
     </template>
 
+    <!-- 文件列表项（仅文件类型，图片用默认缩略图） -->
+    <template v-if="!isImageType" #itemRender="{ file, actions }">
+      <div class="upload-item">
+        <span class="upload-item-icon">{{ getFileIcon(file.name) }}</span>
+        <a
+          v-if="file.url"
+          :href="file.url"
+          target="_blank"
+          class="upload-item-name"
+          @click.prevent="handlePreview(file)"
+        >
+          {{ file.name }}
+        </a>
+        <span v-else class="upload-item-name">{{ file.name }}</span>
+        <span class="upload-item-actions">
+          <span
+            v-if="!disabled"
+            class="upload-item-action upload-item-remove"
+            title="删除文件"
+            @click="actions.remove"
+          >
+            🗑
+          </span>
+        </span>
+      </div>
+    </template>
   </a-upload>
 </template>
 
 <style scoped>
+.upload-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 4px 0;
+  line-height: 1.5;
+}
+
+.upload-item-icon {
+  flex-shrink: 0;
+  font-size: 16px;
+}
+
+.upload-item-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 260px;
+  font-size: 13px;
+  color: #1677ff;
+  cursor: pointer;
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.upload-item-name:hover {
+  color: #4096ff;
+  text-decoration: underline;
+}
+
+.upload-item-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+  flex-shrink: 0;
+}
+
+.upload-item-action {
+  cursor: pointer;
+  font-size: 14px;
+  color: #999;
+  transition: color 0.2s;
+  user-select: none;
+}
+
+.upload-item-remove:hover {
+  color: #ff4d4f;
+}
+
 :deep(.ant-upload-list) {
   margin-top: 8px;
 }

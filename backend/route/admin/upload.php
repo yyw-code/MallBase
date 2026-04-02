@@ -4,6 +4,13 @@ use think\facade\Route;
 
 // 上传接口路由
 Route::group('upload', function () {
+    // 获取上传配置（前端 Upload 组件使用，登录即可，无需权限）
+    Route::get('config', 'config')->name('UploadConfig')->option([
+        '_alias' => '上传配置',
+        '_desc' => '获取上传验证规则和文件图标配置',
+        '_auth' => false,
+    ]);
+
     // 上传图片
     Route::post('image', 'image')->name('UploadImage')->option([
         '_alias' => '上传图片',

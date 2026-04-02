@@ -29,6 +29,45 @@ class UploadService extends BaseService
     ];
 
 
+    // ==================== 上传配置（前端获取） ====================
+
+    /**
+     * 获取上传配置（前端 Upload 组件使用）
+     * 根据 type 参数返回对应的验证规则 + 文件图标
+     *
+     * @param string $type 上传类型：image/images/file/files
+     * @return array
+     */
+    public function getUploadConfig(string $type): array
+    {
+        $config = config('upload');
+        $rules  = $config['rules'] ?? [];
+        $fileIcons = $config['file_icons'] ?? [];
+
+        // 合法类型列表
+        $validTypes = array_keys($rules);
+
+        // 默认回退到 image
+        if (!in_array($type, $validTypes, true)) {
+            $type = 'image';
+        }
+
+        $rule = $rules[$type] ?? [
+            'max_size'     => 2,
+            'max_count'    => 1,
+            'accept_types' => ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
+        ];
+
+        return [
+            'max_size'     => $rule['max_size'],
+            'max_count'    => $rule['max_count'],
+            'accept_types' => $rule['accept_types'],
+            'file_icons'   => $fileIcons,
+        ];
+    }
+
+    // ==================== 上传功能 ====================
+
     /**
      * 设置图片上传配置
      *

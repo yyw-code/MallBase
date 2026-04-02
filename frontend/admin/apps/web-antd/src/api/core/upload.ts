@@ -1,6 +1,26 @@
 import { requestClient } from '#/api/request';
 
 export namespace UploadApi {
+  /** 文件类型图标映射项（后端返回） */
+  export interface FileIconItem {
+    /** 文件扩展名 */
+    ext: string;
+    /** 图标名称（Ant Design 图标） */
+    icon: string;
+  }
+
+  /** 上传验证配置（后端返回，按类型） */
+  export interface UploadRuleConfig {
+    /** 最大文件大小（MB） */
+    max_size: number;
+    /** 最大上传数量 */
+    max_count: number;
+    /** 允许的文件 MIME 类型 */
+    accept_types: string[];
+    /** 文件类型图标映射 */
+    file_icons: FileIconItem[];
+  }
+
   /** 上传响应 */
   export interface UploadResponse {
     /** 相对路径，用于提交保存 */
@@ -23,6 +43,17 @@ export namespace UploadApi {
   export interface BatchUploadResponse {
     data: UploadResponse[];
   }
+}
+
+/**
+ * 获取上传验证配置（按类型，含图标映射）
+ * @param type 上传类型：image / images / file / files
+ */
+export async function getUploadConfigApi(type: string) {
+  return requestClient.get<UploadApi.UploadRuleConfig>(
+    '/upload/config',
+    { params: { type } },
+  );
 }
 
 /**
