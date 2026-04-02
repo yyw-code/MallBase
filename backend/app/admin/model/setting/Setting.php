@@ -29,7 +29,7 @@ class Setting extends BaseModel
     /**
      * 追加到数组中的虚拟字段
      */
-    protected $append = ['preview_url'];
+    protected $append = ['full_url'];
 
     // ========== 表单类型常量 ==========
 
@@ -81,7 +81,7 @@ class Setting extends BaseModel
     const FILE_TYPES = [self::TYPE_IMAGE, self::TYPE_IMAGES, self::TYPE_FILE, self::TYPE_FILES];
 
     /**
-     * preview_url 获取器
+     * full_url 获取器
      * 图片/文件类型自动拼接上传域名前缀
      * - 单文件类型（image/file）：返回完整 URL 字符串
      * - 多文件类型（images/files）：value 为 JSON 数组时返回 URL 数组，逗号分隔时返回逗号分隔的 URL 字符串
@@ -91,7 +91,7 @@ class Setting extends BaseModel
      * @param array $data   当前记录数据
      * @return string|array|null
      */
-    public function getPreviewUrlAttr($value, $data)
+    public function getFullUrlAttr($value, $data)
     {
         $type = $data['type'] ?? '';
         $val  = $data['value'] ?? '';

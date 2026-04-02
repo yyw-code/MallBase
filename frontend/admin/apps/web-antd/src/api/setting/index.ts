@@ -76,8 +76,8 @@ export namespace SettingApi {
     code: string;
     /** 存储的相对路径 */
     value: string;
-    /** 后端返回的完整预览 URL（含域名），用于图片/文件回显 */
-    preview_url?: string;
+  /** 后端返回的完整 URL（含域名），用于图片/文件回显 */
+  full_url?: string;
     type: string;
     options?: null | OptionItem[] | string;
     placeholder?: string;

@@ -5,7 +5,7 @@ export namespace UploadApi {
   export interface UploadResponse {
     /** 相对路径，用于提交保存 */
     url: string;
-    /** 完整 URL，用于前端显示 */
+    /** 完整 URL（含域名），用于前端回显 */
     full_url: string;
     /** 相对路径 */
     path: string;

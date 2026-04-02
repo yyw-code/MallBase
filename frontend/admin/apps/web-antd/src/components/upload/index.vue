@@ -7,11 +7,58 @@ import { message } from 'ant-design-vue';
 
 import { getUploadConfig } from '#/config/upload';
 
+/** 文件信息对象 */
+export interface FileInfo {
+  /** 存储路径（相对路径） */
+  url: string;
+  /** 完整预览/下载 URL（含域名） */
+  full_url?: string;
+  /** 原始文件名 */
+  name: string;
+}
+
+/** 根据 URL 提取文件名 */
+const extractFileName = (url: string): string => {
+  if (!url) return '未知文件';
+  const decoded = decodeURIComponent(url);
+  const segments = decoded.split('/');
+  const lastSegment = segments.pop() || '';
+  const name = lastSegment.split('?')[0] || '';
+  if (name.length > 40) {
+    const ext = name.includes('.') ? `.${name.split('.').pop()}` : '';
+    return `${name.slice(0, 30)}...${ext}`;
+  }
+  return name || '未知文件';
+};
+
+/** 根据文件扩展名获取图标 */
+const getFileIcon = (name: string): string => {
+  const ext = name.includes('.') ? name.split('.').pop()?.toLowerCase() : '';
+  const iconMap: Record<string, string> = {
+    csv: '📊',
+    doc: '📝',
+    docx: '📝',
+    json: '📋',
+    mp3: '🎵',
+    mp4: '🎬',
+    pdf: '📕',
+    ppt: '📊',
+    pptx: '📊',
+    rar: '📦',
+    sql: '🗃️',
+    txt: '📄',
+    xls: '📊',
+    xlsx: '📊',
+    zip: '📦',
+  };
+  return iconMap[ext || ''] || '📎';
+};
+
 interface Props {
   /** 上传类型：image, images, file, files */
   type?: 'file' | 'files' | 'image' | 'images';
-  /** 显示的值（只读） */
-  value?: string | string[];
+  /** 显示的值：支持 URL 字符串或 FileInfo 对象 */
+  value?: FileInfo | FileInfo[] | string;
   /** 是否只读 */
   disabled?: boolean;
   /** 自定义文件大小限制（MB） */
@@ -40,54 +87,67 @@ const config = computed(() => getUploadConfig(props.type));
 // 判断是否为图片类型
 const isImageType = computed(() => ['image', 'images'].includes(props.type));
 
-// 判断是否为多选
-const isMultiple = computed(() => ['files', 'images'].includes(props.type));
-
 // 上传配置
 const uploadProps = computed<UploadProps>(() => {
   const cfg = config.value;
   return {
     name: 'file',
     maxCount: props.maxCount ?? cfg.maxCount,
-    // 图片类型使用 picture-card，文件类型使用 text
-    listType: ['image', 'images'].includes(props.type)
-      ? 'picture-card'
-      : 'text',
-    showUploadList: props.showUploadList,
+    listType: isImageType.value ? 'picture-card' : 'text',
+    showUploadList: props.showUploadList
+      ? { showDownloadIcon: false, showPreviewIcon: true, showRemoveIcon: true }
+      : false,
     beforeUpload: handleBeforeUpload,
     customRequest: handleCustomRequest,
     onRemove: handleRemove,
   };
 });
 
+/** 将 value 转为 UploadFile 列表 */
+const buildFileList = (): UploadFile[] => {
+  const val = props.value;
+  if (!val) return [];
+
+  if (Array.isArray(val)) {
+    return val.map((item: FileInfo, index: number) => ({
+      uid: `${index}`,
+      name: item.name || extractFileName(item.url),
+      status: 'done' as const,
+      url: item.full_url || item.url,
+    }));
+  }
+
+  if (typeof val === 'object') {
+    return [
+      {
+        uid: '0',
+        name: val.name || extractFileName(val.url),
+        status: 'done' as const,
+        url: val.full_url || val.url,
+      },
+    ];
+  }
+
+  // 兜底：纯字符串
+  return [
+    {
+      uid: '0',
+      name: extractFileName(val),
+      status: 'done' as const,
+      url: val,
+    },
+  ];
+};
+
 // 文件列表
 const fileList = ref<UploadFile[]>([]);
 
-// 监听 value 变化
 watch(
   () => props.value,
-  (val) => {
-    if (Array.isArray(val)) {
-      fileList.value = val.map((url, index) => ({
-        uid: `${index}`,
-        name: isImageType.value ? `image-${index}` : `file-${index}`,
-        status: 'done' as const,
-        url,
-      }));
-    } else if (val) {
-      fileList.value = [
-        {
-          uid: '0',
-          name: isImageType.value ? 'avatar' : 'file',
-          status: 'done' as const,
-          url: val,
-        },
-      ];
-    } else {
-      fileList.value = [];
-    }
+  () => {
+    fileList.value = buildFileList();
   },
-  { immediate: true },
+  { immediate: true, deep: true },
 );
 
 // 上传前验证
@@ -95,13 +155,11 @@ const handleBeforeUpload = (file: File) => {
   const cfg = config.value;
   const maxSize = props.maxSize ?? cfg.maxSize;
 
-  // 文件大小验证
   if (file.size / 1024 / 1024 > maxSize) {
     message.error(`文件大小不能超过 ${maxSize}MB`);
     return false;
   }
 
-  // 文件类型验证
   if (props.accept) {
     if (!props.accept.includes(file.type)) {
       message.error('不支持的文件类型');
@@ -126,44 +184,50 @@ const handleCustomRequest = async ({
   onSuccess?: (response: any, file: File) => void;
 }) => {
   try {
-    // 调用父组件传入的上传方法
-    await props.customUpload(file);
-    // 上传成功，通知 Upload 组件
-    onSuccess?.({}, file);
+    await props.customUpload(file as File);
+    onSuccess?.({}, file as File);
   } catch (error) {
     console.error('上传失败:', error);
     message.error('上传失败');
-    // 上传失败，通知 Upload 组件
-    onError?.(error as Error, file);
+    onError?.(error as Error, file as File);
   }
 };
 
 // 删除文件
 const handleRemove = async (file: UploadFile) => {
   if (props.customRemove) {
-    // 如果有自定义删除方法，使用它
     const index = fileList.value.findIndex((item) => item.uid === file.uid);
     await props.customRemove(index === -1 ? undefined : index);
   }
-  // 如果没有自定义删除方法，什么都不做（由父组件通过 value 控制）
 };
 
 // 是否显示上传按钮
 const showUploadButton = computed(() => {
   if (props.disabled) return false;
-
-  if (Array.isArray(props.value)) {
+  const val = props.value;
+  if (Array.isArray(val)) {
     const max = props.maxCount ?? config.value.maxCount;
-    return props.value.length < max;
+    return val.length < max;
   }
-
-  return !props.value;
+  return !val;
 });
+
+/** 预览/下载文件 */
+const handlePreview = (file: UploadFile) => {
+  if (file.url) {
+    window.open(file.url, '_blank');
+  }
+};
 </script>
 
 <template>
-  <a-upload v-bind="uploadProps" :file-list="fileList" :disabled="disabled">
-    <!-- 图片类型上传按钮（使用原生样式） -->
+  <a-upload
+    v-bind="uploadProps"
+    :file-list="fileList"
+    :disabled="disabled"
+    @preview="handlePreview"
+  >
+    <!-- 图片类型上传按钮 -->
     <template v-if="isImageType && showUploadButton">
       <div>
         <span>+</span>
@@ -173,7 +237,7 @@ const showUploadButton = computed(() => {
       </div>
     </template>
 
-    <!-- 文件类型上传按钮（使用原生样式） -->
+    <!-- 文件类型上传按钮 -->
     <template v-else-if="showUploadButton">
       <a-button>
         <template #icon>
@@ -182,13 +246,13 @@ const showUploadButton = computed(() => {
         {{ type === 'file' ? '上传文件' : '添加文件' }}
       </a-button>
     </template>
+
   </a-upload>
 </template>
 
 <style scoped>
-/* ========== 自定义文件列表项样式 ========== */
 :deep(.ant-upload-list) {
-  margin-top: 12px;
+  margin-top: 8px;
 }
 
 :deep(.ant-upload-list-picture-card .ant-upload-list-item) {
@@ -197,5 +261,15 @@ const showUploadButton = computed(() => {
 
 :deep(.ant-upload-list-picture-card .ant-upload-list-item-thumbnail) {
   object-fit: cover;
+}
+
+:deep(.ant-upload-list-text .ant-upload-list-item) {
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: background-color 0.2s;
+}
+
+:deep(.ant-upload-list-text .ant-upload-list-item:hover) {
+  background-color: #f5f5f5;
 }
 </style>

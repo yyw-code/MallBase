@@ -25,36 +25,11 @@ const formErrors = reactive<Record<string, string>>({});
 /** API 基础地址，用于图片/文件回显兜底 */
 const apiBaseUrl = import.meta.env.VITE_GLOB_API_URL || '';
 
-/** 将相对路径转为完整 URL（兜底用，优先使用后端返回的 preview_url） */
+/** 将相对路径转为完整 URL（兜底用，优先使用后端返回的 full_url） */
 const toFullUrl = (path: string) => {
   if (!path) return '';
   if (path.startsWith('http://') || path.startsWith('https://')) return path;
   return `${apiBaseUrl}${path}`;
-};
-
-/**
- * 将 formValues 中媒体值转为 Upload 组件可显示的 URL
- * 内部存储格式: { url, preview_url, name } 或 { url, preview_url, name }[]
- * Upload 组件需要: string 或 string[]
- */
-const getUploadValue = (value: any) => {
-  if (!value) return value;
-  // 多文件/多图: [{ url, preview_url, name }, ...]
-  if (Array.isArray(value)) {
-    return value.map((item: any) => {
-      if (typeof item === 'object' && item?.preview_url)
-        return item.preview_url;
-      if (typeof item === 'object' && item?.url) return toFullUrl(item.url);
-      if (typeof item === 'string') return toFullUrl(item);
-      return '';
-    });
-  }
-  // 单文件/单图: { url, preview_url, name }
-  if (typeof value === 'object' && value?.preview_url)
-    return value.preview_url;
-  if (typeof value === 'object' && value?.url) return toFullUrl(value.url);
-  // 兜底: 纯字符串
-  return toFullUrl(value);
 };
 
 /** 从路由路径中提取 groupCode */
@@ -107,7 +82,7 @@ const getJsonObject = (code: string) => {
 /** 常用验证正则 */
 const REGEX_MAP: Record<string, RegExp> = {
   alphaNum: /^[a-z0-9]+$/i,
-  chinese: /^[\u4e00-\u9fa5]+$/,
+  chinese: /^[\u4E00-\u9FA5]+$/,
   digits: /^\d+$/,
   email: /^[^\s@]+@[^\s@][^\s.@]*\.[^\s@]+$/,
   english: /^[a-z]+$/i,
@@ -291,7 +266,7 @@ const loadConfig = async () => {
 
     const values: Record<string, any> = {};
     for (const item of res.settings) {
-      values[item.code] = convertValue(item.value, item.type, item.preview_url);
+      values[item.code] = convertValue(item.value, item.type, item.full_url);
     }
     formValues.value = values;
 
@@ -308,7 +283,7 @@ const loadConfig = async () => {
 };
 
 /** 根据类型转换值 */
-const convertValue = (value: string, type: string, previewUrl?: string) => {
+const convertValue = (value: string, type: string, fullUrl?: string) => {
   if (value === undefined || value === null) return undefined;
 
   switch (type) {
@@ -327,7 +302,7 @@ const convertValue = (value: string, type: string, previewUrl?: string) => {
       if (value) {
         return {
           url: value,
-          preview_url: previewUrl || toFullUrl(value),
+          full_url: fullUrl || toFullUrl(value),
           name: value.split('/').pop() || 'file',
         };
       }
@@ -338,9 +313,11 @@ const convertValue = (value: string, type: string, previewUrl?: string) => {
       if (typeof value === 'string' && value.startsWith('[')) {
         try {
           const urls: string[] = JSON.parse(value);
-          return urls.map((u) => ({
+          // full_url 可能是数组（后端逐个返回完整路径）
+          const fullUrls = Array.isArray(fullUrl) ? fullUrl : [];
+          return urls.map((u, i) => ({
             url: u,
-            preview_url: toFullUrl(u),
+            full_url: fullUrls[i] || toFullUrl(u),
             name: u.split('/').pop() || 'file',
           }));
         } catch {
@@ -426,7 +403,7 @@ const getEditorHtml = (code: string) => {
   return formValues.value[code] || '';
 };
 
-/** 上传处理 —— 存储完整信息 { url, preview_url, name } */
+/** 上传处理 —— 存储完整信息 { url, full_url, name } */
 const handleUpload = (code: string, type: string) => {
   return async (file: File) => {
     try {
@@ -437,7 +414,7 @@ const handleUpload = (code: string, type: string) => {
 
       const fileInfo = {
         url: res?.url || '',
-        preview_url: res?.preview_url || res?.full_url || toFullUrl(res?.url || ''),
+        full_url: res?.full_url || toFullUrl(res?.url || ''),
         name: res?.name || file.name,
       };
 
@@ -653,7 +630,7 @@ onMounted(loadConfig);
               </div>
               <Upload
                 :type="getUploadType(item.type)"
-                :value="getUploadValue(formValues[item.code])"
+                :value="formValues[item.code]"
                 :custom-upload="handleUpload(item.code, item.type)"
                 :custom-remove="handleUploadRemove(item.code, item.type)"
               />
