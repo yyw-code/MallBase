@@ -5,6 +5,7 @@ declare (strict_types=1);
 namespace app\admin\service\setting;
 
 use app\admin\model\auth\Permission;
+use app\admin\model\setting\RuleType;
 use app\admin\model\setting\Setting;
 use app\admin\model\setting\SettingGroup;
 use app\admin\service\cache\SettingCacheService;
@@ -382,6 +383,19 @@ class SettingService extends BaseService
         ]);
     }
 
+    // ==================== 验证规则类型 ====================
+
+    /**
+     * 获取所有可用的验证规则类型
+     * 后端统一管理，前端动态渲染
+     *
+     * @return array
+     */
+    public function getRuleTypes(): array
+    {
+        return RuleType::getAll();
+    }
+
     // ==================== 设置项管理 ====================
 
     /**
@@ -428,10 +442,10 @@ class SettingService extends BaseService
             'value'       => $data['value'] ?? '',
             'type'        => $data['type'] ?? Setting::TYPE_INPUT,
             'options'     => $data['options'] ?? null,
+            'rules'       => $data['rules'] ?? null,
             'placeholder' => $data['placeholder'] ?? '',
             'remark'      => $data['remark'] ?? '',
             'sort'        => $data['sort'] ?? 0,
-            'is_required' => $data['is_required'] ?? 0,
         ]);
 
         $this->cacheService->clearGroup($group->code);

@@ -47,7 +47,6 @@ const tableColumns: TableColumnType<SettingApi.SettingItem>[] = [
   { dataIndex: 'code', ellipsis: true, title: '编码', width: 200 },
   { dataIndex: 'type', title: '类型', width: 120 },
   { dataIndex: 'value', ellipsis: true, title: '当前值' },
-  { dataIndex: 'is_required', title: '必填', width: 80 },
   { dataIndex: 'sort', title: '排序', width: 90 },
   { key: 'action', title: '操作', width: 140 },
 ];
@@ -410,15 +409,6 @@ onMounted(loadGroupTree);
                   >
                     {{ record.value || '-' }}
                   </span>
-                </template>
-
-                <template v-else-if="column.dataIndex === 'is_required'">
-                  <a-badge
-                    v-if="record.is_required === 1"
-                    color="red"
-                    text="必填"
-                  />
-                  <span v-else class="text-xs text-gray-400">-</span>
                 </template>
 
                 <template v-else-if="column.key === 'action'">

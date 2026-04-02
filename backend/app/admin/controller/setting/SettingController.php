@@ -6,6 +6,7 @@ namespace app\admin\controller\setting;
 
 use app\admin\service\auth\PermissionService;
 use app\admin\service\setting\SettingService;
+use app\admin\validate\setting\SettingValueValidate;
 use mall_base\base\BaseController;
 
 /**
@@ -121,6 +122,18 @@ class SettingController extends BaseController
         return $this->success(null, '删除成功');
     }
 
+    // ==================== 验证规则类型 ====================
+
+    /**
+     * 获取所有可用的验证规则类型
+     * 前端动态渲染规则选项用
+     */
+    public function ruleTypes()
+    {
+        $types = $this->service()->getRuleTypes();
+        return $this->success($types, '获取成功');
+    }
+
     // ==================== 设置项管理 ====================
 
     /**
@@ -143,7 +156,7 @@ class SettingController extends BaseController
      */
     public function settingCreate()
     {
-        $data = $this->request->param(['group_id', 'name', 'code', 'value', 'type', 'options', 'placeholder', 'remark', 'sort', 'is_required']);
+        $data = $this->request->param(['group_id', 'name', 'code', 'value', 'type', 'options', 'rules', 'placeholder', 'remark', 'sort']);
 
         $this->validate($data, 'setting/SettingItem.create');
 
@@ -160,7 +173,7 @@ class SettingController extends BaseController
             return $this->error('ID不能为空');
         }
 
-        $data = $this->request->param(['name', 'code', 'value', 'type', 'options', 'placeholder', 'remark', 'sort', 'is_required']);
+        $data = $this->request->param(['name', 'code', 'value', 'type', 'options', 'rules', 'placeholder', 'remark', 'sort']);
 
         $this->validate($data, 'setting/SettingItem.update');
 
@@ -199,6 +212,7 @@ class SettingController extends BaseController
 
     /**
      * 保存分组配置（前端提交表单）
+     * 先根据设置项的 rules 验证，通过后再保存
      * POST /setting/saveConfig/:groupCode
      */
     public function saveConfig($groupCode)
@@ -212,6 +226,17 @@ class SettingController extends BaseController
 
         if (empty($values)) {
             return $this->error('没有需要保存的配置');
+        }
+
+        // 获取分组配置（含 settings 和 rules）
+        $config = $this->service()->getGroupConfig($groupCode);
+
+        // 使用 SettingValueValidate 根据 rules 验证提交值
+        $validate = new SettingValueValidate();
+        $errors   = $validate->validateGroupValues($config['settings'], $values);
+
+        if (!empty($errors)) {
+            return $this->error('配置验证失败', 422, $errors);
         }
 
         $this->service()->saveGroupValues($groupCode, $values);

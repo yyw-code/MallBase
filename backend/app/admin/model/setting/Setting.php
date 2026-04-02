@@ -24,7 +24,7 @@ class Setting extends BaseModel
     /**
      * JSON 字段
      */
-    protected $json = ['options'];
+    protected $json = ['options', 'rules'];
 
     // ========== 表单类型常量 ==========
 

@@ -35,6 +35,39 @@ export namespace SettingApi {
     children?: SettingGroup[];
   }
 
+  /** 验证规则类型定义（后端接口返回） */
+  export interface RuleTypeItem {
+    /** 规则类型标识 */
+    type: string;
+    /** 规则类型名称 */
+    label: string;
+    /** 是否需要 value 参数 */
+    need_value: boolean;
+    /** value 参数的输入提示 */
+    value_placeholder?: string;
+    /** 是否需要 flags 参数（正则标志） */
+    need_flags?: boolean;
+    /** 默认提示信息模板（支持 {name}、{value} 占位符） */
+    default_message_template: string;
+    /** 该规则适用的字段类型列表，为空表示全部适用 */
+    applicable_types?: string[];
+  }
+
+  /** 验证规则项 */
+  export interface ValidationRule {
+    /** 规则类型标识 */
+    type: string;
+    /** 规则参数，例如 minLength 的数值、pattern 的正则字符串 */
+    value?: number | string | RegExp;
+    /**
+     * 验证失败时的提示信息
+     * 为空时后端会根据字段名和规则类型自动生成
+     */
+    message: string;
+    /** 正则标志（仅 pattern 类型使用），例如 'i'、'g' 等 */
+    flags?: string;
+  }
+
   /** 设置项 */
   export interface SettingItem {
     id: number;
@@ -48,6 +81,8 @@ export namespace SettingApi {
     remark?: string;
     sort: number;
     is_required: number;
+    /** 后端返回的验证规则列表 */
+    rules?: ValidationRule[];
   }
 
   /** 选项项 */
@@ -94,6 +129,8 @@ export namespace SettingApi {
     remark?: string;
     sort?: number;
     is_required?: number;
+    /** 验证规则列表 */
+    rules?: null | ValidationRule[];
   }
 
   /** 更新设置项参数 */
@@ -196,6 +233,18 @@ export async function updateSettingGroupApi(
  */
 export async function deleteSettingGroupApi(id: number) {
   return requestClient.delete(`/setting/group/delete/${id}`);
+}
+
+// ==================== 验证规则类型 API ====================
+
+/**
+ * 获取所有可用的验证规则类型
+ * 后端维护，新增规则类型只需后端添加，前端自动渲染
+ */
+export async function getSettingRuleTypesApi() {
+  return requestClient.get<SettingApi.RuleTypeItem[]>(
+    '/setting/rule/types',
+  );
 }
 
 // ==================== 设置项管理 API ====================

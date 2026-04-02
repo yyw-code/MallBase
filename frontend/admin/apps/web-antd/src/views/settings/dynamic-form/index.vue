@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import type { SettingApi } from '#/api/setting';
 
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 
 import { JsonViewer } from '@vben/common-ui';
@@ -20,6 +20,7 @@ const saving = ref(false);
 const groupInfo = ref<SettingApi.ConfigResponse['group']>();
 const settings = ref<SettingApi.SettingItem[]>([]);
 const formValues = ref<Record<string, any>>({});
+const formErrors = reactive<Record<string, string>>({});
 
 /** API 基础地址，用于图片/文件回显 */
 const apiBaseUrl = import.meta.env.VITE_GLOB_API_URL || '';
@@ -99,6 +100,189 @@ const getJsonObject = (code: string) => {
   }
 };
 
+// ==================== 表单验证 ====================
+
+/** 常用验证正则 */
+const REGEX_MAP: Record<string, RegExp> = {
+  email: /^[^\s@]+@[^\s@][^\s.@]*\.[^\s@]+$/,
+  url: /^https?:\/\/([\w-]+\.)+[\w-]+(\/[\w\-./?%&=@]*)?$/,
+  phone: /^1[3-9]\d{9}$/,
+  idCard: /^\d{17}[\dXx]$/,
+  integer: /^-?\d+$/,
+  float: /^-?\d+(\.\d+)?$/,
+  digits: /^\d+$/,
+  chinese: /^[\u4e00-\u9fa5]+$/,
+  english: /^[A-Za-z]+$/,
+  alphaNum: /^[A-Za-z0-9]+$/,
+  ip: /^(\d{1,3}\.){3}\d{1,3}$/,
+};
+
+/**
+ * 根据后端返回的 rules 验证单个字段
+ * @returns 错误信息，验证通过返回空字符串
+ */
+const validateFieldValue = (
+  item: SettingApi.SettingItem,
+  value: any,
+): string => {
+  // 优先使用后端返回的 rules
+  if (item.rules && item.rules.length > 0) {
+    for (const rule of item.rules) {
+      const error = applyRule(rule, value, item);
+      if (error) return error;
+    }
+    return '';
+  }
+
+  // 兜底：兼容旧的 is_required 逻辑
+  if (
+    item.is_required === 1 &&
+    (value === undefined ||
+      value === null ||
+      value === '' ||
+      (Array.isArray(value) && value.length === 0))
+  ) {
+    return `请填写「${item.name}」`;
+  }
+
+  // json 类型特殊验证
+  if (item.type === 'json' && value) {
+    try {
+      JSON.parse(value);
+    } catch {
+      return `「${item.name}」JSON 格式不正确`;
+    }
+  }
+
+  return '';
+};
+
+/** 应用单条验证规则 */
+const applyRule = (
+  rule: SettingApi.ValidationRule,
+  value: any,
+  item: SettingApi.SettingItem,
+): string => {
+  const strVal = value === undefined || value === null ? '' : String(value);
+  const isEmpty =
+    value === undefined ||
+    value === null ||
+    value === '' ||
+    (Array.isArray(value) && value.length === 0);
+
+  switch (rule.type) {
+    case 'required': {
+      if (isEmpty) {
+        return rule.message || `请填写「${item.name}」`;
+      }
+      break;
+    }
+    case 'minLength': {
+      if (!isEmpty && strVal.length < Number(rule.value)) {
+        return (
+          rule.message ||
+          `「${item.name}」最少输入 ${rule.value} 个字符`
+        );
+      }
+      break;
+    }
+    case 'maxLength': {
+      if (!isEmpty && strVal.length > Number(rule.value)) {
+        return (
+          rule.message ||
+          `「${item.name}」最多输入 ${rule.value} 个字符`
+        );
+      }
+      break;
+    }
+    case 'min': {
+      if (!isEmpty && Number(value) < Number(rule.value)) {
+        return rule.message || `「${item.name}」最小值为 ${rule.value}`;
+      }
+      break;
+    }
+    case 'max': {
+      if (!isEmpty && Number(value) > Number(rule.value)) {
+        return rule.message || `「${item.name}」最大值为 ${rule.value}`;
+      }
+      break;
+    }
+    case 'pattern': {
+      if (!isEmpty && rule.value) {
+        const flags = rule.flags || '';
+        const reg = new RegExp(String(rule.value), flags);
+        if (!reg.test(strVal)) {
+          return rule.message || `「${item.name}」格式不正确`;
+        }
+      }
+      break;
+    }
+    case 'json': {
+      if (!isEmpty) {
+        try {
+          JSON.parse(strVal);
+        } catch {
+          return rule.message || `「${item.name}」JSON 格式不正确`;
+        }
+      }
+      break;
+    }
+    default: {
+      // 正则类规则：email / url / phone / idCard / integer / float / digits / chinese / english / alphaNum / ip
+      const regex = REGEX_MAP[rule.type];
+      if (regex && !isEmpty && !regex.test(strVal)) {
+        return rule.message || `「${item.name}」格式不正确`;
+      }
+      break;
+    }
+  }
+
+  return '';
+};
+
+/** 验证单个字段并更新 formErrors */
+const validateField = (item: SettingApi.SettingItem) => {
+  const value = formValues.value[item.code];
+  const error = validateFieldValue(item, value);
+  if (error) {
+    formErrors[item.code] = error;
+  } else {
+    delete formErrors[item.code];
+  }
+  return !error;
+};
+
+/** 验证所有字段 */
+const validateAll = (): boolean => {
+  let allValid = true;
+  // 先清除所有错误
+  for (const key of Object.keys(formErrors)) {
+    delete formErrors[key];
+  }
+
+  for (const item of settings.value) {
+    const value = formValues.value[item.code];
+    const error = validateFieldValue(item, value);
+    if (error) {
+      formErrors[item.code] = error;
+      if (allValid) {
+        // 第一个错误就提示
+        message.warning(error);
+      }
+      allValid = false;
+    }
+  }
+
+  return allValid;
+};
+
+/** 获取字段的错误信息 */
+const getFieldError = (code: string): string => {
+  return formErrors[code] || '';
+};
+
+// ==================== 数据加载与转换 ====================
+
 /** 加载配置 */
 const loadConfig = async () => {
   if (!groupCode.value) return;
@@ -114,6 +298,11 @@ const loadConfig = async () => {
       values[item.code] = convertValue(item.value, item.type);
     }
     formValues.value = values;
+
+    // 清除验证错误
+    for (const key of Object.keys(formErrors)) {
+      delete formErrors[key];
+    }
   } catch (error) {
     console.error('加载配置失败:', error);
     message.error('加载配置失败');
@@ -139,7 +328,6 @@ const convertValue = (value: string, type: string) => {
     }
     case 'file':
     case 'image': {
-      // 单文件：存为 { url, full_url, name } 对象，方便回显和保存
       if (value) {
         return {
           url: value,
@@ -151,7 +339,6 @@ const convertValue = (value: string, type: string) => {
     }
     case 'files':
     case 'images': {
-      // 多文件：存为 [{ url, full_url, name }, ...] 数组
       if (typeof value === 'string' && value.startsWith('[')) {
         try {
           const urls: string[] = JSON.parse(value);
@@ -192,13 +379,11 @@ const serializeValue = (value: any, type: string): any => {
     }
     case 'file':
     case 'image': {
-      // 单文件：从对象中取 url（相对路径）
       if (typeof value === 'object' && value?.url) return value.url;
       return String(value);
     }
     case 'files':
     case 'images': {
-      // 多文件：从对象数组中取 url 数组
       if (Array.isArray(value)) {
         const urls = value.map((item: any) =>
           typeof item === 'object' ? item.url : item,
@@ -266,6 +451,9 @@ const handleUpload = (code: string, type: string) => {
       } else {
         formValues.value[code] = fileInfo;
       }
+
+      // 上传成功后清除该字段的验证错误
+      delete formErrors[code];
     } catch (error) {
       console.error('上传失败:', error);
       message.error('上传失败');
@@ -287,35 +475,18 @@ const handleUploadRemove = (code: string, type: string) => {
   };
 };
 
+/** 字段值变更时触发验证 */
+const handleFieldChange = (item: SettingApi.SettingItem) => {
+  validateField(item);
+};
+
 /** 保存配置 */
 const handleSave = async () => {
   if (!groupCode.value) return;
 
-  for (const item of settings.value) {
-    if (item.is_required === 1) {
-      const val = formValues.value[item.code];
-      if (
-        val === undefined ||
-        val === null ||
-        val === '' ||
-        (Array.isArray(val) && val.length === 0)
-      ) {
-        message.warning(`请填写「${item.name}」`);
-        return;
-      }
-    }
-  }
-
-  for (const item of settings.value.filter((s) => s.type === 'json')) {
-    const val = formValues.value[item.code];
-    if (val) {
-      try {
-        JSON.parse(val);
-      } catch {
-        message.warning(`「${item.name}」JSON 格式不正确`);
-        return;
-      }
-    }
+  // 使用后端 rules 进行表单验证
+  if (!validateAll()) {
+    return;
   }
 
   saving.value = true;
@@ -371,24 +542,35 @@ onMounted(loadConfig);
               v-for="item in basicSettings"
               :key="item.code"
               class="form-item-wrapper"
+              :class="{ 'has-error': getFieldError(item.code) }"
             >
               <div class="form-label">
                 <span class="label-text">{{ item.name }}</span>
-                <span v-if="item.is_required === 1" class="required-star"
-                  >*</span
+                <span
+                  v-if="
+                    item.rules &&
+                      item.rules.some((r) => r.type === 'required')
+                  "
+                  class="required-star"
                 >
+                  *
+                </span>
               </div>
 
               <a-input
                 v-if="item.type === 'input'"
                 v-model:value="formValues[item.code]"
                 :placeholder="item.placeholder || `请输入${item.name}`"
+                :status="getFieldError(item.code) ? 'error' : undefined"
+                @blur="handleFieldChange(item)"
               />
 
               <a-input-password
                 v-else-if="item.type === 'password'"
                 v-model:value="formValues[item.code]"
                 :placeholder="item.placeholder || `请输入${item.name}`"
+                :status="getFieldError(item.code) ? 'error' : undefined"
+                @blur="handleFieldChange(item)"
               />
 
               <a-textarea
@@ -396,13 +578,17 @@ onMounted(loadConfig);
                 v-model:value="formValues[item.code]"
                 :placeholder="item.placeholder || `请输入${item.name}`"
                 :rows="3"
+                :status="getFieldError(item.code) ? 'error' : undefined"
+                @blur="handleFieldChange(item)"
               />
 
               <a-input-number
                 v-else-if="item.type === 'number'"
                 v-model:value="formValues[item.code]"
                 :placeholder="item.placeholder || `请输入${item.name}`"
+                :status="getFieldError(item.code) ? 'error' : undefined"
                 class="w-full"
+                @blur="handleFieldChange(item)"
               />
 
               <div v-else-if="item.type === 'switch'" class="switch-wrapper">
@@ -417,20 +603,29 @@ onMounted(loadConfig);
                 v-model:value="formValues[item.code]"
                 :placeholder="item.placeholder || `请选择${item.name}`"
                 :options="parseOptions(item.options)"
+                :status="getFieldError(item.code) ? 'error' : undefined"
                 class="w-full"
+                @change="handleFieldChange(item)"
               />
 
               <a-radio-group
                 v-else-if="item.type === 'radio'"
                 v-model:value="formValues[item.code]"
                 :options="parseOptions(item.options)"
+                @change="handleFieldChange(item)"
               />
 
               <a-checkbox-group
                 v-else-if="item.type === 'checkbox'"
                 v-model:value="formValues[item.code]"
                 :options="parseOptions(item.options)"
+                @change="handleFieldChange(item)"
               />
+
+              <!-- 验证错误提示 -->
+              <div v-if="getFieldError(item.code)" class="form-error">
+                {{ getFieldError(item.code) }}
+              </div>
 
               <div v-if="item.remark" class="form-remark">
                 {{ item.remark }}
@@ -452,12 +647,19 @@ onMounted(loadConfig);
               v-for="item in mediaSettings"
               :key="item.code"
               class="media-item-wrapper"
+              :class="{ 'has-error': getFieldError(item.code) }"
             >
               <div class="form-label">
                 <span class="label-text">{{ item.name }}</span>
-                <span v-if="item.is_required === 1" class="required-star"
-                  >*</span
+                <span
+                  v-if="
+                    item.rules &&
+                      item.rules.some((r) => r.type === 'required')
+                  "
+                  class="required-star"
                 >
+                  *
+                </span>
               </div>
               <Upload
                 :type="getUploadType(item.type)"
@@ -465,6 +667,10 @@ onMounted(loadConfig);
                 :custom-upload="handleUpload(item.code, item.type)"
                 :custom-remove="handleUploadRemove(item.code, item.type)"
               />
+              <!-- 验证错误提示 -->
+              <div v-if="getFieldError(item.code)" class="form-error">
+                {{ getFieldError(item.code) }}
+              </div>
               <div v-if="item.remark" class="form-remark">
                 {{ item.remark }}
               </div>
@@ -485,12 +691,19 @@ onMounted(loadConfig);
               v-for="item in advancedSettings"
               :key="item.code"
               class="advanced-item-wrapper"
+              :class="{ 'has-error': getFieldError(item.code) }"
             >
               <div class="form-label">
                 <span class="label-text">{{ item.name }}</span>
-                <span v-if="item.is_required === 1" class="required-star"
-                  >*</span
+                <span
+                  v-if="
+                    item.rules &&
+                      item.rules.some((r) => r.type === 'required')
+                  "
+                  class="required-star"
                 >
+                  *
+                </span>
               </div>
 
               <!-- editor: HTML 编辑器 + 预览 -->
@@ -501,7 +714,9 @@ onMounted(loadConfig);
                       v-model:value="formValues[item.code]"
                       :placeholder="item.placeholder || '请输入内容'"
                       :rows="8"
+                      :status="getFieldError(item.code) ? 'error' : undefined"
                       class="font-mono text-sm"
+                      @blur="handleFieldChange(item)"
                     />
                   </a-tab-pane>
                   <a-tab-pane key="preview" tab="预览">
@@ -524,7 +739,9 @@ onMounted(loadConfig);
                       v-model:value="formValues[item.code]"
                       :placeholder="jsonPlaceholder"
                       :rows="6"
+                      :status="getFieldError(item.code) ? 'error' : undefined"
                       class="font-mono text-sm"
+                      @blur="handleFieldChange(item)"
                     />
                   </a-tab-pane>
                   <a-tab-pane key="preview" tab="预览">
@@ -540,6 +757,11 @@ onMounted(loadConfig);
                   </a-tab-pane>
                 </a-tabs>
               </template>
+
+              <!-- 验证错误提示 -->
+              <div v-if="getFieldError(item.code)" class="form-error">
+                {{ getFieldError(item.code) }}
+              </div>
 
               <div v-if="item.remark" class="form-remark">
                 {{ item.remark }}
@@ -688,6 +910,22 @@ onMounted(loadConfig);
   color: #8c8c8c;
   line-height: 1.5;
   margin-top: 2px;
+}
+
+/* 验证错误样式 */
+.form-error {
+  font-size: 12px;
+  color: #ff4d4f;
+  line-height: 1.5;
+  margin-top: 2px;
+}
+
+.has-error :deep(.ant-input),
+.has-error :deep(.ant-input-password),
+.has-error :deep(.ant-input-number),
+.has-error :deep(.ant-select-selector),
+.has-error :deep(.ant-picker) {
+  border-color: #ff4d4f !important;
 }
 
 .switch-wrapper {
