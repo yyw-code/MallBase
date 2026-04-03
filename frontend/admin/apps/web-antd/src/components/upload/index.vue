@@ -1,13 +1,17 @@
 <script lang="ts" setup>
 import type { UploadFile, UploadProps } from 'ant-design-vue';
 
-import type { UploadParams } from '#/api/core/upload';
+import type { UploadApi, UploadParams } from '#/api/core/upload';
 
 import { computed, onMounted, ref, watch } from 'vue';
 
 import { message } from 'ant-design-vue';
 
-import { getUploadConfigApi, uploadSingleApi } from '#/api/core/upload';
+import {
+  getUploadConfigApi,
+  uploadBatchApi,
+  uploadSingleApi,
+} from '#/api/core/upload';
 
 /** 文件信息对象 */
 export interface FileInfo {
@@ -83,6 +87,20 @@ const props = withDefaults(defineProps<Props>(), {
 const emit = defineEmits<{
   (e: 'update:value', value: any): void;
 }>();
+
+// ==================== 批量上传队列（多文件类型使用 uploadBatchApi） ====================
+
+interface BatchQueueItem {
+  file: File;
+  onSuccess: (response: any, file: File) => void;
+  onError: (error: any) => void;
+}
+
+/** 批量上传待处理队列 */
+const batchQueue: BatchQueueItem[] = [];
+let batchTimer: null | ReturnType<typeof setTimeout> = null;
+/** 正在上传/排队中的文件数量（用于 beforeUpload 计数校验） */
+const pendingCount = ref(0);
 
 // ==================== 后端配置 ====================
 
@@ -243,16 +261,30 @@ watch(
 // ==================== 事件处理 ====================
 
 const handleBeforeUpload = (file: File) => {
+  // 数量校验：已上传 + 正在上传/排队中 不能超过 maxCount
+  const maxCount = effectiveMaxCount.value;
+  const currentCount = fileList.value.length + pendingCount.value;
+  if (currentCount >= maxCount) {
+    message.error(`最多上传 ${maxCount} 个文件`);
+    return false;
+  }
+
+  // 大小校验
   const maxSize = effectiveMaxSize.value;
   if (file.size / 1024 / 1024 > maxSize) {
     message.error(`文件大小不能超过 ${maxSize}MB`);
     return false;
   }
+
+  // 类型校验
   const acceptTypes = effectiveAcceptTypes.value;
   if (acceptTypes.length > 0 && !acceptTypes.includes(file.type)) {
     message.error('不支持的文件类型');
     return false;
   }
+
+  // 校验通过，计入待上传数
+  pendingCount.value++;
   return true;
 };
 
@@ -263,42 +295,134 @@ const buildUploadParams = (): UploadParams => ({
   related_id: props.relatedId,
 });
 
-const handleCustomRequest = async (options: any) => {
-  const { file, onSuccess, onError } = options;
+/** 单文件上传（image/file 类型） */
+const executeSingleUpload = async (
+  file: File,
+  onSuccess: (response: any, file: File) => void,
+  onError: (error: any) => void,
+) => {
   try {
     const params = buildUploadParams();
     let fileInfo: FileInfo | undefined;
 
     if (props.customUpload) {
-      // 用户传了自定义上传方法，使用用户的
-      fileInfo = await props.customUpload(file as File, params);
+      fileInfo = await props.customUpload(file, params);
     } else {
-      // 使用内置上传逻辑
-      const res = await uploadSingleApi(file as File, params);
+      const res = await uploadSingleApi(file, params);
       if (res) {
         fileInfo = {
           url: res.url,
           full_url: res.full_url || toFullUrl(res.url),
-          name: res.name || (file as File).name,
+          name: res.name || file.name,
         };
       }
     }
 
     if (fileInfo) {
-      if (['files', 'images'].includes(props.type)) {
-        const current = Array.isArray(props.value) ? [...props.value] : [];
-        current.push(fileInfo);
-        emit('update:value', current);
-      } else {
-        emit('update:value', fileInfo);
-      }
+      emit('update:value', fileInfo);
     }
 
-    onSuccess?.({}, file);
+    onSuccess({}, file);
   } catch (error) {
     console.error('上传失败:', error);
     message.error('上传失败');
-    onError?.(error);
+    onError(error);
+  } finally {
+    pendingCount.value--;
+  }
+};
+
+/** 批量上传（files/images 类型），使用 uploadBatchApi 一次请求 */
+const executeBatchUpload = async () => {
+  const items = [...batchQueue];
+  batchQueue.length = 0;
+  if (items.length === 0) return;
+
+  try {
+    const files = items.map((item) => item.file);
+
+    if (props.customUpload) {
+      // 用户自定义上传：逐个调用（串行，避免并发）
+      for (const item of items) {
+        try {
+          const params = buildUploadParams();
+          const fileInfo = await props.customUpload(item.file, params);
+
+          if (fileInfo) {
+            const current = Array.isArray(props.value) ? [...props.value] : [];
+            current.push(fileInfo);
+            emit('update:value', current);
+          }
+
+          item.onSuccess({}, item.file);
+        } catch (error) {
+          console.error('上传失败:', error);
+          message.error('上传失败');
+          item.onError(error);
+        } finally {
+          pendingCount.value--;
+        }
+      }
+    } else {
+      // 内置上传：调用 uploadBatchApi 批量上传
+      const params = buildUploadParams();
+      const res = await uploadBatchApi(files, params);
+
+      // 后端返回格式：{ results: UploadResponse[], errors: any[] }
+      const uploadedFiles = res?.results || [];
+      if (uploadedFiles.length > 0) {
+        const newFiles: FileInfo[] = uploadedFiles.map(
+          (item: UploadApi.UploadResponse) => ({
+            url: item.url,
+            full_url: item.full_url || toFullUrl(item.url),
+            name: item.name,
+          }),
+        );
+
+        const current = Array.isArray(props.value) ? [...props.value] : [];
+        current.push(...newFiles);
+        emit('update:value', current);
+      }
+
+      // 所有文件标记为成功
+      for (const item of items) {
+        item.onSuccess({}, item.file);
+      }
+    }
+  } catch (error) {
+    console.error('批量上传失败:', error);
+    message.error('批量上传失败');
+    // 所有文件标记为失败
+    for (const item of items) {
+      item.onError(error);
+    }
+  } finally {
+    pendingCount.value -= items.length;
+    if (pendingCount.value < 0) pendingCount.value = 0;
+  }
+};
+
+/** ant-design-vue customRequest 入口 */
+const handleCustomRequest = (options: any) => {
+  const { file, onSuccess, onError } = options;
+
+  if (['files', 'images'].includes(props.type)) {
+    // 多文件类型：收集到队列，同一批选择结束后统一调用 uploadBatchApi
+    batchQueue.push({
+      file: file as File,
+      onSuccess,
+      onError,
+    });
+
+    // 利用 setTimeout(0) 等同一批次的 customRequest 全部触发后，再统一上传
+    if (batchTimer) clearTimeout(batchTimer);
+    batchTimer = setTimeout(() => {
+      batchTimer = null;
+      executeBatchUpload();
+    }, 0);
+  } else {
+    // 单文件类型：直接调用 uploadSingleApi
+    executeSingleUpload(file as File, onSuccess, onError);
   }
 };
 
@@ -321,10 +445,20 @@ const handleRemove = async (file: UploadFile) => {
 const showUploadButton = computed(() => {
   if (props.disabled) return false;
   const val = props.value;
+  let currentCount = 0;
   if (Array.isArray(val)) {
-    return val.length < effectiveMaxCount.value;
+    currentCount = val.length;
+  } else if (val) {
+    currentCount = 1;
   }
-  return !val;
+  // 已上传 + 正在上传/排队中 < maxCount 时才显示上传按钮
+  return currentCount + pendingCount.value < effectiveMaxCount.value;
+});
+
+/** 上传按钮文字 */
+const uploadButtonText = computed(() => {
+  if (props.directory) return '上传文件夹';
+  return props.type === 'file' ? '上传文件' : '添加文件';
 });
 
 const handlePreview = (file: UploadFile) => {
@@ -357,9 +491,7 @@ const handlePreview = (file: UploadFile) => {
         <template #icon>
           <span>📤</span>
         </template>
-        {{
-          directory ? '上传文件夹' : type === 'file' ? '上传文件' : '添加文件'
-        }}
+        {{ uploadButtonText }}
       </a-button>
     </template>
   </a-upload>

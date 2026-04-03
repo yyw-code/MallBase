@@ -28,7 +28,8 @@ export namespace UploadApi {
 
   /** 批量上传响应 */
   export interface BatchUploadResponse {
-    data: UploadResponse[];
+    results: UploadResponse[];
+    errors: any[];
   }
 }
 

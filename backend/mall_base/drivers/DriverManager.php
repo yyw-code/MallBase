@@ -166,7 +166,7 @@ class DriverManager
      * @param string $key 缓存键
      * @return BaseDriver[]|null
      */
-    private static function getCachedInstance(string $key): ?array
+    private static function getCachedInstance(string $key): ?BaseDriver
     {
         if (self::isCoroutineContext()) {
             return Co::getContext()[$key] ?? null;
@@ -250,13 +250,13 @@ class DriverManager
         } elseif ($name === null) {
             // 清除指定类型的所有驱动缓存
             foreach (array_keys(self::$instances) as $key) {
-                if (str_starts_with($key, $type . '.')) {
+                if (str_starts_with($key, "driver.{$type}.")) {
                     unset(self::$instances[$key]);
                 }
             }
         } else {
             // 清除指定驱动的缓存
-            $cacheKey = "{$type}.{$name}";
+            $cacheKey = "driver.{$type}.{$name}";
             unset(self::$instances[$cacheKey]);
         }
     }
