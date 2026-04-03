@@ -122,16 +122,17 @@ class SettingController extends BaseController
         return $this->success(null, '删除成功');
     }
 
-    // ==================== 验证规则类型 ====================
+    // ==================== 表单配置 ====================
 
     /**
-     * 获取所有可用的验证规则类型
-     * 前端动态渲染规则选项用
+     * 获取表单配置（表单类型选项 + 按 type 索引的验证规则类型）
+     * 合并返回表单类型选项和验证规则，前端一次获取全部配置
+     * GET /setting/form-config
      */
-    public function ruleTypes()
+    public function formConfig()
     {
-        $types = $this->service()->getRuleTypes();
-        return $this->success($types, '获取成功');
+        $config = $this->service()->getFormConfig();
+        return $this->success($config, '获取成功');
     }
 
     // ==================== 设置项管理 ====================

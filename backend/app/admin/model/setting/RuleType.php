@@ -66,6 +66,15 @@ class RuleType
     /** JSON格式 */
     const TYPE_JSON = 'json';
 
+    /** 文件大小限制 (MB) */
+    const TYPE_MAX_FILE_SIZE = 'maxFileSize';
+
+    /** 文件数量限制 */
+    const TYPE_MAX_FILE_COUNT = 'maxFileCount';
+
+    /** 文件类型限制 */
+    const TYPE_ACCEPT_TYPES = 'acceptTypes';
+
     /**
      * 获取所有规则类型定义
      * @return array
@@ -235,6 +244,37 @@ class RuleType
                 'default_message_template' => '{name}格式不正确，请输入有效的JSON',
                 'applicable_types'         => ['textarea', 'json'],
             ],
+            [
+                'type'                     => self::TYPE_MAX_FILE_SIZE,
+                'label'                    => '文件大小限制 (maxFileSize)',
+                'need_value'               => true,
+                'value_placeholder'        => '请输入最大文件大小（MB）',
+                'value_type'               => 'number',
+                'need_flags'               => false,
+                'default_message_template' => '文件大小不能超过{value}MB',
+                'applicable_types'         => ['image', 'images', 'file', 'files'],
+            ],
+            [
+                'type'                     => self::TYPE_MAX_FILE_COUNT,
+                'label'                    => '文件数量限制 (maxFileCount)',
+                'need_value'               => true,
+                'value_placeholder'        => '请输入最大文件数量',
+                'value_type'               => 'number',
+                'need_flags'               => false,
+                'default_message_template' => '最多上传{value}个文件',
+                'applicable_types'         => ['images', 'files'],
+            ],
+            [
+                'type'                     => self::TYPE_ACCEPT_TYPES,
+                'label'                    => '文件类型限制 (acceptTypes)',
+                'need_value'               => true,
+                'value_placeholder'        => '',
+                'value_type'               => 'array',
+                'need_flags'               => false,
+                'default_message_template' => '不支持的文件类型',
+                'applicable_types'         => ['image', 'images', 'file', 'files'],
+                'need_options'             => true,
+            ],
         ];
     }
 
@@ -245,5 +285,27 @@ class RuleType
     public static function getTypeList(): array
     {
         return array_column(self::getAll(), 'type');
+    }
+
+    /**
+     * 获取 acceptTypes 的选项（从 upload config 读取）
+     * 返回每种上传类型的 accept_types 供前端选择
+     *
+     * @return array
+     */
+    public static function getAcceptTypeOptions(): array
+    {
+        $rules = config('upload.rules', []);
+
+        $options = [];
+        foreach ($rules as $type => $rule) {
+            $options[] = [
+                'label'        => $type . '（' . implode(', ', $rule['accept_types'] ?? []) . '）',
+                'value'        => $rule['accept_types'] ?? [],
+                'upload_type'  => $type,
+            ];
+        }
+
+        return $options;
     }
 }

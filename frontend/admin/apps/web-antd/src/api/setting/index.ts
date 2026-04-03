@@ -35,6 +35,12 @@ export namespace SettingApi {
     children?: SettingGroup[];
   }
 
+  /** 表单类型选项 */
+  export interface TypeOption {
+    label: string;
+    value: string;
+  }
+
   /** 验证规则类型定义（后端接口返回） */
   export interface RuleTypeItem {
     /** 规则类型标识 */
@@ -49,8 +55,19 @@ export namespace SettingApi {
     need_flags?: boolean;
     /** 默认提示信息模板（支持 {name}、{value} 占位符） */
     default_message_template: string;
-    /** 该规则适用的字段类型列表，为空表示全部适用 */
-    applicable_types?: string[];
+    /** 预定义选项列表，有此字段时前端渲染为复选框供用户选择 */
+    options?: string[];
+  }
+
+  /** 验证规则类型映射（按表单类型分组，key 为表单类型如 input/number 等） */
+  export type RuleTypesMap = Record<string, RuleTypeItem[]>;
+
+  /** 表单配置响应（/setting/form/config） */
+  export interface FormConfigResponse {
+    /** 表单类型下拉选项 */
+    type_options: TypeOption[];
+    /** 验证规则类型（按表单类型分组） */
+    rule_types: RuleTypesMap;
   }
 
   /** 验证规则项 */
@@ -58,7 +75,7 @@ export namespace SettingApi {
     /** 规则类型标识 */
     type: string;
     /** 规则参数，例如 minLength 的数值、pattern 的正则字符串 */
-    value?: number | string | RegExp;
+    value?: number | RegExp | string;
     /**
      * 验证失败时的提示信息
      * 为空时后端会根据字段名和规则类型自动生成
@@ -76,8 +93,8 @@ export namespace SettingApi {
     code: string;
     /** 存储的相对路径 */
     value: string;
-  /** 后端返回的完整 URL（含域名），用于图片/文件回显 */
-  full_url?: string;
+    /** 后端返回的完整 URL（含域名），用于图片/文件回显 */
+    full_url?: string;
     type: string;
     options?: null | OptionItem[] | string;
     placeholder?: string;
@@ -238,14 +255,16 @@ export async function deleteSettingGroupApi(id: number) {
   return requestClient.delete(`/setting/group/delete/${id}`);
 }
 
-// ==================== 验证规则类型 API ====================
+// ==================== 表单配置 API ====================
 
 /**
- * 获取所有可用的验证规则类型
- * 后端维护，新增规则类型只需后端添加，前端自动渲染
+ * 获取表单配置（表单类型选项 + 验证规则类型）
+ * 一次性获取全部数据，前端根据 type 索引对应的验证规则列表
  */
-export async function getSettingRuleTypesApi() {
-  return requestClient.get<SettingApi.RuleTypeItem[]>('/setting/rule/types');
+export async function getSettingFormConfigApi() {
+  return requestClient.get<SettingApi.FormConfigResponse>(
+    '/setting/form/config',
+  );
 }
 
 // ==================== 设置项管理 API ====================

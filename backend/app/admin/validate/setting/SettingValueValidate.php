@@ -84,9 +84,12 @@ class SettingValueValidate extends Validate
             RuleType::TYPE_CHINESE    => $this->ruleChinese($value, $name, $message),
             RuleType::TYPE_ENGLISH    => $this->ruleEnglish($value, $name, $message),
             RuleType::TYPE_ALPHA_NUM  => $this->ruleAlphaNum($value, $name, $message),
-            RuleType::TYPE_IP         => $this->ruleIp($value, $name, $message),
-            RuleType::TYPE_JSON       => $this->ruleJson($value, $name, $message),
-            default                   => true,
+            RuleType::TYPE_IP              => $this->ruleIp($value, $name, $message),
+            RuleType::TYPE_JSON            => $this->ruleJson($value, $name, $message),
+            RuleType::TYPE_MAX_FILE_SIZE   => $this->ruleMaxFileSize($value, $ruleValue, $name, $message),
+            RuleType::TYPE_MAX_FILE_COUNT  => $this->ruleMaxFileCount($value, $ruleValue, $name, $message),
+            RuleType::TYPE_ACCEPT_TYPES    => $this->ruleAcceptTypes($value, $ruleValue, $name, $message),
+            default                        => true,
         };
     }
 
@@ -290,6 +293,47 @@ class SettingValueValidate extends Validate
         if (json_last_error() !== JSON_ERROR_NONE) {
             return $message ?: "{$name}格式不正确，请输入有效的JSON";
         }
+        return true;
+    }
+
+    protected function ruleMaxFileSize(mixed $value, mixed $ruleValue, string $name, string $message): true|string
+    {
+        if ($value === null || $value === '') {
+            return true;
+        }
+        // 文件大小验证在 upload 时已由 UploadService 完成
+        // 这里仅做前端展示用，保存时不做实际校验
+        return true;
+    }
+
+    protected function ruleMaxFileCount(mixed $value, mixed $ruleValue, string $name, string $message): true|string
+    {
+        if ($value === null || $value === '') {
+            return true;
+        }
+        // 多文件数量验证
+        $decoded = json_decode($value, true);
+        if (is_array($decoded)) {
+            $count = count($decoded);
+        } elseif (str_contains((string)$value, ',')) {
+            $count = count(explode(',', (string)$value));
+        } else {
+            $count = 1;
+        }
+
+        if ($count > (int)$ruleValue) {
+            return $message ?: "{$name}最多上传{$ruleValue}个文件";
+        }
+        return true;
+    }
+
+    protected function ruleAcceptTypes(mixed $value, mixed $ruleValue, string $name, string $message): true|string
+    {
+        if ($value === null || $value === '') {
+            return true;
+        }
+        // 文件类型验证在 upload 时已由 UploadService 完成
+        // 这里仅做前端展示用，保存时不做实际校验
         return true;
     }
 }

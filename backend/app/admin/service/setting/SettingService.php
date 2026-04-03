@@ -383,17 +383,55 @@ class SettingService extends BaseService
         ]);
     }
 
-    // ==================== 验证规则类型 ====================
+    // ==================== 表单配置 ====================
 
     /**
-     * 获取所有可用的验证规则类型
-     * 后端统一管理，前端动态渲染
+     * 获取表单配置（表单类型选项 + 按 type 索引的验证规则类型）
+     * 合并了表单类型和验证规则，前端一次获取全部配置
      *
-     * @return array
+     * @return array{type_options: array, rule_types: array}
      */
-    public function getRuleTypes(): array
+    public function getFormConfig(): array
     {
-        return RuleType::getAll();
+        $allRuleTypes = RuleType::getAll();
+
+        // 从 Setting 模型获取表单类型选项
+        $typeOptions = Setting::getTypeOptions();
+
+        // 从 upload.php 获取上传规则配置
+        $uploadRules = config('upload.rules', []);
+
+        // 前端需要的规则字段
+        $keepKeys = ['type', 'label', 'need_value', 'value_placeholder', 'need_flags', 'default_message_template'];
+
+        // 所有表单类型值
+        $formTypeValues = array_column($typeOptions, 'value');
+
+        $ruleTypes = [];
+        foreach ($formTypeValues as $formType) {
+            // 过滤出适用于当前表单类型的规则
+            $applicableRules = array_values(array_filter($allRuleTypes, function ($rule) use ($formType) {
+                $applicable = $rule['applicable_types'] ?? [];
+                return empty($applicable) || in_array($formType, $applicable, true);
+            }));
+
+            // 仅保留前端需要的字段，并为 acceptTypes 规则注入当前类型的 accept_types
+            $applicableRules = array_map(function ($rule) use ($keepKeys, $formType, $uploadRules) {
+                $item = array_intersect_key($rule, array_flip($keepKeys));
+                // 为 acceptTypes 规则添加 options（当前表单类型对应的 accept_types 列表）
+                if ($rule['type'] === RuleType::TYPE_ACCEPT_TYPES && isset($uploadRules[$formType]['accept_types'])) {
+                    $item['options'] = $uploadRules[$formType]['accept_types'];
+                }
+                return $item;
+            }, $applicableRules);
+
+            $ruleTypes[$formType] = $applicableRules;
+        }
+
+        return [
+            'type_options'  => $typeOptions,
+            'rule_types'    => $ruleTypes,
+        ];
     }
 
     // ==================== 设置项管理 ====================

@@ -30,10 +30,10 @@ Route::group('setting', function () {
     // 删除分组
     Route::delete('group/delete/:id', 'groupDelete')->name('SettingGroupDelete')->option(['_alias' => '删除分组', '_desc' => '删除设置分组', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
 
-    // ==================== 验证规则类型 ====================
+    // ==================== 表单配置 ====================
 
-    // 获取所有可用的验证规则类型（前端动态渲染用，无需权限检查）
-    Route::get('rule/types', 'ruleTypes')->name('SettingRuleTypes')->option(['_alias' => '规则类型', '_desc' => '获取所有可用的验证规则类型', '_auth' => false]);
+    // 获取表单配置（表单类型选项 + 验证规则类型，前端动态渲染用，无需权限检查）
+    Route::get('form/config', 'formConfig')->name('SettingFormConfig')->option(['_alias' => '表单配置', '_desc' => '获取表单类型选项和验证规则类型', '_auth' => false]);
 
     // ==================== 设置项管理 ====================
 

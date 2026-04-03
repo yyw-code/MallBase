@@ -13,6 +13,7 @@ import { message, Modal } from 'ant-design-vue';
 import {
   deleteSettingGroupApi,
   deleteSettingItemApi,
+  getSettingFormConfigApi,
   getSettingGroupTreeApi,
   getSettingItemListApi,
 } from '#/api/setting';
@@ -50,6 +51,21 @@ const tableColumns: TableColumnType<SettingApi.SettingItem>[] = [
   { dataIndex: 'sort', title: '排序', width: 90 },
   { key: 'action', title: '操作', width: 140 },
 ];
+
+// ==================== 表单配置数据（页面级缓存） ====================
+const ruleTypesMap = ref<SettingApi.RuleTypesMap>({});
+const typeOptions = ref<SettingApi.TypeOption[]>([]);
+
+/** 加载表单配置（类型选项 + 验证规则，只调用一次） */
+const loadFormConfig = async () => {
+  try {
+    const res = await getSettingFormConfigApi();
+    typeOptions.value = res.type_options || [];
+    ruleTypesMap.value = res.rule_types || {};
+  } catch (error) {
+    console.error('加载表单配置失败:', error);
+  }
+};
 
 // ==================== 分组树相关 ====================
 const groupTree = ref<SettingApi.SettingGroup[]>([]);
@@ -235,7 +251,10 @@ const onItemModalSuccess = () => {
 };
 
 // ==================== 初始化 ====================
-onMounted(loadGroupTree);
+onMounted(() => {
+  loadFormConfig();
+  loadGroupTree();
+});
 </script>
 
 <template>
@@ -475,6 +494,8 @@ onMounted(loadGroupTree);
       v-model:visible="itemModalVisible"
       :group-id="selectedGroupId || 0"
       :edit-data="editingItem"
+      :rule-types-map="ruleTypesMap"
+      :type-options="typeOptions"
       @success="onItemModalSuccess"
     />
   </ColPage>

@@ -153,6 +153,34 @@ class SettingItem extends Validate
                 }
             }
 
+            // 如果是 maxFileSize，验证 value 是否为正数（MB）
+            if ($rule['type'] === RuleType::TYPE_MAX_FILE_SIZE) {
+                if (isset($rule['value']) && (!is_numeric($rule['value']) || floatval($rule['value']) <= 0)) {
+                    return "第" . ($index + 1) . "条规则的 value 必须是大于0的数字（MB）";
+                }
+            }
+
+            // 如果是 maxFileCount，验证 value 是否为正整数
+            if ($rule['type'] === RuleType::TYPE_MAX_FILE_COUNT) {
+                if (isset($rule['value']) && (!is_numeric($rule['value']) || intval($rule['value']) < 1)) {
+                    return "第" . ($index + 1) . "条规则的 value 必须是大于0的整数";
+                }
+            }
+
+            // 如果是 acceptTypes，验证 value 是否为非空数组
+            if ($rule['type'] === RuleType::TYPE_ACCEPT_TYPES) {
+                if (isset($rule['value'])) {
+                    if (!is_array($rule['value']) || empty($rule['value'])) {
+                        return "第" . ($index + 1) . "条规则的 value 必须是非空数组";
+                    }
+                    foreach ($rule['value'] as $mime) {
+                        if (!is_string($mime) || empty($mime)) {
+                            return "第" . ($index + 1) . "条规则的 value 每项必须是非空字符串（MIME 类型）";
+                        }
+                    }
+                }
+            }
+
             // message 字段如果存在，不能超过 255 字符
             if (isset($rule['message']) && mb_strlen($rule['message']) > 255) {
                 return "第" . ($index + 1) . "条规则的提示信息不能超过255个字符";

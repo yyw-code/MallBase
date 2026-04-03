@@ -395,6 +395,34 @@ const getUploadType = (type: string): 'file' | 'files' | 'image' | 'images' => {
   return type as 'file' | 'files' | 'image' | 'images';
 };
 
+/** 从 rules 中提取上传相关配置（maxFileSize / allowedExtensions） */
+const getUploadConfigFromRules = (
+  item: SettingApi.SettingItem,
+): { accept?: string[]; maxSize?: number } => {
+  const result: { accept?: string[]; maxSize?: number } = {};
+  if (!item.rules?.length) return result;
+
+  for (const rule of item.rules) {
+    if (rule.type === 'maxFileSize' && rule.value != null) {
+      result.maxSize = Number(rule.value);
+    }
+    if (rule.type === 'allowedExtensions' && rule.value) {
+      // rule.value 可能是逗号分隔的扩展名，如 "jpg,jpeg,png"
+      // 转为 MIME accept 格式
+      const exts = String(rule.value)
+        .split(',')
+        .map((e) => e.trim())
+        .filter(Boolean);
+      if (exts.length > 0) {
+        result.accept = exts.map((ext) =>
+          ext.startsWith('.') ? ext : `.${ext}`,
+        );
+      }
+    }
+  }
+  return result;
+};
+
 /** JSON 编辑器占位符 */
 const jsonPlaceholder = '{"key": "value"}';
 
@@ -633,6 +661,7 @@ onMounted(loadConfig);
                 :value="formValues[item.code]"
                 :custom-upload="handleUpload(item.code, item.type)"
                 :custom-remove="handleUploadRemove(item.code, item.type)"
+                v-bind="getUploadConfigFromRules(item)"
               />
               <!-- 验证错误提示 -->
               <div v-if="getFieldError(item.code)" class="form-error">

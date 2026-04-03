@@ -81,6 +81,35 @@ class Setting extends BaseModel
     const FILE_TYPES = [self::TYPE_IMAGE, self::TYPE_IMAGES, self::TYPE_FILE, self::TYPE_FILES];
 
     /**
+     * 需要配置选项的类型（单选、多选、下拉）
+     */
+    const OPTION_TYPES = [self::TYPE_RADIO, self::TYPE_CHECKBOX, self::TYPE_SELECT];
+
+    /**
+     * 获取所有表单类型选项（供前端下拉选择）
+     * @return array<array{label: string, value: string}>
+     */
+    public static function getTypeOptions(): array
+    {
+        return [
+            ['label' => '单行文本 (input)',     'value' => self::TYPE_INPUT],
+            ['label' => '多行文本 (textarea)',  'value' => self::TYPE_TEXTAREA],
+            ['label' => '数字 (number)',        'value' => self::TYPE_NUMBER],
+            ['label' => '密码 (password)',      'value' => self::TYPE_PASSWORD],
+            ['label' => '开关 (switch)',        'value' => self::TYPE_SWITCH],
+            ['label' => '单选 (radio)',         'value' => self::TYPE_RADIO],
+            ['label' => '多选 (checkbox)',      'value' => self::TYPE_CHECKBOX],
+            ['label' => '下拉选择 (select)',    'value' => self::TYPE_SELECT],
+            ['label' => '图片 (image)',         'value' => self::TYPE_IMAGE],
+            ['label' => '多图 (images)',        'value' => self::TYPE_IMAGES],
+            ['label' => '文件 (file)',          'value' => self::TYPE_FILE],
+            ['label' => '多文件 (files)',       'value' => self::TYPE_FILES],
+            ['label' => '富文本 (editor)',      'value' => self::TYPE_EDITOR],
+            ['label' => 'JSON',                 'value' => self::TYPE_JSON],
+        ];
+    }
+
+    /**
      * full_url 获取器
      * 图片/文件类型自动拼接上传域名前缀
      * - 单文件类型（image/file）：返回完整 URL 字符串

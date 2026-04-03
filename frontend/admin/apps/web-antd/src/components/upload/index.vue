@@ -61,6 +61,14 @@ const remoteConfig = ref<null | {
 }>(null);
 
 const loadRemoteConfig = async () => {
+  // 如果所有配置都已通过 props 传入，则跳过后端接口调用
+  if (
+    props.maxSize !== undefined &&
+    props.maxCount !== undefined &&
+    props.accept !== undefined
+  ) {
+    return;
+  }
   try {
     const res = await getUploadConfigApi(props.type);
     if (res) {
