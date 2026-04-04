@@ -362,7 +362,15 @@ if (hasAccessByCodes(['SystemAdminList'])) {
 
         <a-form-item label="头像">
           <Upload
-            :value="formData.avatar_full_url ? { url: formData.avatar, full_url: formData.avatar_full_url, name: 'avatar' } : undefined"
+            :value="
+              formData.avatar_full_url
+                ? {
+                    url: formData.avatar,
+                    full_url: formData.avatar_full_url,
+                    name: 'avatar',
+                  }
+                : undefined
+            "
             type="image"
             module="admin"
             @update:value="handleAvatarChange"
