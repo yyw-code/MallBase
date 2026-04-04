@@ -204,7 +204,8 @@ const itemsLoading = ref(false);
 const loadItems = async (groupId: number) => {
   itemsLoading.value = true;
   try {
-    settingItems.value = await getSettingItemListApi(groupId);
+    const res = await getSettingItemListApi({ group_id: groupId });
+    settingItems.value = res.list;
   } catch (error) {
     console.error('加载设置项失败:', error);
     message.error('加载设置项失败');

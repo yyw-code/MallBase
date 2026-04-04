@@ -120,6 +120,15 @@ export namespace SettingApi {
     limit?: number;
   }
 
+  /** 设置项列表参数 */
+  export interface ItemListParams {
+    group_id?: number;
+    keyword?: string;
+    type?: string;
+    page?: number;
+    limit?: number;
+  }
+
   /** 创建分组参数 */
   export interface CreateGroupParams {
     parent_id?: number;
@@ -183,7 +192,7 @@ export namespace SettingApi {
  */
 export async function getSettingPermissionTreeApi() {
   return requestClient.get<SettingApi.PermissionItem[]>(
-    '/setting/permission/tree',
+    '/setting/group/permission/tree',
   );
 }
 
@@ -263,19 +272,22 @@ export async function deleteSettingGroupApi(id: number) {
  */
 export async function getSettingFormConfigApi() {
   return requestClient.get<SettingApi.FormConfigResponse>(
-    '/setting/form/config',
+    '/setting/item/form/config',
   );
 }
 
 // ==================== 设置项管理 API ====================
 
 /**
- * 获取设置项列表（按分组）
+ * 获取设置项列表（支持分页和搜索）
  */
-export async function getSettingItemListApi(groupId: number) {
-  return requestClient.get<SettingApi.SettingItem[]>('/setting/item/list', {
-    params: { group_id: groupId },
-  });
+export async function getSettingItemListApi(
+  params?: SettingApi.ItemListParams,
+) {
+  return requestClient.get<{ list: SettingApi.SettingItem[]; total: number }>(
+    '/setting/item/list',
+    { params },
+  );
 }
 
 /**

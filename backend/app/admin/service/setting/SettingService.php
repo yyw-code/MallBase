@@ -270,6 +270,58 @@ class SettingService extends BaseService
     }
 
     /**
+     * 修改分组状态（同步更新对应权限状态）
+     * 禁用父级时递归禁用所有子级及其权限
+     */
+    public function changeGroupStatus(int $id, int $status): bool
+    {
+        $group = $this->model()->find($id);
+        if (!$group) {
+            throw new BusinessException('分组不存在');
+        }
+
+        $group->save(['status' => $status]);
+
+        // 同步更新对应权限状态
+        $this->syncPermissionStatus($group, $status);
+
+        // 禁用时递归禁用所有子级
+        if ($status === 0) {
+            $this->disableChildGroups($id);
+        }
+
+        $this->cacheService->clearAll();
+
+        return true;
+    }
+
+    /**
+     * 递归禁用子级分组及其权限
+     */
+    protected function disableChildGroups(int $parentId): void
+    {
+        $children = $this->model()->where('parent_id', $parentId)->select();
+        foreach ($children as $child) {
+            $child->save(['status' => 0]);
+            $this->syncPermissionStatus($child, 0);
+            $this->disableChildGroups($child->id);
+        }
+    }
+
+    /**
+     * 同步更新分组对应权限的状态
+     */
+    protected function syncPermissionStatus($group, int $status): void
+    {
+        if ($group->permission_id > 0) {
+            $permission = $this->model(Permission::class)->find($group->permission_id);
+            if ($permission) {
+                $permission->save(['status' => $status]);
+            }
+        }
+    }
+
+    /**
      * 获取分组详情（用于编辑回显）
      */
     public function getGroupInfo(int $id): array
@@ -362,12 +414,30 @@ class SettingService extends BaseService
      */
     protected function syncUpdatePermission(SettingGroup $group, int $menuParentPermissionId = 0): void
     {
+        // 顶级分组且 menu_parent_permission_id 为 0：清除权限关联
+        if ($group->parent_id <= 0 && $menuParentPermissionId <= 0) {
+            if ($group->permission_id > 0) {
+                // 删除对应的权限记录
+                $permission = $this->model(Permission::class)->find($group->permission_id);
+                if ($permission) {
+                    $permission->delete();
+                }
+                // 清除分组的 permission_id
+                $group->save(['permission_id' => 0]);
+            }
+            return;
+        }
+
+        // permission_id 不存在时，创建权限并回写
         if ($group->permission_id <= 0) {
+            $this->syncCreatePermission($group, $menuParentPermissionId);
             return;
         }
 
         $permission = $this->model(Permission::class)->find($group->permission_id);
         if (!$permission) {
+            // 权限记录被删了，重新创建
+            $this->syncCreatePermission($group, $menuParentPermissionId);
             return;
         }
 
@@ -438,20 +508,40 @@ class SettingService extends BaseService
     // ==================== 设置项管理 ====================
 
     /**
-     * 获取分组下的设置项列表
+     * 获取设置项列表
+     * group_id 为 0 或不传时返回所有设置项，支持关键词和表单类型搜索
+     *
+     * @param array $where 搜索条件 [group_id, keyword, type]
+     * @return array
      */
-    public function getSettingList(int $groupId): array
+    public function getSettingList(array $where = [], int $page = 1, int $pageSize = 15): array
     {
-        $group = $this->model()->find($groupId);
-        if (!$group) {
-            throw new BusinessException('分组不存在');
+        // group_id > 0 时校验分组是否存在
+        if (!empty($where['group_id'])) {
+            $group = $this->model()->find($where['group_id']);
+            if (!$group) {
+                throw new BusinessException('分组不存在');
+            }
         }
 
-        return $this->model(Setting::class)
-            ->where('group_id', $groupId)
-            ->order('sort', 'asc')
+        $query = $this->model(Setting::class)
+            ->when(!empty($where['group_id']), function ($q) use ($where) {
+                $q->where('group_id', $where['group_id']);
+            })
+            ->when(!empty($where['keyword']), function ($q) use ($where) {
+                $q->whereLike('name|code', "%{$where['keyword']}%");
+            })
+            ->when(!empty($where['type']), function ($q) use ($where) {
+                $q->where('type', $where['type']);
+            });
+
+        $total = $query->count();
+        $list = $query->order('sort', 'asc')
+            ->page($page, $pageSize)
             ->select()
             ->toArray();
+
+        return compact('total', 'list');
     }
 
     /**

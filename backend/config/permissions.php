@@ -150,6 +150,21 @@ return [
                     'affix_tab' => 0,
                     'no_basic_layout' => 0,
                     'remark' => null,
+                ],
+                [
+                    'name' => '设置管理',
+                    'code' => 'SystemManagement',
+                    'type' => 1,
+                    'path' => null,
+                    'icon' => 'lucide:setting',
+                    'component' => null,
+                    'redirect' => null,
+                    'sort' => 0,
+                    'status' => 1,
+                    'is_show' => 1,
+                    'affix_tab' => 0,
+                    'no_basic_layout' => 0,
+                    'remark' => null,
                 ]
             ]
         ],
