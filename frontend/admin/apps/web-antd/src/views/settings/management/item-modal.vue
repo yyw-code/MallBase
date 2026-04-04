@@ -7,10 +7,7 @@ import { computed, ref, watch } from 'vue';
 
 import { message } from 'ant-design-vue';
 
-import {
-  createSettingItemApi,
-  updateSettingItemApi,
-} from '#/api/setting';
+import { createSettingItemApi, updateSettingItemApi } from '#/api/setting';
 
 const props = defineProps<{
   editData?: null | SettingApi.SettingItem;
@@ -56,6 +53,57 @@ const needOptions = computed(() =>
   ['checkbox', 'radio', 'select'].includes(formData.value.type),
 );
 
+/** 选项编辑列表 */
+const optionItems = ref<Array<{ label: string; value: string }>>([]);
+
+/** 添加选项行 */
+const addOptionItem = () => {
+  optionItems.value.push({ label: '', value: '' });
+};
+
+/** 删除选项行 */
+const removeOptionItem = (index: number) => {
+  optionItems.value.splice(index, 1);
+};
+
+/** 从选项数组同步到 formData.options（JSON 字符串） */
+const syncOptionsToForm = () => {
+  const valid = optionItems.value.filter((item) => item.label || item.value);
+  formData.value.options = valid.length > 0 ? JSON.stringify(valid) : '';
+};
+
+/** 从后端数据解析选项到 optionItems */
+const parseOptionsToArray = (options: any) => {
+  if (!options) {
+    optionItems.value = [];
+    return;
+  }
+  if (typeof options === 'string') {
+    try {
+      const parsed = JSON.parse(options);
+      if (Array.isArray(parsed)) {
+        optionItems.value = parsed.map((item: any) => ({
+          label: String(item.label ?? ''),
+          value: String(item.value ?? ''),
+        }));
+        return;
+      }
+    } catch {
+      // JSON 解析失败，忽略
+    }
+    optionItems.value = [];
+    return;
+  }
+  if (Array.isArray(options)) {
+    optionItems.value = options.map((item: any) => ({
+      label: String(item.label ?? ''),
+      value: String(item.value ?? ''),
+    }));
+    return;
+  }
+  optionItems.value = [];
+};
+
 // ==================== 验证规则配置（从 props.ruleTypesMap 索引） ====================
 
 /** 当前表单类型对应的验证规则列表（根据 type 从 ruleTypesMap 中索引） */
@@ -83,9 +131,28 @@ const createEmptyRule = (): SettingApi.ValidationRule => ({
   flags: undefined,
 });
 
-/** 添加一条规则 */
+/** 检查规则类型是否已存在（排除指定索引） */
+const isRuleTypeDuplicate = (type: string, excludeIndex: number): boolean => {
+  if (!type) return false;
+  return formData.value.rules.some(
+    (r, i) => i !== excludeIndex && r.type === type,
+  );
+};
+
+/** 添加一条规则（自动选中第一个未使用的规则类型） */
 const addRule = () => {
-  formData.value.rules.push(createEmptyRule());
+  const usedTypes = new Set(formData.value.rules.map((r) => r.type));
+  const firstAvailable = ruleTypes.value.find((rt) => !usedTypes.has(rt.type));
+  const rule = createEmptyRule();
+  if (firstAvailable) {
+    rule.type = firstAvailable.type;
+    rule.message = firstAvailable.default_message_template
+      ? firstAvailable.default_message_template
+          .replace('{name}', formData.value.name || '此项')
+          .replace('{value}', '')
+      : '';
+  }
+  formData.value.rules.push(rule);
 };
 
 /** 删除一条规则 */
@@ -93,10 +160,33 @@ const removeRule = (index: number) => {
   formData.value.rules.splice(index, 1);
 };
 
+/** 根据规则类型模板生成 message */
+const generateRuleMessage = (index: number): string => {
+  const rule = formData.value.rules[index];
+  if (!rule) return '';
+  const def = getRuleTypeDef(rule.type);
+  return def?.default_message_template
+    ? def.default_message_template
+        .replace('{name}', formData.value.name || '此项')
+        .replace('{value}', String(rule.value ?? ''))
+    : '';
+};
+
 /** 规则类型变更 */
 const handleRuleTypeChange = (index: number) => {
   const rule = formData.value.rules[index];
   if (!rule) return;
+
+  // 检查是否重复
+  if (isRuleTypeDuplicate(rule.type, index)) {
+    message.warning(
+      `规则类型"${getRuleTypeDef(rule.type)?.label || rule.type}"已存在，不可重复添加`,
+    );
+    rule.type = '';
+    rule.message = '';
+    return;
+  }
+
   const def = getRuleTypeDef(rule.type);
 
   if (!def?.need_value) {
@@ -107,29 +197,36 @@ const handleRuleTypeChange = (index: number) => {
   }
 
   // 切换规则类型时，始终根据新的类型模板更新 message
-  rule.message = def?.default_message_template
-    ? def.default_message_template
-        .replace('{name}', formData.value.name || '此项')
-        .replace('{value}', String(rule.value || ''))
-    : '';
+  rule.message = generateRuleMessage(index);
+};
+
+/** 规则 value 变更时同步更新 message 中的 {value} 占位符 */
+const handleRuleValueChange = (index: number) => {
+  const rule = formData.value.rules[index];
+  if (!rule) return;
+  const def = getRuleTypeDef(rule.type);
+  // 仅当 message 仍为默认模板（用户未自定义）时才自动更新
+  if (def?.default_message_template && rule.message) {
+    rule.message = generateRuleMessage(index);
+  }
 };
 
 /** 获取规则的 options 复选框配置 */
-const getRuleOptions = (
-  ruleType: string,
-): string[] => {
+const getRuleOptions = (ruleType: string): string[] => {
   const def = getRuleTypeDef(ruleType);
   return def?.options || [];
 };
 
 /** 处理 options 复选框变更 */
-const handleRuleOptionsChange = (
-  index: number,
-  checkedValues: string[],
-) => {
+const handleRuleOptionsChange = (index: number, checkedValues: string[]) => {
   const rule = formData.value.rules[index];
   if (!rule) return;
-  rule.value = checkedValues;
+  rule.value = checkedValues as any;
+  // 同步更新 message 中的 {value} 占位符
+  const def = getRuleTypeDef(rule.type);
+  if (def?.default_message_template) {
+    rule.message = generateRuleMessage(index);
+  }
 };
 
 // ==================== 表单数据 ====================
@@ -169,24 +266,19 @@ watch(
 
       if (props.editData) {
         const item = props.editData;
-        const optionsStr =
-          typeof item.options === 'string'
-            ? item.options || ''
-            : item.options
-              ? JSON.stringify(item.options, null, 2)
-              : '';
         formData.value = {
           name: item.name,
           code: item.code,
           value: item.value || '',
           type: item.type,
-          options: optionsStr,
+          options: '',
           placeholder: item.placeholder || '',
           remark: item.remark || '',
           sort: item.sort,
           is_required: item.is_required,
           rules: item.rules ? [...item.rules] : [],
         };
+        parseOptionsToArray(item.options);
       } else {
         formData.value = {
           name: '',
@@ -200,6 +292,7 @@ watch(
           is_required: 0,
           rules: [],
         };
+        optionItems.value = [];
       }
     }
   },
@@ -218,11 +311,14 @@ const handleOk = async () => {
     return;
   }
 
-  if (needOptions.value && formData.value.options) {
-    try {
-      JSON.parse(formData.value.options);
-    } catch {
-      message.warning('选项 JSON 格式不正确');
+  // 提交前同步选项数据
+  if (needOptions.value) {
+    syncOptionsToForm();
+    const validItems = optionItems.value.filter(
+      (item) => item.label && item.value,
+    );
+    if (validItems.length === 0) {
+      message.warning('请至少添加一个有效选项（标签和值都不能为空）');
       return;
     }
   }
@@ -234,6 +330,12 @@ const handleOk = async () => {
       message.warning(`第 ${i + 1} 条验证规则未选择类型`);
       return;
     }
+    if (isRuleTypeDuplicate(rule.type, i)) {
+      message.warning(
+        `验证规则"${getRuleTypeDef(rule.type)?.label || rule.type}"重复，每条规则类型只能添加一次`,
+      );
+      return;
+    }
     const def = getRuleTypeDef(rule.type);
     if (def?.need_value && !rule.value && rule.value !== 0) {
       message.warning(`第 ${i + 1} 条验证规则请填写规则参数`);
@@ -243,11 +345,13 @@ const handleOk = async () => {
 
   saving.value = true;
   try {
-    const serializedRules = formData.value.rules.map((rule) => {
+    const serializedRules = formData.value.rules.map((rule, index) => {
       const def = getRuleTypeDef(rule.type);
+      // 提交时重新生成 message，确保 {value} 已替换为最新值
+      const finalMessage = rule.message || generateRuleMessage(index) || '';
       const cleaned: SettingApi.ValidationRule = {
         type: rule.type,
-        message: rule.message,
+        message: finalMessage,
       };
       if (def?.need_value) {
         cleaned.value = rule.value;
@@ -305,10 +409,7 @@ const handleOk = async () => {
       </a-form-item>
 
       <a-form-item label="编码" name="code">
-        <a-input
-          v-model:value="formData.code"
-          placeholder="如：wechat_appid"
-        />
+        <a-input v-model:value="formData.code" placeholder="如：wechat_appid" />
       </a-form-item>
 
       <a-form-item label="表单类型" name="type">
@@ -324,13 +425,38 @@ const handleOk = async () => {
       </a-form-item>
 
       <a-form-item v-if="needOptions" label="选项" name="options">
-        <a-textarea
-          v-model:value="formData.options"
-          placeholder='[{"label":"启用","value":"1"},{"label":"禁用","value":"0"}]'
-          :rows="4"
-          class="font-mono"
-        />
-        <div class="mt-1 text-xs text-gray-400">请输入 JSON 数组格式</div>
+        <div class="options-config">
+          <div
+            v-for="(item, index) in optionItems"
+            :key="index"
+            class="option-row"
+          >
+            <a-input
+              v-model:value="item.label"
+              placeholder="标签（如：启用）"
+              class="option-label-input"
+            />
+            <a-input
+              v-model:value="item.value"
+              placeholder="值（如：1）"
+              class="option-value-input"
+            />
+            <a-button
+              type="text"
+              danger
+              size="small"
+              @click="removeOptionItem(index)"
+            >
+              删除
+            </a-button>
+          </div>
+          <a-button type="dashed" block @click="addOptionItem">
+            <template #icon>
+              <span class="i-ant-design:plus-outlined mr-1"></span>
+            </template>
+            添加选项
+          </a-button>
+        </div>
       </a-form-item>
 
       <a-form-item label="占位提示" name="placeholder">
@@ -349,11 +475,7 @@ const handleOk = async () => {
       </a-form-item>
 
       <a-form-item label="排序" name="sort">
-        <a-input-number
-          v-model:value="formData.sort"
-          :min="0"
-          class="w-full"
-        />
+        <a-input-number v-model:value="formData.sort" :min="0" class="w-full" />
       </a-form-item>
 
       <!-- 验证规则配置 -->
@@ -377,7 +499,9 @@ const handleOk = async () => {
                 <a-checkbox-group
                   :value="Array.isArray(rule.value) ? rule.value : []"
                   class="rule-options-group"
-                  @change="(vals: any[]) => handleRuleOptionsChange(index, vals)"
+                  @change="
+                    (vals: any[]) => handleRuleOptionsChange(index, vals)
+                  "
                 >
                   <a-checkbox
                     v-for="opt in getRuleOptions(rule.type)"
@@ -389,15 +513,14 @@ const handleOk = async () => {
                 </a-checkbox-group>
               </template>
               <!-- 无 options 但 need_value 时显示输入框 -->
-              <template
-                v-else-if="getRuleTypeDef(rule.type)?.need_value"
-              >
+              <template v-else-if="getRuleTypeDef(rule.type)?.need_value">
                 <a-input
                   v-model:value="rule.value"
                   :placeholder="
                     getRuleTypeDef(rule.type)?.value_placeholder || '参数值'
                   "
                   class="rule-value-input"
+                  @change="handleRuleValueChange(index)"
                 />
               </template>
               <a-button
@@ -453,6 +576,25 @@ const handleOk = async () => {
 </template>
 
 <style lang="css" scoped>
+.options-config {
+  width: 100%;
+}
+
+.option-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.option-label-input {
+  flex: 1;
+}
+
+.option-value-input {
+  flex: 1;
+}
+
 .rules-config {
   width: 100%;
 }
