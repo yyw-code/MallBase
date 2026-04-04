@@ -7,13 +7,13 @@ const routes: RouteRecordRaw[] = [
       order: 0,
       title: '系统管理',
     },
-    name: 'System',
-    path: '/system',
+    name: 'Auth',
+    path: '/auth',
     children: [
       {
         name: 'SystemAdmin',
         path: '/admin',
-        component: () => import('#/views/system/admin/index.vue'),
+        component: () => import('#/views/auth/admin/index.vue'),
         meta: {
           icon: 'lucide:users',
           title: '管理员管理',
@@ -22,7 +22,7 @@ const routes: RouteRecordRaw[] = [
       {
         name: 'SystemRole',
         path: '/role',
-        component: () => import('#/views/system/role/index.vue'),
+        component: () => import('#/views/auth/role/index.vue'),
         meta: {
           icon: 'lucide:shield',
           title: '角色管理',
@@ -31,7 +31,7 @@ const routes: RouteRecordRaw[] = [
       {
         name: 'SystemPermission',
         path: '/permission',
-        component: () => import('#/views/system/permission/index.vue'),
+        component: () => import('#/views/auth/permission/index.vue'),
         meta: {
           icon: 'lucide:lock',
           title: '权限管理',

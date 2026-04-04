@@ -5,7 +5,7 @@ import { useAccess } from '@vben/access';
 
 import { message, Switch, Tag } from 'ant-design-vue';
 
-import { getPermissionTreeApi } from '#/api/system/permission';
+import { getPermissionTreeApi } from '#/api/auth/permission';
 import {
   createRoleApi,
   deleteRoleApi,
@@ -13,7 +13,7 @@ import {
   getRoleListApi,
   updateRoleApi,
   updateRoleStatusApi,
-} from '#/api/system/role';
+} from '#/api/auth/role';
 import { useFormModal, useTableCrud } from '#/composables/useTableCrud';
 
 defineOptions({

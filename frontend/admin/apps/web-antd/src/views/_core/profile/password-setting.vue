@@ -7,7 +7,7 @@ import { ProfilePasswordSetting, z } from '@vben/common-ui';
 
 import { message } from 'ant-design-vue';
 
-import { changePasswordApi } from '#/api/system/admin';
+import { changePasswordApi } from '#/api/auth/admin';
 import { useAuthStore } from '#/store';
 
 const formSchema = computed((): VbenFormSchema[] => {

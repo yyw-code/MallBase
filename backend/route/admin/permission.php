@@ -32,5 +32,5 @@ Route::group('auth/permission', function () {
         '_auth' => true,
         '_icon' => 'lucide:lock',
         '_parent' => 'SystemPermissionManagement',
-        '_component' => '/system/permission/index',
+        '_component' => '/auth/permission/index',
     ]);

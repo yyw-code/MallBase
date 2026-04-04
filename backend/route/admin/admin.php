@@ -47,5 +47,5 @@ Route::group('auth/admin', function () {
         '_auth' => true,
         '_icon' => 'lucide:users',
         '_parent' => 'SystemPermissionManagement',
-        '_component' => '/system/admin/index',
+        '_component' => '/auth/admin/index',
     ]);

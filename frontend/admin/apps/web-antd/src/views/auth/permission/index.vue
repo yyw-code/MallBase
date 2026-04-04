@@ -14,7 +14,7 @@ import {
   getPermissionInfoApi,
   getPermissionTreeApi,
   updatePermissionApi,
-} from '#/api/system/permission';
+} from '#/api/auth/permission';
 import { useFormModal } from '#/composables/useTableCrud';
 
 defineOptions({

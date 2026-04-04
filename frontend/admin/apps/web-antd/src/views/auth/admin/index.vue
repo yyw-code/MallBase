@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import type { AdminApi } from '#/api/system/admin';
+import type { AdminApi } from '#/api/auth/admin';
 
 import { computed, h, ref } from 'vue';
 
@@ -15,8 +15,8 @@ import {
   resetPasswordApi,
   updateAdminApi,
   updateAdminStatusApi,
-} from '#/api/system/admin';
-import { getAllRolesApi } from '#/api/system/role';
+} from '#/api/auth/admin';
+import { getAllRolesApi } from '#/api/auth/role';
 import Upload from '#/components/upload/index.vue';
 import { useFormModal, useTableCrud } from '#/composables/useTableCrud';
 

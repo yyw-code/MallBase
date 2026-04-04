@@ -30,5 +30,5 @@ Route::group('auth/role', function () {
         '_auth' => true,
         '_icon' => 'lucide:shield',
         '_parent' => 'SystemPermissionManagement',
-        '_component' => '/system/role/index',
+        '_component' => '/auth/role/index',
     ]);
