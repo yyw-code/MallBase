@@ -96,6 +96,7 @@ const resetSearch = () => {
     keyword: '',
     type: undefined,
   };
+  pagination.current = 1;
   loadData(searchParams.value);
 };
 
@@ -184,7 +185,7 @@ onMounted(() => {
         />
       </a-form-item>
       <a-form-item>
-        <a-button type="primary" @click="loadData(searchParams)">
+        <a-button type="primary" @click="() => { pagination.current = 1; loadData(searchParams); }">
           搜索
         </a-button>
         <a-button class="ml-2" @click="resetSearch"> 重置 </a-button>
@@ -197,7 +198,11 @@ onMounted(() => {
       :loading="loading"
       :pagination="pagination"
       row-key="id"
-      @change="() => loadData(searchParams)"
+      @change="(newPagination) => {
+        pagination.current = newPagination.current;
+        pagination.pageSize = newPagination.pageSize;
+        loadData(searchParams);
+      }"
     >
       <template #bodyCell="{ column, record }">
         <template v-if="column.dataIndex === 'type'">
