@@ -117,7 +117,7 @@ const columns = [
     dataIndex: 'code',
     width: 150,
     customRender: ({ record }: { record: UserGroupApi.GroupItem }) => {
-      return h('span', { class: 'font-mono text-sm' }, record.code);
+      return h('span', { class: 'font-mono text-sm' }, () => record.code);
     },
   },
   {
@@ -130,7 +130,7 @@ const columns = [
       return h(
         Tag,
         { color: config.color },
-        config.label,
+        () => config.label,
       );
     },
   },
