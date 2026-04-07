@@ -81,7 +81,7 @@ class UserGroupService extends BaseService
             throw new BusinessException('分组编码已存在');
         }
 
-        $group = $this->model()->save($data);
+        $group = $this->model()->create($data);
 
         return $group->id;
     }

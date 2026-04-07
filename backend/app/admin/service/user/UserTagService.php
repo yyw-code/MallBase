@@ -71,7 +71,7 @@ class UserTagService extends BaseService
      */
     public function create(array $data): int
     {
-        $tag = $this->model()->save($data);
+        $tag = $this->model()->create($data);
 
         return $tag->id;
     }
