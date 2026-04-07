@@ -9,6 +9,7 @@ use mall_base\base\BaseController;
 
 /**
  * 用户标签控制器
+ * @extends BaseController<UserTagService>
  */
 class UserTagController extends BaseController
 {

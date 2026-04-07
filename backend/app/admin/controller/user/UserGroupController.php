@@ -9,6 +9,7 @@ use mall_base\base\BaseController;
 
 /**
  * 用户分组控制器
+ * @extends BaseController<UserGroupService>
  */
 class UserGroupController extends BaseController
 {

@@ -10,6 +10,7 @@ use mall_base\log\Logger;
 
 /**
  * 上传控制器
+ * @extends BaseController<UploadService>
  */
 class UploadController extends BaseController
 {

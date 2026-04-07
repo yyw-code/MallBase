@@ -9,6 +9,7 @@ use mall_base\log\Logger;
 
 /**
  * 系统配置控制器
+ * @extends BaseController<UploadService>
  */
 class ConfigController extends BaseController
 {
