@@ -17,7 +17,9 @@ class UserTag extends BaseModel
      */
     public function searchNameAttr($query, $value)
     {
-        $query->whereLike('name', '%' . $value . '%');
+        if ($value !== '' && $value !== null) {
+            $query->whereLike('name', '%' . $value . '%');
+        }
     }
 
     /**
@@ -25,6 +27,8 @@ class UserTag extends BaseModel
      */
     public function searchStatusAttr($query, $value)
     {
-        $query->where('status', $value);
+        if ($value !== '' && $value !== null) {
+            $query->where('status', $value);
+        }
     }
 }

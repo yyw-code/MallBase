@@ -28,15 +28,20 @@ class UserTagService extends BaseService
      */
     public function getList(array $where, int $page, int $limit): array
     {
+        // 过滤空值，避免 withSearch 搜索器查不到数据
+        $searchWhere = array_filter($where, function ($value) {
+            return $value !== '' && $value !== null;
+        });
+
         $list = $this->model()
-            ->withSearch(['name', 'status'], $where)
+            ->withSearch(['name', 'status'], $searchWhere)
             ->order('sort', 'asc')
             ->order('id', 'desc')
             ->page($page, $limit)
             ->select();
 
         $total = $this->model()
-            ->withSearch(['name', 'status'], $where)
+            ->withSearch(['name', 'status'], $searchWhere)
             ->count();
 
         return [
