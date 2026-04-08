@@ -4,9 +4,13 @@ declare(strict_types=1);
 namespace app\client\service;
 
 use app\client\model\User;
-use app\admin\service\cache\JwtCacheService;
+use app\client\model\user\UserGroup;
+use app\client\model\user\UserGroupRelation;
+use app\client\model\user\UserTag;
+use app\client\model\user\UserTagRelation;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
+use mall_base\service\JwtCacheService;
 use mall_base\service\JwtService;
 use think\facade\Request;
 
@@ -44,7 +48,7 @@ class UserService extends BaseService
         ]);
 
         // 生成 JWT Token
-        $jwtService = new JwtService();
+        $jwtService = app()->make(JwtService::class);
         $token = $jwtService->encode([
             'user_id' => $user->id,
             'account' => $account,
@@ -52,7 +56,7 @@ class UserService extends BaseService
         ]);
 
         // 存储 refresh_token 到 Redis
-        $jwtCacheService = new JwtCacheService();
+        $jwtCacheService = app()->make(JwtCacheService::class);
         $jwtCacheService->storeRefreshToken(
             $token['refresh_token'],
             $user->id,
@@ -88,7 +92,7 @@ class UserService extends BaseService
         $user->save();
 
         // 生成 JWT Token
-        $jwtService = new JwtService();
+        $jwtService = app()->make(JwtService::class);
         $token = $jwtService->encode([
             'user_id' => $user->id,
             'account' => $account,
@@ -96,7 +100,7 @@ class UserService extends BaseService
         ]);
 
         // 存储 refresh_token 到 Redis
-        $jwtCacheService = new JwtCacheService();
+        $jwtCacheService = app()->make(JwtCacheService::class);
         $jwtCacheService->storeRefreshToken(
             $token['refresh_token'],
             $user->id,
@@ -302,7 +306,7 @@ class UserService extends BaseService
      */
     public function logout(int $userId): bool
     {
-        $jwtCacheService = new JwtCacheService();
+        $jwtCacheService = app()->make(JwtCacheService::class);
         $jwtCacheService->clearUserTokens($userId);
         return true;
     }
@@ -334,7 +338,7 @@ class UserService extends BaseService
      */
     public function getUserGroups(int $userId): array
     {
-        $relations = \app\admin\model\user\UserGroupRelation::where('user_id', $userId)
+        $relations = $this->model(UserGroupRelation::class)->where('user_id', $userId)
             ->select();
 
         $groupIds = array_column($relations->toArray(), 'group_id');
@@ -343,7 +347,7 @@ class UserService extends BaseService
             return [];
         }
 
-        $groups = \app\admin\model\user\UserGroup::where('status', 1)
+        $groups = $this->model(UserGroup::class)->where('status', 1)
             ->whereIn('id', $groupIds)
             ->select();
 
@@ -355,7 +359,7 @@ class UserService extends BaseService
      */
     public function getUserTags(int $userId): array
     {
-        $relations = \app\admin\model\user\UserTagRelation::where('user_id', $userId)
+        $relations = $this->model(UserTagRelation::class)->where('user_id', $userId)
             ->select();
 
         $tagIds = array_column($relations->toArray(), 'tag_id');
@@ -364,7 +368,7 @@ class UserService extends BaseService
             return [];
         }
 
-        $tags = \app\admin\model\user\UserTag::where('status', 1)
+        $tags = $this->model(UserTag::class)->where('status', 1)
             ->whereIn('id', $tagIds)
             ->select();
 
