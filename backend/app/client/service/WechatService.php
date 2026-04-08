@@ -3,10 +3,10 @@ declare(strict_types=1);
 
 namespace app\client\service;
 
-use app\admin\service\cache\JwtCacheService;
 use app\client\model\User;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
+use mall_base\service\JwtCacheService;
 use mall_base\service\JwtService;
 use support\Redis;
 use think\facade\Request;
@@ -57,7 +57,7 @@ class WechatService extends BaseService
         ]);
 
         // 4. 生成 JWT Token
-        $jwtService = new JwtService();
+        $jwtService = app()->make(JwtService::class);
         $token = $jwtService->encode([
             'user_id' => $user->id,
             'account' => $user->wx_openid,
@@ -65,7 +65,7 @@ class WechatService extends BaseService
         ]);
 
         // 5. 存储 refresh_token 到 Redis
-        $jwtCacheService = new JwtCacheService();
+        $jwtCacheService = app()->make(JwtCacheService::class);
         $jwtCacheService->storeRefreshToken(
             $token['refresh_token'],
             $user->id,
@@ -128,7 +128,7 @@ class WechatService extends BaseService
         $user->save($updateData);
 
         // 4. 生成 JWT Token
-        $jwtService = new JwtService();
+        $jwtService = app()->make(JwtService::class);
         $token = $jwtService->encode([
             'user_id' => $user->id,
             'account' => $mobile,
@@ -136,7 +136,7 @@ class WechatService extends BaseService
         ]);
 
         // 5. 存储 refresh_token 到 Redis
-        $jwtCacheService = new JwtCacheService();
+        $jwtCacheService = app()->make(JwtCacheService::class);
         $jwtCacheService->storeRefreshToken(
             $token['refresh_token'],
             $user->id,

@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace app\admin\service\user;
 
+use app\admin\model\user\UserGroupRelation;
 use app\admin\model\user\UserTag;
 use app\admin\model\user\UserTagRelation;
 use mall_base\base\BaseService;
@@ -137,7 +138,7 @@ class UserTagService extends BaseService
      */
     public function getUserCount(int $tagId): int
     {
-        return UserTagRelation::where('tag_id', $tagId)->count();
+        return $this->model(UserTagRelation::class)->where('tag_id', $tagId)->count();
     }
 
     /**
@@ -158,12 +159,12 @@ class UserTagService extends BaseService
 
         $count = 0;
         foreach ($userIds as $userId) {
-            $relation = UserTagRelation::where('user_id', $userId)
+            $relation = $this->model(UserTagRelation::class)->where('user_id', $userId)
                 ->where('tag_id', $tagId)
                 ->find();
 
             if (!$relation) {
-                UserTagRelation::create([
+                $this->model(UserTagRelation::class)->create([
                     'user_id' => $userId,
                     'tag_id' => $tagId,
                 ]);
@@ -184,7 +185,7 @@ class UserTagService extends BaseService
      */
     public function removeUser(int $tagId, int $userId): bool
     {
-        $relation = UserTagRelation::where('user_id', $userId)
+        $relation = $this->model(UserTagRelation::class)->where('user_id', $userId)
             ->where('tag_id', $tagId)
             ->find();
 
@@ -205,7 +206,7 @@ class UserTagService extends BaseService
      */
     public function getUserTags(int $userId): array
     {
-        $relations = UserTagRelation::where('user_id', $userId)
+        $relations = $this->model(UserTagRelation::class)->where('user_id', $userId)
             ->select();
 
         $tagIds = array_column($relations->toArray(), 'tag_id');

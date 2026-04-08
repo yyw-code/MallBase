@@ -6,10 +6,10 @@ namespace app\admin\service\auth;
 
 use app\admin\model\auth\Admin as AdminModel;
 use app\admin\model\auth\AdminRole;
-use app\admin\service\cache\JwtCacheService;
 use app\admin\service\cache\PermissionCacheService;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
+use mall_base\service\JwtCacheService;
 use mall_base\service\JwtService;
 use think\facade\Request;
 
@@ -46,7 +46,7 @@ class AdminService extends BaseService
         $admin->save();
 
         // 生成 JWT Token（encode 自动生成 access_token + refresh_token）
-        $jwtService = new JwtService();
+        $jwtService = app()->make(JwtService::class);
         $token = $jwtService->encode([
             'admin_id' => $admin->id,
             'username' => $admin->username,
@@ -54,7 +54,7 @@ class AdminService extends BaseService
         ]);
 
         // 存储 refresh_token 到 Redis
-        $jwtCacheService = new JwtCacheService();
+        $jwtCacheService = app()->make(JwtCacheService::class);
         $jwtCacheService->storeRefreshToken(
             $token['refresh_token'],
             $admin->id,
@@ -263,7 +263,7 @@ class AdminService extends BaseService
     public function delete(int $id): bool
     {
         // 不允许删除超级管理员
-        if ($id === AdminModel::SUPER_ADMIN_ID) {
+        if ($id === $this->model()::SUPER_ADMIN_ID) {
             throw new BusinessException('不能删除超级管理员');
         }
 
@@ -316,7 +316,7 @@ class AdminService extends BaseService
      */
     protected function clearUserPermissionCache(int $adminId): void
     {
-        $cacheService = new PermissionCacheService();
+        $cacheService = app()->make(PermissionCacheService::class);
         $cacheService->clearUser($adminId);
     }
 
@@ -379,7 +379,7 @@ class AdminService extends BaseService
     public function logout(int $adminId): void
     {
         // 撤销 refresh_token
-        $jwtCacheService = new JwtCacheService();
+        $jwtCacheService = app()->make(JwtCacheService::class);
         $jwtCacheService->revokeRefreshToken($adminId);
 
         // 清除该用户的权限缓存
@@ -391,7 +391,7 @@ class AdminService extends BaseService
      */
     public function refreshToken(string $refreshToken): array
     {
-        $jwtService = new JwtService();
+        $jwtService = app()->make(JwtService::class);
 
         // 解析 refresh_token
         try {
@@ -417,7 +417,7 @@ class AdminService extends BaseService
         }
 
         // 验证 refresh_token 是否在 Redis 中（防止已登出的 token 被复用）
-        $jwtCacheService = new JwtCacheService();
+        $jwtCacheService = app()->make(JwtCacheService::class);
         if (!$jwtCacheService->verifyRefreshToken($refreshToken, $admin->id)) {
             throw new BusinessException('刷新令牌已失效');
         }

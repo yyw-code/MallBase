@@ -41,7 +41,7 @@ class SettingService extends BaseService
 
     public function __construct()
     {
-        $this->cacheService = new SettingCacheService();
+        $this->cacheService = app()->make(SettingCacheService::class);
     }
 
     // ==================== 分组管理 ====================

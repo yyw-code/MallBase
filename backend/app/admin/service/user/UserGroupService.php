@@ -159,7 +159,7 @@ class UserGroupService extends BaseService
      */
     public function getUserCount(int $groupId): int
     {
-        return UserGroupRelation::where('group_id', $groupId)->count();
+        return $this->model(UserGroupRelation::class)->where('group_id', $groupId)->count();
     }
 
     /**
@@ -180,12 +180,12 @@ class UserGroupService extends BaseService
 
         $count = 0;
         foreach ($userIds as $userId) {
-            $relation = UserGroupRelation::where('user_id', $userId)
+            $relation = $this->model(UserGroupRelation::class)->where('user_id', $userId)
                 ->where('group_id', $groupId)
                 ->find();
 
             if (!$relation) {
-                UserGroupRelation::create([
+                $this->model(UserGroupRelation::class)->create([
                     'user_id' => $userId,
                     'group_id' => $groupId,
                 ]);
@@ -206,7 +206,7 @@ class UserGroupService extends BaseService
      */
     public function removeUser(int $groupId, int $userId): bool
     {
-        $relation = UserGroupRelation::where('user_id', $userId)
+        $relation = $this->model(UserGroupRelation::class)->where('user_id', $userId)
             ->where('group_id', $groupId)
             ->find();
 
@@ -227,7 +227,7 @@ class UserGroupService extends BaseService
      */
     public function getUserGroups(int $userId): array
     {
-        $relations = UserGroupRelation::where('user_id', $userId)
+        $relations = $this->model(UserGroupRelation::class)->where('user_id', $userId)
             ->select();
 
         $groupIds = array_column($relations->toArray(), 'group_id');
