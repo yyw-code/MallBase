@@ -14,7 +14,6 @@ import {
   resetClientUserPasswordApi,
   updateClientUserStatusApi,
 } from '#/api/user';
-import { useColorMap } from '#/composables/useColorOptions';
 import { useTableCrud } from '#/composables/useTableCrud';
 
 import UserModal from './user-modal.vue';
@@ -37,7 +36,6 @@ const REGISTER_TYPE_MAP: Record<string, { color: string; label: string }> = {
 // ==================== 分组和标签选项 ====================
 const groupOptions = ref<UserGroupApi.GroupItem[]>([]);
 const tagOptions = ref<UserTagApi.TagItem[]>([]);
-const colorMap = useColorMap();
 
 /* ---------------- 表格 CRUD ---------------- */
 const { tableData, loading, pagination, loadData, handleDelete } = useTableCrud<
@@ -193,13 +191,9 @@ const columns = [
       if (!record.groups || record.groups.length === 0) return '-';
 
       return h('div', { class: 'flex flex-wrap gap-1' },
-        record.groups.map((group: UserGroupApi.GroupItem) => {
-          const config = colorMap.value[group.color] || {
-            label: group.name,
-            color: group.color || 'default'
-          };
-          return h(Tag, { color: config.color }, () => config.label);
-        })
+        record.groups.map((group: UserGroupApi.GroupItem) =>
+          h(Tag, { color: group.color || 'default' }, () => group.name)
+        )
       );
     },
   },
@@ -211,13 +205,9 @@ const columns = [
       if (!record.tags || record.tags.length === 0) return '-';
 
       return h('div', { class: 'flex flex-wrap gap-1' },
-        record.tags.map((tag: UserTagApi.TagItem) => {
-          const config = colorMap.value[tag.color] || {
-            label: tag.name,
-            color: tag.color || 'default'
-          };
-          return h(Tag, { color: config.color }, () => config.label);
-        })
+        record.tags.map((tag: UserTagApi.TagItem) =>
+          h(Tag, { color: tag.color || 'default' }, () => tag.name)
+        )
       );
     },
   },

@@ -44,10 +44,9 @@ class UserGroupService extends BaseService
             ->withSearch(['name', 'code', 'status'], $searchWhere)
             ->count();
 
-        return [
-            'list' => $list->toArray(),
-            'total' => $total,
-        ];
+        $list = $list->toArray();
+
+        return compact('total', 'list');
     }
 
     /**

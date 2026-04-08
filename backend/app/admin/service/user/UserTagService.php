@@ -45,10 +45,9 @@ class UserTagService extends BaseService
             ->withSearch(['name', 'status'], $searchWhere)
             ->count();
 
-        return [
-            'list' => $list->toArray(),
-            'total' => $total,
-        ];
+        $list = $list->toArray();
+
+        return compact('total', 'list');
     }
 
     /**

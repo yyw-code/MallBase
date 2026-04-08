@@ -38,16 +38,13 @@ class UserService extends BaseService
         $groupMap = $this->batchGetUserGroups($userIds);
         $tagMap = $this->batchGetUserTags($userIds);
 
-        $listArray = $list->toArray();
-        foreach ($listArray as &$user) {
+        $list = $list->toArray();
+        foreach ($list as &$user) {
             $user['groups'] = $groupMap[$user['id']] ?? [];
             $user['tags'] = $tagMap[$user['id']] ?? [];
         }
 
-        return [
-            'list' => $listArray,
-            'total' => $total,
-        ];
+        return compact('total', 'list');
     }
 
     /**
@@ -55,40 +52,28 @@ class UserService extends BaseService
      */
     protected function buildListQuery(array $where)
     {
-        $query = $this->model();
-
-        // 关键词搜索
-        if (!empty($where['keyword'])) {
-            $query->whereLike('mobile|email|nickname', "%{$where['keyword']}%");
-        }
-
-        // 状态筛选
-        if (isset($where['status']) && $where['status'] !== null && $where['status'] !== '') {
-            $query->where('status', $where['status']);
-        }
-
-        // 注册方式筛选
-        if (!empty($where['register_type'])) {
-            $query->where('register_type', $where['register_type']);
-        }
-
-        // 分组筛选（子查询方式，兼容 ThinkPHP 8）
-        if (!empty($where['group_ids']) && is_array($where['group_ids'])) {
-            $groupUserIds = $this->model(UserGroupRelation::class)
-                ->whereIn('group_id', $where['group_ids'])
-                ->column('user_id');
-            $query->whereIn('id', array_unique($groupUserIds) ?: [0]);
-        }
-
-        // 标签筛选（子查询方式，兼容 ThinkPHP 8）
-        if (!empty($where['tag_ids']) && is_array($where['tag_ids'])) {
-            $tagUserIds = $this->model(UserTagRelation::class)
-                ->whereIn('tag_id', $where['tag_ids'])
-                ->column('user_id');
-            $query->whereIn('id', array_unique($tagUserIds) ?: [0]);
-        }
-
-        return $query;
+        return $this->model()
+            ->when(!empty($where['keyword']), function ($q) use ($where) {
+                $q->whereLike('mobile|email|nickname', "%{$where['keyword']}%");
+            })
+            ->when(($where['status'] ?? null) !== null && $where['status'] !== '', function ($q) use ($where) {
+                $q->where('status', $where['status']);
+            })
+            ->when(!empty($where['register_type']), function ($q) use ($where) {
+                $q->where('register_type', $where['register_type']);
+            })
+            ->when(!empty($where['group_ids']) && is_array($where['group_ids']), function ($q) use ($where) {
+                $groupUserIds = $this->model(UserGroupRelation::class)
+                    ->whereIn('group_id', $where['group_ids'])
+                    ->column('user_id');
+                $q->whereIn('id', array_unique($groupUserIds) ?: [0]);
+            })
+            ->when(!empty($where['tag_ids']) && is_array($where['tag_ids']), function ($q) use ($where) {
+                $tagUserIds = $this->model(UserTagRelation::class)
+                    ->whereIn('tag_id', $where['tag_ids'])
+                    ->column('user_id');
+                $q->whereIn('id', array_unique($tagUserIds) ?: [0]);
+            });
     }
 
     /**
