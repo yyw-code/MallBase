@@ -39,4 +39,20 @@ class User extends BaseModel
         }
         return request()->domain() . $data['avatar'];
     }
+
+    /**
+     * 用户分组关联（多对多）
+     */
+    public function userGroups()
+    {
+        return $this->hasMany(UserGroupRelation::class, 'user_id', 'id');
+    }
+
+    /**
+     * 用户标签关联（多对多）
+     */
+    public function userTags()
+    {
+        return $this->hasMany(UserTagRelation::class, 'user_id', 'id');
+    }
 }

@@ -25,6 +25,8 @@ export namespace ClientUserApi {
     remark?: string;
     create_time: string;
     update_time: string;
+    groups?: UserGroupApi.GroupItem[];
+    tags?: UserTagApi.TagItem[];
   }
 
   /** 列表参数 */
@@ -34,6 +36,8 @@ export namespace ClientUserApi {
     register_type?: string;
     page?: number;
     limit?: number;
+    group_ids?: number[];
+    tag_ids?: number[];
   }
 
   /** 创建参数 */
@@ -47,6 +51,8 @@ export namespace ClientUserApi {
     birthday?: string;
     status?: number;
     remark?: string;
+    group_ids?: number[];
+    tag_ids?: number[];
   }
 
   /** 更新参数 */
@@ -63,6 +69,8 @@ export namespace ClientUserApi {
     bio?: string;
     status?: number;
     remark?: string;
+    group_ids?: number[];
+    tag_ids?: number[];
   }
 
   /** 登录参数 */

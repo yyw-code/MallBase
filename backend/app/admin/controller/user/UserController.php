@@ -24,7 +24,7 @@ class UserController extends BaseController
      */
     public function list()
     {
-        $where = $this->request->param(['keyword', 'status', 'register_type']);
+        $where = $this->request->param(['keyword', 'status', 'register_type', 'group_ids', 'tag_ids']);
 
         // 获取分页参数
         [$page, $limit] = $this->getPagination(1, 15);
@@ -54,7 +54,7 @@ class UserController extends BaseController
         $data = $this->request->param([
             'mobile', 'email', 'password', 'nickname',
             'real_name', 'gender', 'birthday', 'status', 'remark',
-            'avatar',
+            'avatar', 'group_ids', 'tag_ids',
         ]);
 
         $this->validate($data, UserValidate::class . '.create');
@@ -80,7 +80,7 @@ class UserController extends BaseController
         $data = $this->request->param([
             'mobile', 'email', 'nickname', 'real_name',
             'gender', 'birthday', 'status', 'remark',
-            'avatar',
+            'avatar', 'group_ids', 'tag_ids',
         ]);
 
         $this->validate($data, UserValidate::class . '.update');

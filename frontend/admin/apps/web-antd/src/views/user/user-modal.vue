@@ -1,12 +1,17 @@
 <script lang="ts" setup>
-import type { ClientUserApi } from '#/api/user';
+import type { ClientUserApi, UserGroupApi, UserTagApi } from '#/api/user';
 import type { FileInfo } from '#/components/upload';
 
-import { computed, ref, watch } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 
 import { message } from 'ant-design-vue';
 
-import { createClientUserApi, updateClientUserApi } from '#/api/user';
+import {
+  createClientUserApi,
+  getUserGroupListApi,
+  getUserTagListApi,
+  updateClientUserApi,
+} from '#/api/user';
 import Upload from '#/components/upload/index.vue';
 
 defineOptions({ name: 'UserModal' });
@@ -17,6 +22,10 @@ const props = withDefaults(defineProps<Props>(), {
 });
 
 const emit = defineEmits<Emits>();
+
+// 分组和标签选项
+const groupOptions = ref<UserGroupApi.GroupItem[]>([]);
+const tagOptions = ref<UserTagApi.TagItem[]>([]);
 
 interface Props {
   visible?: boolean;
@@ -44,6 +53,8 @@ const formData = ref({
   birthday: undefined as string | undefined,
   status: 1,
   remark: '',
+  group_ids: [] as number[],
+  tag_ids: [] as number[],
 });
 
 const formRef = ref();
@@ -117,6 +128,17 @@ const handleSubmit = async () => {
       delete data.password;
     }
 
+    // 创建模式下空数组不发送（避免后端处理多余字段）
+    // 编辑模式下始终发送，以便后端区分"不修改"和"清空关联"
+    if (!isEdit.value) {
+      if (data.group_ids && data.group_ids.length === 0) {
+        delete data.group_ids;
+      }
+      if (data.tag_ids && data.tag_ids.length === 0) {
+        delete data.tag_ids;
+      }
+    }
+
     if (isEdit.value) {
       await updateClientUserApi(props.editData!.id, data);
       message.success('更新成功');
@@ -155,13 +177,15 @@ watch(
           email: data.email || '',
           password: '',
           confirm_password: '',
-          avatar: data.avatar || undefined,
+          avatar: data.avatar_full_url || data.avatar || undefined,
           nickname: data.nickname || '',
           real_name: data.real_name || '',
           gender: data.gender ?? 0,
           birthday: data.birthday || undefined,
           status: data.status ?? 1,
           remark: data.remark || '',
+          group_ids: data.groups?.map((g: UserGroupApi.GroupItem) => g.id) || [],
+          tag_ids: data.tags?.map((t: UserTagApi.TagItem) => t.id) || [],
         }
       : {
           mobile: '',
@@ -175,10 +199,26 @@ watch(
           birthday: undefined,
           status: 1,
           remark: '',
+          group_ids: [],
+          tag_ids: [],
         };
   },
   { immediate: true },
 );
+
+/* ---------------- 加载选项 ---------------- */
+onMounted(async () => {
+  try {
+    const [groups, tags] = await Promise.all([
+      getUserGroupListApi({ status: 1, limit: 100 }),
+      getUserTagListApi({ status: 1, limit: 100 }),
+    ]);
+    groupOptions.value = groups.list;
+    tagOptions.value = tags.list;
+  } catch (error) {
+    console.error('加载分组和标签失败:', error);
+  }
+});
 </script>
 
 <template>
@@ -275,6 +315,26 @@ watch(
           <a-radio :value="1">启用</a-radio>
           <a-radio :value="0">禁用</a-radio>
         </a-radio-group>
+      </a-form-item>
+
+      <a-form-item label="用户分组">
+        <a-select
+          v-model:value="formData.group_ids"
+          mode="multiple"
+          placeholder="请选择分组"
+          allow-clear
+          :options="groupOptions.map((g) => ({ label: g.name, value: g.id }))"
+        />
+      </a-form-item>
+
+      <a-form-item label="用户标签">
+        <a-select
+          v-model:value="formData.tag_ids"
+          mode="multiple"
+          placeholder="请选择标签"
+          allow-clear
+          :options="tagOptions.map((t) => ({ label: t.name, value: t.id }))"
+        />
       </a-form-item>
 
       <a-form-item label="备注" name="remark">

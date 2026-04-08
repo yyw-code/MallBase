@@ -1,17 +1,20 @@
 <script lang="ts" setup>
-import type { ClientUserApi } from '#/api/user';
+import type { ClientUserApi, UserGroupApi, UserTagApi } from '#/api/user';
 
 import { h, onMounted, ref } from 'vue';
 
-import { message, Modal, Switch } from 'ant-design-vue';
+import { message, Modal, Switch, Tag } from 'ant-design-vue';
 
 import {
   deleteClientUserApi,
   getClientUserInfoApi,
   getClientUserListApi,
+  getUserGroupListApi,
+  getUserTagListApi,
   resetClientUserPasswordApi,
   updateClientUserStatusApi,
 } from '#/api/user';
+import { useColorMap } from '#/composables/useColorOptions';
 import { useTableCrud } from '#/composables/useTableCrud';
 
 import UserModal from './user-modal.vue';
@@ -31,6 +34,11 @@ const REGISTER_TYPE_MAP: Record<string, { color: string; label: string }> = {
   email: { label: '邮箱', color: 'purple' },
 };
 
+// ==================== 分组和标签选项 ====================
+const groupOptions = ref<UserGroupApi.GroupItem[]>([]);
+const tagOptions = ref<UserTagApi.TagItem[]>([]);
+const colorMap = useColorMap();
+
 /* ---------------- 表格 CRUD ---------------- */
 const { tableData, loading, pagination, loadData, handleDelete } = useTableCrud<
   ClientUserApi.UserItem,
@@ -48,6 +56,8 @@ const searchParams = ref({
   keyword: '',
   status: undefined as number | undefined,
   register_type: undefined as string | undefined,
+  group_ids: [] as number[],
+  tag_ids: [] as number[],
 });
 
 const resetSearch = () => {
@@ -55,6 +65,8 @@ const resetSearch = () => {
     keyword: '',
     status: undefined,
     register_type: undefined,
+    group_ids: [],
+    tag_ids: [],
   };
   pagination.current = 1;
   loadData(searchParams.value);
@@ -174,6 +186,42 @@ const columns = [
     },
   },
   {
+    title: '分组',
+    dataIndex: 'groups',
+    width: 150,
+    customRender: ({ record }: { record: ClientUserApi.UserItem }) => {
+      if (!record.groups || record.groups.length === 0) return '-';
+
+      return h('div', { class: 'flex flex-wrap gap-1' },
+        record.groups.map((group: UserGroupApi.GroupItem) => {
+          const config = colorMap.value[group.color] || {
+            label: group.name,
+            color: group.color || 'default'
+          };
+          return h(Tag, { color: config.color }, () => config.label);
+        })
+      );
+    },
+  },
+  {
+    title: '标签',
+    dataIndex: 'tags',
+    width: 150,
+    customRender: ({ record }: { record: ClientUserApi.UserItem }) => {
+      if (!record.tags || record.tags.length === 0) return '-';
+
+      return h('div', { class: 'flex flex-wrap gap-1' },
+        record.tags.map((tag: UserTagApi.TagItem) => {
+          const config = colorMap.value[tag.color] || {
+            label: tag.name,
+            color: tag.color || 'default'
+          };
+          return h(Tag, { color: config.color }, () => config.label);
+        })
+      );
+    },
+  },
+  {
     title: '最后登录',
     dataIndex: 'last_login_time',
     width: 160,
@@ -184,7 +232,18 @@ const columns = [
 ];
 
 /* ---------------- 初始化 ---------------- */
-onMounted(() => {
+onMounted(async () => {
+  try {
+    const [groups, tags] = await Promise.all([
+      getUserGroupListApi({ status: 1, limit: 100 }),
+      getUserTagListApi({ status: 1, limit: 100 }),
+    ]);
+    groupOptions.value = groups.list;
+    tagOptions.value = tags.list;
+  } catch (error) {
+    console.error('加载分组和标签失败:', error);
+  }
+
   loadData(searchParams.value);
 });
 </script>
@@ -230,6 +289,26 @@ onMounted(() => {
           <a-select-option value="email">邮箱</a-select-option>
         </a-select>
       </a-form-item>
+      <a-form-item label="分组">
+        <a-select
+          v-model:value="searchParams.group_ids"
+          mode="multiple"
+          placeholder="请选择分组"
+          allow-clear
+          style="width: 200px"
+          :options="groupOptions.map((g) => ({ label: g.name, value: g.id }))"
+        />
+      </a-form-item>
+      <a-form-item label="标签">
+        <a-select
+          v-model:value="searchParams.tag_ids"
+          mode="multiple"
+          placeholder="请选择标签"
+          allow-clear
+          style="width: 200px"
+          :options="tagOptions.map((t) => ({ label: t.name, value: t.id }))"
+        />
+      </a-form-item>
       <a-form-item>
         <a-button
           type="primary"
@@ -251,7 +330,7 @@ onMounted(() => {
       :data-source="tableData"
       :loading="loading"
       :pagination="pagination"
-      :scroll="{ x: 1400 }"
+      :scroll="{ x: 1700 }"
       row-key="id"
       @change="
         (newPagination) => {
