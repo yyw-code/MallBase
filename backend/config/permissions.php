@@ -123,7 +123,7 @@ return [
         ],
         [
             'name' => '用户管理',
-            'code' => 'ClientUserManagement',
+            'code' => 'SystemClientUserManagement',
             'type' => 1,
             'path' => null,
             'icon' => 'lucide:users',
