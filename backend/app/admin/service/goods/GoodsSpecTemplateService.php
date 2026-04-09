@@ -6,7 +6,6 @@ namespace app\admin\service\goods;
 use app\admin\model\goods\GoodsSpecTemplate;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
-use mall_base\util\Logger;
 
 /**
  * 商品规格模板服务
@@ -90,14 +89,9 @@ class GoodsSpecTemplateService extends BaseService
      */
     public function create(array $data): int
     {
-        // 业务校验（事务外）
         $this->validateNameUnique($data['name']);
 
-        Logger::instance()->info('创建规格模板', ['name' => $data['name']]);
-
         $template = $this->model()->create($data);
-
-        Logger::instance()->info('规格模板创建成功', ['id' => $template->id, 'name' => $data['name']]);
 
         return $template->id;
     }
@@ -124,11 +118,7 @@ class GoodsSpecTemplateService extends BaseService
             $this->validateNameUnique($data['name'], $id);
         }
 
-        Logger::instance()->info('更新规格模板', ['id' => $id, 'data' => $data]);
-
         $template->save($data);
-
-        Logger::instance()->info('规格模板更新成功', ['id' => $id]);
 
         return true;
     }
@@ -149,11 +139,7 @@ class GoodsSpecTemplateService extends BaseService
             throw new BusinessException('规格模板不存在');
         }
 
-        Logger::instance()->info('删除规格模板', ['id' => $id]);
-
         $template->delete();
-
-        Logger::instance()->info('规格模板删除成功', ['id' => $id]);
 
         return true;
     }
@@ -174,11 +160,7 @@ class GoodsSpecTemplateService extends BaseService
             throw new BusinessException('规格模板不存在');
         }
 
-        Logger::instance()->info('更新规格模板状态', ['id' => $id, 'status' => $status]);
-
         $template->save(['status' => $status]);
-
-        Logger::instance()->info('规格模板状态更新成功', ['id' => $id, 'status' => $status]);
 
         return true;
     }
