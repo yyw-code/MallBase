@@ -3,7 +3,6 @@ import type { GoodsSpecTemplateApi } from '#/api/goods';
 
 import { computed, reactive, ref, watch } from 'vue';
 
-import { DeleteOutlined, PlusOutlined } from '@ant-design/icons-vue';
 import { message } from 'ant-design-vue';
 
 import {
@@ -221,7 +220,7 @@ const handleCancel = () => {
               @click="removeSpecRow(index)"
             >
               <template #icon>
-                <DeleteOutlined />
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor"><path d="M6 4.586L9.293 1.293a1 1 0 011.414 1.414L7.414 6l3.293 3.293a1 1 0 01-1.414 1.414L6 7.414l-3.293 3.293a1 1 0 01-1.414-1.414L4.586 6 1.293 2.707A1 1 0 012.707 1.293L6 4.586z"/></svg>
               </template>
             </a-button>
           </div>
@@ -239,7 +238,7 @@ const handleCancel = () => {
             @click="addSpecRow"
           >
             <template #icon>
-              <PlusOutlined />
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor"><path d="M6 1a1 1 0 011 1v3h3a1 1 0 010 2H7v3a1 1 0 01-2 0V7H2a1 1 0 010-2h3V2a1 1 0 011-1z"/></svg>
             </template>
             添加规格项
           </a-button>

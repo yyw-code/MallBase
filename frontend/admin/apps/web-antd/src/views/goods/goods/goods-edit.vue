@@ -368,7 +368,8 @@ onMounted(() => {});
 .val-pic-thumb img { width: 46px; height: 46px; object-fit: cover; border-radius: 4px; border: 1px solid #e8edf2; display: block; }
 .val-pic-del { position: absolute; top: -6px; right: -6px; width: 16px; height: 16px; border-radius: 50%; background: rgba(0,0,0,.45); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 12px; cursor: pointer; line-height: 1; }
 .val-pic-del:hover { background: #ff4d4f; }
-.val-pic-upload-wrap :deep(.ant-upload) { width: 46px !important; height: 46px !important; font-size: 18px; border-radius: 4px; }
+.val-pic-upload-wrap :deep(.ant-upload) { width: 46px !important; height: 46px !important; min-width: 46px !important; min-height: 46px !important; font-size: 18px; border-radius: 4px; overflow: hidden !important; }
+.val-pic-upload-wrap :deep(.ant-upload-text) { display: none !important; }
 .val-pic-upload-wrap :deep(.ant-upload-list) { display: none !important; }
 .val-del { font-size: 16px; color: #bfbfbf; cursor: pointer; line-height: 1; transition: color 0.15s; margin-left: 2px; align-self: center; }
 .val-del:hover { color: #ff4d4f; }
@@ -386,9 +387,10 @@ onMounted(() => {});
 .sku-img-cell .sku-img-thumb img { width: 36px; height: 36px; object-fit: cover; border-radius: 3px; border: 1px solid #e8edf2; display: block; }
 .sku-img-cell .sku-img-del { position: absolute; top: -5px; right: -5px; width: 14px; height: 14px; border-radius: 50%; background: rgba(0,0,0,.45); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 10px; cursor: pointer; }
 .sku-img-cell .sku-img-del:hover { background: #ff4d4f; }
-.sku-img-cell .sku-upload-wrap :deep(.ant-upload.ant-upload-select) { width: 36px !important; height: 36px !important; font-size: 14px !important; border-radius: 3px; }
 .sku-img-cell :deep(.ant-upload-list) { display: none !important; }
-.sku-img-cell :deep(.ant-upload.ant-upload-select) { width: 36px !important; height: 36px !important; font-size: 14px !important; border-radius: 3px; }
+.sku-img-cell :deep(.ant-upload.ant-upload-select) { width: 36px !important; height: 36px !important; min-width: 36px !important; min-height: 36px !important; max-width: 36px !important; max-height: 36px !important; font-size: 14px !important; border-radius: 3px !important; overflow: hidden !important; }
+.sku-img-cell :deep(.ant-upload-text) { display: none !important; }
+.sku-img-cell :deep(.ant-upload-wrapper) { display: block; width: 36px; height: 36px; }
 
 /* ===== 规格库弹窗 ===== */
 .spec-lib-list { display: flex; flex-direction: column; gap: 10px; max-height: 380px; overflow-y: auto; width: 100%; }

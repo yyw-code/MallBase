@@ -109,7 +109,7 @@ Route::group('goods/list', function () {
     ->middleware([JwtAuth::class, CheckPermission::class])
     ->option([
         '_group_name' => '商品管理',
-        '_group_code' => 'SystemGoodsList',
+        '_group_code' => 'SystemGoods',
         '_group_name_desc' => '商品管理模块',
         '_parent' => 'SystemGoodsManagement',
         '_icon' => 'lucide:package',
