@@ -14,7 +14,9 @@ import { message } from 'ant-design-vue';
 import Upload from '#/components/upload/index.vue';
 
 import {
+  batchCreateSpecValuesApi,
   createGoodsApi,
+  createGoodsSpecApi,
   getAllGoodsBrandsApi,
   getAllGoodsCategoriesApi,
   getAllGoodsSpecsApi,
@@ -61,7 +63,6 @@ const formData = reactive({
   is_new: 0,
   is_hot: 0,
   tag_ids: [] as number[],
-  skus: [] as GoodsApi.SkuCreateParams[],
 });
 
 const rules = {
@@ -98,6 +99,60 @@ const selectedSpecIds = ref<number[]>([]);
 
 /* ---------------- 标签选项 ---------------- */
 const tagOptions = ref<GoodsTagApi.TagItem[]>([]);
+
+/* ---------------- 新增规格相关 ---------------- */
+const newSpecModalVisible = ref(false);
+const newSpecForm = reactive({
+  name: '',
+  values: '',
+});
+const newSpecCreating = ref(false);
+
+/** 打开新增规格弹窗 */
+const openNewSpecModal = () => {
+  newSpecForm.name = '';
+  newSpecForm.values = '';
+  newSpecModalVisible.value = true;
+};
+
+/** 提交新增规格 */
+const handleCreateSpec = async () => {
+  if (!newSpecForm.name.trim()) {
+    message.warning('请输入规格名称');
+    return;
+  }
+  const values = newSpecForm.values
+    .split(/[,，、\n]/)
+    .map((v) => v.trim())
+    .filter(Boolean);
+  if (values.length === 0) {
+    message.warning('请输入至少一个规格值');
+    return;
+  }
+
+  try {
+    newSpecCreating.value = true;
+    // 创建规格组
+    const res = await createGoodsSpecApi({ name: newSpecForm.name.trim() });
+    const specId = res.id;
+    // 批量创建规格值
+    await batchCreateSpecValuesApi(specId, values);
+    message.success('规格创建成功');
+    newSpecModalVisible.value = false;
+
+    // 重新加载规格列表并自动选中新建的规格
+    const specs = await getAllGoodsSpecsApi();
+    specOptions.value = specs;
+    if (!selectedSpecIds.value.includes(specId)) {
+      selectedSpecIds.value = [...selectedSpecIds.value, specId];
+      generateSkuCombinations();
+    }
+  } catch (error: any) {
+    message.error(error.message || '创建规格失败');
+  } finally {
+    newSpecCreating.value = false;
+  }
+};
 
 /* ---------------- SKU 组合 ---------------- */
 interface SkuRow {
@@ -192,14 +247,14 @@ const loadOptions = async () => {
 /* ---------------- 监听 visible 变化 ---------------- */
 watch(
   () => props.visible,
-  (val) => {
+  async (val) => {
     if (val) {
       resetForm();
-      loadOptions();
       activeTab.value = 'basic';
+      await loadOptions();
 
       if (props.editData) {
-        // 编辑模式：加载完整数据
+        // 编辑模式：加载完整数据（loadOptions 已完成，specOptions 可用）
         loadEditData(props.editData.id);
       }
     }
@@ -234,7 +289,7 @@ const loadEditData = async (id: number) => {
       tag_ids: (detail.tags || []).map((t) => t.id),
     });
 
-    // 回填 SKU 数据
+    // 回填 SKU 数据并恢复选中的规格
     if (detail.skus && detail.skus.length > 0) {
       skuRows.value = detail.skus.map((sku) => ({
         spec_values: sku.spec_values,
@@ -244,6 +299,22 @@ const loadEditData = async (id: number) => {
         sku_code: sku.sku_code || '',
         image: sku.image || undefined,
       }));
+
+      // 从 SKU 的 spec_values 反推选中的规格
+      const specValueSet = new Set<string>();
+      for (const sku of detail.skus) {
+        sku.spec_values.split(',').forEach((v) => specValueSet.add(v.trim()));
+      }
+
+      // 匹配规格选项
+      const matchedSpecIds: number[] = [];
+      for (const spec of specOptions.value) {
+        const specValues = (spec.spec_values || []).map((v) => v.value);
+        if (specValues.some((v) => specValueSet.has(v))) {
+          matchedSpecIds.push(spec.id);
+        }
+      }
+      selectedSpecIds.value = matchedSpecIds;
     }
   } catch (error) {
     console.error('加载商品详情失败:', error);
@@ -275,7 +346,6 @@ const resetForm = () => {
     is_new: 0,
     is_hot: 0,
     tag_ids: [],
-    skus: [],
   });
   selectedSpecIds.value = [];
   skuRows.value = [];
@@ -314,7 +384,7 @@ const handleSubmit = async () => {
     emit('update:visible', false);
   } catch (error: any) {
     if (error.errorFields) {
-      console.log('表单验证失败:', error);
+      return;
     } else {
       console.error('提交失败:', error);
       message.error(error.message || '操作失败');
@@ -339,7 +409,7 @@ onMounted(() => {
     :title="isEdit ? '编辑商品' : '新增商品'"
     :open="visible"
     :confirm-loading="loading"
-    :width="900"
+    :width="1000"
     @ok="handleSubmit"
     @cancel="handleCancel"
   >
@@ -351,7 +421,7 @@ onMounted(() => {
       class="pt-4"
     >
       <a-tabs v-model:activeKey="activeTab">
-        <!-- 基本信息 -->
+        <!-- ==================== 基本信息 ==================== -->
         <a-tab-pane key="basic" tab="基本信息">
           <a-row :gutter="16">
             <a-col :span="12">
@@ -474,119 +544,118 @@ onMounted(() => {
               </a-form-item>
             </a-col>
           </a-row>
-        </a-tab-pane>
 
-        <!-- 价格库存 -->
-        <a-tab-pane key="price" tab="价格库存">
-          <a-row :gutter="16">
-            <a-col :span="8">
-              <a-form-item label="价格" name="price">
-                <a-input-number
-                  v-model:value="formData.price"
-                  :min="0"
-                  :precision="2"
-                  placeholder="请输入价格"
-                  class="w-full"
-                />
-              </a-form-item>
-            </a-col>
-            <a-col :span="8">
-              <a-form-item label="市场价" name="market_price">
-                <a-input-number
-                  v-model:value="formData.market_price"
-                  :min="0"
-                  :precision="2"
-                  placeholder="请输入市场价"
-                  class="w-full"
-                />
-              </a-form-item>
-            </a-col>
-            <a-col :span="8">
-              <a-form-item label="库存" name="stock">
-                <a-input-number
-                  v-model:value="formData.stock"
-                  :min="0"
-                  placeholder="请输入库存"
-                  class="w-full"
-                />
-              </a-form-item>
-            </a-col>
-          </a-row>
-        </a-tab-pane>
-
-        <!-- 图片管理 -->
-        <a-tab-pane key="images" tab="图片管理">
-          <a-form-item label="主图" name="main_image">
-            <Upload
-              v-model:value="formData.main_image"
-              type="image"
-              module="goods"
-            />
-          </a-form-item>
-
-          <a-form-item label="商品图片">
-            <Upload
-              v-model:value="formData.images"
-              type="images"
-              module="goods"
-              :max-count="10"
-            />
-          </a-form-item>
-        </a-tab-pane>
-
-        <!-- 商品详情 -->
-        <a-tab-pane key="detail" tab="商品详情">
-          <a-form-item label="商品描述" name="description">
+          <!-- 商品描述整合到基本信息 -->
+          <a-form-item label="商品描述" name="description" :label-col="{ style: { width: '100px' } }">
             <a-textarea
               v-model:value="formData.description"
               placeholder="请输入商品详情描述"
-              :rows="8"
+              :rows="4"
               allow-clear
             />
           </a-form-item>
         </a-tab-pane>
 
-        <!-- 规格SKU -->
-        <a-tab-pane key="sku" tab="规格SKU">
+        <!-- ==================== 规格编辑 ==================== -->
+        <a-tab-pane key="spec" tab="规格编辑">
+          <!-- 无规格时的默认价格库存 -->
+          <div v-if="selectedSpecIds.length === 0" class="mb-4">
+            <a-alert
+              message="未选择规格，以下为商品的默认价格和库存。选择规格后将按规格设置价格库存。"
+              type="info"
+              show-icon
+              class="mb-4"
+            />
+            <a-row :gutter="16">
+              <a-col :span="8">
+                <a-form-item label="价格" name="price">
+                  <a-input-number
+                    v-model:value="formData.price"
+                    :min="0"
+                    :precision="2"
+                    placeholder="请输入价格"
+                    class="w-full"
+                  />
+                </a-form-item>
+              </a-col>
+              <a-col :span="8">
+                <a-form-item label="市场价" name="market_price">
+                  <a-input-number
+                    v-model:value="formData.market_price"
+                    :min="0"
+                    :precision="2"
+                    placeholder="请输入市场价"
+                    class="w-full"
+                  />
+                </a-form-item>
+              </a-col>
+              <a-col :span="8">
+                <a-form-item label="库存" name="stock">
+                  <a-input-number
+                    v-model:value="formData.stock"
+                    :min="0"
+                    placeholder="请输入库存"
+                    class="w-full"
+                  />
+                </a-form-item>
+              </a-col>
+            </a-row>
+          </div>
+
+          <!-- 规格选择区域 -->
           <a-form-item label="选择规格">
-            <a-checkbox-group
-              v-model:value="selectedSpecIds"
-              @change="handleSpecChange"
-            >
-              <a-checkbox
-                v-for="spec in specOptions"
-                :key="spec.id"
-                :value="spec.id"
+            <div class="flex items-start gap-2">
+              <a-checkbox-group
+                v-model:value="selectedSpecIds"
+                @change="handleSpecChange"
+                class="flex-1"
               >
-                {{ spec.name }}
-                <span class="text-gray-400 text-xs">
-                  （{{
-                    (spec.spec_values || [])
-                      .map((v) => v.value)
-                      .join('、')
-                  }}）
-                </span>
-              </a-checkbox>
-            </a-checkbox-group>
+                <a-row :gutter="[8, 8]">
+                  <a-col
+                    v-for="spec in specOptions"
+                    :key="spec.id"
+                  >
+                    <a-checkbox :value="spec.id">
+                      {{ spec.name }}
+                      <span class="text-gray-400 text-xs">
+                        （{{
+                          (spec.spec_values || [])
+                            .map((v) => v.value)
+                            .join('、')
+                        }}）
+                      </span>
+                    </a-checkbox>
+                  </a-col>
+                </a-row>
+              </a-checkbox-group>
+              <a-button type="dashed" size="small" @click="openNewSpecModal">
+                + 新增规格
+              </a-button>
+            </div>
           </a-form-item>
 
+          <!-- SKU 组合表格（含价格、库存、图片） -->
           <div v-if="skuRows.length > 0">
-            <div class="mb-2 font-medium">SKU 组合</div>
+            <a-divider orientation="left" style="font-size: 14px;">
+              SKU 组合列表（{{ skuRows.length }} 个）
+            </a-divider>
             <a-table
               :columns="[
-                { title: '规格组合', dataIndex: 'spec_values', width: 150 },
+                { title: '规格组合', dataIndex: 'spec_values', width: 140, fixed: 'left' },
                 { title: '价格', dataIndex: 'price', width: 120 },
                 { title: '市场价', dataIndex: 'market_price', width: 120 },
                 { title: '库存', dataIndex: 'stock', width: 100 },
-                { title: 'SKU编码', dataIndex: 'sku_code', width: 150 },
-                { title: '图片', dataIndex: 'image', width: 150 },
+                { title: 'SKU编码', dataIndex: 'sku_code', width: 140 },
+                { title: '规格图片', dataIndex: 'image', width: 160 },
               ]"
               :data-source="skuRows"
               :pagination="false"
+              :scroll="{ x: 780 }"
               size="small"
               row-key="spec_values"
+              bordered
             >
-              <template #bodyCell="{ column, record, index }">
+              <template #bodyCell="{ column, record }">
                 <template v-if="column.dataIndex === 'price'">
                   <a-input-number
                     v-model:value="record.price"
@@ -632,13 +701,30 @@ onMounted(() => {
               </template>
             </a-table>
           </div>
-          <div v-else class="text-gray-400">
-            请先选择规格生成SKU组合
+          <div v-else-if="selectedSpecIds.length > 0" class="text-gray-400 py-4 text-center">
+            所选规格暂无规格值，请先在规格管理中添加规格值
           </div>
         </a-tab-pane>
 
-        <!-- 标签 -->
-        <a-tab-pane key="tags" tab="标签">
+        <!-- ==================== 其它 ==================== -->
+        <a-tab-pane key="other" tab="其它">
+          <a-form-item label="主图" name="main_image">
+            <Upload
+              v-model:value="formData.main_image"
+              type="image"
+              module="goods"
+            />
+          </a-form-item>
+
+          <a-form-item label="商品图片">
+            <Upload
+              v-model:value="formData.images"
+              type="images"
+              module="goods"
+              :max-count="10"
+            />
+          </a-form-item>
+
           <a-form-item label="商品标签" name="tag_ids">
             <a-select
               v-model:value="formData.tag_ids"
@@ -659,5 +745,32 @@ onMounted(() => {
         </a-tab-pane>
       </a-tabs>
     </a-form>
+
+    <!-- ==================== 新增规格弹窗 ==================== -->
+    <a-modal
+      v-model:open="newSpecModalVisible"
+      title="新增规格"
+      :confirm-loading="newSpecCreating"
+      :width="460"
+      @ok="handleCreateSpec"
+    >
+      <a-form :label-col="{ style: { width: '80px' } }" class="pt-4">
+        <a-form-item label="规格名称" required>
+          <a-input
+            v-model:value="newSpecForm.name"
+            placeholder="如：颜色、尺码、版本"
+            allow-clear
+          />
+        </a-form-item>
+        <a-form-item label="规格值" required>
+          <a-textarea
+            v-model:value="newSpecForm.values"
+            placeholder="多个规格值用逗号分隔，如：红色,蓝色,黑色"
+            :rows="3"
+            allow-clear
+          />
+        </a-form-item>
+      </a-form>
+    </a-modal>
   </a-modal>
 </template>
