@@ -1,7 +1,7 @@
 -- ============================================
 -- 商品管理系统数据库表结构
 -- 表前缀：mb_
--- 包含：分类表、品牌表、规格表、商品表、SKU表、标签表、评论表及关联表
+-- 包含：分类表、品牌表、规格表、规格模板表、商品表、SKU表、标签表、评论表及关联表
 -- ============================================
 
 -- -----------------------------
@@ -115,7 +115,24 @@ INSERT INTO `mb_goods_spec_value` (`spec_id`, `value`, `sort`) VALUES
 (3, 'XL', 4);
 
 -- -----------------------------
--- 五、商品主表（SPU）
+-- 五、商品规格模板表
+-- -----------------------------
+DROP TABLE IF EXISTS `mb_goods_spec_template`;
+CREATE TABLE `mb_goods_spec_template` (
+  `id` int(11) unsigned NOT NULL AUTO_INCREMENT COMMENT '模板ID',
+  `name` varchar(100) NOT NULL COMMENT '模板名称',
+  `detail` json NOT NULL COMMENT '规格详情 JSON: [{spec_name, values:[...]}]',
+  `sort` int(11) DEFAULT 0 COMMENT '排序（数字越小越靠前）',
+  `status` tinyint(1) DEFAULT 1 COMMENT '状态（0禁用，1启用）',
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  KEY `idx_status` (`status`),
+  KEY `idx_sort` (`sort`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='商品规格模板表';
+
+-- -----------------------------
+-- 六、商品主表（SPU）
 -- -----------------------------
 DROP TABLE IF EXISTS `mb_goods`;
 CREATE TABLE `mb_goods` (
@@ -150,7 +167,7 @@ CREATE TABLE `mb_goods` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='商品主表（SPU）';
 
 -- -----------------------------
--- 六、商品图片表
+-- 七、商品图片表
 -- -----------------------------
 DROP TABLE IF EXISTS `mb_goods_image`;
 CREATE TABLE `mb_goods_image` (
@@ -164,7 +181,7 @@ CREATE TABLE `mb_goods_image` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='商品图片表';
 
 -- -----------------------------
--- 七、商品SKU表
+-- 八、商品SKU表
 -- -----------------------------
 DROP TABLE IF EXISTS `mb_goods_sku`;
 CREATE TABLE `mb_goods_sku` (
@@ -188,7 +205,7 @@ CREATE TABLE `mb_goods_sku` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='商品SKU表';
 
 -- -----------------------------
--- 八、商品标签表
+-- 九、商品标签表
 -- -----------------------------
 DROP TABLE IF EXISTS `mb_goods_tag`;
 CREATE TABLE `mb_goods_tag` (
@@ -213,7 +230,7 @@ INSERT INTO `mb_goods_tag` (`name`, `color`, `sort`) VALUES
 ('精选好物', 'green', 4);
 
 -- -----------------------------
--- 九、商品-标签关联表
+-- 十、商品-标签关联表
 -- -----------------------------
 DROP TABLE IF EXISTS `mb_goods_tag_relation`;
 CREATE TABLE `mb_goods_tag_relation` (
@@ -228,7 +245,7 @@ CREATE TABLE `mb_goods_tag_relation` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='商品标签关联表';
 
 -- -----------------------------
--- 十、商品评论表
+-- 十一、商品评论表
 -- -----------------------------
 DROP TABLE IF EXISTS `mb_goods_comment`;
 CREATE TABLE `mb_goods_comment` (
