@@ -678,12 +678,19 @@ importers:
       pinia:
         specifier: ^3.0.4
         version: 3.0.4(typescript@5.9.3)(vue@3.5.27(typescript@5.9.3))
+      sortablejs:
+        specifier: 'catalog:'
+        version: 1.15.6
       vue:
         specifier: ^3.5.27
         version: 3.5.27(typescript@5.9.3)
       vue-router:
         specifier: 'catalog:'
         version: 4.6.4(vue@3.5.27(typescript@5.9.3))
+    devDependencies:
+      '@types/sortablejs':
+        specifier: 'catalog:'
+        version: 1.15.9
 
   internal/lint-configs/commitlint-config:
     dependencies:
