@@ -78,8 +78,12 @@ class GoodsService extends BaseService
             // 批量获取标签
             $goodsIds = array_column($listArray, 'id');
             $tagMap = $this->batchGetGoodsTags($goodsIds);
+            $firstImageMap = $this->batchGetFirstImageMap($goodsIds);
 
             foreach ($listArray as &$item) {
+                if (empty($item['main_image']) && !empty($firstImageMap[$item['id']])) {
+                    $item['main_image'] = $firstImageMap[$item['id']];
+                }
                 $item['category_name'] = $categories[$item['category_id']] ?? '';
                 $item['brand_name'] = $brands[$item['brand_id']] ?? '';
                 $item['tags'] = $tagMap[$item['id']] ?? [];
@@ -113,6 +117,10 @@ class GoodsService extends BaseService
             ->order('sort', 'asc')
             ->select();
         $result['images'] = $images->toArray();
+        if (empty($result['main_image']) && !empty($result['images'][0]['url'])) {
+            $result['main_image'] = $result['images'][0]['url'];
+            $result['main_image_full_url'] = $result['images'][0]['full_url'] ?? '';
+        }
 
         // 获取商品SKU
         $skus = $this->model(GoodsSku::class)
@@ -146,6 +154,8 @@ class GoodsService extends BaseService
      */
     public function create(array $data): int
     {
+        $data = $this->normalizeMainImage($data);
+
         // 业务校验（事务外）
         $this->validateCategoryAndBrand($data);
 
@@ -190,6 +200,8 @@ class GoodsService extends BaseService
      */
     public function update(int $id, array $data): bool
     {
+        $data = $this->normalizeMainImage($data);
+
         // 业务校验（事务外）
         $goods = $this->model()->find($id);
 
@@ -444,6 +456,53 @@ class GoodsService extends BaseService
         }
 
         return $result;
+    }
+
+    /**
+     * 批量获取商品首图（按 sort ASC, id ASC）
+     *
+     * @param array<int> $goodsIds 商品 ID 数组
+     * @return array<int, string> key=goods_id, value=url
+     */
+    protected function batchGetFirstImageMap(array $goodsIds): array
+    {
+        if (empty($goodsIds)) {
+            return [];
+        }
+
+        $images = $this->model(GoodsImage::class)
+            ->whereIn('goods_id', $goodsIds)
+            ->order('sort', 'asc')
+            ->order('id', 'asc')
+            ->select()
+            ->toArray();
+
+        $result = [];
+        foreach ($images as $image) {
+            $goodsId = (int)($image['goods_id'] ?? 0);
+            if ($goodsId <= 0 || isset($result[$goodsId])) {
+                continue;
+            }
+            $result[$goodsId] = (string)($image['url'] ?? '');
+        }
+        return $result;
+    }
+
+    /**
+     * 规范化主图字段：main_image 为空时，优先使用 images[0].url
+     */
+    protected function normalizeMainImage(array $data): array
+    {
+        if (!empty($data['main_image'])) {
+            return $data;
+        }
+        if (!empty($data['images']) && is_array($data['images'])) {
+            $first = $data['images'][0] ?? null;
+            if (is_array($first) && !empty($first['url'])) {
+                $data['main_image'] = $first['url'];
+            }
+        }
+        return $data;
     }
 
     /**

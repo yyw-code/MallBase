@@ -93,8 +93,7 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
   const getPicPreviewUrl = (pic: FileInfo | string): string => {
     if (!pic) return '';
     if (typeof pic === 'object') return pic.full_url || pic.url || '';
-    if (pic.startsWith('http')) return pic;
-    return `${import.meta.env.VITE_GLOB_API_URL || ''}${pic}`;
+    return pic;
   };
   const getPicUrl = (pic: FileInfo | string): string => {
     if (!pic) return '';
@@ -246,6 +245,7 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
       if (batchData['__market_price__']) row.market_price = Number(batchData['__market_price__']);
       if (batchData['__stock__']) row.stock = Number(batchData['__stock__']);
       if (batchData['__sku_code__']) row.sku_code = String(batchData['__sku_code__']);
+      if (batchData['__image__']) row.image = batchData['__image__'];
     }
     message.success('批量设置成功');
   };
@@ -376,8 +376,18 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
         category_id: detail.category_id || undefined, brand_id: detail.brand_id || undefined,
         unit: detail.unit || '件', price: detail.price || 0, market_price: detail.market_price || 0,
         stock: detail.stock || 0,
-        main_image: detail.main_image || undefined,
-        images: (detail.images || []).map((img) => ({ url: img.url, name: img.url.split('/').pop() || '' })),
+        main_image: detail.main_image
+          ? {
+              url: detail.main_image,
+              full_url: detail.main_image_full_url || detail.main_image,
+              name: detail.main_image.split('/').pop() || '',
+            }
+          : undefined,
+        images: (detail.images || []).map((img) => ({
+          url: img.url,
+          full_url: img.full_url || img.url,
+          name: img.url.split('/').pop() || '',
+        })),
         description: detail.description || '', sort: detail.sort || 0, status: detail.status ?? 1,
         is_on_sale: detail.is_on_sale ?? 0, is_recommend: detail.is_recommend ?? 0,
         is_new: detail.is_new ?? 0, is_hot: detail.is_hot ?? 0,
@@ -399,7 +409,19 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
         const skuMap = new Map(detail.skus.map((s) => [s.spec_values, s]));
         for (const row of skuRows.value) {
           const sku = skuMap.get(row.spec_values);
-          if (sku) { row.price = sku.price; row.market_price = sku.market_price || 0; row.stock = sku.stock; row.sku_code = sku.sku_code || ''; row.image = sku.image || undefined; }
+          if (sku) {
+            row.price = sku.price;
+            row.market_price = sku.market_price || 0;
+            row.stock = sku.stock;
+            row.sku_code = sku.sku_code || '';
+            row.image = sku.image
+              ? {
+                  url: sku.image,
+                  full_url: sku.image_full_url || sku.image,
+                  name: sku.image.split('/').pop() || '',
+                }
+              : undefined;
+          }
         }
       } else {
         specType.value = 'single';

@@ -9,6 +9,7 @@ export namespace GoodsApi {
     name: string;
     subtitle?: string;
     main_image?: string;
+    main_image_full_url?: string;
     description?: string;
     price: number;
     market_price?: number;
@@ -42,6 +43,7 @@ export namespace GoodsApi {
     id: number;
     goods_id: number;
     url: string;
+    full_url?: string;
     sort: number;
   }
 
@@ -56,6 +58,7 @@ export namespace GoodsApi {
     stock: number;
     sku_code?: string;
     image?: string;
+    image_full_url?: string;
     weight?: number;
     volume?: number;
     status: number;

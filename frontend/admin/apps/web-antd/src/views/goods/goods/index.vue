@@ -133,7 +133,11 @@ const columns = [
     width: 80,
     customRender: ({ record }: { record: GoodsApi.GoodsItem }) => {
       if (!record.main_image) return '-';
-      return h(Avatar, { src: record.main_image, size: 40, shape: 'square' });
+      return h(Avatar, {
+        src: record.main_image_full_url || record.main_image,
+        size: 40,
+        shape: 'square',
+      });
     },
   },
   { title: '商品名称', dataIndex: 'name', width: 180, ellipsis: true },

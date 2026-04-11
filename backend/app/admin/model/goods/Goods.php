@@ -11,6 +11,7 @@ use mall_base\base\BaseModel;
 class Goods extends BaseModel
 {
     protected $name = 'goods';
+    protected array $append = ['main_image_full_url'];
 
     /**
      * 搜索器-按关键词搜索（名称/副标题）
@@ -60,5 +61,17 @@ class Goods extends BaseModel
         if (($value ?? null) !== null && $value !== '') {
             $query->where('status', $value);
         }
+    }
+
+    public function getMainImageFullUrlAttr($value, $data): string
+    {
+        $path = $data['main_image'] ?? '';
+        if (empty($path)) {
+            return '';
+        }
+        if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://')) {
+            return $path;
+        }
+        return getUploadDomain() . $path;
     }
 }
