@@ -40,6 +40,50 @@ if (!function_exists('getUploadDomain')) {
     }
 }
 
+if (!function_exists('buildUploadUrl')) {
+    /**
+     * 构建上传文件完整 URL
+     *
+     * 规则：
+     * - 为空返回空字符串
+     * - 已经是 http/https 绝对地址则原样返回
+     * - 其他情况拼接上传域名
+     */
+    function buildUploadUrl(?string $path): string
+    {
+        if ($path === null) {
+            return '';
+        }
+
+        $path = trim($path);
+        if ($path === '') {
+            return '';
+        }
+
+        if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://')) {
+            return $path;
+        }
+
+        return getUploadDomain() . $path;
+    }
+}
+
+if (!function_exists('buildUploadUrls')) {
+    /**
+     * 批量构建上传文件完整 URL
+     *
+     * @param array<int, string> $paths
+     * @return array<int, string>
+     */
+    function buildUploadUrls(array $paths): array
+    {
+        return array_map(
+            static fn($path) => buildUploadUrl(is_string($path) ? $path : ''),
+            $paths
+        );
+    }
+}
+
 if (!function_exists('getSystemSetting')) {
     /**
      * 获取系统设置项的值（带缓存）

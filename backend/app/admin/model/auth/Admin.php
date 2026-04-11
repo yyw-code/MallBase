@@ -66,6 +66,6 @@ class Admin extends BaseModel
 
     public function getAvatarFullUrlAttr($value, $data)
     {
-        return getUploadDomain() . $data['avatar'];
+        return buildUploadUrl($data['avatar'] ?? '');
     }
 }

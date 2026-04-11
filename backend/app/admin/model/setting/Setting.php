@@ -135,29 +135,27 @@ class Setting extends BaseModel
             return '';
         }
 
-        $domain = getUploadDomain();
-
         // 多文件类型（images/files）：可能是 JSON 数组或逗号分隔
         if (in_array($type, [self::TYPE_IMAGES, self::TYPE_FILES], true)) {
             $decoded = json_decode($val, true);
 
             // JSON 数组格式
             if (is_array($decoded)) {
-                return array_map(fn($path) => $domain . $path, $decoded);
+                return buildUploadUrls($decoded);
             }
 
             // 逗号分隔格式
             if (str_contains($val, ',')) {
                 $paths = explode(',', $val);
-                return array_map(fn($path) => $domain . trim($path), $paths);
+                return buildUploadUrls(array_map(static fn($path) => trim($path), $paths));
             }
 
             // 单个值
-            return [$domain . $val];
+            return [buildUploadUrl($val)];
         }
 
         // 单文件类型（image/file）
-        return $domain . $val;
+        return buildUploadUrl($val);
     }
 
     /**

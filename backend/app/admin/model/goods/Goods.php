@@ -65,13 +65,6 @@ class Goods extends BaseModel
 
     public function getMainImageFullUrlAttr($value, $data): string
     {
-        $path = $data['main_image'] ?? '';
-        if (empty($path)) {
-            return '';
-        }
-        if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://')) {
-            return $path;
-        }
-        return getUploadDomain() . $path;
+        return buildUploadUrl($data['main_image'] ?? '');
     }
 }

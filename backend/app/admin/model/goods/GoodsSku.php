@@ -25,13 +25,6 @@ class GoodsSku extends BaseModel
 
     public function getImageFullUrlAttr($value, $data): string
     {
-        $path = $data['image'] ?? '';
-        if (empty($path)) {
-            return '';
-        }
-        if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://')) {
-            return $path;
-        }
-        return getUploadDomain() . $path;
+        return buildUploadUrl($data['image'] ?? '');
     }
 }
