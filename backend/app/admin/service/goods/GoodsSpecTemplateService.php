@@ -9,6 +9,7 @@ use mall_base\exception\BusinessException;
 
 /**
  * 商品规格模板服务
+ * @extends BaseService<GoodsSpecTemplate>
  */
 class GoodsSpecTemplateService extends BaseService
 {

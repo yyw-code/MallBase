@@ -15,6 +15,7 @@ use mall_base\exception\BusinessException;
 
 /**
  * 商品服务
+ * @extends BaseService<Goods>
  */
 class GoodsService extends BaseService
 {

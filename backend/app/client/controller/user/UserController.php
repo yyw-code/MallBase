@@ -10,6 +10,7 @@ use mall_base\base\BaseController;
 
 /**
  * 前台用户控制器
+ * @extends BaseController<UserService>
  */
 class UserController extends BaseController
 {

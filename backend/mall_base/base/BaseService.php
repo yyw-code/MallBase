@@ -40,8 +40,12 @@ abstract class BaseService
      * 3. Swoole 常驻进程下最安全
      * 4. 实例化开销极小（ThinkPHP Model 很轻量）
      *
-     * @param class-string<TModel>|null $modelClass
-     * @return TModel
+     * - 不传参数时，返回当前 Service 默认 Model（TModel）
+     * - 传入具体 Model::class 时，返回对应 Model 类型（提升 IDE 跳转准确度）
+     *
+     * @template TRequestedModel of BaseModel
+     * @param class-string<TRequestedModel>|null $modelClass
+     * @return TModel|TRequestedModel
      */
     protected function model(?string $modelClass = null)
     {

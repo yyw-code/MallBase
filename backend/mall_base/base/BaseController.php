@@ -60,8 +60,13 @@ abstract class BaseController
 
     /**
      * 获取 Service 实例（每次返回缓存的实例）
-     * @param class-string<TService>|null $serviceClass
-     * @return TService
+     *
+     * - 不传参数时，返回当前控制器默认 Service（TService）
+     * - 传入具体 Service::class 时，返回对应 Service 类型（提升 IDE 跳转准确度）
+     *
+     * @template TRequestedService of BaseService
+     * @param class-string<TRequestedService>|null $serviceClass
+     * @return TService|TRequestedService
      * @throws BusinessException
      */
     protected function service(?string $serviceClass = null)

@@ -10,6 +10,7 @@ use mall_base\exception\BusinessException;
 
 /**
  * 上传公共服务
+ * @extends BaseService<\mall_base\base\BaseModel>
  *
  * 所有模块（admin、api 等）统一使用此服务进行文件上传
  * 上传路径按 module 区分，如：images/admin/2026/04/04/xxx.jpg

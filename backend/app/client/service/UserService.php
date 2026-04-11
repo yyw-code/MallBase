@@ -16,6 +16,7 @@ use think\facade\Request;
 
 /**
  * 前台用户服务
+ * @extends BaseService<User>
  */
 class UserService extends BaseService
 {

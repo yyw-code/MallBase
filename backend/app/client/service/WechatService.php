@@ -13,6 +13,7 @@ use think\facade\Request;
 
 /**
  * 微信小程序服务
+ * @extends BaseService<User>
  */
 class WechatService extends BaseService
 {

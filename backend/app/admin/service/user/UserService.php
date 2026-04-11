@@ -14,6 +14,7 @@ use mall_base\exception\BusinessException;
 
 /**
  * 前台用户管理服务（后台管理用）
+ * @extends BaseService<User>
  */
 class UserService extends BaseService
 {

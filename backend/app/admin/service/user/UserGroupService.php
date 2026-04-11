@@ -10,6 +10,7 @@ use mall_base\exception\BusinessException;
 
 /**
  * 用户分组服务
+ * @extends BaseService<UserGroup>
  */
 class UserGroupService extends BaseService
 {

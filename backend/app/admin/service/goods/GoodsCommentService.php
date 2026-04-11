@@ -11,6 +11,7 @@ use mall_base\exception\BusinessException;
 
 /**
  * 商品评论服务
+ * @extends BaseService<GoodsComment>
  */
 class GoodsCommentService extends BaseService
 {

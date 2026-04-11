@@ -9,6 +9,7 @@ use mall_base\exception\BusinessException;
 
 /**
  * 商品品牌服务
+ * @extends BaseService<GoodsBrand>
  */
 class GoodsBrandService extends BaseService
 {

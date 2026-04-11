@@ -11,6 +11,7 @@ use mall_base\exception\BusinessException;
 
 /**
  * 用户标签服务
+ * @extends BaseService<UserTag>
  */
 class UserTagService extends BaseService
 {

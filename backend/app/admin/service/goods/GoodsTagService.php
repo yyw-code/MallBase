@@ -10,6 +10,7 @@ use mall_base\exception\BusinessException;
 
 /**
  * 商品标签服务
+ * @extends BaseService<GoodsTag>
  */
 class GoodsTagService extends BaseService
 {

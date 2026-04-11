@@ -9,6 +9,7 @@ use mall_base\exception\BusinessException;
 
 /**
  * 商品分类服务
+ * @extends BaseService<GoodsCategory>
  */
 class GoodsCategoryService extends BaseService
 {
