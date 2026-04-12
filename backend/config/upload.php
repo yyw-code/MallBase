@@ -40,13 +40,13 @@ return [
         'image' => [
             'max_size'     => 2,    // MB
             'max_count'    => 1,
-            'accept_types' => ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
+            'accept_types' => ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'],
         ],
         // 多张图片
         'images' => [
             'max_size'     => 5,    // MB（单张）
             'max_count'    => 9,
-            'accept_types' => ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
+            'accept_types' => ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'],
         ],
         // 单个文件
         'file' => [
@@ -61,10 +61,18 @@ return [
                 'application/vnd.ms-powerpoint',
                 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
                 'application/zip',
+                'application/x-zip-compressed',
+                'application/vnd.rar',
+                'application/x-rar',
                 'application/x-rar-compressed',
+                'application/x-7z-compressed',
+                'application/x-tar',
+                'application/gzip',
                 'text/plain',
-                'video/mp4',
+                'text/csv',
+                'application/csv',
                 'audio/mpeg',
+                'audio/mp3',
             ],
         ],
         // 多个文件
@@ -80,10 +88,48 @@ return [
                 'application/vnd.ms-powerpoint',
                 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
                 'application/zip',
+                'application/x-zip-compressed',
+                'application/vnd.rar',
+                'application/x-rar',
                 'application/x-rar-compressed',
+                'application/x-7z-compressed',
+                'application/x-tar',
+                'application/gzip',
                 'text/plain',
-                'video/mp4',
+                'text/csv',
+                'application/csv',
                 'audio/mpeg',
+                'audio/mp3',
+            ],
+        ],
+        // 单个视频
+        'video' => [
+            'max_size'     => 200,  // MB
+            'max_count'    => 1,
+            'accept_types' => [
+                'video/mp4',
+                'video/quicktime',
+                'video/x-msvideo',
+                'video/x-matroska',
+                'video/x-flv',
+                'video/x-ms-wmv',
+                'video/webm',
+                'video/mp2t',
+            ],
+        ],
+        // 多个视频
+        'videos' => [
+            'max_size'     => 200,  // MB（单个）
+            'max_count'    => 5,
+            'accept_types' => [
+                'video/mp4',
+                'video/quicktime',
+                'video/x-msvideo',
+                'video/x-matroska',
+                'video/x-flv',
+                'video/x-ms-wmv',
+                'video/webm',
+                'video/mp2t',
             ],
         ],
     ],

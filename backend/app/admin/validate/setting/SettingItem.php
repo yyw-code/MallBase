@@ -20,7 +20,7 @@ class SettingItem extends Validate
         'name|设置项名称' => 'require|max:100',
         'code|设置项编码' => 'require|alphaDash|max:50',
         'value|设置值' => 'max:65535',
-        'type|表单类型' => 'in:input,textarea,number,password,switch,radio,checkbox,select,image,images,file,files,editor,json',
+        'type|表单类型' => 'in:input,textarea,number,password,switch,radio,checkbox,select,image,images,file,files,video,videos,editor,json',
         'options|选项' => 'checkOptions',
         'rules|验证规则' => 'checkRules',
         'placeholder|输入提示' => 'max:255',

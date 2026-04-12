@@ -32,7 +32,21 @@ export const uploadConfig = {
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       'application/vnd.ms-excel',
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'application/vnd.ms-powerpoint',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      'application/zip',
+      'application/x-zip-compressed',
+      'application/vnd.rar',
+      'application/x-rar',
+      'application/x-rar-compressed',
+      'application/x-7z-compressed',
+      'application/x-tar',
+      'application/gzip',
       'text/plain',
+      'text/csv',
+      'application/csv',
+      'audio/mpeg',
+      'audio/mp3',
     ],
     maxCount: 1, // 最大上传数量
   },
@@ -46,7 +60,53 @@ export const uploadConfig = {
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       'application/vnd.ms-excel',
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'application/vnd.ms-powerpoint',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      'application/zip',
+      'application/x-zip-compressed',
+      'application/vnd.rar',
+      'application/x-rar',
+      'application/x-rar-compressed',
+      'application/x-7z-compressed',
+      'application/x-tar',
+      'application/gzip',
       'text/plain',
+      'text/csv',
+      'application/csv',
+      'audio/mpeg',
+      'audio/mp3',
+    ],
+    maxCount: 5, // 最大上传数量
+  },
+
+  // 视频上传配置
+  video: {
+    maxSize: 200, // 最大文件大小（MB）
+    acceptTypes: [
+      'video/mp4',
+      'video/quicktime',
+      'video/x-msvideo',
+      'video/x-matroska',
+      'video/x-flv',
+      'video/x-ms-wmv',
+      'video/webm',
+      'video/mp2t',
+    ],
+    maxCount: 1, // 最大上传数量
+  },
+
+  // 多视频上传配置
+  videos: {
+    maxSize: 200, // 最大文件大小（MB）
+    acceptTypes: [
+      'video/mp4',
+      'video/quicktime',
+      'video/x-msvideo',
+      'video/x-matroska',
+      'video/x-flv',
+      'video/x-ms-wmv',
+      'video/webm',
+      'video/mp2t',
     ],
     maxCount: 5, // 最大上传数量
   },

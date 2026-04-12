@@ -69,6 +69,12 @@ class Setting extends BaseModel
     /** 多文件上传 */
     const TYPE_FILES = 'files';
 
+    /** 视频上传（单个） */
+    const TYPE_VIDEO = 'video';
+
+    /** 多视频上传 */
+    const TYPE_VIDEOS = 'videos';
+
     /** 富文本 */
     const TYPE_EDITOR = 'editor';
 
@@ -78,7 +84,7 @@ class Setting extends BaseModel
     /**
      * 需要拼接上传域名的文件类型
      */
-    const FILE_TYPES = [self::TYPE_IMAGE, self::TYPE_IMAGES, self::TYPE_FILE, self::TYPE_FILES];
+    const FILE_TYPES = [self::TYPE_IMAGE, self::TYPE_IMAGES, self::TYPE_FILE, self::TYPE_FILES, self::TYPE_VIDEO, self::TYPE_VIDEOS];
 
     /**
      * 需要配置选项的类型（单选、多选、下拉）
@@ -104,6 +110,8 @@ class Setting extends BaseModel
             ['label' => '多图 (images)',        'value' => self::TYPE_IMAGES],
             ['label' => '文件 (file)',          'value' => self::TYPE_FILE],
             ['label' => '多文件 (files)',       'value' => self::TYPE_FILES],
+            ['label' => '视频 (video)',         'value' => self::TYPE_VIDEO],
+            ['label' => '多视频 (videos)',      'value' => self::TYPE_VIDEOS],
             ['label' => '富文本 (editor)',      'value' => self::TYPE_EDITOR],
             ['label' => 'JSON',                 'value' => self::TYPE_JSON],
         ];
@@ -136,7 +144,7 @@ class Setting extends BaseModel
         }
 
         // 多文件类型（images/files）：可能是 JSON 数组或逗号分隔
-        if (in_array($type, [self::TYPE_IMAGES, self::TYPE_FILES], true)) {
+        if (in_array($type, [self::TYPE_IMAGES, self::TYPE_FILES, self::TYPE_VIDEOS], true)) {
             $decoded = json_decode($val, true);
 
             // JSON 数组格式

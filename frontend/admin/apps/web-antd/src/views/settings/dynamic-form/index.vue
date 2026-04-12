@@ -324,6 +324,7 @@ const convertValue = (value: string, type: string, fullUrl?: string) => {
       return value ? value.split(',') : [];
     }
     case 'file':
+    case 'video':
     case 'image': {
       if (value) {
         return {
@@ -335,6 +336,7 @@ const convertValue = (value: string, type: string, fullUrl?: string) => {
       return undefined;
     }
     case 'files':
+    case 'videos':
     case 'images': {
       if (typeof value === 'string' && value.startsWith('[')) {
         try {
@@ -377,11 +379,13 @@ const serializeValue = (value: any, type: string): any => {
       return String(value);
     }
     case 'file':
+    case 'video':
     case 'image': {
       if (typeof value === 'object' && value?.url) return value.url;
       return String(value);
     }
     case 'files':
+    case 'videos':
     case 'images': {
       if (Array.isArray(value)) {
         const urls = value.map((item: any) =>
@@ -417,8 +421,8 @@ const parseOptions = (options: any) => {
 };
 
 /** 获取上传组件类型 */
-const getUploadType = (type: string): 'file' | 'files' | 'image' | 'images' => {
-  return type as 'file' | 'files' | 'image' | 'images';
+const getUploadType = (type: string): 'file' | 'files' | 'image' | 'images' | 'video' | 'videos' => {
+  return type as 'file' | 'files' | 'image' | 'images' | 'video' | 'videos';
 };
 
 /** 从 rules 中提取上传配置（maxSize / maxCount / accept），传给 Upload 组件 */
@@ -721,8 +725,8 @@ onMounted(loadConfig);
 
             <!-- file: 单文件上传 -->
             <Upload
-              v-else-if="item.type === 'file'"
-              type="file"
+              v-else-if="item.type === 'file' || item.type === 'video'"
+              :type="getUploadType(item.type)"
               :value="formValues[item.code]"
               module="dynamic_form"
               :related-id="item.id"
@@ -737,8 +741,8 @@ onMounted(loadConfig);
 
             <!-- files: 多文件上传 -->
             <Upload
-              v-else-if="item.type === 'files'"
-              type="files"
+              v-else-if="item.type === 'files' || item.type === 'videos'"
+              :type="getUploadType(item.type)"
               :value="formValues[item.code]"
               module="dynamic_form"
               :related-id="item.id"
@@ -956,8 +960,8 @@ onMounted(loadConfig);
 
             <!-- file: 单文件上传 -->
             <Upload
-              v-else-if="item.type === 'file'"
-              type="file"
+              v-else-if="item.type === 'file' || item.type === 'video'"
+              :type="getUploadType(item.type)"
               :value="formValues[item.code]"
               module="dynamic_form"
               :related-id="item.id"
@@ -972,8 +976,8 @@ onMounted(loadConfig);
 
             <!-- files: 多文件上传 -->
             <Upload
-              v-else-if="item.type === 'files'"
-              type="files"
+              v-else-if="item.type === 'files' || item.type === 'videos'"
+              :type="getUploadType(item.type)"
               :value="formValues[item.code]"
               module="dynamic_form"
               :related-id="item.id"
@@ -1189,8 +1193,8 @@ onMounted(loadConfig);
 
             <!-- file: 单文件上传 -->
             <Upload
-              v-else-if="item.type === 'file'"
-              type="file"
+              v-else-if="item.type === 'file' || item.type === 'video'"
+              :type="getUploadType(item.type)"
               :value="formValues[item.code]"
               module="dynamic_form"
               :related-id="item.id"
@@ -1205,8 +1209,8 @@ onMounted(loadConfig);
 
             <!-- files: 多文件上传 -->
             <Upload
-              v-else-if="item.type === 'files'"
-              type="files"
+              v-else-if="item.type === 'files' || item.type === 'videos'"
+              :type="getUploadType(item.type)"
               :value="formValues[item.code]"
               module="dynamic_form"
               :related-id="item.id"

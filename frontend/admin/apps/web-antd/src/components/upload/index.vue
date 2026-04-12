@@ -28,8 +28,8 @@ export interface FileInfo {
  * <Upload type="image" :value="fileList" :custom-upload="handleUpload" />
  */
 interface Props {
-  /** 上传类型：image=单图 | images=多图 | file=单文件 | files=多文件，默认 image */
-  type?: 'file' | 'files' | 'image' | 'images';
+  /** 上传类型：image=单图 | images=多图 | file=单文件 | files=多文件 | video=单视频 | videos=多视频，默认 image */
+  type?: 'file' | 'files' | 'image' | 'images' | 'video' | 'videos';
   /** 已上传的文件值 */
   value?: FileInfo | FileInfo[] | string;
   /** 是否禁用上传，默认 false */
@@ -141,6 +141,8 @@ const fallbackConfig: Record<string, { maxCount: number; maxSize: number }> = {
   files: { maxCount: 5, maxSize: 10 },
   image: { maxCount: 1, maxSize: 2 },
   images: { maxCount: 9, maxSize: 5 },
+  video: { maxCount: 1, maxSize: 200 },
+  videos: { maxCount: 5, maxSize: 200 },
 };
 
 const effectiveMaxSize = computed(() => {
@@ -162,12 +164,14 @@ const effectiveAcceptTypes = computed(() => {
   return remoteConfig.value?.acceptTypes ?? [];
 });
 
+const effectiveAccept = computed(() => effectiveAcceptTypes.value.join(','));
+
 const isImageType = computed(() => ['image', 'images'].includes(props.type));
 
 /** 多选：files/images 自动开启，传了 multiple 以传的为准 */
 const effectiveMultiple = computed(() => {
   if (props.multiple !== undefined) return props.multiple;
-  return ['files', 'images'].includes(props.type);
+  return ['files', 'images', 'videos'].includes(props.type);
 });
 
 /** 文件夹上传：默认关闭，传了 directory 以传的为准 */
@@ -203,6 +207,7 @@ const toFullUrl = (path: string) => {
 const uploadProps = computed<UploadProps>(() => ({
   name: 'file',
   maxCount: effectiveMaxCount.value,
+  accept: effectiveAccept.value || undefined,
   listType: isImageType.value ? 'picture-card' : 'text',
   showUploadList: props.showUploadList
     ? { showDownloadIcon: false, showPreviewIcon: true, showRemoveIcon: true }
@@ -406,7 +411,7 @@ const executeBatchUpload = async () => {
 const handleCustomRequest = (options: any) => {
   const { file, onSuccess, onError } = options;
 
-  if (['files', 'images'].includes(props.type)) {
+  if (['files', 'images', 'videos'].includes(props.type)) {
     // 多文件类型：收集到队列，同一批选择结束后统一调用 uploadBatchApi
     batchQueue.push({
       file: file as File,
@@ -430,7 +435,7 @@ const handleRemove = async (file: UploadFile) => {
   if (props.customRemove) {
     const index = fileList.value.findIndex((item) => item.uid === file.uid);
     await props.customRemove(index === -1 ? undefined : index);
-  } else if (['files', 'images'].includes(props.type)) {
+  } else if (['files', 'images', 'videos'].includes(props.type)) {
     const index = fileList.value.findIndex((item) => item.uid === file.uid);
     if (index !== -1) {
       const current = Array.isArray(props.value) ? [...props.value] : [];
@@ -458,6 +463,8 @@ const showUploadButton = computed(() => {
 /** 上传按钮文字 */
 const uploadButtonText = computed(() => {
   if (props.directory) return '上传文件夹';
+  if (props.type === 'video') return '上传视频';
+  if (props.type === 'videos') return '添加视频';
   return props.type === 'file' ? '上传文件' : '添加文件';
 });
 

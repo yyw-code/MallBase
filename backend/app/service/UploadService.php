@@ -87,7 +87,7 @@ class UploadService extends BaseService
      * 获取指定类型的上传规则
      * 不存在则返回 null
      *
-     * @param string $type 上传类型（image/images/file/files）
+     * @param string $type 上传类型（image/images/file/files/video/videos）
      * @return array|null
      */
     public static function getRuleByType(string $type): ?array
@@ -144,7 +144,7 @@ class UploadService extends BaseService
      * 获取上传配置（前端 Upload 组件使用）
      * 根据 type 参数返回对应的验证规则
      *
-     * @param string $type 上传类型：image/images/file/files
+     * @param string $type 上传类型：image/images/file/files/video/videos
      * @return array{max_size: float, max_count: int, accept_types: string[]}
      */
     public function getUploadConfig(string $type): array
@@ -170,7 +170,7 @@ class UploadService extends BaseService
      *    - 如果配置文件中也没有对应 type，则报错
      * 2. module 为空或其他值时：直接从 upload 配置文件按 type 获取
      *
-     * @param string $type 上传类型（image/file/images/files）
+     * @param string $type 上传类型（image/file/images/files/video/videos）
      * @param string $module 模块标识（如 dynamic_form）
      * @param int $relatedId 关联ID（module=dynamic_form 时为 mb_setting 的 ID）
      * @return array{max_size: float, max_count: int, accept_types: string[]}
@@ -375,7 +375,7 @@ class UploadService extends BaseService
 
     /**
      * 获取存储子目录（按 accept_types 和 module 区分）
-     * 路径格式：{fileType}/{module}  如 images/admin、files/api
+     * 路径格式：{fileType}/{module}  如 images/admin、videos/admin、files/api
      * module 为空时不加模块层级：images、files
      *
      * @param string[] $acceptTypes 允许的 MIME 类型
@@ -385,7 +385,13 @@ class UploadService extends BaseService
     private function getSubDir(array $acceptTypes, string $module = ''): string
     {
         $firstType = $acceptTypes[0] ?? '';
-        $fileType = str_starts_with($firstType, 'image/') ? 'images' : 'files';
+        if (str_starts_with($firstType, 'image/')) {
+            $fileType = 'images';
+        } elseif (str_starts_with($firstType, 'video/')) {
+            $fileType = 'videos';
+        } else {
+            $fileType = 'files';
+        }
 
         if (!empty($module)) {
             return $fileType . '/' . $module;

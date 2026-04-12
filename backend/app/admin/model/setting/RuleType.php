@@ -263,7 +263,7 @@ class RuleType
                 'value_type' => 'number',
                 'need_flags' => false,
                 'default_message_template' => '文件大小不能超过{value}MB',
-                'applicable_types' => ['image', 'images', 'file', 'files'],
+                'applicable_types' => ['image', 'images', 'file', 'files', 'video', 'videos'],
             ],
             [
                 'type' => self::TYPE_MAX_FILE_COUNT,
@@ -273,7 +273,7 @@ class RuleType
                 'value_type' => 'number',
                 'need_flags' => false,
                 'default_message_template' => '{name}最多上传{value}个文件',
-                'applicable_types' => ['images', 'files'],
+                'applicable_types' => ['images', 'files', 'videos'],
             ],
             [
                 'type' => self::TYPE_ACCEPT_TYPES,
@@ -283,7 +283,7 @@ class RuleType
                 'value_type' => 'array',
                 'need_flags' => false,
                 'default_message_template' => '支持的文件类型:{value}',
-                'applicable_types' => ['image', 'images', 'file', 'files'],
+                'applicable_types' => ['image', 'images', 'file', 'files', 'video', 'videos'],
                 'need_options' => true,
             ],
         ];

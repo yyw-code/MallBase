@@ -28,7 +28,7 @@ export namespace UploadApi {
 
 /** 上传接口参数（module + related_id + type） */
 export interface UploadParams {
-  /** 上传类型：image / images / file / files */
+  /** 上传类型：image / images / file / files / video / videos */
   type?: string;
   /** 模块名：dynamic_form / admin 等，不传则后端使用默认验证 */
   module?: string;
@@ -56,7 +56,7 @@ function appendUploadParams(formData: FormData, params?: UploadParams) {
 
 /**
  * 单文件上传（图片/文件统一接口）
- * POST /upload/single?type=image&module=dynamic_form&related_id=123
+ * POST /upload/single?type=image|file|video&module=dynamic_form&related_id=123
  */
 export async function uploadSingleApi(file: File, params?: UploadParams) {
   const formData = new FormData();
@@ -76,7 +76,7 @@ export async function uploadSingleApi(file: File, params?: UploadParams) {
 
 /**
  * 批量上传
- * POST /upload/batch?type=images&module=dynamic_form&related_id=123
+ * POST /upload/batch?type=images|files|videos&module=dynamic_form&related_id=123
  */
 export async function uploadBatchApi(files: File[], params?: UploadParams) {
   const formData = new FormData();
