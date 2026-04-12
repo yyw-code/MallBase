@@ -3,10 +3,20 @@
 return [
     'http'       => [
         'enable'     => true,
-        'host'       => '0.0.0.0',
-        'port'       => 8080,
-        'worker_num' => swoole_cpu_num(),
-        'options'    => [],
+        'host'       => env('SWOOLE_HTTP_HOST', '0.0.0.0'),
+        'port'       => (int) env('SWOOLE_HTTP_PORT', 8080),
+        'worker_num' => (int) env('SWOOLE_WORKER_NUM', 0) > 0 ? (int) env('SWOOLE_WORKER_NUM', 0) : swoole_cpu_num(),
+        'options'    => [
+            // 安全默认：定期重启 worker，避免内存泄漏累积
+            'max_request'       => (int) env('SWOOLE_MAX_REQUEST', 2000),
+            // 平滑重启，避免强杀 worker 导致请求丢失
+            'reload_async'      => env('SWOOLE_RELOAD_ASYNC', true),
+            // reload/stop 最大等待时间（秒）
+            'max_wait_time'     => (int) env('SWOOLE_MAX_WAIT_TIME', 60),
+            // 心跳检查，及时清理失效连接
+            'heartbeat_idle_time' => (int) env('SWOOLE_HEARTBEAT_IDLE_TIME', 120),
+            'heartbeat_check_interval' => (int) env('SWOOLE_HEARTBEAT_CHECK_INTERVAL', 60),
+        ],
     ],
     'websocket'  => [
         'enable'        => false,
@@ -23,10 +33,10 @@ return [
                 'client_size' => 2048,
             ],
             'redis' => [
-                'host'          => '127.0.0.1',
-                'port'          => 6379,
-                'max_active'    => 3,
-                'max_wait_time' => 5,
+                'host'          => env('REDIS_HOST', '127.0.0.1'),
+                'port'          => (int) env('REDIS_PORT', 6379),
+                'max_active'    => (int) env('SWOOLE_REDIS_POOL_MAX_ACTIVE', 3),
+                'max_wait_time' => (int) env('SWOOLE_POOL_MAX_WAIT_TIME', 5),
             ],
         ],
         'listen'        => [],
@@ -57,23 +67,23 @@ return [
     'pool'       => [
         'db'    => [
             'enable'        => true,
-            'max_active'    => 3,
-            'max_wait_time' => 5,
+            'max_active'    => (int) env('SWOOLE_DB_POOL_MAX_ACTIVE', 3),
+            'max_wait_time' => (int) env('SWOOLE_POOL_MAX_WAIT_TIME', 5),
         ],
         'cache' => [
             'enable'        => true,
-            'max_active'    => 3,
-            'max_wait_time' => 5,
+            'max_active'    => (int) env('SWOOLE_CACHE_POOL_MAX_ACTIVE', 3),
+            'max_wait_time' => (int) env('SWOOLE_POOL_MAX_WAIT_TIME', 5),
         ],
         //自定义连接池
     ],
     'ipc'        => [
         'type'  => 'unix_socket',
         'redis' => [
-            'host'          => '127.0.0.1',
-            'port'          => 6379,
-            'max_active'    => 3,
-            'max_wait_time' => 5,
+            'host'          => env('REDIS_HOST', '127.0.0.1'),
+            'port'          => (int) env('REDIS_PORT', 6379),
+            'max_active'    => (int) env('SWOOLE_REDIS_POOL_MAX_ACTIVE', 3),
+            'max_wait_time' => (int) env('SWOOLE_POOL_MAX_WAIT_TIME', 5),
         ],
     ],
     //锁
@@ -81,10 +91,10 @@ return [
         'enable' => false,
         'type'   => 'table',
         'redis'  => [
-            'host' => '127.0.0.1',
-            'port'          => 6379,
-            'max_active'    => 3,
-            'max_wait_time' => 5,
+            'host'          => env('REDIS_HOST', '127.0.0.1'),
+            'port'          => (int) env('REDIS_PORT', 6379),
+            'max_active'    => (int) env('SWOOLE_REDIS_POOL_MAX_ACTIVE', 3),
+            'max_wait_time' => (int) env('SWOOLE_POOL_MAX_WAIT_TIME', 5),
         ],
     ],
     'tables'     => [],
