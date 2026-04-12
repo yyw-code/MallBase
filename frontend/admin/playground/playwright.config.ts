@@ -96,7 +96,9 @@ const config: PlaywrightTestConfig = {
 
   /* Run your local dev server before starting the tests */
   webServer: {
-    command: process.env.CI ? 'pnpm preview --port 5555' : 'pnpm dev',
+    command: process.env.CI
+      ? 'VITE_E2E=true pnpm preview --port 5555'
+      : 'VITE_E2E=true pnpm dev',
     port: 5555,
     reuseExistingServer: !process.env.CI,
   },

@@ -12,6 +12,7 @@ import { useAuthStore } from '#/store';
 defineOptions({ name: 'Login' });
 
 const authStore = useAuthStore();
+const isE2E = import.meta.env.VITE_E2E === 'true';
 
 const MOCK_USER_OPTIONS: BasicOption[] = [
   {
@@ -29,7 +30,7 @@ const MOCK_USER_OPTIONS: BasicOption[] = [
 ];
 
 const formSchema = computed((): VbenFormSchema[] => {
-  return [
+  const schema: VbenFormSchema[] = [
     {
       component: 'VbenSelect',
       // componentProps(_values, form) {
@@ -103,6 +104,12 @@ const formSchema = computed((): VbenFormSchema[] => {
       }),
     },
   ];
+
+  if (isE2E) {
+    return schema.filter((item) => item.fieldName !== 'captcha');
+  }
+
+  return schema;
 });
 
 const loginRef =
@@ -110,6 +117,7 @@ const loginRef =
 
 async function onSubmit(params: Recordable<any>) {
   authStore.authLogin(params).catch(() => {
+    if (isE2E) return;
     // 登陆失败，刷新验证码的演示
     const formApi = loginRef.value?.getFormApi();
     // 重置验证码组件的值
