@@ -82,35 +82,41 @@ class AdminService extends BaseService
             ->page($page, $limit)->select()
             ->toArray();
 
-        // 手动加载角色列表
-        foreach ($list as &$admin) {
-            unset($admin['password']);
-            $admin['roles'] = [];
-            $admin['role_ids'] = [];
-
-            $adminRoles = $this->model(AdminRole::class)
+        // 批量加载管理员角色，避免 N+1 查询
+        $adminIds = array_column($list, 'id');
+        $rolesByAdminId = [];
+        if (!empty($adminIds)) {
+            $rows = $this->model(AdminRole::class)
                 ->alias('ar')
                 ->leftJoin('role r', 'ar.role_id = r.id')
-                ->where('ar.admin_id', $admin['id'])
+                ->whereIn('ar.admin_id', $adminIds)
                 ->field('ar.id as pivot_id, ar.admin_id, ar.role_id, ar.create_time as pivot_create_time, r.*')
                 ->order('ar.id', 'asc')
                 ->select()
                 ->toArray();
 
-            foreach ($adminRoles as $item) {
-                if (!empty($item['id'])) {
-                    $role = $item;
-                    $role['pivot'] = [
-                        'id' => $item['pivot_id'],
-                        'admin_id' => $item['admin_id'],
-                        'role_id' => $item['role_id'],
-                        'create_time' => $item['pivot_create_time'],
-                    ];
-                    unset($role['pivot_id'], $role['admin_id'], $role['pivot_create_time']);
-                    $admin['roles'][] = $role;
+            foreach ($rows as $item) {
+                if (empty($item['id'])) {
+                    continue;
                 }
+                $adminId = (int) $item['admin_id'];
+                $role = $item;
+                $role['pivot'] = [
+                    'id' => $item['pivot_id'],
+                    'admin_id' => $item['admin_id'],
+                    'role_id' => $item['role_id'],
+                    'create_time' => $item['pivot_create_time'],
+                ];
+                unset($role['pivot_id'], $role['admin_id'], $role['pivot_create_time']);
+                $rolesByAdminId[$adminId][] = $role;
             }
-            $admin['role_ids'] = array_column($admin['roles'], 'id');
+        }
+
+        foreach ($list as &$admin) {
+            unset($admin['password']);
+            $adminRoles = $rolesByAdminId[(int) $admin['id']] ?? [];
+            $admin['roles'] = $adminRoles;
+            $admin['role_ids'] = array_column($adminRoles, 'id');
         }
 
         return compact('total', 'list');

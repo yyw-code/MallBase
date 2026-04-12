@@ -42,34 +42,40 @@ class RoleService extends BaseService
             ->page($page, $limit)->select()
             ->toArray();
 
-        // 手动加载权限列表
-        foreach ($list as &$role) {
-            $role['permissions'] = [];
-            $role['permission_ids'] = [];
-
-            $rolePermissions = $this->model(RolePermission::class)
+        // 批量加载角色权限，避免 N+1 查询
+        $roleIds = array_column($list, 'id');
+        $permissionsByRoleId = [];
+        if (!empty($roleIds)) {
+            $rows = $this->model(RolePermission::class)
                 ->alias('rp')
                 ->leftJoin('permission p', 'rp.permission_id = p.id')
-                ->where('rp.role_id', $role['id'])
+                ->whereIn('rp.role_id', $roleIds)
                 ->field('rp.id as pivot_id, rp.role_id, rp.permission_id, rp.create_time as pivot_create_time, p.*')
                 ->order('rp.id', 'asc')
                 ->select()
                 ->toArray();
 
-            foreach ($rolePermissions as $item) {
-                if (!empty($item['id'])) {
-                    $permission = $item;
-                    $permission['pivot'] = [
-                        'id' => $item['pivot_id'],
-                        'role_id' => $item['role_id'],
-                        'permission_id' => $item['permission_id'],
-                        'create_time' => $item['pivot_create_time'],
-                    ];
-                    unset($permission['pivot_id'], $permission['role_id'], $permission['pivot_create_time']);
-                    $role['permissions'][] = $permission;
+            foreach ($rows as $item) {
+                if (empty($item['id'])) {
+                    continue;
                 }
+                $roleId = (int) $item['role_id'];
+                $permission = $item;
+                $permission['pivot'] = [
+                    'id' => $item['pivot_id'],
+                    'role_id' => $item['role_id'],
+                    'permission_id' => $item['permission_id'],
+                    'create_time' => $item['pivot_create_time'],
+                ];
+                unset($permission['pivot_id'], $permission['role_id'], $permission['pivot_create_time']);
+                $permissionsByRoleId[$roleId][] = $permission;
             }
-            $role['permission_ids'] = array_column($role['permissions'], 'id');
+        }
+
+        foreach ($list as &$role) {
+            $rolePermissions = $permissionsByRoleId[(int) $role['id']] ?? [];
+            $role['permissions'] = $rolePermissions;
+            $role['permission_ids'] = array_column($rolePermissions, 'id');
         }
 
         return compact('total', 'list');
@@ -161,7 +167,11 @@ class RoleService extends BaseService
                 'sort' => $data['sort'] ?? 0,
             ]);
 
-            $permissionIds = array_merge($data['menu_permission_ids'], $data['button_permission_ids'], $data['api_permission_ids']);
+            $permissionIds = array_merge(
+                $data['menu_permission_ids'] ?? [],
+                $data['button_permission_ids'] ?? [],
+                $data['api_permission_ids'] ?? []
+            );
             // 分配权限
             if (!empty($permissionIds)) {
                 $this->assignPermissions($role->id, $permissionIds);
@@ -189,7 +199,11 @@ class RoleService extends BaseService
         }
 
         // 重新分配权限
-        $permissionIds = array_merge($data['menu_permission_ids'], $data['button_permission_ids'], $data['api_permission_ids']);
+        $permissionIds = array_merge(
+            $data['menu_permission_ids'] ?? [],
+            $data['button_permission_ids'] ?? [],
+            $data['api_permission_ids'] ?? []
+        );
         unset($data['menu_permission_ids'], $data['button_permission_ids'], $data['api_permission_ids']);
         return $this->transaction(function () use ($id, $data, $permissionIds) {
 

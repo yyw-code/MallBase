@@ -9,6 +9,7 @@ use app\admin\model\setting\RuleType;
 use app\admin\model\setting\Setting;
 use app\admin\model\setting\SettingGroup;
 use app\admin\service\cache\SettingCacheService;
+use app\admin\validate\setting\SettingValueValidate;
 use app\service\UploadService;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
@@ -1076,5 +1077,41 @@ class SettingService extends BaseService
         $this->cacheService->clearGroup($groupCode);
 
         return true;
+    }
+
+    /**
+     * 校验并保存分组配置值
+     */
+    public function saveGroupValuesWithValidation(string $groupCode, array $values): bool
+    {
+        $config = $this->getGroupConfig($groupCode);
+        $allSettings = $this->collectSettingsForValidation($config);
+
+        $validate = new SettingValueValidate();
+        $errors = $validate->validateGroupValues($allSettings, $values);
+        if (!empty($errors)) {
+            $firstError = is_array($errors) ? (string) reset($errors) : '';
+            throw new BusinessException($firstError !== '' ? $firstError : '配置验证失败');
+        }
+
+        return $this->saveGroupValues($groupCode, $values);
+    }
+
+    /**
+     * 从分组配置中提取需要校验的设置项
+     */
+    protected function collectSettingsForValidation(array $config): array
+    {
+        if (($config['display_type'] ?? '') === SettingGroup::DISPLAY_TYPE_TAB) {
+            $allSettings = [];
+            foreach ($config['tabs'] ?? [] as $tab) {
+                foreach (($tab['settings'] ?? []) as $setting) {
+                    $allSettings[] = $setting;
+                }
+            }
+            return $allSettings;
+        }
+
+        return $config['settings'] ?? [];
     }
 }
