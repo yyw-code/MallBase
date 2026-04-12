@@ -1320,13 +1320,13 @@ onMounted(loadConfig);
 .setting-form-page {
   min-height: 100%;
   padding: 24px;
-  background: linear-gradient(135deg, #f5f7fa 0%, #f0f2f5 100%);
+  background: var(--ant-colorBgLayout, #f5f7fa);
 }
 
 .setting-header {
   margin-bottom: 24px;
   padding: 24px 28px;
-  background: #fff;
+  background: var(--ant-colorBgContainer, #fff);
   border-radius: 12px;
   box-shadow: 0 1px 4px rgb(0 0 0 / 5%);
 }
@@ -1353,13 +1353,13 @@ onMounted(loadConfig);
   margin: 0;
   font-size: 20px;
   font-weight: 600;
-  color: #1a1a2e;
+  color: var(--ant-colorText, #1a1a2e);
 }
 
 .header-desc {
   margin: 4px 0 0;
   font-size: 13px;
-  color: #8c8c8c;
+  color: var(--ant-colorTextSecondary, #8c8c8c);
 }
 
 .setting-section {
@@ -1373,12 +1373,12 @@ onMounted(loadConfig);
   padding-left: 4px;
   font-size: 15px;
   font-weight: 600;
-  color: #333;
+  color: var(--ant-colorText, #333);
 }
 
 .setting-card {
   padding: 24px;
-  background: #fff;
+  background: var(--ant-colorBgContainer, #fff);
   border-radius: 12px;
   box-shadow: 0 1px 4px rgb(0 0 0 / 5%);
 }
@@ -1420,7 +1420,7 @@ onMounted(loadConfig);
   gap: 2px;
   font-size: 14px;
   font-weight: 500;
-  color: #333;
+  color: var(--ant-colorText, #333);
 }
 
 .required-star {
@@ -1430,7 +1430,7 @@ onMounted(loadConfig);
 
 .form-remark {
   font-size: 12px;
-  color: #8c8c8c;
+  color: var(--ant-colorTextSecondary, #8c8c8c);
   line-height: 1.5;
   margin-top: 2px;
 }
@@ -1460,11 +1460,11 @@ onMounted(loadConfig);
 
 .switch-label {
   font-size: 13px;
-  color: #8c8c8c;
+  color: var(--ant-colorTextSecondary, #8c8c8c);
 }
 
 .editor-tabs {
-  border: 1px solid #f0f0f0;
+  border: 1px solid var(--ant-colorBorderSecondary, #f0f0f0);
   border-radius: 8px;
   overflow: hidden;
 }
@@ -1472,11 +1472,11 @@ onMounted(loadConfig);
 .editor-preview {
   min-height: 160px;
   padding: 12px 16px;
-  background: #fafafa;
+  background: var(--ant-colorBgElevated, #fafafa);
   border-radius: 0 0 8px 8px;
   font-size: 14px;
   line-height: 1.8;
-  color: #333;
+  color: var(--ant-colorText, #333);
 }
 
 .editor-preview :deep(img) {
@@ -1487,7 +1487,7 @@ onMounted(loadConfig);
 .json-preview {
   min-height: 120px;
   padding: 12px 16px;
-  background: #fafafa;
+  background: var(--ant-colorBgElevated, #fafafa);
   border-radius: 0 0 8px 8px;
 }
 
@@ -1505,8 +1505,8 @@ onMounted(loadConfig);
   z-index: 10;
   margin-top: 24px;
   padding: 16px 24px;
-  background: #fff;
-  border-top: 1px solid #f0f0f0;
+  background: var(--ant-colorBgContainer, #fff);
+  border-top: 1px solid var(--ant-colorBorderSecondary, #f0f0f0);
   border-radius: 12px;
   box-shadow: 0 -2px 8px rgb(0 0 0 / 6%);
 }
@@ -1520,7 +1520,7 @@ onMounted(loadConfig);
 
 .save-tip {
   font-size: 13px;
-  color: #8c8c8c;
+  color: var(--ant-colorTextSecondary, #8c8c8c);
 }
 
 /* 闪烁高亮动画 */
@@ -1552,7 +1552,7 @@ onMounted(loadConfig);
   left: 0;
   right: 0;
   height: 1px;
-  background: #e8e8e8;
+  background: var(--ant-colorBorderSecondary, #e8e8e8);
 }
 
 .tab-divider-text {
@@ -1561,8 +1561,8 @@ onMounted(loadConfig);
   padding: 0 16px;
   font-size: 14px;
   font-weight: 600;
-  color: #8c8c8c;
-  background: #f5f7fa;
+  color: var(--ant-colorTextSecondary, #8c8c8c);
+  background: var(--ant-colorBgLayout, #f5f7fa);
 }
 
 @media (width <= 768px) {

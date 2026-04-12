@@ -188,23 +188,26 @@ onBeforeUnmount(() => {
 <style scoped>
 .rich-text-editor {
   overflow: hidden;
-  border: 1px solid #d9d9d9;
+  border: 1px solid var(--ant-colorBorder, #d9d9d9);
   border-radius: 8px;
-  background: inherit;
+  color: var(--ant-colorText, #262626);
+  background: var(--ant-colorBgContainer, #fff);
 }
 
 .rich-text-editor__toolbar {
-  border-bottom: 1px solid #f0f0f0;
-  background: inherit;
+  border-bottom: 1px solid var(--ant-colorBorderSecondary, #f0f0f0);
+  background: var(--ant-colorBgContainer, #fff);
 }
 
 .rich-text-editor__body {
   overflow-y: auto;
-  background: inherit;
+  color: var(--ant-colorText, #262626);
+  background: var(--ant-colorBgContainer, #fff);
 }
 
 .rich-text-editor :deep(.w-e-text-container [data-slate-editor]) {
   padding: 12px 14px;
+  color: var(--ant-colorText, #262626);
   background: transparent;
 }
 
@@ -214,5 +217,14 @@ onBeforeUnmount(() => {
 
 .rich-text-editor :deep(.w-e-bar) {
   background: transparent;
+}
+
+.rich-text-editor :deep(.w-e-bar-item button),
+.rich-text-editor :deep(.w-e-bar-item .menu-item) {
+  color: var(--ant-colorText, #262626);
+}
+
+.rich-text-editor :deep(.w-e-bar-divider) {
+  border-left-color: var(--ant-colorBorderSecondary, #f0f0f0);
 }
 </style>
