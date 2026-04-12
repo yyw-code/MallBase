@@ -11,9 +11,14 @@ import { useAuthStore } from '#/store';
 defineOptions({ name: 'Login' });
 
 const authStore = useAuthStore();
+const isE2EByEnv = import.meta.env.VITE_E2E === 'true';
+const isE2EByQuery =
+  typeof window !== 'undefined' &&
+  new URLSearchParams(window.location.search).get('e2e') === '1';
+const isE2E = isE2EByEnv || isE2EByQuery;
 
 const formSchema = computed((): VbenFormSchema[] => {
-  return [
+  const schema: VbenFormSchema[] = [
     {
       component: 'VbenInput',
       componentProps: {
@@ -40,6 +45,12 @@ const formSchema = computed((): VbenFormSchema[] => {
       }),
     },
   ];
+
+  if (isE2E) {
+    return schema.filter((item) => item.fieldName !== 'captcha');
+  }
+
+  return schema;
 });
 </script>
 

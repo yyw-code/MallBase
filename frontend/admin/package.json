@@ -49,8 +49,10 @@
     "publint": "vsh publint",
     "reinstall": "pnpm clean --del-lock && pnpm install",
     "test:unit": "vitest run --dom",
-    "test:e2e": "turbo run test:e2e",
-    "test:e2e:install": "pnpm -F @vben/playground run test:e2e:install",
+    "test:e2e": "pnpm -F @vben/web-antd run test:e2e",
+    "test:e2e:web": "pnpm -F @vben/web-antd run test:e2e",
+    "test:e2e:play": "pnpm -F @vben/playground run test:e2e",
+    "test:e2e:install": "pnpm -F @vben/web-antd run test:e2e:install",
     "update:deps": "npx taze -r -w",
     "version": "pnpm exec changeset version && pnpm install --no-frozen-lockfile",
     "catalog": "pnpx codemod pnpm/catalog"
