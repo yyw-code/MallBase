@@ -635,6 +635,7 @@ const resetSearch = () => {
     keyword: '',
     status: undefined,
   };
+  pagination.current = 1;
   loadData(searchParams.value);
 };
 
@@ -715,7 +716,15 @@ if (hasAccessByCodes(['SystemRoleList'])) {
         </a-select>
       </a-form-item>
       <a-form-item>
-        <a-button type="primary" @click="loadData(searchParams)">
+        <a-button
+          type="primary"
+          @click="
+            () => {
+              pagination.current = 1;
+              loadData(searchParams.value);
+            }
+          "
+        >
           搜索
         </a-button>
         <a-button class="ml-2" @click="resetSearch"> 重置 </a-button>
@@ -728,7 +737,13 @@ if (hasAccessByCodes(['SystemRoleList'])) {
       :loading="loading"
       :pagination="pagination"
       :scroll="{ x: 900 }"
-      @change="loadData(searchParams)"
+      @change="
+        (newPagination) => {
+          pagination.current = newPagination.current;
+          pagination.pageSize = newPagination.pageSize;
+          loadData(searchParams.value);
+        }
+      "
       row-key="id"
       v-access:code="'SystemRoleList'"
     >

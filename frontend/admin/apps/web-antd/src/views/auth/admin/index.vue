@@ -140,6 +140,7 @@ const resetSearch = () => {
     keyword: '',
     status: undefined,
   };
+  pagination.current = 1;
   loadData(searchParams.value);
 };
 
@@ -235,7 +236,15 @@ if (hasAccessByCodes(['SystemAdminList'])) {
         </a-select>
       </a-form-item>
       <a-form-item>
-        <a-button type="primary" @click="loadData(searchParams)">
+        <a-button
+          type="primary"
+          @click="
+            () => {
+              pagination.current = 1;
+              loadData(searchParams.value);
+            }
+          "
+        >
           搜索
         </a-button>
         <a-button class="ml-2" @click="resetSearch"> 重置 </a-button>
@@ -249,7 +258,13 @@ if (hasAccessByCodes(['SystemAdminList'])) {
       :pagination="pagination"
       :scroll="{ x: 1200 }"
       row-key="id"
-      @change="() => loadData(searchParams)"
+      @change="
+        (newPagination) => {
+          pagination.current = newPagination.current;
+          pagination.pageSize = newPagination.pageSize;
+          loadData(searchParams.value);
+        }
+      "
       v-access:code="'SystemAdminList'"
     >
       <template #bodyCell="{ column, record }">

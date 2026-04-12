@@ -53,7 +53,8 @@ const handleStatusChange = async (
     await updateGoodsCommentStatusApi(record.id, checked ? 1 : 0);
     message.success('状态更新成功');
     await loadData(searchParams.value);
-  } catch {
+  } catch (error: any) {
+    message.error(error?.message || '状态更新失败');
     // 失败后刷新列表恢复状态
     await loadData(searchParams.value);
   }

@@ -52,13 +52,10 @@ class RequestLockMiddleware
         // 生成锁定键
         $lockKey = $this->getLockKey($request);
 
-        // 检查是否已锁定
-        if (Cache::get($lockKey)) {
+        // 原子加锁，避免并发请求同时通过检查
+        if (!$this->acquireLock($lockKey)) {
             throw new BusinessException('操作过于频繁，请稍后再试', 429);
         }
-
-        // 加锁
-        Cache::set($lockKey, 1, $this->lockTime);
 
         try {
             // 执行请求
@@ -74,10 +71,55 @@ class RequestLockMiddleware
             }
 
             return $response;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             // 发生异常，释放锁（允许重试）
             Cache::delete($lockKey);
             throw $e;
+        }
+    }
+
+    /**
+     * 获取请求锁
+     *
+     * 1. 优先走 Redis 原子 setnx + expire
+     * 2. 若底层驱动不支持或异常，降级为普通缓存锁
+     */
+    protected function acquireLock(string $lockKey): bool
+    {
+        try {
+            $handler = Cache::handler();
+
+            if (is_object($handler) && method_exists($handler, 'setnx') && method_exists($handler, 'expire')) {
+                $acquired = (bool) $handler->setnx($lockKey, 1);
+                if (!$acquired) {
+                    return false;
+                }
+
+                $handler->expire($lockKey, $this->lockTime);
+                return true;
+            }
+        } catch (\Throwable $e) {
+            // 忽略并降级到普通缓存锁，避免锁服务异常导致接口整体不可用
+        }
+
+        return $this->acquireLockFallback($lockKey);
+    }
+
+    /**
+     * 非原子降级锁
+     */
+    protected function acquireLockFallback(string $lockKey): bool
+    {
+        try {
+            if (Cache::get($lockKey)) {
+                return false;
+            }
+
+            Cache::set($lockKey, 1, $this->lockTime);
+            return true;
+        } catch (\Throwable $e) {
+            // 安全降级：缓存系统异常时不阻断业务请求
+            return true;
         }
     }
 

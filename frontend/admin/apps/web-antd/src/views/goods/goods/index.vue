@@ -105,7 +105,8 @@ const handleStatusChange = async (
     await updateGoodsStatusApi(record.id, checked ? 1 : 0);
     message.success('状态更新成功');
     await loadData(searchParams.value);
-  } catch {
+  } catch (error: any) {
+    message.error(error?.message || '状态更新失败');
     await loadData(searchParams.value);
   }
 };
@@ -119,7 +120,8 @@ const handleOnSaleChange = async (
     await updateGoodsOnSaleApi(record.id, checked ? 1 : 0);
     message.success(checked ? '上架成功' : '下架成功');
     await loadData(searchParams.value);
-  } catch {
+  } catch (error: any) {
+    message.error(error?.message || (checked ? '上架失败' : '下架失败'));
     await loadData(searchParams.value);
   }
 };
@@ -187,7 +189,7 @@ onMounted(() => {
   <div class="p-4">
     <div class="mb-4">
       <a-button type="primary" @click="handleCreate"> 新增商品 </a-button>
-      <a-button class="ml-2" @click="() => loadData(searchParams)">
+      <a-button class="ml-2" @click="() => loadData(searchParams.value)">
         刷新
       </a-button>
     </div>
@@ -255,7 +257,7 @@ onMounted(() => {
           @click="
             () => {
               pagination.current = 1;
-              loadData(searchParams);
+              loadData(searchParams.value);
             }
           "
         >
@@ -276,7 +278,7 @@ onMounted(() => {
         (newPagination) => {
           pagination.current = newPagination.current;
           pagination.pageSize = newPagination.pageSize;
-          loadData(searchParams);
+          loadData(searchParams.value);
         }
       "
     >

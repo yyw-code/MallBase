@@ -122,9 +122,14 @@ function setupAccessGuard(router: Router) {
     // 获取用户权限码（按钮级权限）
     try {
       const permissions = await getAccessCodesApi();
-      accessStore.setAccessCodes(permissions.access_codes);
+      accessStore.setAccessCodes(
+        Array.isArray(permissions?.access_codes)
+          ? permissions.access_codes
+          : [],
+      );
     } catch (error) {
       console.error('获取权限码失败:', error);
+      accessStore.setAccessCodes([]);
     }
 
     const userRoles = userInfo?.roles ?? [];

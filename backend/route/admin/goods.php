@@ -144,7 +144,7 @@ Route::group('goods/tag', function () {
 Route::group('goods/comment', function () {
     Route::get('list', 'list')->name('SystemGoodsCommentList')->option(['_alias' => '评论列表', '_desc' => '获取商品评论列表', '_auth' => true]);
     Route::get('info/:id', 'info')->name('SystemGoodsCommentInfo')->option(['_alias' => '评论详情', '_desc' => '获取评论详情', '_auth' => true]);
-    Route::post('reply/:id', 'reply')->name('SystemGoodsCommentReply')->option(['_alias' => '回复评论', '_desc' => '商家回复评论', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
+    Route::post(':id/reply', 'reply')->name('SystemGoodsCommentReply')->option(['_alias' => '回复评论', '_desc' => '商家回复评论', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::put('updateStatus/:id', 'updateStatus')->name('SystemGoodsCommentUpdateStatus')->option(['_alias' => '评论状态', '_desc' => '更新评论状态', '_auth' => true]);
     Route::delete('delete/:id', 'delete')->name('SystemGoodsCommentDelete')->option(['_alias' => '删除评论', '_desc' => '删除评论', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
 })->prefix('goods.GoodsCommentController/')

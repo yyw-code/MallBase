@@ -64,7 +64,7 @@ export async function replyGoodsCommentApi(
   id: number,
   reply_content: string,
 ) {
-  return requestClient.put(`/goods/comment/reply/${id}`, { reply_content });
+  return requestClient.post(`/goods/comment/${id}/reply`, { reply_content });
 }
 
 /**

@@ -94,7 +94,7 @@ class PermissionService extends BaseService
                 ->column('role_id');
 
             if (empty($roleIds)) {
-                return [];
+                return ['access_codes' => []];
             }
 
             // 获取这些角色的所有权限码
@@ -112,32 +112,42 @@ class PermissionService extends BaseService
     }
 
     /**
-     * 获取权限列表（不分页）
+     * 获取权限列表（分页）
      */
     public function getList(array $where = [], int $page = 1, int $limit = 10): array
     {
-        $keyword = $where['keyword'] ?? '';
-        $type = $where['type'] ?? null;
-        $status = $where['status'] ?? null;
+        $list = $this->buildListQuery($where)
+            ->order('sort', 'asc')
+            ->order('id', 'asc')
+            ->page($page, $limit)
+            ->select()
+            ->toArray();
 
-        $query = $this->model()->order('sort', 'asc')->order('id', 'asc');
+        $total = $this->buildListQuery($where)->count();
 
-        // 关键字搜索
-        if ($keyword) {
-            $query->whereLike('name|code', "%{$keyword}%");
+        return compact('total', 'list');
+    }
+
+    /**
+     * 构建权限列表查询（list/total 条件同源）
+     */
+    protected function buildListQuery(array $where)
+    {
+        $query = $this->model();
+
+        if (!empty($where['keyword'])) {
+            $query->whereLike('name|code', "%{$where['keyword']}%");
         }
 
-        // 类型筛选
-        if ($type !== null) {
-            $query->where('type', $type);
+        if (($where['type'] ?? null) !== null) {
+            $query->where('type', $where['type']);
         }
 
-        // 状态筛选
-        if ($status !== null) {
-            $query->where('status', $status);
+        if (array_key_exists('status', $where) && $where['status'] !== null && $where['status'] !== '') {
+            $query->where('status', $where['status']);
         }
 
-        return $query->page($page, $limit)->select()->toArray();
+        return $query;
     }
 
     /**
@@ -268,6 +278,32 @@ class PermissionService extends BaseService
         }
 
         return $ids;
+    }
+
+    /**
+     * 批量更新字段（可选包含所有子节点）
+     */
+    public function batchUpdateField(int $id, string $field, $value, bool $includeChildren = true): bool
+    {
+        $permission = $this->model()->find($id);
+        if (!$permission) {
+            throw new BusinessException('权限不存在');
+        }
+
+        $updateData = [$field => $value];
+        $updateIds = [$id];
+
+        if ($includeChildren) {
+            $updateIds = array_merge($updateIds, $this->getAllChildIds($id));
+        }
+
+        return $this->transaction(function () use ($updateIds, $updateData) {
+            $this->model()->whereIn('id', array_values(array_unique($updateIds)))->update($updateData);
+
+            // 统一清缓存，避免逐条更新导致频繁清理
+            $this->clearAllUserPermissionCache();
+            return true;
+        });
     }
 
     /**

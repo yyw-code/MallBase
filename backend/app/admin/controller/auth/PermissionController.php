@@ -63,8 +63,8 @@ class PermissionController extends BaseController
         // 获取分页参数
         [$page, $limit] = $this->getPagination(1, 15);
 
-        $list = $this->service()->getList($where, $page, $limit);
-        return $this->success($list, '获取成功');
+        $data = $this->service()->getList($where, $page, $limit);
+        return $this->success($data, '获取成功');
 
     }
 
@@ -149,21 +149,8 @@ class PermissionController extends BaseController
             return $this->error('字段不合法');
         }
 
-        // 构建更新数据
-        $updateData = [$field => $value];
-
-        // 更新当前节点
-        $this->service()->update((int)$id, $updateData);
-
-        // 如果需要同时更新子节点，获取所有子节点ID
-        if ($includeChildren) {
-            $childIds = $this->service()->getAllChildIds((int)$id);
-            if (!empty($childIds)) {
-                foreach ($childIds as $childId) {
-                    $this->service()->update($childId, $updateData);
-                }
-            }
-        }
+        // 业务逻辑下沉到 Service：统一事务与缓存清理
+        $this->service()->batchUpdateField((int)$id, $field, $value, (bool) $includeChildren);
 
         return $this->success(null, '更新成功');
 

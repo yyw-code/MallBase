@@ -58,6 +58,20 @@ export namespace PermissionApi {
     value: number;
     include_children?: boolean;
   }
+
+  /** 权限列表响应（规范） */
+  export interface ListResult {
+    list: PermissionItem[];
+    total: number;
+  }
+
+  /** 权限列表响应（兼容旧格式） */
+  export interface LegacyListResult {
+    data: PermissionItem[];
+    limit: number;
+    page: number;
+    total: number;
+  }
 }
 
 /**
@@ -76,12 +90,22 @@ export async function getPermissionTreeApi(params?: PermissionApi.ListParams) {
  * 获取权限列表（分页）
  */
 export async function getPermissionListApi(params?: PermissionApi.ListParams) {
-  return requestClient.get<{
-    data: PermissionApi.PermissionItem[];
-    limit: number;
-    page: number;
-    total: number;
-  }>('/auth/permission/list', { params });
+  const result = await requestClient.get<
+    | PermissionApi.LegacyListResult
+    | PermissionApi.ListResult
+  >('/auth/permission/list', { params });
+
+  if ('list' in result) {
+    return {
+      list: result.list ?? [],
+      total: result.total ?? 0,
+    };
+  }
+
+  return {
+    list: result.data ?? [],
+    total: result.total ?? 0,
+  };
 }
 
 /**

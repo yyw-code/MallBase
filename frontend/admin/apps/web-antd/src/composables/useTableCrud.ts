@@ -1,4 +1,4 @@
-import { reactive, ref } from 'vue';
+import { isRef, reactive, ref } from 'vue';
 
 import { message, Modal } from 'ant-design-vue';
 
@@ -37,13 +37,19 @@ export function useTableCrud<T, P>(
   const loadData = async (params?: P) => {
     loading.value = true;
     try {
-      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-      // @ts-ignore
+      const resolvedParams = isRef(params) ? params.value : params;
+      const normalizedParams =
+        resolvedParams &&
+        typeof resolvedParams === 'object' &&
+        !Array.isArray(resolvedParams)
+          ? resolvedParams
+          : {};
+
       const result = await api.list({
         page: pagination.current,
         limit: pagination.pageSize,
-        ...params,
-      });
+        ...(normalizedParams as Record<string, unknown>),
+      } as P);
       tableData.value = result.list;
       pagination.total = result.total;
     } catch (error) {
