@@ -59,7 +59,7 @@ const formSchema = computed((): VbenFormSchema[] => {
         .string()
         .min(1, { message: $t('authentication.selectAccount') })
         .optional()
-        .default('vben'),
+        .default('admin'),
     },
     {
       component: 'VbenInput',
@@ -74,7 +74,7 @@ const formSchema = computed((): VbenFormSchema[] => {
             );
             if (findUser) {
               form.setValues({
-                password: '123456',
+                password: findUser.value === 'admin' ? '123123' : '123456',
                 username: findUser.value,
               });
             }
