@@ -533,7 +533,7 @@ class GoodsService extends BaseService
     protected function hasMainVideoColumn(): bool
     {
         $table = $this->model()->getTable();
-        $result = Db::query(sprintf('SHOW COLUMNS FROM `%s` LIKE ?', $table), ['main_video']);
+        $result = Db::query(sprintf("SHOW COLUMNS FROM `%s` LIKE 'main_video'", $table));
 
         return !empty($result);
     }
