@@ -10,6 +10,8 @@ export namespace GoodsApi {
     subtitle?: string;
     main_image?: string;
     main_image_full_url?: string;
+    main_video?: string;
+    main_video_full_url?: string;
     description?: string;
     price: number;
     market_price?: number;
@@ -82,6 +84,7 @@ export namespace GoodsApi {
     brand_id?: number;
     subtitle?: string;
     main_image?: string;
+    main_video?: string;
     description?: string;
     price?: number;
     market_price?: number;
@@ -119,6 +122,7 @@ export namespace GoodsApi {
     brand_id?: number;
     subtitle?: string;
     main_image?: string;
+    main_video?: string;
     description?: string;
     price?: number;
     market_price?: number;

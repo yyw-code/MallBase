@@ -8,6 +8,7 @@ export namespace GoodsCategoryApi {
     name: string;
     icon?: string;
     image?: string;
+    image_full_url?: string;
     description?: string;
     sort: number;
     status: number;

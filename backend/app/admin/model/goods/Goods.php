@@ -11,7 +11,7 @@ use mall_base\base\BaseModel;
 class Goods extends BaseModel
 {
     protected $name = 'goods';
-    protected array $append = ['main_image_full_url'];
+    protected array $append = ['main_image_full_url', 'main_video_full_url'];
 
     /**
      * 搜索器-按关键词搜索（名称/副标题）
@@ -66,5 +66,13 @@ class Goods extends BaseModel
     public function getMainImageFullUrlAttr($value, $data): string
     {
         return buildUploadUrl($data['main_image'] ?? '');
+    }
+
+    /**
+     * 获取主视频完整地址
+     */
+    public function getMainVideoFullUrlAttr($value, $data): string
+    {
+        return buildUploadUrl($data['main_video'] ?? '');
     }
 }

@@ -101,6 +101,10 @@ onMounted(() => {});
                   <div class="form-tip">建议尺寸 800×800，正方形</div>
                   <Upload v-model:value="formData.main_image" type="image" module="goods" />
                 </a-form-item>
+                <a-form-item label="主视频">
+                  <div class="form-tip">可选，建议上传 9-30 秒商品展示短视频（MP4）</div>
+                  <Upload v-model:value="formData.main_video" type="video" module="goods" />
+                </a-form-item>
                 <a-form-item label="轮播图片">
                   <div class="form-tip">最多10张，首图用于列表展示</div>
                   <Upload v-model:value="formData.images" type="images" module="goods" :max-count="10" />

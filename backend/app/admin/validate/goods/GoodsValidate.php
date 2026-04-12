@@ -22,6 +22,7 @@ class GoodsValidate extends Validate
         'market_price' => 'float|egt:0',
         'stock' => 'integer|egt:0',
         'main_image' => 'max:255',
+        'main_video' => 'max:255',
         'unit' => 'max:20',
         'sort' => 'integer|egt:0',
         'description' => 'max:2000',
@@ -51,6 +52,7 @@ class GoodsValidate extends Validate
         'stock.integer' => '库存必须是整数',
         'stock.egt' => '库存必须大于等于0',
         'main_image.max' => '主图URL最多255个字符',
+        'main_video.max' => '主视频URL最多255个字符',
         'unit.max' => '单位最多20个字符',
         'sort.integer' => '排序必须是整数',
         'sort.egt' => '排序必须大于等于0',
@@ -68,14 +70,14 @@ class GoodsValidate extends Validate
     protected $scene = [
         'create' => [
             'name', 'subtitle', 'category_id', 'brand_id',
-            'price', 'market_price', 'stock', 'main_image',
+            'price', 'market_price', 'stock', 'main_image', 'main_video',
             'unit', 'sort', 'description',
             'status', 'is_on_sale', 'is_recommend', 'is_new', 'is_hot',
             'images', 'skus', 'tag_ids',
         ],
         'update' => [
             'name', 'subtitle', 'category_id', 'brand_id',
-            'price', 'market_price', 'stock', 'main_image',
+            'price', 'market_price', 'stock', 'main_image', 'main_video',
             'unit', 'sort', 'description',
             'status', 'is_on_sale', 'is_recommend', 'is_new', 'is_hot',
             'images', 'skus', 'tag_ids',

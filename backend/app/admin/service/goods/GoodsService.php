@@ -12,6 +12,7 @@ use app\admin\model\goods\GoodsTag;
 use app\admin\model\goods\GoodsTagRelation;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
+use think\facade\Db;
 
 /**
  * 商品服务
@@ -83,6 +84,7 @@ class GoodsService extends BaseService
             foreach ($listArray as &$item) {
                 if (empty($item['main_image']) && !empty($firstImageMap[$item['id']])) {
                     $item['main_image'] = $firstImageMap[$item['id']];
+                    $item['main_image_full_url'] = buildUploadUrl($item['main_image']);
                 }
                 $item['category_name'] = $categories[$item['category_id']] ?? '';
                 $item['brand_name'] = $brands[$item['brand_id']] ?? '';
@@ -154,6 +156,7 @@ class GoodsService extends BaseService
      */
     public function create(array $data): int
     {
+        $data = $this->filterMainVideoData($data);
         $data = $this->normalizeMainImage($data);
 
         // 业务校验（事务外）
@@ -200,6 +203,7 @@ class GoodsService extends BaseService
      */
     public function update(int $id, array $data): bool
     {
+        $data = $this->filterMainVideoData($data);
         $data = $this->normalizeMainImage($data);
 
         // 业务校验（事务外）
@@ -503,6 +507,35 @@ class GoodsService extends BaseService
             }
         }
         return $data;
+    }
+
+    /**
+     * 兼容旧库：main_video 列不存在时忽略该字段。
+     */
+    protected function filterMainVideoData(array $data): array
+    {
+        if (!array_key_exists('main_video', $data)) {
+            return $data;
+        }
+
+        if ($this->hasMainVideoColumn()) {
+            return $data;
+        }
+
+        unset($data['main_video']);
+
+        return $data;
+    }
+
+    /**
+     * 检查商品表是否存在 main_video 列。
+     */
+    protected function hasMainVideoColumn(): bool
+    {
+        $table = $this->model()->getTable();
+        $result = Db::query(sprintf('SHOW COLUMNS FROM `%s` LIKE ?', $table), ['main_video']);
+
+        return !empty($result);
     }
 
     /**

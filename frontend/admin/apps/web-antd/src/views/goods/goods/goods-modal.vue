@@ -56,6 +56,7 @@ const formData = reactive({
   market_price: 0,
   stock: 0,
   main_image: undefined as FileInfo | string | undefined,
+  main_video: undefined as FileInfo | string | undefined,
   images: [] as FileInfo[],
   description: '',
   sort: 0,
@@ -194,6 +195,39 @@ interface SkuRow {
 
 const skuRows = ref<SkuRow[]>([]);
 const batchData = reactive<Record<string, string>>({});
+const multiSpecDraft = ref<{ attrs: Attr[]; skuRows: SkuRow[] }>({ attrs: [], skuRows: [] });
+
+const cloneAttrs = (source: Attr[]): Attr[] =>
+  source.map((attr) => ({
+    value: attr.value,
+    add_pic: attr.add_pic,
+    detail: attr.detail.map((det) => ({ value: det.value, pic: det.pic })),
+  }));
+
+const cloneSkuRows = (source: SkuRow[]): SkuRow[] =>
+  source.map((row) => ({
+    _isBatch: row._isBatch,
+    spec_values: row.spec_values,
+    detail: { ...row.detail },
+    price: row.price,
+    market_price: row.market_price,
+    stock: row.stock,
+    sku_code: row.sku_code,
+    image: row.image,
+  }));
+
+const saveMultiSpecDraft = () => {
+  multiSpecDraft.value = {
+    attrs: cloneAttrs(attrs.value),
+    skuRows: cloneSkuRows(skuRows.value),
+  };
+};
+
+const restoreMultiSpecDraft = () => {
+  if (multiSpecDraft.value.attrs.length === 0 && multiSpecDraft.value.skuRows.length === 0) return;
+  attrs.value = cloneAttrs(multiSpecDraft.value.attrs);
+  skuRows.value = cloneSkuRows(multiSpecDraft.value.skuRows);
+};
 
 const tableData = computed<SkuRow[]>(() => {
   if (skuRows.value.length === 0) return [];
@@ -416,12 +450,13 @@ const resetForm = () => {
   formRef.value?.resetFields();
   Object.assign(formData, {
     name: '', subtitle: '', category_id: undefined, brand_id: undefined, unit: '件',
-    price: 0, market_price: 0, stock: 0, main_image: undefined, images: [],
+    price: 0, market_price: 0, stock: 0, main_image: undefined, main_video: undefined, images: [],
     description: '', sort: 0, status: 1, is_on_sale: 0, is_recommend: 0, is_new: 0, is_hot: 0, tag_ids: [],
   });
   specType.value = 'single';
   attrs.value = [];
   skuRows.value = [];
+  multiSpecDraft.value = { attrs: [], skuRows: [] };
   isFullscreen.value = false;
 };
 
@@ -453,6 +488,13 @@ const loadEditData = async (id: number) => {
       market_price: detail.market_price || 0,
       stock: detail.stock || 0,
       main_image: detail.main_image || undefined,
+      main_video: detail.main_video
+        ? {
+            url: detail.main_video,
+            full_url: detail.main_video_full_url || detail.main_video,
+            name: detail.main_video.split('/').pop() || '',
+          }
+        : undefined,
       images: (detail.images || []).map((img) => ({ url: img.url, name: img.url.split('/').pop() || '' })),
       description: detail.description || '',
       sort: detail.sort || 0,
@@ -498,8 +540,10 @@ const loadEditData = async (id: number) => {
           row.image = sku.image || undefined;
         }
       }
+      saveMultiSpecDraft();
     } else {
       specType.value = 'single';
+      multiSpecDraft.value = { attrs: [], skuRows: [] };
     }
   } catch {
     message.error('加载商品详情失败');
@@ -517,6 +561,7 @@ const handleSubmit = async () => {
     const submitData: any = {
       ...formData,
       main_image: typeof formData.main_image === 'object' ? formData.main_image?.url || '' : formData.main_image || '',
+      main_video: typeof formData.main_video === 'object' ? formData.main_video?.url || '' : formData.main_video || '',
       images: formData.images.map((img, index) => ({ url: typeof img === 'object' ? img.url : img, sort: index })),
     };
 
@@ -554,8 +599,12 @@ const handleSubmit = async () => {
 const handleCancel = () => emit('update:visible', false);
 
 const handleSpecTypeChange = (val: 'single' | 'multi') => {
+  if (val === 'single' && specType.value === 'multi') saveMultiSpecDraft();
   specType.value = val;
-  if (val === 'single') { attrs.value = []; skuRows.value = []; }
+  if (val === 'multi') {
+    restoreMultiSpecDraft();
+    nextTick(() => { initSpecDrag(); initValueDrag(); });
+  }
 };
 
 onMounted(() => loadOptions());
@@ -630,6 +679,10 @@ onMounted(() => loadOptions());
               <a-form-item label="商品主图">
                 <div class="form-tip">建议尺寸 800×800，正方形</div>
                 <Upload v-model:value="formData.main_image" type="image" module="goods" />
+              </a-form-item>
+              <a-form-item label="商品主视频">
+                <div class="form-tip">选填，建议上传 MP4/MOV，适合详情页首屏展示</div>
+                <Upload v-model:value="formData.main_video" type="video" module="goods" />
               </a-form-item>
               <a-form-item label="轮播图片">
                 <div class="form-tip">最多10张，首图用于列表展示</div>

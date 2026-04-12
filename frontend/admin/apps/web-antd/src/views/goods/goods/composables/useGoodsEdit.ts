@@ -56,6 +56,7 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
     market_price: 0,
     stock: 0,
     main_image: undefined as FileInfo | string | undefined,
+    main_video: undefined as FileInfo | string | undefined,
     images: [] as (FileInfo | string)[],
     description: '',
     sort: 0,
@@ -165,6 +166,43 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
 
   /* ---------- SKU 表格 ---------- */
   const skuRows = ref<SkuRow[]>([]);
+  const multiSpecDraft = ref<{ attrs: Attr[]; skuRows: SkuRow[] }>({ attrs: [], skuRows: [] });
+
+  const cloneAttrs = (source: Attr[]): Attr[] =>
+    source.map((attr) => ({
+      value: attr.value,
+      add_pic: attr.add_pic,
+      detail: attr.detail.map((det) => ({ value: det.value, pic: det.pic })),
+    }));
+
+  const cloneSkuRows = (source: SkuRow[]): SkuRow[] =>
+    source.map((row) => ({
+      _isBatch: row._isBatch,
+      spec_values: row.spec_values,
+      detail: { ...row.detail },
+      price: row.price,
+      market_price: row.market_price,
+      stock: row.stock,
+      sku_code: row.sku_code,
+      image: row.image,
+      is_show: row.is_show,
+    }));
+
+  const saveMultiSpecDraft = () => {
+    multiSpecDraft.value = {
+      attrs: cloneAttrs(attrs.value),
+      skuRows: cloneSkuRows(skuRows.value),
+    };
+  };
+
+  const restoreMultiSpecDraft = () => {
+    if (multiSpecDraft.value.attrs.length === 0 && multiSpecDraft.value.skuRows.length === 0) {
+      return;
+    }
+    attrs.value = cloneAttrs(multiSpecDraft.value.attrs);
+    skuRows.value = cloneSkuRows(multiSpecDraft.value.skuRows);
+  };
+
   const batchData = reactive<Record<string, any>>({});
   const tableData = computed<SkuRow[]>(() => {
     if (skuRows.value.length === 0) return [];
@@ -356,12 +394,13 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
     formRef.value?.resetFields();
     Object.assign(formData, {
       name: '', subtitle: '', category_id: undefined, brand_id: undefined, unit: '件',
-      price: 0, market_price: 0, stock: 0, main_image: undefined, images: [],
+      price: 0, market_price: 0, stock: 0, main_image: undefined, main_video: undefined, images: [],
       description: '', sort: 0, status: 1, is_on_sale: 0, is_recommend: 0, is_new: 0, is_hot: 0, tag_ids: [],
     });
     specType.value = 'single';
     attrs.value = [];
     skuRows.value = [];
+    multiSpecDraft.value = { attrs: [], skuRows: [] };
     isFullscreen.value = false;
     activeTab.value = 'basic';
   };
@@ -381,6 +420,13 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
               url: detail.main_image,
               full_url: detail.main_image_full_url || detail.main_image,
               name: detail.main_image.split('/').pop() || '',
+            }
+          : undefined,
+        main_video: detail.main_video
+          ? {
+              url: detail.main_video,
+              full_url: detail.main_video_full_url || detail.main_video,
+              name: detail.main_video.split('/').pop() || '',
             }
           : undefined,
         images: (detail.images || []).map((img) => ({
@@ -423,8 +469,10 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
               : undefined;
           }
         }
+        saveMultiSpecDraft();
       } else {
         specType.value = 'single';
+        multiSpecDraft.value = { attrs: [], skuRows: [] };
       }
     } catch { message.error('加载商品详情失败'); }
     finally { loading.value = false; }
@@ -438,6 +486,7 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
       const submitData: any = {
         ...formData,
         main_image: typeof formData.main_image === 'object' ? (formData.main_image as FileInfo)?.url || '' : formData.main_image || '',
+        main_video: typeof formData.main_video === 'object' ? (formData.main_video as FileInfo)?.url || '' : formData.main_video || '',
         images: formData.images.map((img, index) => ({ url: typeof img === 'object' ? (img as FileInfo).url : img, sort: index })),
       };
       if (specType.value === 'multi' && skuRows.value.length > 0) {
@@ -446,7 +495,10 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
           stock: sku.stock, sku_code: sku.sku_code || '',
           image: typeof sku.image === 'object' ? (sku.image as FileInfo)?.url || '' : sku.image || '',
         }));
-      } else { submitData.skus = undefined; }
+      } else {
+        // 单规格时显式清空多规格 SKU，避免“切换后历史 SKU 残留”
+        submitData.skus = [];
+      }
       if (isEdit.value) { await updateGoodsApi(editIdRef.value!, submitData); message.success('更新成功'); }
       else { await createGoodsApi(submitData); message.success('创建成功'); }
       onSuccess();
@@ -456,8 +508,20 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
   };
 
   const handleSpecTypeChange = (val: 'single' | 'multi') => {
+    if (val === 'single' && specType.value === 'multi') {
+      saveMultiSpecDraft();
+    }
     specType.value = val;
-    if (val === 'single') { attrs.value = []; skuRows.value = []; }
+    if (val === 'single') {
+      attrs.value = [];
+      skuRows.value = [];
+      return;
+    }
+    restoreMultiSpecDraft();
+    nextTick(() => {
+      initSpecDrag();
+      initValueDrag();
+    });
   };
 
   return {

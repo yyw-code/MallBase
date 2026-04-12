@@ -88,11 +88,19 @@ watch(
       resetForm();
       loadCategoryTree();
       if (props.editData) {
+        const imageUrl = props.editData.image || '';
+        const imageFullUrl = props.editData.image_full_url || imageUrl;
         Object.assign(formData, {
           pid: props.editData.pid || 0,
           name: props.editData.name || '',
           icon: props.editData.icon || '',
-          image: props.editData.image || undefined,
+          image: imageUrl
+            ? {
+                url: imageUrl,
+                full_url: imageFullUrl,
+                name: imageUrl.split('/').pop() || '',
+              }
+            : undefined,
           description: props.editData.description || '',
           sort: props.editData.sort || 0,
           status: props.editData.status ?? 1,

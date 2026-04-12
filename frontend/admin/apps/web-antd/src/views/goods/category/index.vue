@@ -3,6 +3,8 @@ import type { GoodsCategoryApi } from '#/api/goods';
 
 import { h, onMounted, ref } from 'vue';
 
+import { IconifyIcon } from '@vben/icons';
+
 import { Avatar, message, Switch } from 'ant-design-vue';
 
 import {
@@ -83,6 +85,11 @@ const handleStatusChange = async (
   }
 };
 
+const isImageLike = (value?: string) => {
+  if (!value) return false;
+  return /^(?:https?:\/\/|\/\/|\/|\.\/|\.\.\/|data:image\/)/.test(value);
+};
+
 /* ---------------- 表格列 ---------------- */
 const columns = [
   { title: 'ID', dataIndex: 'id', width: 80 },
@@ -90,10 +97,32 @@ const columns = [
   {
     title: '图标',
     dataIndex: 'icon',
-    width: 80,
+    width: 100,
     customRender: ({ record }: { record: GoodsCategoryApi.CategoryItem }) => {
       if (!record.icon) return '-';
-      return h(Avatar, { src: record.icon, size: 32 });
+      if (isImageLike(record.icon)) {
+        return h(Avatar, { src: record.icon, size: 32, shape: 'square' });
+      }
+      return h(IconifyIcon, {
+        icon: record.icon,
+        class: 'category-icon text-lg',
+      });
+    },
+  },
+  {
+    title: '分类图片',
+    dataIndex: 'image',
+    width: 110,
+    customRender: ({ record }: { record: GoodsCategoryApi.CategoryItem }) => {
+      const imageUrl = record.image_full_url || record.image;
+      if (!imageUrl) return '-';
+      return h('div', { class: 'category-image-wrap' }, [
+        h('img', {
+          src: imageUrl,
+          alt: record.name,
+          class: 'category-image',
+        }),
+      ]);
     },
   },
   { title: '排序', dataIndex: 'sort', width: 80 },
@@ -171,7 +200,7 @@ onMounted(() => {
       :data-source="tableData"
       :loading="loading"
       :pagination="pagination"
-      :scroll="{ x: 900 }"
+      :scroll="{ x: 1020 }"
       row-key="id"
       @change="
         (newPagination) => {
@@ -208,3 +237,28 @@ onMounted(() => {
     />
   </div>
 </template>
+
+<style scoped>
+.category-icon {
+  color: var(--ant-color-text);
+}
+
+.category-image-wrap {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: 1px solid var(--ant-color-border-secondary);
+  background: var(--ant-color-bg-container);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.category-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+</style>
