@@ -621,7 +621,12 @@ class SettingService extends BaseService
         $uploadRules = UploadService::getRules();
 
         // 前端需要的规则字段
-        $keepKeys = ['type', 'label', 'need_value', 'value_placeholder', 'need_flags', 'default_message_template'];
+        $keepKeys = ['type', 'label', 'need_value', 'value_placeholder', 'value_type', 'need_flags', 'default_message_template'];
+
+        $systemLimits = UploadService::getSystemUploadLimits();
+        $effectiveMaxSize = $systemLimits['effective_max_size_mb'];
+        $effectiveMaxCount = $systemLimits['effective_max_count'];
+        $formWarnings = [];
 
         // 所有表单类型值
         $formTypeValues = array_column($typeOptions, 'value');
@@ -644,12 +649,36 @@ class SettingService extends BaseService
                 return $item;
             }, $applicableRules);
 
+            // 注入 max_size / max_count 的系统上限提示
+            $applicableRules = array_map(function ($item) use ($effectiveMaxSize, $effectiveMaxCount, &$formWarnings) {
+                if (($item['type'] ?? '') === RuleType::TYPE_MAX_FILE_SIZE && is_numeric($effectiveMaxSize) && $effectiveMaxSize > 0) {
+                    $item['value_max'] = floatval($effectiveMaxSize);
+                    $item['hint'] = sprintf(
+                        '受 PHP 限制，最大 %sMB；如仍报 413 请检查 Nginx client_max_body_size。',
+                        $this->formatNumber(floatval($effectiveMaxSize))
+                    );
+                    $formWarnings[] = $item['hint'];
+                }
+
+                if (($item['type'] ?? '') === RuleType::TYPE_MAX_FILE_COUNT && is_numeric($effectiveMaxCount) && $effectiveMaxCount > 0) {
+                    $item['value_max'] = intval($effectiveMaxCount);
+                    $item['hint'] = sprintf(
+                        '受 PHP 限制，最多 %d 个文件；如仍报 413 请检查 Nginx client_max_body_size。',
+                        intval($effectiveMaxCount)
+                    );
+                    $formWarnings[] = $item['hint'];
+                }
+
+                return $item;
+            }, $applicableRules);
+
             $ruleTypes[$formType] = $applicableRules;
         }
 
         return [
             'type_options' => $typeOptions,
             'rule_types' => $ruleTypes,
+            'warnings' => array_values(array_unique($formWarnings)),
         ];
     }
 
@@ -695,7 +724,7 @@ class SettingService extends BaseService
     /**
      * 创建设置项
      */
-    public function createSetting(array $data): int
+    public function createSetting(array $data): array
     {
         // 验证分组是否存在
         $group = $this->model()->find($data['group_id']);
@@ -711,6 +740,8 @@ class SettingService extends BaseService
             throw new BusinessException('该分组下设置项编码已存在');
         }
 
+        $rulesProcessResult = $this->normalizeAndClampRules($data['rules'] ?? null);
+
         $setting = $this->model(Setting::class);
         $setting->save([
             'group_id' => $data['group_id'],
@@ -719,7 +750,7 @@ class SettingService extends BaseService
             'value' => $data['value'] ?? '',
             'type' => $data['type'] ?? Setting::TYPE_INPUT,
             'options' => $data['options'] ?? null,
-            'rules' => $data['rules'] ?? null,
+            'rules' => $rulesProcessResult['rules'],
             'placeholder' => $data['placeholder'] ?? '',
             'remark' => $data['remark'] ?? '',
             'sort' => $data['sort'] ?? 0,
@@ -736,13 +767,16 @@ class SettingService extends BaseService
             }
         }
 
-        return $setting->id;
+        return [
+            'id' => $setting->id,
+            'warnings' => $rulesProcessResult['warnings'],
+        ];
     }
 
     /**
      * 更新设置项
      */
-    public function updateSetting(int $id, array $data): bool
+    public function updateSetting(int $id, array $data): array
     {
         $setting = $this->model(Setting::class)->find($id);
         if (!$setting) {
@@ -770,6 +804,9 @@ class SettingService extends BaseService
                 throw new BusinessException('该分组下设置项编码已存在');
             }
         }
+
+        $rulesProcessResult = $this->normalizeAndClampRules($data['rules'] ?? null);
+        $data['rules'] = $rulesProcessResult['rules'];
 
         $setting->save($data);
 
@@ -822,7 +859,92 @@ class SettingService extends BaseService
             }
         }
 
-        return true;
+        return [
+            'updated' => true,
+            'warnings' => $rulesProcessResult['warnings'],
+        ];
+    }
+
+    /**
+     * 规则归一化并按系统限制截断（超限自动截断并告警）
+     *
+     * @param mixed $rules
+     * @return array{rules: array|null, warnings: string[]}
+     */
+    protected function normalizeAndClampRules($rules): array
+    {
+        if ($rules === null || $rules === '') {
+            return ['rules' => null, 'warnings' => []];
+        }
+
+        if (is_string($rules)) {
+            $decoded = json_decode($rules, true);
+            if (json_last_error() === JSON_ERROR_NONE) {
+                $rules = $decoded;
+            }
+        }
+
+        if (!is_array($rules)) {
+            return ['rules' => null, 'warnings' => []];
+        }
+
+        $limits = UploadService::getSystemUploadLimits();
+        $effectiveMaxSize = $limits['effective_max_size_mb'];
+        $effectiveMaxCount = $limits['effective_max_count'];
+
+        $warnings = [];
+        $clamped = false;
+
+        foreach ($rules as &$rule) {
+            if (!is_array($rule)) {
+                continue;
+            }
+
+            $type = $rule['type'] ?? '';
+            $value = $rule['value'] ?? null;
+
+            if ($type === RuleType::TYPE_MAX_FILE_SIZE && is_numeric($value) && is_numeric($effectiveMaxSize) && $effectiveMaxSize > 0) {
+                $sizeValue = floatval($value);
+                if ($sizeValue > $effectiveMaxSize) {
+                    $rule['value'] = floatval($effectiveMaxSize);
+                    $warnings[] = sprintf(
+                        '规则 max_size 已按 PHP 上限自动截断为 %sMB。',
+                        $this->formatNumber(floatval($effectiveMaxSize))
+                    );
+                    $clamped = true;
+                }
+            }
+
+            if ($type === RuleType::TYPE_MAX_FILE_COUNT && is_numeric($value) && is_numeric($effectiveMaxCount) && $effectiveMaxCount > 0) {
+                $countValue = intval($value);
+                if ($countValue > $effectiveMaxCount) {
+                    $rule['value'] = intval($effectiveMaxCount);
+                    $warnings[] = sprintf(
+                        '规则 max_count 已按 PHP 上限自动截断为 %d。',
+                        intval($effectiveMaxCount)
+                    );
+                    $clamped = true;
+                }
+            }
+        }
+        unset($rule);
+
+        if ($clamped) {
+            $warnings[] = UploadService::NGINX_413_HINT;
+        }
+
+        return [
+            'rules' => $rules,
+            'warnings' => array_values(array_unique($warnings)),
+        ];
+    }
+
+    protected function formatNumber(float $num): string
+    {
+        if (floor($num) === $num) {
+            return (string)intval($num);
+        }
+        return rtrim(rtrim(sprintf('%.2f', $num), '0'), '.');
     }
 
     /**

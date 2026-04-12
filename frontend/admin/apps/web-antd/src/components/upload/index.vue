@@ -108,6 +108,7 @@ const remoteConfig = ref<null | {
   acceptTypes: string[];
   maxCount: number;
   maxSize: number;
+  warnings: string[];
 }>(null);
 
 const loadRemoteConfig = async () => {
@@ -125,6 +126,7 @@ const loadRemoteConfig = async () => {
         maxSize: res.max_size,
         maxCount: res.max_count,
         acceptTypes: res.accept_types,
+        warnings: res.warnings || [],
       };
     }
   } catch (error) {
@@ -165,6 +167,7 @@ const effectiveAcceptTypes = computed(() => {
 });
 
 const effectiveAccept = computed(() => effectiveAcceptTypes.value.join(','));
+const uploadWarnings = computed(() => remoteConfig.value?.warnings ?? []);
 
 const isImageType = computed(() => ['image', 'images'].includes(props.type));
 const isVideoType = computed(() => ['video', 'videos'].includes(props.type));
@@ -539,6 +542,10 @@ const handlePreview = (file: UploadFile) => {
     </template>
   </a-upload>
 
+  <div v-if="uploadWarnings.length > 0" class="upload-warning-text">
+    {{ uploadWarnings.join('；') }}
+  </div>
+
   <div v-if="isVideoType && inlineVideoList.length > 0" class="video-inline-preview">
     <div
       v-for="item in inlineVideoList"
@@ -638,5 +645,11 @@ const handlePreview = (file: UploadFile) => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.upload-warning-text {
+  margin-top: 8px;
+  font-size: 12px;
+  color: hsl(var(--warning));
 }
 </style>

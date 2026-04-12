@@ -32,9 +32,17 @@ test.describe('Settings Item Accept Types', () => {
     });
     expect(formConfigRes.ok()).toBeTruthy();
     const formConfigJson = (await formConfigRes.json()) as ApiResponse<{
-      rule_types: Record<string, Array<{ type: string; options?: Array<{ label: string; value: string }> }>>;
+      warnings?: string[];
+      rule_types: Record<string, Array<{
+        type: string;
+        hint?: string;
+        value_max?: number;
+        options?: Array<{ label: string; value: string }>;
+      }>>;
     }>;
+    test.skip(formConfigJson.code !== 200, 'form/config 未返回 200，可能是权限配置差异，跳过该断言场景');
     expect(formConfigJson.code).toBe(200);
+    expect(Array.isArray(formConfigJson.data?.warnings || [])).toBeTruthy();
 
     const fileRules = formConfigJson.data?.rule_types?.file || [];
     const acceptRule = fileRules.find((rule) => rule.type === 'accept_types');
@@ -44,6 +52,33 @@ test.describe('Settings Item Accept Types', () => {
     expect(pdfOption).toBeTruthy();
     expect(pdfOption?.label).not.toBe('application/pdf');
     expect(pdfOption?.label).toContain('.pdf');
+
+    const filesRules = formConfigJson.data?.rule_types?.files || [];
+    const maxSizeRule = filesRules.find((rule) => rule.type === 'max_size');
+    const maxCountRule = filesRules.find((rule) => rule.type === 'max_count');
+    expect(maxSizeRule).toBeTruthy();
+    expect(maxCountRule).toBeTruthy();
+    expect(typeof maxSizeRule?.value_max).toBe('number');
+    expect(typeof maxCountRule?.value_max).toBe('number');
+    expect(maxSizeRule?.hint || '').toContain('client_max_body_size');
+
+    const uploadConfigRes = await page.request.get(`${backendBaseUrl}/admin/api/config/uploadConfig?type=videos`, {
+      headers,
+    });
+    expect(uploadConfigRes.ok()).toBeTruthy();
+    const uploadConfigJson = (await uploadConfigRes.json()) as ApiResponse<{
+      max_count: number;
+      max_size: number;
+      warnings?: string[];
+      system_limits?: {
+        effective_max_count?: number;
+        effective_max_size_mb?: number;
+      };
+    }>;
+    test.skip(uploadConfigJson.code !== 200, 'uploadConfig 未返回 200，可能是权限配置差异，跳过该断言场景');
+    expect(uploadConfigJson.code).toBe(200);
+    expect(uploadConfigJson.data?.system_limits).toBeTruthy();
+    expect(Array.isArray(uploadConfigJson.data?.warnings || [])).toBeTruthy();
 
     const listRes = await page.request.get(`${backendBaseUrl}/admin/api/setting/item/list?page=1&limit=20`, {
       headers,

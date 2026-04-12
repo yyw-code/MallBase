@@ -54,8 +54,8 @@ class SettingItemController extends BaseController
 
         $this->validate($data, 'setting/SettingItem.create');
 
-        $id = $this->service()->createSetting($data);
-        return $this->success(['id' => $id], '创建成功');
+        $result = $this->service()->createSetting($data);
+        return $this->success($result, '创建成功');
     }
 
     /**
@@ -71,8 +71,8 @@ class SettingItemController extends BaseController
 
         $this->validate($data, 'setting/SettingItem.update');
 
-        $this->service()->updateSetting((int)$id, $data);
-        return $this->success(null, '更新成功');
+        $result = $this->service()->updateSetting((int)$id, $data);
+        return $this->success($result, '更新成功');
     }
 
     /**

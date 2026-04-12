@@ -63,6 +63,12 @@ export namespace SettingApi {
     need_flags?: boolean;
     /** 默认提示信息模板（支持 {name}、{value} 占位符） */
     default_message_template: string;
+    /** value 最大值（后端按系统上限注入） */
+    value_max?: number;
+    /** 规则提示（如 PHP/Nginx 上限说明） */
+    hint?: string;
+    /** 规则级告警 */
+    warnings?: string[];
     /** 预定义选项列表，兼容旧版 string[] 与新版 {label,value}[] */
     options?: RuleOptionItem[] | string[];
   }
@@ -76,6 +82,8 @@ export namespace SettingApi {
     type_options: TypeOption[];
     /** 验证规则类型（按表单类型分组） */
     rule_types: RuleTypesMap;
+    /** 表单配置级告警 */
+    warnings?: string[];
   }
 
   /** 验证规则项 */
@@ -306,7 +314,10 @@ export async function getSettingItemListApi(
 export async function createSettingItemApi(
   data: SettingApi.CreateSettingParams,
 ) {
-  return requestClient.post<{ id: number }>('/setting/item/create', data);
+  return requestClient.post<{ id: number; warnings?: string[] }>(
+    '/setting/item/create',
+    data,
+  );
 }
 
 /**
@@ -316,7 +327,10 @@ export async function updateSettingItemApi(
   id: number,
   data: Omit<SettingApi.UpdateSettingParams, 'id'>,
 ) {
-  return requestClient.put(`/setting/item/update/${id}`, data);
+  return requestClient.put<{ updated: boolean; warnings?: string[] }>(
+    `/setting/item/update/${id}`,
+    data,
+  );
 }
 
 /**

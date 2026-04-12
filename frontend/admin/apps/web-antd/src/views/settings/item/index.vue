@@ -36,12 +36,14 @@ const TYPE_LABEL_MAP: Record<string, { color: string; label: string }> = {
 /* ---------------- 表单配置数据 ---------------- */
 const ruleTypesMap = ref<SettingApi.RuleTypesMap>({});
 const typeOptions = ref<SettingApi.TypeOption[]>([]);
+const formWarnings = ref<string[]>([]);
 
 const loadFormConfig = async () => {
   try {
     const res = await getSettingFormConfigApi();
     typeOptions.value = res.type_options || [];
     ruleTypesMap.value = res.rule_types || {};
+    formWarnings.value = res.warnings || [];
   } catch (error) {
     console.error('加载表单配置失败:', error);
   }
@@ -246,6 +248,7 @@ onMounted(() => {
       :edit-data="editingItem"
       :rule-types-map="ruleTypesMap"
       :type-options="typeOptions"
+      :form-warnings="formWarnings"
       @success="onModalSuccess"
     />
   </div>

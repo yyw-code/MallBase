@@ -1,11 +1,21 @@
 import { requestClient } from '#/api/request';
 
 export namespace UploadApi {
+  export interface UploadSystemLimits {
+    php_upload_max_filesize_mb: null | number;
+    php_post_max_size_mb: null | number;
+    php_max_file_uploads: null | number;
+    effective_max_size_mb: null | number;
+    effective_max_count: null | number;
+  }
+
   /** 上传验证配置（后端返回，按类型） */
   export interface UploadRuleConfig {
     max_size: number;
     max_count: number;
     accept_types: string[];
+    system_limits?: UploadSystemLimits;
+    warnings?: string[];
   }
 
   /** 上传响应 */

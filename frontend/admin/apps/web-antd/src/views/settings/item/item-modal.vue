@@ -17,6 +17,8 @@ const props = defineProps<{
   ruleTypesMap: SettingApi.RuleTypesMap;
   /** 表单类型下拉选项（从后端获取） */
   typeOptions: SettingApi.TypeOption[];
+  /** 表单级告警（系统上限等） */
+  formWarnings?: string[];
   visible: boolean;
 }>();
 
@@ -147,6 +149,16 @@ const ruleTypeSelectOptions = computed(() =>
 /** 根据 type 查找规则类型定义 */
 const getRuleTypeDef = (type: string): SettingApi.RuleTypeItem | undefined =>
   ruleTypes.value.find((rt) => rt.type === type);
+
+const getRuleValueMax = (ruleType: string): number | undefined => {
+  const max = getRuleTypeDef(ruleType)?.value_max;
+  return typeof max === 'number' && Number.isFinite(max) ? max : undefined;
+};
+
+const getRuleHint = (ruleType: string): string => getRuleTypeDef(ruleType)?.hint || '';
+
+const isRuleNumericInput = (ruleType: string): boolean =>
+  [ 'max_size', 'max_count' ].includes(ruleType);
 
 /** 创建空规则 */
 const createEmptyRule = (): SettingApi.ValidationRule => ({
@@ -420,10 +432,16 @@ const handleOk = async () => {
     };
 
     if (isEdit.value && props.editData) {
-      await updateSettingItemApi(props.editData.id, submitData);
+      const updateResult = await updateSettingItemApi(props.editData.id, submitData);
+      if (Array.isArray(updateResult?.warnings) && updateResult.warnings.length > 0) {
+        message.warning(updateResult.warnings.join('；'));
+      }
       message.success('更新成功');
     } else {
-      await createSettingItemApi(submitData);
+      const createResult = await createSettingItemApi(submitData);
+      if (Array.isArray(createResult?.warnings) && createResult.warnings.length > 0) {
+        message.warning(createResult.warnings.join('；'));
+      }
       message.success('创建成功');
     }
     emit('update:visible', false);
@@ -549,6 +567,9 @@ const handleOk = async () => {
         <!-- 验证规则配置 -->
         <a-form-item label="验证规则">
           <div class="rules-config">
+            <div v-if="(formWarnings || []).length > 0" class="rule-tip rule-tip-warning mb-2">
+              {{ (formWarnings || []).join('；') }}
+            </div>
             <div
               v-for="(rule, index) in formData.rules"
               :key="index"
@@ -582,7 +603,21 @@ const handleOk = async () => {
                 </template>
                 <!-- 无 options 但 need_value 时显示输入框 -->
                 <template v-else-if="getRuleTypeDef(rule.type)?.need_value">
+                  <a-input-number
+                    v-if="isRuleNumericInput(rule.type)"
+                    v-model:value="rule.value"
+                    :min="rule.type === 'max_count' ? 1 : 0.1"
+                    :max="getRuleValueMax(rule.type)"
+                    :step="rule.type === 'max_count' ? 1 : 0.1"
+                    :precision="rule.type === 'max_count' ? 0 : 2"
+                    :placeholder="
+                      getRuleTypeDef(rule.type)?.value_placeholder || '参数值'
+                    "
+                    class="rule-value-input"
+                    @change="handleRuleValueChange(index)"
+                  />
                   <a-input
+                    v-else
                     v-model:value="rule.value"
                     :placeholder="
                       getRuleTypeDef(rule.type)?.value_placeholder || '参数值'
@@ -613,6 +648,9 @@ const handleOk = async () => {
                   placeholder="标志如 i"
                   class="rule-flags-input"
                 />
+              </div>
+              <div v-if="getRuleHint(rule.type)" class="rule-tip rule-tip-warning mt-2">
+                {{ getRuleHint(rule.type) }}
               </div>
             </div>
 

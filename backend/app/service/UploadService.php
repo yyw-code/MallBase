@@ -38,6 +38,8 @@ use mall_base\exception\BusinessException;
  */
 class UploadService extends BaseService
 {
+    public const NGINX_413_HINT = '若仍报 413 Payload Too Large，请检查 Nginx client_max_body_size 并与 PHP 上传限制保持一致。';
+
     // ==================== 统一配置获取入口（静态方法，供所有模块调用） ====================
 
     /**
@@ -96,6 +98,36 @@ class UploadService extends BaseService
     }
 
     /**
+     * 获取 PHP 运行时上传限制（MB / 个数）
+     *
+     * @return array{
+     *   php_upload_max_filesize_mb: float|null,
+     *   php_post_max_size_mb: float|null,
+     *   php_max_file_uploads: int|null,
+     *   effective_max_size_mb: float|null,
+     *   effective_max_count: int|null
+     * }
+     */
+    public static function getSystemUploadLimits(): array
+    {
+        $uploadMaxSizeMb = self::parseIniSizeToMb(ini_get('upload_max_filesize'));
+        $postMaxSizeMb = self::parseIniSizeToMb(ini_get('post_max_size'));
+        $maxFileUploads = self::parseIniInt(ini_get('max_file_uploads'));
+
+        $sizeCandidates = array_values(array_filter([$uploadMaxSizeMb, $postMaxSizeMb], static fn($v) => is_numeric($v) && $v > 0));
+        $effectiveMaxSizeMb = empty($sizeCandidates) ? null : floatval(min($sizeCandidates));
+        $effectiveMaxCount = ($maxFileUploads !== null && $maxFileUploads > 0) ? $maxFileUploads : null;
+
+        return [
+            'php_upload_max_filesize_mb' => $uploadMaxSizeMb,
+            'php_post_max_size_mb' => $postMaxSizeMb,
+            'php_max_file_uploads' => $maxFileUploads,
+            'effective_max_size_mb' => $effectiveMaxSizeMb,
+            'effective_max_count' => $effectiveMaxCount,
+        ];
+    }
+
+    /**
      * 获取当前上传驱动名称
      *
      * @return string
@@ -138,6 +170,65 @@ class UploadService extends BaseService
         ];
     }
 
+    /**
+     * 按系统上限截断上传规则
+     *
+     * @param array $rule 原始规则
+     * @param string $type 上传类型（用于 warning 文案）
+     * @return array{
+     *   rule: array{max_size: float, max_count: int, accept_types: string[]},
+     *   warnings: string[],
+     *   system_limits: array{
+     *      php_upload_max_filesize_mb: float|null,
+     *      php_post_max_size_mb: float|null,
+     *      php_max_file_uploads: int|null,
+     *      effective_max_size_mb: float|null,
+     *      effective_max_count: int|null
+     *   },
+     *   clamped: bool
+     * }
+     */
+    public static function applySystemLimits(array $rule, string $type = ''): array
+    {
+        $normalizedRule = self::normalizeRule($rule);
+        $limits = self::getSystemUploadLimits();
+        $warnings = [];
+        $clamped = false;
+
+        $effectiveMaxSizeMb = $limits['effective_max_size_mb'];
+        if (is_numeric($effectiveMaxSizeMb) && $effectiveMaxSizeMb > 0 && $normalizedRule['max_size'] > $effectiveMaxSizeMb) {
+            $normalizedRule['max_size'] = floatval($effectiveMaxSizeMb);
+            $warnings[] = sprintf(
+                '上传类型%s的 max_size 已按 PHP 上限截断为 %sMB。',
+                $type !== '' ? " {$type}" : '',
+                self::formatNumber($effectiveMaxSizeMb)
+            );
+            $clamped = true;
+        }
+
+        $effectiveMaxCount = $limits['effective_max_count'];
+        if (is_numeric($effectiveMaxCount) && $effectiveMaxCount > 0 && $normalizedRule['max_count'] > $effectiveMaxCount) {
+            $normalizedRule['max_count'] = intval($effectiveMaxCount);
+            $warnings[] = sprintf(
+                '上传类型%s的 max_count 已按 PHP 上限截断为 %d。',
+                $type !== '' ? " {$type}" : '',
+                intval($effectiveMaxCount)
+            );
+            $clamped = true;
+        }
+
+        if ($clamped) {
+            $warnings[] = self::NGINX_413_HINT;
+        }
+
+        return [
+            'rule' => $normalizedRule,
+            'warnings' => array_values(array_unique($warnings)),
+            'system_limits' => $limits,
+            'clamped' => $clamped,
+        ];
+    }
+
     // ==================== 前端配置获取 ====================
 
     /**
@@ -155,7 +246,12 @@ class UploadService extends BaseService
             throw new BusinessException("不支持的上传类型: {$type}");
         }
 
-        return self::normalizeRule($rules[$type]);
+        $result = self::applySystemLimits($rules[$type], $type);
+
+        return array_merge($result['rule'], [
+            'system_limits' => $result['system_limits'],
+            'warnings' => $result['warnings'],
+        ]);
     }
 
     // ==================== 规则解析 ====================
@@ -219,7 +315,10 @@ class UploadService extends BaseService
             $result['accept_types'] = (array)$extracted['accept_types'];
         }
 
-        return $result;
+        // 所有来源统一做系统上限截断，保证行为一致
+        $applied = self::applySystemLimits($result, $type);
+
+        return $applied['rule'];
     }
 
     // ==================== 上传功能 ====================
@@ -346,7 +445,69 @@ class UploadService extends BaseService
             throw new BusinessException("不支持的上传类型: {$type}");
         }
 
-        return self::normalizeRule($rule);
+        $applied = self::applySystemLimits($rule, $type);
+
+        return $applied['rule'];
+    }
+
+    /**
+     * 解析 php.ini 大小配置并转为 MB
+     *
+     * @param mixed $value
+     */
+    private static function parseIniSizeToMb($value): ?float
+    {
+        if (!is_string($value) && !is_numeric($value)) {
+            return null;
+        }
+
+        $raw = trim((string)$value);
+        if ($raw === '' || $raw === '-1') {
+            return null;
+        }
+
+        if (!preg_match('/^([0-9]+(?:\.[0-9]+)?)\s*([kmgtp]?)/i', $raw, $matches)) {
+            return null;
+        }
+
+        $number = floatval($matches[1] ?? 0);
+        $unit = strtolower($matches[2] ?? '');
+        if ($number <= 0) {
+            return null;
+        }
+
+        $bytes = match ($unit) {
+            'k' => $number * 1024,
+            'm' => $number * 1024 * 1024,
+            'g' => $number * 1024 * 1024 * 1024,
+            't' => $number * 1024 * 1024 * 1024 * 1024,
+            'p' => $number * 1024 * 1024 * 1024 * 1024 * 1024,
+            default => $number,
+        };
+
+        return $bytes / 1024 / 1024;
+    }
+
+    /**
+     * 解析 php.ini 整数配置
+     *
+     * @param mixed $value
+     */
+    private static function parseIniInt($value): ?int
+    {
+        if (!is_string($value) && !is_numeric($value)) {
+            return null;
+        }
+        $num = intval(trim((string)$value));
+        return $num > 0 ? $num : null;
+    }
+
+    private static function formatNumber(float $num): string
+    {
+        if (floor($num) === $num) {
+            return (string)intval($num);
+        }
+        return rtrim(rtrim(sprintf('%.2f', $num), '0'), '.');
     }
 
     /**
