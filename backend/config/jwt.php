@@ -2,8 +2,8 @@
 
 // JWT 配置
 return [
-    // 密钥（生产环境请务必修改）
-    'secret' => env('JWT_SECRET', 'your-secret-key-change-in-production'),
+    // 密钥（必须在环境变量中配置）
+    'secret' => env('JWT_SECRET', ''),
 
     // Token 过期时间（秒），默认 2 小时
     'expire' => env('JWT_EXPIRE', 7200),

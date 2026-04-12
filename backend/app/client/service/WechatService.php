@@ -6,9 +6,9 @@ namespace app\client\service;
 use app\client\model\User;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
+use mall_base\log\Logger;
 use mall_base\service\JwtCacheService;
 use mall_base\service\JwtService;
-use support\Redis;
 use think\facade\Request;
 
 /**
@@ -17,6 +17,11 @@ use think\facade\Request;
  */
 class WechatService extends BaseService
 {
+    /**
+     * Model 类名
+     */
+    protected string $modelClass = User::class;
+
     /**
      * 微信小程序登录
      *

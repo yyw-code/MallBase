@@ -43,7 +43,12 @@ class JwtService
      */
     public function __construct()
     {
-        $this->key = config('jwt.secret') ?: 'your-secret-key-change-in-production';
+        $key = (string) config('jwt.secret', '');
+        if (trim($key) === '') {
+            throw new \RuntimeException('JWT secret 未配置，请设置 JWT_SECRET 环境变量');
+        }
+
+        $this->key = $key;
         $this->expire = config('jwt.expire', 7200);
         $this->refreshExpire = config('jwt.refresh_expire', 2592000);
         $this->algorithm = config('jwt.algorithm', 'HS256');

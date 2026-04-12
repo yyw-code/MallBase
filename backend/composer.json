@@ -31,6 +31,7 @@
         "topthink/think-multi-app": "^1.1"
     },
     "require-dev": {
+        "phpunit/phpunit": "^10.5",
         "topthink/think-dumper": "^1.0"
     },
     "autoload": {
@@ -42,10 +43,16 @@
             "": "extend/"
         }
     },
+    "autoload-dev": {
+        "psr-4": {
+            "Tests\\": "tests/"
+        }
+    },
     "config": {
         "preferred-install": "dist"
     },
     "scripts": {
+        "test": "@php vendor/bin/phpunit -c phpunit.xml",
         "post-autoload-dump": [
             "@php think service:discover",
             "@php think vendor:publish"
