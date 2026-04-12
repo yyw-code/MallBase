@@ -19,6 +19,8 @@
     "build": "pnpm vite build --mode production",
     "build:analyze": "pnpm vite build --mode analyze",
     "dev": "pnpm vite --mode development",
+    "pretest:e2e": "pnpm run test:e2e:install",
+    "test:e2e:install": "playwright install chromium",
     "preview": "vite preview",
     "typecheck": "vue-tsc --noEmit --skipLibCheck",
     "test:e2e": "playwright test",
