@@ -11,6 +11,7 @@ use mall_base\base\BaseModel;
 class GoodsBrand extends BaseModel
 {
     protected $name = 'goods_brand';
+    protected array $append = ['logo_full_url'];
 
     /**
      * 搜索器-按名称搜索
@@ -30,5 +31,13 @@ class GoodsBrand extends BaseModel
         if ($value !== '' && $value !== null) {
             $query->where('status', $value);
         }
+    }
+
+    /**
+     * 品牌 LOGO 完整地址
+     */
+    public function getLogoFullUrlAttr($value, $data): string
+    {
+        return buildUploadUrl($data['logo'] ?? '');
     }
 }

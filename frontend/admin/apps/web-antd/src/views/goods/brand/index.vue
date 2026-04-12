@@ -92,7 +92,11 @@ const columns = [
     width: 80,
     customRender: ({ record }: { record: GoodsBrandApi.BrandItem }) => {
       if (!record.logo) return '-';
-      return h(Avatar, { src: record.logo, size: 32, shape: 'square' });
+      return h(Avatar, {
+        src: record.logo_full_url || record.logo,
+        size: 32,
+        shape: 'square',
+      });
     },
   },
   { title: '品牌名称', dataIndex: 'name', width: 150 },

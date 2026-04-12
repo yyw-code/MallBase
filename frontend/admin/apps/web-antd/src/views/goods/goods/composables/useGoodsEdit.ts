@@ -102,6 +102,29 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
     return pic;
   };
 
+  const getSpecImageByRow = (row: SkuRow): FileInfo | string | undefined => {
+    const attrWithPic = attrs.value.find((attr) => attr.add_pic === 1);
+    if (!attrWithPic || !attrWithPic.value) {
+      return undefined;
+    }
+
+    const detailValue = row.detail[attrWithPic.value];
+    if (!detailValue) {
+      return undefined;
+    }
+
+    return attrWithPic.detail.find((detail) => detail.value === detailValue)?.pic || undefined;
+  };
+
+  const getSkuPreviewImage = (row: SkuRow): FileInfo | string | undefined => {
+    return row.image || getSpecImageByRow(row);
+  };
+
+  const getSkuSubmitImage = (row: SkuRow): string => {
+    const image = row.image || getSpecImageByRow(row);
+    return getPicUrl(image || '');
+  };
+
   const handleAddSpec = () => {
     attrs.value.push({ value: '', add_pic: 0, detail: [{ value: '', pic: '' }] });
     nextTick(initValueDrag);
@@ -493,7 +516,7 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
         submitData.skus = skuRows.value.map((sku) => ({
           spec_values: sku.spec_values, price: sku.price, market_price: sku.market_price,
           stock: sku.stock, sku_code: sku.sku_code || '',
-          image: typeof sku.image === 'object' ? (sku.image as FileInfo)?.url || '' : sku.image || '',
+          image: getSkuSubmitImage(sku),
         }));
       } else {
         // 单规格时显式清空多规格 SKU，避免“切换后历史 SKU 残留”
@@ -528,6 +551,7 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
     formData, rules, formRef, loading, activeTab, isFullscreen, isEdit,
     toggleFullscreen, categoryTreeData, brandOptions, tagOptions,
     specType, attrs, canAddPic, getPicPreviewUrl, getPicUrl,
+    getSkuPreviewImage,
     handleAddSpec, handleRemoveSpec, addSpecValue, removeSpecValue, toggleAddPic,
     specListRef, valueListRefs, initSpecDrag, initValueDrag,
     skuRows, batchData, tableData, skuColumns, spanMap,

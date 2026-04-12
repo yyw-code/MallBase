@@ -56,9 +56,17 @@ watch(
     if (val) {
       resetForm();
       if (props.editData) {
+        const logoUrl = props.editData.logo || '';
+        const logoFullUrl = props.editData.logo_full_url || logoUrl;
         Object.assign(formData, {
           name: props.editData.name || '',
-          logo: props.editData.logo || undefined,
+          logo: logoUrl
+            ? {
+                url: logoUrl,
+                full_url: logoFullUrl,
+                name: logoUrl.split('/').pop() || '',
+              }
+            : undefined,
           description: props.editData.description || '',
           sort: props.editData.sort || 0,
           status: props.editData.status ?? 1,

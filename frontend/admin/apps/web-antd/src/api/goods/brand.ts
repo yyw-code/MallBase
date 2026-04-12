@@ -6,6 +6,7 @@ export namespace GoodsBrandApi {
     id: number;
     name: string;
     logo?: string;
+    logo_full_url?: string;
     description?: string;
     sort: number;
     status: number;

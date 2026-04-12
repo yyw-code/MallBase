@@ -23,7 +23,7 @@ const editId = computed(() => {
 const {
   formData, rules, formRef, loading, activeTab, isFullscreen, isEdit,
   toggleFullscreen, categoryTreeData, brandOptions, tagOptions,
-  specType, attrs, canAddPic, getPicPreviewUrl,
+  specType, attrs, canAddPic, getPicPreviewUrl, getSkuPreviewImage,
   handleAddSpec, handleRemoveSpec, addSpecValue, removeSpecValue, toggleAddPic,
   specListRef, valueListRefs, initSpecDrag, initValueDrag,
   skuRows, batchData, tableData, skuColumns,
@@ -220,9 +220,9 @@ onMounted(() => {});
                           <template v-if="(column as any)._isSpecCol"><span class="sku-spec-val">{{ (record as SkuRow).detail[(column as any).title] }}</span></template>
                           <template v-else-if="column.dataIndex === 'image'">
                             <div class="sku-img-cell">
-                              <div v-if="(record as SkuRow).image" class="sku-img-thumb">
-                                <img :src="getPicPreviewUrl((record as SkuRow).image!)" />
-                                <span class="sku-img-del" @click.stop="(record as SkuRow).image = undefined">×</span>
+                              <div v-if="getSkuPreviewImage(record as SkuRow)" class="sku-img-thumb">
+                                <img :src="getPicPreviewUrl(getSkuPreviewImage(record as SkuRow)!)" />
+                                <span v-if="(record as SkuRow).image" class="sku-img-del" @click.stop="(record as SkuRow).image = undefined">×</span>
                               </div>
                               <div v-else class="sku-upload-wrap">
                                 <Upload type="image" module="goods" :show-upload-list="false"

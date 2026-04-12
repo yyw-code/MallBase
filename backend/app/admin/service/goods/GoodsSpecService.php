@@ -47,7 +47,7 @@ class GoodsSpecService extends BaseService
             ->withSearch(['name', 'status'], $searchWhere)
             ->count();
 
-        $list = $list->toArray();
+        $list = $this->normalizeSpecList($list->toArray());
 
         return compact('total', 'list');
     }
@@ -71,7 +71,7 @@ class GoodsSpecService extends BaseService
             throw new BusinessException('规格不存在');
         }
 
-        return $info->toArray();
+        return $this->normalizeSpecItem($info->toArray());
     }
 
     /**
@@ -89,7 +89,26 @@ class GoodsSpecService extends BaseService
             ->order('sort', 'asc')
             ->select();
 
-        return $list->toArray();
+        return $this->normalizeSpecList($list->toArray());
+    }
+
+    /**
+     * 统一规格值字段，前端固定使用 spec_values。
+     */
+    protected function normalizeSpecList(array $list): array
+    {
+        return array_map(fn(array $item) => $this->normalizeSpecItem($item), $list);
+    }
+
+    /**
+     * 兼容 ThinkPHP 关联输出键名不稳定。
+     */
+    protected function normalizeSpecItem(array $item): array
+    {
+        $item['spec_values'] = $item['spec_values'] ?? $item['specValues'] ?? [];
+        unset($item['specValues']);
+
+        return $item;
     }
 
     /**

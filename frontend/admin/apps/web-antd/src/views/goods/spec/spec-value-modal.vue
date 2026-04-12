@@ -3,7 +3,7 @@ import type { GoodsSpecApi } from '#/api/goods';
 
 import { computed, ref, watch } from 'vue';
 
-import { message, Tag } from 'ant-design-vue';
+import { message } from 'ant-design-vue';
 
 import {
   batchCreateSpecValuesApi,
@@ -41,7 +41,7 @@ const loadSpecValues = async () => {
   if (!props.specData) return;
   try {
     const detail = await getGoodsSpecInfoApi(props.specData.id);
-    specValues.value = detail.spec_values || [];
+    specValues.value = detail.spec_values || detail.specValues || [];
   } catch (error) {
     console.error('加载规格值失败:', error);
     message.error('加载规格值失败');
@@ -152,17 +152,27 @@ const handleCancel = () => {
         <div v-if="specValues.length === 0" class="text-gray-400">
           暂无规格值
         </div>
-        <div v-else style="display: flex; flex-wrap: wrap; gap: 8px">
-          <a-tag
-            v-for="item in specValues"
-            :key="item.id"
-            color="blue"
-            closable
-            @close="handleDeleteValue(item)"
-          >
-            {{ item.value }}
-          </a-tag>
-        </div>
+        <a-table
+          v-else
+          :data-source="specValues"
+          :pagination="false"
+          size="small"
+          row-key="id"
+          :columns="[
+            { title: 'ID', dataIndex: 'id', width: 80 },
+            { title: '规格值', dataIndex: 'value' },
+            { title: '排序', dataIndex: 'sort', width: 90 },
+            { title: '操作', key: 'action', width: 90 },
+          ]"
+        >
+          <template #bodyCell="{ column, record }">
+            <template v-if="column.key === 'action'">
+              <a-button type="link" danger size="small" @click="handleDeleteValue(record)">
+                删除
+              </a-button>
+            </template>
+          </template>
+        </a-table>
       </div>
 
       <a-divider />

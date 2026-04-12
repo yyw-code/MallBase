@@ -82,6 +82,10 @@ const onSpecValueModalSuccess = () => {
   loadData(searchParams.value);
 };
 
+const getSpecValues = (record: GoodsSpecApi.SpecItem) => {
+  return record.spec_values || record.specValues || [];
+};
+
 /* ---------------- 状态切换 ---------------- */
 const handleStatusChange = async (
   record: GoodsSpecApi.SpecItem,
@@ -105,13 +109,14 @@ const columns = [
   {
     title: '规格值',
     dataIndex: 'spec_values',
-    width: 250,
+    width: 320,
     customRender: ({ record }: { record: GoodsSpecApi.SpecItem }) => {
-      if (!record.spec_values || record.spec_values.length === 0) return '-';
+      const values = getSpecValues(record);
+      if (values.length === 0) return '-';
       return h(
         'div',
         { style: 'display: flex; flex-wrap: wrap; gap: 4px;' },
-        record.spec_values.map((item: GoodsSpecApi.SpecValueItem) =>
+        values.map((item: GoodsSpecApi.SpecValueItem) =>
           h(Tag, { color: 'blue' }, () => item.value),
         ),
       );
