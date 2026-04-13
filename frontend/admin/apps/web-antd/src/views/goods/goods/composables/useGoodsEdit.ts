@@ -46,6 +46,10 @@ export interface SkuRow {
   is_show?: 0 | 1;
 }
 
+const SPEC_TYPE_SINGLE = 1;
+const SPEC_TYPE_MULTI = 2;
+const DEFAULT_SINGLE_SKU_SPEC_VALUES = '';
+
 export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
   const createLocalId = () =>
     `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
@@ -145,6 +149,18 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
     const image = row.image || getSpecImageByRow(row);
     return getPicUrl(image || '');
   };
+
+  const buildSingleSkuPayload = () => ({
+    spec_values: DEFAULT_SINGLE_SKU_SPEC_VALUES,
+    price: formData.price,
+    market_price: formData.market_price,
+    stock: formData.stock,
+    sku_code: '',
+    image: typeof formData.main_image === 'object'
+      ? ((formData.main_image as FileInfo)?.url || '')
+      : (formData.main_image || ''),
+    status: formData.status ?? 1,
+  });
 
   const updateMatchedSkuImages = (specName: string, specValue: string, nextPic: FileInfo | string | undefined) => {
     for (const row of skuRows.value) {
@@ -700,7 +716,7 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
         is_new: detail.is_new ?? 0, is_hot: detail.is_hot ?? 0,
         tag_ids: (detail.tags || []).map((t) => t.id),
       });
-      if (detail.skus && detail.skus.length > 0) {
+      if ((detail.spec_type ?? SPEC_TYPE_SINGLE) === SPEC_TYPE_MULTI) {
         specType.value = 'multi';
         let newAttrs: Attr[] = [];
         if (Array.isArray(detail.spec_meta) && detail.spec_meta.length > 0) {
@@ -759,6 +775,10 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
         saveMultiSpecDraft();
       } else {
         specType.value = 'single';
+        const defaultSku = Array.isArray(detail.skus) ? detail.skus[0] : undefined;
+        formData.price = defaultSku?.price ?? detail.price ?? 0;
+        formData.market_price = defaultSku?.market_price ?? detail.market_price ?? 0;
+        formData.stock = defaultSku?.stock ?? detail.stock ?? 0;
         multiSpecDraft.value = { attrs: [], skuRows: [] };
       }
     } catch { message.error('加载商品详情失败'); }
@@ -780,6 +800,7 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
         })),
       };
       if (specType.value === 'multi' && skuRows.value.length > 0) {
+        submitData.spec_type = SPEC_TYPE_MULTI;
         validateUniqueSkuCodes();
         submitData.spec_meta = buildSpecMetaPayload();
         submitData.skus = skuRows.value.map((sku) => ({
@@ -789,9 +810,9 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
           status: sku.is_show ?? 1,
         }));
       } else {
-        // 单规格时显式清空多规格 SKU，避免“切换后历史 SKU 残留”
+        submitData.spec_type = SPEC_TYPE_SINGLE;
         submitData.spec_meta = [];
-        submitData.skus = [];
+        submitData.skus = [buildSingleSkuPayload()];
       }
       if (isEdit.value) { await updateGoodsApi(editIdRef.value!, submitData); message.success('更新成功'); }
       else { await createGoodsApi(submitData); message.success('创建成功'); }

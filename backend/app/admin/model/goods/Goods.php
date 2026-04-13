@@ -16,6 +16,9 @@ class Goods extends BaseModel
     protected $jsonAssoc = true;
     protected array $append = ['main_image_full_url', 'main_video_full_url'];
 
+    public const SPEC_TYPE_SINGLE = 1;
+    public const SPEC_TYPE_MULTI = 2;
+
     public function getSpecMetaAttr($value, $data)
     {
         if ($value instanceof Json) {

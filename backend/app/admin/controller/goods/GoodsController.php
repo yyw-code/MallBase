@@ -53,7 +53,7 @@ class GoodsController extends BaseController
     {
         $data = $this->request->param([
             'name', 'subtitle', 'category_id', 'brand_id',
-            'price', 'market_price', 'stock', 'main_image', 'main_video', 'spec_meta',
+            'price', 'market_price', 'stock', 'main_image', 'main_video', 'spec_type', 'spec_meta',
             'unit', 'sort', 'description',
             'status', 'is_on_sale', 'is_recommend', 'is_new', 'is_hot',
             'images', 'skus', 'tag_ids',
@@ -78,7 +78,7 @@ class GoodsController extends BaseController
 
         $data = $this->request->param([
             'name', 'subtitle', 'category_id', 'brand_id',
-            'price', 'market_price', 'stock', 'main_image', 'main_video', 'spec_meta',
+            'price', 'market_price', 'stock', 'main_image', 'main_video', 'spec_type', 'spec_meta',
             'unit', 'sort', 'description',
             'status', 'is_on_sale', 'is_recommend', 'is_new', 'is_hot',
             'images', 'skus', 'tag_ids',

@@ -19,6 +19,8 @@ use mall_base\exception\BusinessException;
  */
 class GoodsService extends BaseService
 {
+    private const DEFAULT_SINGLE_SKU_SPEC_VALUES = '';
+
     /**
      * 默认 Model 类名
      */
@@ -156,7 +158,9 @@ class GoodsService extends BaseService
     public function create(array $data): int
     {
         $data = $this->normalizeMainImage($data);
+        $data = $this->normalizeSpecType($data);
         $data = $this->normalizeSpecMeta($data);
+        $data = $this->normalizeSkusBySpecType($data);
 
         // 业务校验（事务外）
         $this->validateCategoryAndBrand($data);
@@ -204,7 +208,9 @@ class GoodsService extends BaseService
     public function update(int $id, array $data): bool
     {
         $data = $this->normalizeMainImage($data);
+        $data = $this->normalizeSpecType($data);
         $data = $this->normalizeSpecMeta($data);
+        $data = $this->normalizeSkusBySpecType($data);
 
         // 业务校验（事务外）
         $goods = $this->model()->find($id);
@@ -402,12 +408,48 @@ class GoodsService extends BaseService
         }
     }
 
+    protected function normalizeSpecType(array $data): array
+    {
+        $rawSpecType = (int) ($data['spec_type'] ?? 0);
+        if (in_array($rawSpecType, [Goods::SPEC_TYPE_SINGLE, Goods::SPEC_TYPE_MULTI], true)) {
+            $data['spec_type'] = $rawSpecType;
+            return $data;
+        }
+
+        $hasSpecMeta = !empty($data['spec_meta']) && is_array($data['spec_meta']);
+        $hasMultiSku = false;
+        foreach (($data['skus'] ?? []) as $sku) {
+            if (!is_array($sku)) {
+                continue;
+            }
+
+            if (trim((string) ($sku['spec_values'] ?? '')) !== '') {
+                $hasMultiSku = true;
+                break;
+            }
+        }
+
+        $data['spec_type'] = ($hasSpecMeta || $hasMultiSku)
+            ? Goods::SPEC_TYPE_MULTI
+            : Goods::SPEC_TYPE_SINGLE;
+
+        return $data;
+    }
+
     /**
      * 规范化规格元数据
      */
     protected function normalizeSpecMeta(array $data): array
     {
         if (!array_key_exists('spec_meta', $data)) {
+            if (($data['spec_type'] ?? Goods::SPEC_TYPE_SINGLE) === Goods::SPEC_TYPE_SINGLE) {
+                $data['spec_meta'] = [];
+            }
+            return $data;
+        }
+
+        if (($data['spec_type'] ?? Goods::SPEC_TYPE_SINGLE) === Goods::SPEC_TYPE_SINGLE) {
+            $data['spec_meta'] = [];
             return $data;
         }
 
@@ -432,6 +474,30 @@ class GoodsService extends BaseService
         }, array_filter($data['spec_meta'], 'is_array')));
 
         return $data;
+    }
+
+    protected function normalizeSkusBySpecType(array $data): array
+    {
+        if (($data['spec_type'] ?? Goods::SPEC_TYPE_SINGLE) === Goods::SPEC_TYPE_MULTI) {
+            $data['skus'] = is_array($data['skus'] ?? null) ? array_values($data['skus']) : [];
+            return $data;
+        }
+
+        $data['skus'] = [$this->buildSingleSpecSku($data)];
+        return $data;
+    }
+
+    protected function buildSingleSpecSku(array $data): array
+    {
+        return [
+            'spec_values' => self::DEFAULT_SINGLE_SKU_SPEC_VALUES,
+            'sku_code' => '',
+            'price' => $data['price'] ?? 0,
+            'market_price' => $data['market_price'] ?? 0,
+            'stock' => $data['stock'] ?? 0,
+            'image' => $data['main_image'] ?? '',
+            'status' => $data['status'] ?? 1,
+        ];
     }
 
     /**
@@ -460,6 +526,11 @@ class GoodsService extends BaseService
      */
     protected function updatePriceAndStock(int $goodsId): void
     {
+        $goods = $this->model()->find($goodsId);
+        if (!$goods) {
+            return;
+        }
+
         $skus = $this->model(GoodsSku::class)
             ->where('goods_id', $goodsId)
             ->select();
@@ -468,7 +539,21 @@ class GoodsService extends BaseService
             return;
         }
 
+        $goodsArray = $goods->toArray();
+        $specType = (int) ($goodsArray['spec_type'] ?? Goods::SPEC_TYPE_SINGLE);
+
+        if ($specType === Goods::SPEC_TYPE_SINGLE) {
+            $singleSku = $skus->toArray()[0] ?? [];
+            $goods->save([
+                'price' => (float) ($singleSku['price'] ?? 0),
+                'market_price' => $singleSku['market_price'] ?? null,
+                'stock' => (int) ($singleSku['stock'] ?? 0),
+            ]);
+            return;
+        }
+
         $minPrice = null;
+        $minMarketPrice = null;
         $totalStock = 0;
 
         foreach ($skus->toArray() as $sku) {
@@ -476,16 +561,20 @@ class GoodsService extends BaseService
             if ($minPrice === null || $price < $minPrice) {
                 $minPrice = $price;
             }
+            $marketPrice = $sku['market_price'] ?? null;
+            if ($minMarketPrice === null && $marketPrice !== null && $marketPrice !== '') {
+                $minMarketPrice = (float) $marketPrice;
+            } elseif ($marketPrice !== null && $marketPrice !== '' && (float) $marketPrice < (float) $minMarketPrice) {
+                $minMarketPrice = (float) $marketPrice;
+            }
             $totalStock += (int) ($sku['stock'] ?? 0);
         }
 
-        $goods = $this->model()->find($goodsId);
-        if ($goods) {
-            $goods->save([
-                'price' => $minPrice ?? 0,
-                'stock' => $totalStock,
-            ]);
-        }
+        $goods->save([
+            'price' => $minPrice ?? 0,
+            'market_price' => $minMarketPrice,
+            'stock' => $totalStock,
+        ]);
     }
 
     /**

@@ -23,6 +23,7 @@ class GoodsValidate extends Validate
         'stock' => 'integer|egt:0',
         'main_image' => 'max:255',
         'main_video' => 'max:255',
+        'spec_type' => 'integer|in:1,2',
         'spec_meta' => 'checkSpecMeta',
         'unit' => 'max:20',
         'sort' => 'integer|egt:0',
@@ -54,6 +55,8 @@ class GoodsValidate extends Validate
         'stock.egt' => '库存必须大于等于0',
         'main_image.max' => '主图URL最多255个字符',
         'main_video.max' => '主视频URL最多255个字符',
+        'spec_type.integer' => '规格类型必须是整数',
+        'spec_type.in' => '规格类型必须是1或2',
         'unit.max' => '单位最多20个字符',
         'sort.integer' => '排序必须是整数',
         'sort.egt' => '排序必须大于等于0',
@@ -71,14 +74,14 @@ class GoodsValidate extends Validate
     protected $scene = [
         'create' => [
             'name', 'subtitle', 'category_id', 'brand_id',
-            'price', 'market_price', 'stock', 'main_image', 'main_video', 'spec_meta',
+            'price', 'market_price', 'stock', 'main_image', 'main_video', 'spec_type', 'spec_meta',
             'unit', 'sort', 'description',
             'status', 'is_on_sale', 'is_recommend', 'is_new', 'is_hot',
             'images', 'skus', 'tag_ids',
         ],
         'update' => [
             'name', 'subtitle', 'category_id', 'brand_id',
-            'price', 'market_price', 'stock', 'main_image', 'main_video', 'spec_meta',
+            'price', 'market_price', 'stock', 'main_image', 'main_video', 'spec_type', 'spec_meta',
             'unit', 'sort', 'description',
             'status', 'is_on_sale', 'is_recommend', 'is_new', 'is_hot',
             'images', 'skus', 'tag_ids',
@@ -97,13 +100,14 @@ class GoodsValidate extends Validate
             return true;
         }
 
+        $specType = (int) ($this->data['spec_type'] ?? 1);
+
         foreach ($value as $index => $sku) {
             if (!is_array($sku)) {
                 return "SKU第" . ($index + 1) . "项数据格式错误";
             }
 
-            // spec_values 在多规格模式下必须非空
-            if (empty($sku['spec_values'])) {
+            if ($specType === 2 && empty($sku['spec_values'])) {
                 return "SKU第" . ($index + 1) . "项规格值不能为空";
             }
 

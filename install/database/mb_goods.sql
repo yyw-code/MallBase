@@ -143,6 +143,7 @@ CREATE TABLE `mb_goods` (
   `subtitle` varchar(255) DEFAULT NULL COMMENT '商品副标题',
   `main_image` varchar(255) DEFAULT NULL COMMENT '主图URL',
   `main_video` varchar(255) DEFAULT NULL COMMENT '主视频URL',
+  `spec_type` tinyint(1) NOT NULL DEFAULT 1 COMMENT '规格类型（1单规格，2多规格）',
   `spec_meta` json DEFAULT NULL COMMENT '规格设计器元数据 JSON',
   `description` text DEFAULT NULL COMMENT '商品详情（富文本）',
   `price` decimal(10,2) NOT NULL DEFAULT 0.00 COMMENT '最低价格（SKU最小价格）',
@@ -189,7 +190,7 @@ DROP TABLE IF EXISTS `mb_goods_sku`;
 CREATE TABLE `mb_goods_sku` (
   `id` int(11) unsigned NOT NULL AUTO_INCREMENT COMMENT 'SKU ID',
   `goods_id` int(11) unsigned NOT NULL COMMENT '商品ID（SPU）',
-  `spec_values` varchar(500) NOT NULL COMMENT '规格值组合JSON，如 {"1":3,"2":5} 表示规格ID:规格值ID',
+  `spec_values` varchar(500) NOT NULL COMMENT '规格值组合，单规格固定为空字符串',
   `price` decimal(10,2) NOT NULL DEFAULT 0.00 COMMENT '销售价',
   `market_price` decimal(10,2) DEFAULT NULL COMMENT '市场价（划线价）',
   `cost_price` decimal(10,2) DEFAULT NULL COMMENT '成本价',

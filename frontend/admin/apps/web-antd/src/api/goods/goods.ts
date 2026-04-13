@@ -16,6 +16,7 @@ export namespace GoodsApi {
   /** 商品信息 */
   export interface GoodsItem {
     id: number;
+    spec_type: 1 | 2;
     category_id: number;
     brand_id?: number;
     name: string;
@@ -92,6 +93,7 @@ export namespace GoodsApi {
 
   /** 创建参数 */
   export interface CreateParams {
+    spec_type?: 1 | 2;
     category_id: number;
     name: string;
     brand_id?: number;
@@ -131,6 +133,7 @@ export namespace GoodsApi {
 
   /** 更新参数 */
   export interface UpdateParams {
+    spec_type?: 1 | 2;
     category_id?: number;
     name?: string;
     brand_id?: number;
