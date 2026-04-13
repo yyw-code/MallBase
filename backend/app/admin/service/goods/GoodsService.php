@@ -169,6 +169,7 @@ class GoodsService extends BaseService
             $goods->save($data);
 
             $goodsId = $goods->id;
+            $this->persistSpecMeta((int) $goodsId, $data['spec_meta'] ?? null);
 
             // 同步图片
             if (!empty($data['images']) && is_array($data['images'])) {
@@ -220,6 +221,7 @@ class GoodsService extends BaseService
         // 事务内只做写入
         $this->transaction(function () use ($id, $goods, $data) {
             $goods->save($data);
+            $this->persistSpecMeta($id, $data['spec_meta'] ?? null);
 
             // 同步图片
             if (array_key_exists('images', $data) && is_array($data['images'])) {
@@ -468,6 +470,21 @@ class GoodsService extends BaseService
                 'values' => $values,
             ];
         }, array_filter($specMeta, 'is_array')));
+    }
+
+    /**
+     * 通过模型持久化规格元数据。
+     *
+     * 规格元数据是商品正式字段，仍然必须走模型层，避免绕过项目约定。
+     *
+     * @param int $goodsId
+     * @param mixed $specMeta
+     */
+    protected function persistSpecMeta(int $goodsId, $specMeta): void
+    {
+        $this->model()->updateById($goodsId, [
+            'spec_meta' => is_array($specMeta) ? $specMeta : null,
+        ]);
     }
 
     /**
