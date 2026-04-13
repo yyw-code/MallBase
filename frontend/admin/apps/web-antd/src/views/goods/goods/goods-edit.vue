@@ -291,8 +291,10 @@ onMounted(() => {});
                               </a-select>
                             </template>
                             <template v-else-if="column.dataIndex === 'image'">
-                              <div class="batch-image-editor" title="批量设置图片">
-                                <Upload v-model:value="(batchData as any)['__image__']" type="image" module="goods" :show-upload-list="false" />
+                              <div class="batch-image-cell">
+                                <div class="batch-image-editor" title="批量设置图片">
+                                  <Upload v-model:value="(batchData as any)['__image__']" type="image" module="goods" :show-upload-list="false" />
+                                </div>
                               </div>
                             </template>
                             <template v-else-if="column.dataIndex === 'price'">
@@ -523,9 +525,13 @@ onMounted(() => {});
 .sku-batch-toolbar { display: flex; flex-direction: column; align-items: stretch; gap: 10px; padding: 10px 12px; margin-bottom: 10px; border: 1px solid hsl(var(--border)); border-radius: 12px; background: hsl(var(--primary) / 0.05); overflow-x: auto; }
 .sku-batch-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
 .batch-cell-control { width: 100%; }
-.batch-image-editor { display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 32px; border: 1px solid hsl(var(--border)); border-radius: 10px; background: hsl(var(--card)); }
+.batch-image-cell { display: flex; align-items: center; justify-content: center; width: 100%; min-height: 36px; }
+.batch-image-editor { display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border: 1px solid hsl(var(--border)); border-radius: 3px; background: hsl(var(--card)); overflow: hidden; }
 .batch-image-editor :deep(.ant-upload-wrapper),
-.batch-image-editor :deep(.ant-upload.ant-upload-select) { width: 100% !important; height: 100% !important; min-width: 100% !important; min-height: 100% !important; border-radius: 10px !important; }
+.batch-image-editor :deep(.ant-upload.ant-upload-select),
+.batch-image-editor :deep(.ant-upload.ant-upload-select-picture-card) { width: 100% !important; height: 100% !important; min-width: 100% !important; min-height: 100% !important; max-width: 100% !important; max-height: 100% !important; border-radius: 3px !important; margin: 0 !important; }
+.batch-image-editor :deep(.ant-upload) { display: flex; align-items: center; justify-content: center; width: 100% !important; height: 100% !important; }
+.batch-image-editor :deep(.ant-upload-list) { display: none !important; }
 .sku-batch-table { min-width: max-content; }
 .sku-batch-table :deep(.ant-table-tbody > tr > td) { background: hsl(var(--card)); }
 .sku-hit-stat { display: flex; align-items: center; gap: 8px; padding: 0 10px; height: 32px; border-radius: 10px; background: hsl(var(--card)); color: hsl(var(--muted-foreground)); font-size: 12px; }
