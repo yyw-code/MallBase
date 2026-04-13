@@ -23,6 +23,7 @@ class GoodsValidate extends Validate
         'stock' => 'integer|egt:0',
         'main_image' => 'max:255',
         'main_video' => 'max:255',
+        'spec_meta' => 'checkSpecMeta',
         'unit' => 'max:20',
         'sort' => 'integer|egt:0',
         'description' => 'max:2000',
@@ -70,14 +71,14 @@ class GoodsValidate extends Validate
     protected $scene = [
         'create' => [
             'name', 'subtitle', 'category_id', 'brand_id',
-            'price', 'market_price', 'stock', 'main_image', 'main_video',
+            'price', 'market_price', 'stock', 'main_image', 'main_video', 'spec_meta',
             'unit', 'sort', 'description',
             'status', 'is_on_sale', 'is_recommend', 'is_new', 'is_hot',
             'images', 'skus', 'tag_ids',
         ],
         'update' => [
             'name', 'subtitle', 'category_id', 'brand_id',
-            'price', 'market_price', 'stock', 'main_image', 'main_video',
+            'price', 'market_price', 'stock', 'main_image', 'main_video', 'spec_meta',
             'unit', 'sort', 'description',
             'status', 'is_on_sale', 'is_recommend', 'is_new', 'is_hot',
             'images', 'skus', 'tag_ids',
@@ -139,6 +140,39 @@ class GoodsValidate extends Validate
 
             if (empty($image['url'])) {
                 return "图片第" . ($index + 1) . "项URL不能为空";
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * 验证规格元数据
+     *
+     * @param mixed $value
+     * @return bool|string
+     */
+    protected function checkSpecMeta($value): bool|string
+    {
+        if ($value === null || $value === '') {
+            return true;
+        }
+
+        if (!is_array($value)) {
+            return '规格元数据格式错误';
+        }
+
+        foreach ($value as $index => $item) {
+            if (!is_array($item)) {
+                return '规格元数据第' . ($index + 1) . '项格式错误';
+            }
+
+            if (empty($item['name'])) {
+                return '规格元数据第' . ($index + 1) . '项名称不能为空';
+            }
+
+            if (!isset($item['values']) || !is_array($item['values'])) {
+                return '规格元数据第' . ($index + 1) . '项规格值格式错误';
             }
         }
 

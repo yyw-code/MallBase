@@ -11,6 +11,8 @@ use mall_base\base\BaseModel;
 class Goods extends BaseModel
 {
     protected $name = 'goods';
+    protected $json = ['spec_meta'];
+    protected $jsonAssoc = true;
     protected array $append = ['main_image_full_url', 'main_video_full_url'];
 
     /**

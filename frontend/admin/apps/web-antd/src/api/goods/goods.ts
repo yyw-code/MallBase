@@ -1,6 +1,18 @@
 import { requestClient } from '#/api/request';
 
 export namespace GoodsApi {
+  export interface SpecMetaValueItem {
+    value: string;
+    pic?: string;
+    pic_full_url?: string;
+  }
+
+  export interface SpecMetaItem {
+    name: string;
+    add_pic: 0 | 1;
+    values: SpecMetaValueItem[];
+  }
+
   /** 商品信息 */
   export interface GoodsItem {
     id: number;
@@ -31,6 +43,7 @@ export namespace GoodsApi {
     tags?: GoodsTagItem[];
     images?: ImageItem[];
     skus?: SkuItem[];
+    spec_meta?: SpecMetaItem[];
   }
 
   /** 商品标签简要信息 */
@@ -85,6 +98,7 @@ export namespace GoodsApi {
     subtitle?: string;
     main_image?: string;
     main_video?: string;
+    spec_meta?: SpecMetaItem[];
     description?: string;
     price?: number;
     market_price?: number;
@@ -123,6 +137,7 @@ export namespace GoodsApi {
     subtitle?: string;
     main_image?: string;
     main_video?: string;
+    spec_meta?: SpecMetaItem[];
     description?: string;
     price?: number;
     market_price?: number;

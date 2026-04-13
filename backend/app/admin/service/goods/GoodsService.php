@@ -111,6 +111,7 @@ class GoodsService extends BaseService
         }
 
         $result = $goods->toArray();
+        $result['spec_meta'] = $this->hydrateSpecMeta($result['spec_meta'] ?? []);
 
         // 获取商品图片
         $images = $this->model(GoodsImage::class)
@@ -156,6 +157,7 @@ class GoodsService extends BaseService
     public function create(array $data): int
     {
         $data = $this->normalizeMainImage($data);
+        $data = $this->normalizeSpecMeta($data);
 
         // 业务校验（事务外）
         $this->validateCategoryAndBrand($data);
@@ -203,6 +205,7 @@ class GoodsService extends BaseService
     public function update(int $id, array $data): bool
     {
         $data = $this->normalizeMainImage($data);
+        $data = $this->normalizeSpecMeta($data);
 
         // 业务校验（事务外）
         $goods = $this->model()->find($id);
@@ -398,6 +401,73 @@ class GoodsService extends BaseService
         if (!empty($exists)) {
             throw new BusinessException('SKU编码已存在：' . implode('、', array_unique($exists)));
         }
+    }
+
+    /**
+     * 规范化规格元数据
+     */
+    protected function normalizeSpecMeta(array $data): array
+    {
+        if (!array_key_exists('spec_meta', $data)) {
+            return $data;
+        }
+
+        if (!is_array($data['spec_meta'])) {
+            $data['spec_meta'] = [];
+            return $data;
+        }
+
+        $data['spec_meta'] = array_values(array_map(function (array $item) {
+            $values = array_values(array_map(function (array $value) {
+                return [
+                    'value' => (string) ($value['value'] ?? ''),
+                    'pic' => (string) ($value['pic'] ?? ''),
+                ];
+            }, array_filter($item['values'] ?? [], 'is_array')));
+
+            return [
+                'name' => (string) ($item['name'] ?? ''),
+                'add_pic' => (int) (($item['add_pic'] ?? 0) ? 1 : 0),
+                'values' => $values,
+            ];
+        }, array_filter($data['spec_meta'], 'is_array')));
+
+        return $data;
+    }
+
+    /**
+     * 为规格元数据补充完整图片地址
+     *
+     * @param mixed $specMeta
+     * @return array
+     */
+    protected function hydrateSpecMeta($specMeta): array
+    {
+        if (is_string($specMeta) && $specMeta !== '') {
+            $decoded = json_decode($specMeta, true);
+            $specMeta = is_array($decoded) ? $decoded : [];
+        }
+
+        if (!is_array($specMeta)) {
+            return [];
+        }
+
+        return array_values(array_map(function (array $item) {
+            $values = array_values(array_map(function (array $value) {
+                $pic = (string) ($value['pic'] ?? '');
+                return [
+                    'value' => (string) ($value['value'] ?? ''),
+                    'pic' => $pic,
+                    'pic_full_url' => buildUploadUrl($pic),
+                ];
+            }, array_filter($item['values'] ?? [], 'is_array')));
+
+            return [
+                'name' => (string) ($item['name'] ?? ''),
+                'add_pic' => (int) (($item['add_pic'] ?? 0) ? 1 : 0),
+                'values' => $values,
+            ];
+        }, array_filter($specMeta, 'is_array')));
     }
 
     /**

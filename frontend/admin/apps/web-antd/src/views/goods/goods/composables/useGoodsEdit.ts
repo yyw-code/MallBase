@@ -1,5 +1,6 @@
 import type { GoodsBrandApi } from '#/api/goods';
 import type { GoodsCategoryApi } from '#/api/goods';
+import type { GoodsApi } from '#/api/goods';
 import type { GoodsSpecApi } from '#/api/goods';
 import type { GoodsSpecTemplateApi } from '#/api/goods';
 import type { GoodsTagApi } from '#/api/goods';
@@ -251,8 +252,6 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
       handle: '.spec-drag-zone',
       draggable: '.spec-item',
       animation: 150,
-      forceFallback: true,
-      fallbackTolerance: 4,
       filter: 'input,textarea,button,.spec-name-actions,.ant-checkbox-wrapper,.ant-input,.ant-input-affix-wrapper,.ant-input-number,.ant-select,.ant-select-selector',
       preventOnFilter: false,
       onEnd({ oldIndex, newIndex }) {
@@ -274,8 +273,6 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
     valueSortables[attrIdx] = Sortable.create(el, {
       handle: '.val-drag-handle',
       animation: 150,
-      forceFallback: true,
-      fallbackTolerance: 4,
       onEnd({ oldIndex, newIndex }) {
         if (oldIndex === newIndex) return;
         const moved = attrs.value[attrIdx]!.detail.splice(oldIndex!, 1)[0]!;
@@ -378,6 +375,20 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
       });
     });
   };
+
+  const buildSpecMetaPayload = (): GoodsApi.SpecMetaItem[] =>
+    attrs.value
+      .filter((attr) => attr.value.trim())
+      .map((attr) => ({
+        name: attr.value.trim(),
+        add_pic: attr.add_pic,
+        values: attr.detail
+          .filter((detail) => detail.value.trim())
+          .map((detail) => ({
+            value: detail.value.trim(),
+            pic: getPicUrl(detail.pic || ''),
+          })),
+      }));
 
   const batchData = reactive<Record<string, any>>({});
   const batchFilters = reactive<Record<string, string | undefined>>({});
@@ -660,18 +671,40 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
       });
       if (detail.skus && detail.skus.length > 0) {
         specType.value = 'multi';
-        const colCount = (detail.skus[0]!.spec_values || '').split(',').length;
-        const newAttrs: Attr[] = Array.from({ length: colCount }, (_, i) =>
-          createAttr(`规格${i + 1}`, 0, []),
-        );
-        const valueSetsByPos: Set<string>[] = Array.from({ length: colCount }, () => new Set());
-        for (const sku of detail.skus) {
-          (sku.spec_values || '').split(',').forEach((v, i) => { if (v) valueSetsByPos[i]?.add(v); });
+        let newAttrs: Attr[] = [];
+        if (Array.isArray(detail.spec_meta) && detail.spec_meta.length > 0) {
+          newAttrs = detail.spec_meta.map((item) =>
+            createAttr(
+              item.name || '',
+              item.add_pic ?? 0,
+              (item.values || []).map((value) =>
+                createAttrDetail(
+                  value.value || '',
+                  value.pic
+                    ? {
+                        url: value.pic,
+                        full_url: value.pic_full_url || value.pic,
+                        name: value.pic.split('/').pop() || '',
+                      }
+                    : '',
+                ),
+              ),
+            ),
+          );
+        } else {
+          const colCount = (detail.skus[0]!.spec_values || '').split(',').length;
+          newAttrs = Array.from({ length: colCount }, (_, i) =>
+            createAttr(`规格${i + 1}`, 0, []),
+          );
+          const valueSetsByPos: Set<string>[] = Array.from({ length: colCount }, () => new Set());
+          for (const sku of detail.skus) {
+            (sku.spec_values || '').split(',').forEach((v, i) => { if (v) valueSetsByPos[i]?.add(v); });
+          }
+          for (let i = 0; i < colCount; i++) {
+            newAttrs[i]!.detail = [...(valueSetsByPos[i] || [])].map((v) => createAttrDetail(v));
+          }
+          inferSpecImagesFromSkus(detail.skus, newAttrs);
         }
-        for (let i = 0; i < colCount; i++) {
-          newAttrs[i]!.detail = [...(valueSetsByPos[i] || [])].map((v) => createAttrDetail(v));
-        }
-        inferSpecImagesFromSkus(detail.skus, newAttrs);
         attrs.value = newAttrs;
         generateSkuCombinations();
         const skuMap = new Map(detail.skus.map((s) => [s.spec_values, s]));
@@ -717,6 +750,7 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
       };
       if (specType.value === 'multi' && skuRows.value.length > 0) {
         validateUniqueSkuCodes();
+        submitData.spec_meta = buildSpecMetaPayload();
         submitData.skus = skuRows.value.map((sku) => ({
           spec_values: sku.spec_values, price: sku.price, market_price: sku.market_price,
           stock: sku.stock, sku_code: sku.sku_code || '',
@@ -725,6 +759,7 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
         }));
       } else {
         // 单规格时显式清空多规格 SKU，避免“切换后历史 SKU 残留”
+        submitData.spec_meta = [];
         submitData.skus = [];
       }
       if (isEdit.value) { await updateGoodsApi(editIdRef.value!, submitData); message.success('更新成功'); }

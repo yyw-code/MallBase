@@ -143,6 +143,7 @@ CREATE TABLE `mb_goods` (
   `subtitle` varchar(255) DEFAULT NULL COMMENT '商品副标题',
   `main_image` varchar(255) DEFAULT NULL COMMENT '主图URL',
   `main_video` varchar(255) DEFAULT NULL COMMENT '主视频URL',
+  `spec_meta` json DEFAULT NULL COMMENT '规格设计器元数据 JSON',
   `description` text DEFAULT NULL COMMENT '商品详情（富文本）',
   `price` decimal(10,2) NOT NULL DEFAULT 0.00 COMMENT '最低价格（SKU最小价格）',
   `market_price` decimal(10,2) DEFAULT NULL COMMENT '市场价（划线价）',
