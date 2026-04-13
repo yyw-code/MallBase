@@ -167,8 +167,7 @@ const initSpecDrag = () => {
       const moved = attrs.value.splice(oldIndex!, 1)[0]!;
       attrs.value.splice(newIndex!, 0, moved);
       generateSkuCombinations();
-      // setTimeout 推迟到拖拽事件队列清空后，避免在 SortableJS 全局 dragover 监听触发期间 destroy 实例
-      setTimeout(() => nextTick(initValueDrag), 0);
+      // 规格重排后无需重新初始化值拖拽：onEnd 使用动态索引查找，不依赖创建时的 attrIdx
     },
   });
 };
@@ -183,6 +182,9 @@ const initValueDragAt = (attrIdx: number) => {
     animation: 150,
     onEnd({ oldIndex, newIndex, item, from }) {
       if (oldIndex === newIndex) return;
+      // 运行时动态查找当前索引，规格重排后无需重建实例
+      const currentIdx = valueListRefs.value.indexOf(el);
+      if (currentIdx === -1) return;
       // SortableJS 已经移动了 DOM，先把它恢复原位，让 Vue 来统一渲染
       const children = [...from.children];
       if (oldIndex! < newIndex!) {
@@ -190,10 +192,9 @@ const initValueDragAt = (attrIdx: number) => {
       } else {
         from.insertBefore(item, children[oldIndex! + 1] ?? null);
       }
-      const moved = attrs.value[attrIdx]!.detail.splice(oldIndex!, 1)[0]!;
-      attrs.value[attrIdx]!.detail.splice(newIndex!, 0, moved);
+      const moved = attrs.value[currentIdx]!.detail.splice(oldIndex!, 1)[0]!;
+      attrs.value[currentIdx]!.detail.splice(newIndex!, 0, moved);
       generateSkuCombinations();
-      // 值拖拽容器元素不变，实例仍有效，无需重新初始化
     },
   });
 };

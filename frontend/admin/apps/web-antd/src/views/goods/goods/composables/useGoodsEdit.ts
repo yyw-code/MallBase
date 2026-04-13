@@ -282,9 +282,7 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
         const moved = attrs.value.splice(oldIndex!, 1)[0]!;
         attrs.value.splice(newIndex!, 0, moved);
         generateSkuCombinations();
-        // 用 setTimeout 延迟到拖拽事件队列全部清空后再重建 value 监听
-        // 不能在 onEnd 里调用 destroy()，否则 SortableJS 全局 dragover 监听会访问已销毁实例
-        setTimeout(() => nextTick(initValueDrag), 0);
+        // 规格重排后无需重新初始化值拖拽：onEnd 使用动态索引查找，不依赖创建时的 attrIdx
       },
     });
   };
@@ -298,6 +296,9 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
       animation: 150,
       onEnd({ oldIndex, newIndex, item, from }) {
         if (oldIndex === newIndex) return;
+        // 运行时动态查找当前索引，规格重排后无需重建实例
+        const currentIdx = valueListRefs.value.indexOf(el);
+        if (currentIdx === -1) return;
         // SortableJS 已经移动了 DOM，先把它恢复原位，让 Vue 来统一渲染
         const children = [...from.children];
         if (oldIndex! < newIndex!) {
@@ -305,10 +306,9 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
         } else {
           from.insertBefore(item, children[oldIndex! + 1] ?? null);
         }
-        const moved = attrs.value[attrIdx]!.detail.splice(oldIndex!, 1)[0]!;
-        attrs.value[attrIdx]!.detail.splice(newIndex!, 0, moved);
+        const moved = attrs.value[currentIdx]!.detail.splice(oldIndex!, 1)[0]!;
+        attrs.value[currentIdx]!.detail.splice(newIndex!, 0, moved);
         generateSkuCombinations();
-        // 无需 reinit：容器元素不变，SortableJS 实例仍然有效
       },
     });
   };
