@@ -1,5 +1,4 @@
 <script lang="ts" setup>
-import type { FileInfo } from '#/components/upload';
 
 import { computed, nextTick, onMounted, watch } from 'vue';
 
@@ -37,11 +36,24 @@ const {
 
 const handleCancel = () => router.back();
 const onSubmit = () => handleSubmit(() => router.back());
-const batchGridStyle = computed(() => ({
-  gridTemplateColumns: (skuColumns.value as any[])
-    .map((column) => `${column.width || 120}px`)
-    .join(' '),
-}));
+const batchColumns = computed(() =>
+  (skuColumns.value as any[]).map((column) => ({
+    ...column,
+    customCell: undefined,
+  })),
+);
+const batchTableData = computed(() => [
+  {
+    spec_values: '__batch__',
+    detail: {},
+    price: undefined,
+    market_price: undefined,
+    stock: undefined,
+    sku_code: '',
+    image: undefined,
+    is_show: 1,
+  } as SkuRow,
+]);
 
 watch(editId, async (id) => {
   resetForm();
@@ -201,7 +213,7 @@ onMounted(() => {});
                                   </div>
                                   <div v-else class="val-pic-upload-wrap media-thumb media-upload-wrap">
                                     <Upload type="image" module="goods" :show-upload-list="false"
-                                      @update:value="(v: FileInfo | undefined) => handleSpecValueImageChange(attrIdx, detIdx, v)" />
+                                      @update:value="(v) => handleSpecValueImageChange(attrIdx, detIdx, v)" />
                                   </div>
                                 </div>
                                 <a-input v-model:value="det.value" placeholder="规格值" :maxlength="30" class="val-input media-input" @change="generateSkuCombinations" />
@@ -250,41 +262,56 @@ onMounted(() => {});
                           <button type="button" class="light-tool-btn primary" @click="applyBatch">批量修改 / 快速清空</button>
                           <button type="button" class="light-tool-btn" @click="resetBatchEditor">重置</button>
                         </div>
-                        <div class="sku-batch-grid" :style="batchGridStyle">
-                          <div
-                            v-for="(attr, attrIdx) in attrs"
-                            :key="attr.id"
-                            class="sku-batch-cell"
-                          >
-                            <a-select
-                              v-model:value="batchFilters[attr.value || `规格${attrIdx + 1}`]"
-                              :placeholder="`${attr.value || `规格${attrIdx + 1}`}：全部`"
-                              size="small"
-                              allow-clear
-                              class="batch-cell-control"
-                            >
-                              <a-select-option v-for="det in attr.detail.filter((item) => item.value)" :key="det.id" :value="det.value">{{ det.value }}</a-select-option>
-                            </a-select>
-                          </div>
-                          <div class="sku-batch-cell sku-batch-cell-image">
-                            <div class="batch-image-editor" title="批量设置图片">
-                              <Upload v-model:value="(batchData as any)['__image__']" type="image" module="goods" :show-upload-list="false" />
-                            </div>
-                          </div>
-                          <div class="sku-batch-cell">
-                            <a-input-number v-model:value="(batchData as any)['__price__']" placeholder="批量售价" :min="0" :precision="2" size="small" :controls="false" class="batch-cell-control" />
-                          </div>
-                          <div class="sku-batch-cell">
-                            <a-input-number v-model:value="(batchData as any)['__market_price__']" placeholder="批量市价" :min="0" :precision="2" size="small" :controls="false" class="batch-cell-control" />
-                          </div>
-                          <div class="sku-batch-cell">
-                            <a-input-number v-model:value="(batchData as any)['__stock__']" placeholder="批量库存" :min="0" size="small" :controls="false" class="batch-cell-control" />
-                          </div>
-                          <div class="sku-batch-cell">
-                            <a-input v-model:value="batchData['__sku_code__']" placeholder="批量SKU编码" size="small" class="batch-cell-control" />
-                          </div>
-                          <div class="sku-batch-cell sku-batch-cell-empty" />
-                        </div>
+                        <a-table
+                          :columns="(batchColumns as any[])"
+                          :data-source="batchTableData"
+                          :pagination="false"
+                          :scroll="{ x: 860 }"
+                          size="small"
+                          bordered
+                          row-key="spec_values"
+                          class="sku-table compact-table sku-batch-table"
+                        >
+                          <template #bodyCell="{ column }">
+                            <template v-if="(column as any)._isSpecCol">
+                              <a-select
+                                v-model:value="batchFilters[(column as any).title]"
+                                :placeholder="`${(column as any).title}：全部`"
+                                size="small"
+                                allow-clear
+                                class="batch-cell-control"
+                              >
+                                <a-select-option
+                                  v-for="attr in attrs.find((item) => (item.value || `规格${attrs.indexOf(item) + 1}`) === (column as any).title)?.detail.filter((item) => item.value) || []"
+                                  :key="attr.id"
+                                  :value="attr.value"
+                                >
+                                  {{ attr.value }}
+                                </a-select-option>
+                              </a-select>
+                            </template>
+                            <template v-else-if="column.dataIndex === 'image'">
+                              <div class="batch-image-editor" title="批量设置图片">
+                                <Upload v-model:value="(batchData as any)['__image__']" type="image" module="goods" :show-upload-list="false" />
+                              </div>
+                            </template>
+                            <template v-else-if="column.dataIndex === 'price'">
+                              <a-input-number v-model:value="(batchData as any)['__price__']" placeholder="批量售价" :min="0" :precision="2" size="small" :controls="false" class="batch-cell-control" />
+                            </template>
+                            <template v-else-if="column.dataIndex === 'market_price'">
+                              <a-input-number v-model:value="(batchData as any)['__market_price__']" placeholder="批量市价" :min="0" :precision="2" size="small" :controls="false" class="batch-cell-control" />
+                            </template>
+                            <template v-else-if="column.dataIndex === 'stock'">
+                              <a-input-number v-model:value="(batchData as any)['__stock__']" placeholder="批量库存" :min="0" size="small" :controls="false" class="batch-cell-control" />
+                            </template>
+                            <template v-else-if="column.dataIndex === 'sku_code'">
+                              <a-input v-model:value="batchData['__sku_code__']" placeholder="批量SKU编码" size="small" class="batch-cell-control" />
+                            </template>
+                            <template v-else-if="column.dataIndex === '_action'">
+                              <span class="batch-action-placeholder">-</span>
+                            </template>
+                          </template>
+                        </a-table>
                       </div>
                     </div>
                     <a-table :columns="(skuColumns as any[])" :data-source="tableData" :pagination="false" :scroll="{ x: 860, y: 400 }" size="small" bordered row-key="spec_values" class="sku-table compact-table">
@@ -298,7 +325,7 @@ onMounted(() => {});
                             </div>
                             <div v-else class="sku-upload-wrap">
                               <Upload type="image" module="goods" :show-upload-list="false"
-                                @update:value="(v: FileInfo | undefined) => { if (v) (record as SkuRow).image = v; }" />
+                                @update:value="(v) => { if (v) (record as SkuRow).image = v; }" />
                             </div>
                           </div>
                         </template>
@@ -489,18 +516,13 @@ onMounted(() => {});
 .sku-panel-summary { font-size: 13px; color: hsl(var(--muted-foreground)); padding-top: 4px; }
 .sku-batch-toolbar { display: flex; flex-direction: column; align-items: stretch; gap: 10px; padding: 10px 12px; margin-bottom: 10px; border: 1px solid hsl(var(--border)); border-radius: 12px; background: hsl(var(--primary) / 0.05); overflow-x: auto; }
 .sku-batch-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
-.sku-batch-grid { display: grid; gap: 8px; min-width: max-content; }
-.sku-batch-cell { display: flex; align-items: center; min-height: 32px; }
-.sku-batch-cell :deep(.ant-select),
-.sku-batch-cell :deep(.ant-input-number),
-.sku-batch-cell :deep(.ant-input-affix-wrapper),
-.sku-batch-cell :deep(.ant-input) { width: 100%; }
-.sku-batch-cell-image { justify-content: center; }
-.sku-batch-cell-empty { pointer-events: none; }
 .batch-cell-control { width: 100%; }
 .batch-image-editor { display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 32px; border: 1px solid hsl(var(--border)); border-radius: 10px; background: hsl(var(--card)); }
 .batch-image-editor :deep(.ant-upload-wrapper),
 .batch-image-editor :deep(.ant-upload.ant-upload-select) { width: 100% !important; height: 100% !important; min-width: 100% !important; min-height: 100% !important; border-radius: 10px !important; }
+.sku-batch-table { min-width: max-content; }
+.sku-batch-table :deep(.ant-table-tbody > tr > td) { background: hsl(var(--card)); }
+.batch-action-placeholder { color: hsl(var(--muted-foreground)); }
 .sku-hit-stat { display: flex; align-items: center; gap: 8px; padding: 0 10px; height: 32px; border-radius: 10px; background: hsl(var(--card)); color: hsl(var(--muted-foreground)); font-size: 12px; }
 .sku-hit-stat strong { font-size: 15px; color: hsl(var(--foreground)); }
 .sku-table :deep(.ant-table-cell) { padding: 4px 6px !important; vertical-align: middle; }

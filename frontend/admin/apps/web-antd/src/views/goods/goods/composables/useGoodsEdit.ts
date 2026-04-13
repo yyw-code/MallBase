@@ -206,7 +206,10 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
 
   const handleAddSpec = () => {
     attrs.value.push(createAttr());
-    nextTick(initValueDrag);
+    nextTick(() => {
+      initSpecDrag();
+      initValueDrag();
+    });
   };
   const handleRemoveSpec = (idx: number) => {
     attrs.value.splice(idx, 1);
@@ -322,6 +325,55 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
     }
     attrs.value = cloneAttrs(multiSpecDraft.value.attrs);
     skuRows.value = cloneSkuRows(multiSpecDraft.value.skuRows);
+  };
+
+  const inferSpecImagesFromSkus = (sourceSkus: Array<Record<string, any>>, targetAttrs: Attr[]) => {
+    let picAttrIndex = -1;
+    let picMap: Record<string, FileInfo> = {};
+
+    targetAttrs.forEach((_attr, attrIdx) => {
+      const currentMap: Record<string, FileInfo> = {};
+      let hasImage = false;
+      let isConsistent = true;
+
+      for (const sku of sourceSkus) {
+        const parts = String(sku.spec_values || '').split(',');
+        const value = parts[attrIdx] || '';
+        const imageUrl = sku.image || '';
+        if (!value || !imageUrl) {
+          continue;
+        }
+
+        hasImage = true;
+        const nextImage: FileInfo = {
+          url: imageUrl,
+          full_url: sku.image_full_url || imageUrl,
+          name: imageUrl.split('/').pop() || '',
+        };
+        const existing = currentMap[value];
+        if (existing && existing.url !== nextImage.url) {
+          isConsistent = false;
+          break;
+        }
+        currentMap[value] = nextImage;
+      }
+
+      if (isConsistent && hasImage && Object.keys(currentMap).length > 0) {
+        picAttrIndex = attrIdx;
+        picMap = currentMap;
+      }
+    });
+
+    if (picAttrIndex < 0) {
+      return;
+    }
+
+    targetAttrs.forEach((attr, attrIdx) => {
+      attr.add_pic = attrIdx === picAttrIndex ? 1 : 0;
+      attr.detail.forEach((detail) => {
+        detail.pic = attrIdx === picAttrIndex ? (picMap[detail.value] || '') : '';
+      });
+    });
   };
 
   const batchData = reactive<Record<string, any>>({});
@@ -587,6 +639,7 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
         for (let i = 0; i < colCount; i++) {
           newAttrs[i]!.detail = [...(valueSetsByPos[i] || [])].map((v) => createAttrDetail(v));
         }
+        inferSpecImagesFromSkus(detail.skus, newAttrs);
         attrs.value = newAttrs;
         generateSkuCombinations();
         const skuMap = new Map(detail.skus.map((s) => [s.spec_values, s]));
