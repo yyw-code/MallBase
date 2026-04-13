@@ -515,19 +515,8 @@ const handlePreview = (file: UploadFile) => {
   >
     <!-- 图片/视频类型：缩略图卡片 -->
     <template v-if="(isImageType || isVideoType) && showUploadButton">
-      <div>
-        <span>{{ isVideoType ? '▶' : '+' }}</span>
-        <div style="margin-top: 8px">
-          {{
-            isVideoType
-              ? type === 'video'
-                ? '上传视频'
-                : '添加视频'
-              : type === 'image'
-                ? '上传图片'
-                : '添加图片'
-          }}
-        </div>
+      <div class="upload-trigger-icon" :title="isVideoType ? '上传视频' : '上传图片'">
+        <span class="upload-trigger-icon__symbol">{{ isVideoType ? '▶' : '+' }}</span>
       </div>
     </template>
 
@@ -614,6 +603,32 @@ const handlePreview = (file: UploadFile) => {
 :deep(.ant-upload-select-picture-card) {
   background: hsl(var(--card));
   border: 1px dashed hsl(var(--border));
+}
+
+:deep(.ant-upload-select-picture-card .ant-upload) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.upload-trigger-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+
+.upload-trigger-icon__symbol {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  font-size: 20px;
+  line-height: 1;
+  color: hsl(var(--muted-foreground));
 }
 
 .video-inline-preview {

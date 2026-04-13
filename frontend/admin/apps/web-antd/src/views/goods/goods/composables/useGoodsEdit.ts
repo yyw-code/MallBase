@@ -24,10 +24,12 @@ import {
 } from '#/api/goods';
 
 export interface AttrDetail {
+  id: string;
   value: string;
   pic: FileInfo | string;
 }
 export interface Attr {
+  id: string;
   value: string;
   add_pic: 0 | 1;
   detail: AttrDetail[];
@@ -44,6 +46,25 @@ export interface SkuRow {
 }
 
 export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
+  const createLocalId = () =>
+    `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+
+  const createAttrDetail = (
+    value = '',
+    pic: FileInfo | string = '',
+  ): AttrDetail => ({
+    id: createLocalId(),
+    value,
+    pic,
+  });
+
+  const createAttr = (value = '', addPic: 0 | 1 = 0, detail: AttrDetail[] = [createAttrDetail()]): Attr => ({
+    id: createLocalId(),
+    value,
+    add_pic: addPic,
+    detail,
+  });
+
   /* ---------- 基本表单 ---------- */
   const formData = reactive({
     name: '',
@@ -184,7 +205,7 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
   };
 
   const handleAddSpec = () => {
-    attrs.value.push({ value: '', add_pic: 0, detail: [{ value: '', pic: '' }] });
+    attrs.value.push(createAttr());
     nextTick(initValueDrag);
   };
   const handleRemoveSpec = (idx: number) => {
@@ -192,7 +213,7 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
     generateSkuCombinations();
   };
   const addSpecValue = (attrIdx: number) => {
-    attrs.value[attrIdx]!.detail.push({ value: '', pic: '' });
+    attrs.value[attrIdx]!.detail.push(createAttrDetail());
     nextTick(() => initValueDragAt(attrIdx));
   };
   const removeSpecValue = (attrIdx: number, detIdx: number) => {
@@ -220,6 +241,8 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
     specSortable = Sortable.create(specListRef.value, {
       handle: '.spec-drag-handle',
       animation: 150,
+      forceFallback: true,
+      fallbackTolerance: 4,
       onEnd({ oldIndex, newIndex }) {
         if (oldIndex === newIndex) return;
         const moved = attrs.value.splice(oldIndex!, 1)[0]!;
@@ -235,6 +258,8 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
     valueSortables[attrIdx] = Sortable.create(el, {
       handle: '.val-drag-handle',
       animation: 150,
+      forceFallback: true,
+      fallbackTolerance: 4,
       onEnd({ oldIndex, newIndex }) {
         if (oldIndex === newIndex) return;
         const moved = attrs.value[attrIdx]!.detail.splice(oldIndex!, 1)[0]!;
@@ -251,9 +276,14 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
 
   const cloneAttrs = (source: Attr[]): Attr[] =>
     source.map((attr) => ({
+      id: attr.id || createLocalId(),
       value: attr.value,
       add_pic: attr.add_pic,
-      detail: attr.detail.map((det) => ({ value: det.value, pic: det.pic })),
+      detail: attr.detail.map((det) => ({
+        id: det.id || createLocalId(),
+        value: det.value,
+        pic: det.pic,
+      })),
     }));
 
   const cloneSkuRows = (source: SkuRow[]): SkuRow[] =>
@@ -409,9 +439,9 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
       const selected = specLibList.value.filter((s) => selectedSpecIds.value.includes(s.id));
       for (const spec of selected) {
         if (attrs.value.some((a) => a.value === spec.name)) continue;
-        const values = (spec.spec_values || spec.specValues || []).map((v) => ({ value: v.value, pic: '' }));
-        if (values.length === 0) values.push({ value: '', pic: '' });
-        attrs.value.push({ value: spec.name, add_pic: 0, detail: values });
+        const values = (spec.spec_values || spec.specValues || []).map((v) => createAttrDetail(v.value));
+        if (values.length === 0) values.push(createAttrDetail());
+        attrs.value.push(createAttr(spec.name, 0, values));
         added++;
       }
     } else {
@@ -419,9 +449,9 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
       for (const tpl of selected) {
         for (const item of (tpl.detail || [])) {
           if (attrs.value.some((a) => a.value === item.spec_name)) continue;
-          const values = (item.values || []).map((v) => ({ value: v, pic: '' }));
-          if (values.length === 0) values.push({ value: '', pic: '' });
-          attrs.value.push({ value: item.spec_name, add_pic: 0, detail: values });
+          const values = (item.values || []).map((v) => createAttrDetail(v));
+          if (values.length === 0) values.push(createAttrDetail());
+          attrs.value.push(createAttr(item.spec_name, 0, values));
           added++;
         }
       }
@@ -536,13 +566,15 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
       if (detail.skus && detail.skus.length > 0) {
         specType.value = 'multi';
         const colCount = (detail.skus[0]!.spec_values || '').split(',').length;
-        const newAttrs: Attr[] = Array.from({ length: colCount }, (_, i) => ({ value: `规格${i + 1}`, add_pic: 0, detail: [] }));
+        const newAttrs: Attr[] = Array.from({ length: colCount }, (_, i) =>
+          createAttr(`规格${i + 1}`, 0, []),
+        );
         const valueSetsByPos: Set<string>[] = Array.from({ length: colCount }, () => new Set());
         for (const sku of detail.skus) {
           (sku.spec_values || '').split(',').forEach((v, i) => { if (v) valueSetsByPos[i]?.add(v); });
         }
         for (let i = 0; i < colCount; i++) {
-          newAttrs[i]!.detail = [...(valueSetsByPos[i] || [])].map((v) => ({ value: v, pic: '' }));
+          newAttrs[i]!.detail = [...(valueSetsByPos[i] || [])].map((v) => createAttrDetail(v));
         }
         attrs.value = newAttrs;
         generateSkuCombinations();
@@ -581,7 +613,10 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
         ...formData,
         main_image: typeof formData.main_image === 'object' ? (formData.main_image as FileInfo)?.url || '' : formData.main_image || '',
         main_video: typeof formData.main_video === 'object' ? (formData.main_video as FileInfo)?.url || '' : formData.main_video || '',
-        images: formData.images.map((img, index) => ({ url: typeof img === 'object' ? (img as FileInfo).url : img, sort: index })),
+        images: formData.images.map((img: FileInfo | string, index: number) => ({
+          url: typeof img === 'object' ? (img as FileInfo).url : img,
+          sort: index,
+        })),
       };
       if (specType.value === 'multi' && skuRows.value.length > 0) {
         submitData.skus = skuRows.value.map((sku) => ({

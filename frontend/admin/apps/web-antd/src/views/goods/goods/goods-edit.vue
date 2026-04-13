@@ -8,7 +8,7 @@ import { useRoute, useRouter } from 'vue-router';
 import RichTextEditor from '#/components/rich-text-editor/index.vue';
 import Upload from '#/components/upload/index.vue';
 
-import { type Attr, type SkuRow, useGoodsEdit } from './composables/useGoodsEdit';
+import { type SkuRow, useGoodsEdit } from './composables/useGoodsEdit';
 
 defineOptions({ name: 'GoodsEdit' });
 
@@ -164,7 +164,7 @@ onMounted(() => {});
                         </div>
                       </div>
                       <div ref="specListRef" class="spec-list">
-                        <div v-for="(attr, attrIdx) in attrs" :key="attrIdx" class="spec-item">
+                        <div v-for="(attr, attrIdx) in attrs" :key="attr.id" class="spec-item">
                           <div class="spec-name-row">
                             <div class="spec-name-main">
                               <span class="spec-drag-handle" title="拖拽排序"><svg width="12" height="12" viewBox="0 0 12 12" fill="#bbb"><circle cx="3" cy="3" r="1.2"/><circle cx="9" cy="3" r="1.2"/><circle cx="3" cy="7" r="1.2"/><circle cx="9" cy="7" r="1.2"/><circle cx="3" cy="11" r="1.2"/><circle cx="9" cy="11" r="1.2"/></svg></span>
@@ -183,7 +183,7 @@ onMounted(() => {});
                           </div>
                           <div :ref="(el) => { valueListRefs[attrIdx] = el as HTMLElement }" class="spec-values-row">
                             <template v-if="attr.add_pic">
-                              <div v-for="(det, detIdx) in attr.detail" :key="detIdx" class="spec-val-item has-pic">
+                              <div v-for="(det, detIdx) in attr.detail" :key="det.id" class="spec-val-item has-pic">
                                 <div class="spec-val-media-top">
                                   <span class="val-drag-handle"><svg width="10" height="10" viewBox="0 0 12 12" fill="#ccc"><circle cx="3" cy="3" r="1.2"/><circle cx="9" cy="3" r="1.2"/><circle cx="3" cy="7" r="1.2"/><circle cx="9" cy="7" r="1.2"/><circle cx="3" cy="11" r="1.2"/><circle cx="9" cy="11" r="1.2"/></svg></span>
                                   <span class="val-del media-del" @click="removeSpecValue(attrIdx, detIdx)">×</span>
@@ -194,7 +194,7 @@ onMounted(() => {});
                                     <span class="val-pic-del" @click.stop="handleSpecValueImageChange(attrIdx, detIdx, '')">×</span>
                                   </div>
                                   <div v-else class="val-pic-upload-wrap media-thumb media-upload-wrap">
-                                    <Upload type="image" module="goods" :show-upload-list="false" class="val-pic-upload"
+                                    <Upload type="image" module="goods" :show-upload-list="false"
                                       @update:value="(v: FileInfo | undefined) => handleSpecValueImageChange(attrIdx, detIdx, v)" />
                                   </div>
                                 </div>
@@ -206,7 +206,7 @@ onMounted(() => {});
                               </button>
                             </template>
                             <template v-else>
-                              <div v-for="(det, detIdx) in attr.detail" :key="detIdx" class="spec-val-item">
+                              <div v-for="(det, detIdx) in attr.detail" :key="det.id" class="spec-val-item">
                                 <span class="val-drag-handle"><svg width="10" height="10" viewBox="0 0 12 12" fill="#ccc"><circle cx="3" cy="3" r="1.2"/><circle cx="9" cy="3" r="1.2"/><circle cx="3" cy="7" r="1.2"/><circle cx="9" cy="7" r="1.2"/><circle cx="3" cy="11" r="1.2"/><circle cx="9" cy="11" r="1.2"/></svg></span>
                                 <a-input v-model:value="det.value" placeholder="规格值" :maxlength="30" class="val-input" @change="generateSkuCombinations" />
                                 <span class="val-del" @click="removeSpecValue(attrIdx, detIdx)">×</span>
@@ -236,7 +236,7 @@ onMounted(() => {});
                         <div class="sku-panel-summary">已生成 {{ skuRows.length }} 个 SKU</div>
                       </div>
                       <div class="sku-batch-toolbar">
-                        <div class="sku-batch-left">
+                        <div class="sku-batch-filters">
                           <a-select
                             v-for="(attr, attrIdx) in attrs"
                             :key="attrIdx"
@@ -252,12 +252,11 @@ onMounted(() => {});
                           <a-input-number v-model:value="(batchData as any)['__market_price__']" placeholder="批量市价" :min="0" :precision="2" size="small" :controls="false" class="batch-editor" />
                           <a-input-number v-model:value="(batchData as any)['__stock__']" placeholder="批量库存" :min="0" size="small" :controls="false" class="batch-editor" />
                           <a-input v-model:value="batchData['__sku_code__']" placeholder="批量SKU编码" size="small" class="batch-editor" />
-                          <div class="batch-image-editor">
-                            <span class="batch-image-label">批量设图</span>
+                          <div class="batch-image-editor" title="批量设置图片">
                             <Upload v-model:value="(batchData as any)['__image__']" type="image" module="goods" :show-upload-list="false" />
                           </div>
                         </div>
-                        <div class="sku-batch-right">
+                        <div class="sku-batch-actions">
                           <div class="sku-hit-stat">
                             <span>命中 SKU</span>
                             <strong>{{ matchedSkuRows.length }}</strong>
@@ -268,7 +267,7 @@ onMounted(() => {});
                       </div>
                     </div>
                     <a-table :columns="(skuColumns as any[])" :data-source="tableData" :pagination="false" :scroll="{ x: 860, y: 400 }" size="small" bordered row-key="spec_values" class="sku-table compact-table">
-                      <template #bodyCell="{ column, record, index: rowIdx }">
+                      <template #bodyCell="{ column, record }">
                         <template v-if="(column as any)._isSpecCol"><span class="sku-spec-val">{{ (record as SkuRow).detail[(column as any).title] }}</span></template>
                         <template v-else-if="column.dataIndex === 'image'">
                           <div class="sku-img-cell">
@@ -420,7 +419,7 @@ onMounted(() => {});
 .spec-name-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 10px; background: hsl(var(--popover) / 0.9); border-bottom: 1px solid hsl(var(--border)); }
 .spec-name-main { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .spec-name-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
-.spec-drag-handle, .val-drag-handle { cursor: grab; padding: 0 4px; color: #bbb; flex-shrink: 0; }
+.spec-drag-handle, .val-drag-handle { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; cursor: grab; padding: 0; color: #bbb; flex-shrink: 0; }
 .spec-drag-handle:active, .val-drag-handle:active { cursor: grabbing; }
 .spec-name-input { width: 240px; }
 .icon-info { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; border-radius: 50%; border: 1px solid hsl(var(--border)); font-size: 11px; color: hsl(var(--muted-foreground)); cursor: help; flex-shrink: 0; }
@@ -442,10 +441,11 @@ onMounted(() => {});
 .media-thumb img { width: 100%; height: 64px; object-fit: cover; border-radius: 10px; }
 .val-pic-del { position: absolute; top: -6px; right: -6px; width: 16px; height: 16px; border-radius: 50%; background: rgba(0,0,0,.45); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 12px; cursor: pointer; line-height: 1; }
 .val-pic-del:hover { background: #ff4d4f; }
-.val-pic-upload-wrap :deep(.ant-upload) { width: 46px !important; height: 46px !important; min-width: 46px !important; min-height: 46px !important; font-size: 18px; border-radius: 4px; overflow: hidden !important; }
+.val-pic-upload-wrap :deep(.ant-upload),
+.val-pic-upload-wrap :deep(.ant-upload-wrapper) { width: 100% !important; height: 64px !important; min-width: 100% !important; min-height: 64px !important; }
 .val-pic-upload-wrap :deep(.ant-upload-text) { display: none !important; }
 .val-pic-upload-wrap :deep(.ant-upload-list) { display: none !important; }
-.media-upload-wrap :deep(.ant-upload) { border-style: dashed !important; }
+.media-upload-wrap :deep(.ant-upload) { border-style: dashed !important; border-radius: 10px !important; overflow: hidden !important; }
 .val-del { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; font-size: 16px; color: #bfbfbf; cursor: pointer; line-height: 1; transition: color 0.15s; margin-left: 2px; align-self: center; }
 .val-del:hover { color: #ff4d4f; }
 .media-del { align-self: auto; }
@@ -464,14 +464,14 @@ onMounted(() => {});
 .sku-panel { margin-bottom: 10px; }
 .sku-panel-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
 .sku-panel-summary { font-size: 13px; color: hsl(var(--muted-foreground)); padding-top: 4px; }
-.sku-batch-toolbar { display: flex; justify-content: space-between; gap: 16px; align-items: center; padding: 9px 12px; margin-bottom: 10px; border: 1px solid hsl(var(--border)); border-radius: 12px; background: hsl(var(--primary) / 0.05); }
-.sku-batch-left { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.sku-batch-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.sku-batch-toolbar { display: flex; flex-direction: column; align-items: stretch; gap: 10px; padding: 10px 12px; margin-bottom: 10px; border: 1px solid hsl(var(--border)); border-radius: 12px; background: hsl(var(--primary) / 0.05); }
+.sku-batch-filters { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.sku-batch-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
 .batch-filter-select { width: 170px; }
 .batch-editor { width: 120px; }
-.batch-image-editor { display: inline-flex; align-items: center; gap: 8px; padding: 0 8px 0 10px; height: 32px; border: 1px solid hsl(var(--border)); border-radius: 10px; background: hsl(var(--card)); }
-.batch-image-label { font-size: 12px; color: hsl(var(--muted-foreground)); }
-.batch-image-editor :deep(.ant-upload.ant-upload-select) { width: 30px !important; height: 30px !important; min-width: 30px !important; min-height: 30px !important; border-radius: 8px !important; }
+.batch-image-editor { display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 32px; border: 1px solid hsl(var(--border)); border-radius: 10px; background: hsl(var(--card)); }
+.batch-image-editor :deep(.ant-upload-wrapper),
+.batch-image-editor :deep(.ant-upload.ant-upload-select) { width: 100% !important; height: 100% !important; min-width: 100% !important; min-height: 100% !important; border-radius: 10px !important; }
 .sku-hit-stat { display: flex; align-items: center; gap: 8px; padding: 0 10px; height: 32px; border-radius: 10px; background: hsl(var(--card)); color: hsl(var(--muted-foreground)); font-size: 12px; }
 .sku-hit-stat strong { font-size: 15px; color: hsl(var(--foreground)); }
 .sku-table :deep(.ant-table-cell) { padding: 4px 6px !important; vertical-align: middle; }
@@ -491,13 +491,12 @@ onMounted(() => {});
 .sku-img-cell :deep(.ant-upload-wrapper) { display: block; width: 36px; height: 36px; }
 
 @media (max-width: 1280px) {
-  .sku-batch-toolbar,
   .page-header,
   .spec-name-row {
     flex-wrap: wrap;
   }
 
-  .sku-batch-right {
+  .sku-batch-actions {
     width: 100%;
     justify-content: flex-end;
   }
