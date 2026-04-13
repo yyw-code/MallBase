@@ -37,6 +37,11 @@ const {
 
 const handleCancel = () => router.back();
 const onSubmit = () => handleSubmit(() => router.back());
+const batchGridStyle = computed(() => ({
+  gridTemplateColumns: (skuColumns.value as any[])
+    .map((column) => `${column.width || 120}px`)
+    .join(' '),
+}));
 
 watch(editId, async (id) => {
   resetForm();
@@ -75,8 +80,9 @@ onMounted(() => {});
     <!-- 内容区域 -->
     <div class="page-body">
       <a-spin :spinning="loading">
-        <a-form ref="formRef" :model="formData" :rules="rules" :label-col="{ style: { width: '88px' } }">
-          <a-tabs v-model:activeKey="activeTab" class="edit-tabs">
+        <div class="page-content-min">
+          <a-form ref="formRef" :model="formData" :rules="rules" :label-col="{ style: { width: '88px' } }">
+            <a-tabs v-model:activeKey="activeTab" class="edit-tabs">
             <!-- ===== 基本信息 ===== -->
             <a-tab-pane key="basic" tab="基本信息">
               <div class="tab-body">
@@ -236,26 +242,6 @@ onMounted(() => {});
                         <div class="sku-panel-summary">已生成 {{ skuRows.length }} 个 SKU</div>
                       </div>
                       <div class="sku-batch-toolbar">
-                        <div class="sku-batch-filters">
-                          <a-select
-                            v-for="(attr, attrIdx) in attrs"
-                            :key="attrIdx"
-                            v-model:value="batchFilters[attr.value || `规格${attrIdx + 1}`]"
-                            :placeholder="`${attr.value || `规格${attrIdx + 1}`}：全部`"
-                            size="small"
-                            allow-clear
-                            class="batch-filter-select"
-                          >
-                            <a-select-option v-for="det in attr.detail.filter((item) => item.value)" :key="det.value" :value="det.value">{{ attr.value || `规格${attrIdx + 1}` }}：{{ det.value }}</a-select-option>
-                          </a-select>
-                          <a-input-number v-model:value="(batchData as any)['__price__']" placeholder="批量售价" :min="0" :precision="2" size="small" :controls="false" class="batch-editor" />
-                          <a-input-number v-model:value="(batchData as any)['__market_price__']" placeholder="批量市价" :min="0" :precision="2" size="small" :controls="false" class="batch-editor" />
-                          <a-input-number v-model:value="(batchData as any)['__stock__']" placeholder="批量库存" :min="0" size="small" :controls="false" class="batch-editor" />
-                          <a-input v-model:value="batchData['__sku_code__']" placeholder="批量SKU编码" size="small" class="batch-editor" />
-                          <div class="batch-image-editor" title="批量设置图片">
-                            <Upload v-model:value="(batchData as any)['__image__']" type="image" module="goods" :show-upload-list="false" />
-                          </div>
-                        </div>
                         <div class="sku-batch-actions">
                           <div class="sku-hit-stat">
                             <span>命中 SKU</span>
@@ -263,6 +249,41 @@ onMounted(() => {});
                           </div>
                           <button type="button" class="light-tool-btn primary" @click="applyBatch">批量修改 / 快速清空</button>
                           <button type="button" class="light-tool-btn" @click="resetBatchEditor">重置</button>
+                        </div>
+                        <div class="sku-batch-grid" :style="batchGridStyle">
+                          <div
+                            v-for="(attr, attrIdx) in attrs"
+                            :key="attr.id"
+                            class="sku-batch-cell"
+                          >
+                            <a-select
+                              v-model:value="batchFilters[attr.value || `规格${attrIdx + 1}`]"
+                              :placeholder="`${attr.value || `规格${attrIdx + 1}`}：全部`"
+                              size="small"
+                              allow-clear
+                              class="batch-cell-control"
+                            >
+                              <a-select-option v-for="det in attr.detail.filter((item) => item.value)" :key="det.id" :value="det.value">{{ det.value }}</a-select-option>
+                            </a-select>
+                          </div>
+                          <div class="sku-batch-cell sku-batch-cell-image">
+                            <div class="batch-image-editor" title="批量设置图片">
+                              <Upload v-model:value="(batchData as any)['__image__']" type="image" module="goods" :show-upload-list="false" />
+                            </div>
+                          </div>
+                          <div class="sku-batch-cell">
+                            <a-input-number v-model:value="(batchData as any)['__price__']" placeholder="批量售价" :min="0" :precision="2" size="small" :controls="false" class="batch-cell-control" />
+                          </div>
+                          <div class="sku-batch-cell">
+                            <a-input-number v-model:value="(batchData as any)['__market_price__']" placeholder="批量市价" :min="0" :precision="2" size="small" :controls="false" class="batch-cell-control" />
+                          </div>
+                          <div class="sku-batch-cell">
+                            <a-input-number v-model:value="(batchData as any)['__stock__']" placeholder="批量库存" :min="0" size="small" :controls="false" class="batch-cell-control" />
+                          </div>
+                          <div class="sku-batch-cell">
+                            <a-input v-model:value="batchData['__sku_code__']" placeholder="批量SKU编码" size="small" class="batch-cell-control" />
+                          </div>
+                          <div class="sku-batch-cell sku-batch-cell-empty" />
                         </div>
                       </div>
                     </div>
@@ -309,8 +330,9 @@ onMounted(() => {});
                 </a-form-item>
               </div>
             </a-tab-pane>
-          </a-tabs>
-        </a-form>
+            </a-tabs>
+          </a-form>
+        </div>
       </a-spin>
     </div>
 
@@ -383,8 +405,9 @@ onMounted(() => {});
 .fullscreen-btn:hover { color: #1677ff; }
 
 /* ===== 内容区域 ===== */
-.page-body { flex: 1; overflow-y: auto; padding: 16px; }
-.edit-tabs { background: hsl(var(--card)); border-radius: 8px; }
+.page-body { flex: 1; overflow: auto; padding: 16px; }
+.page-content-min { min-width: 1320px; }
+.edit-tabs { background: hsl(var(--card)); border-radius: 8px; min-width: 1320px; }
 .edit-tabs :deep(.ant-tabs-nav) { padding: 0 20px; margin: 0; background: hsl(var(--popover)); border-radius: 8px 8px 0 0; }
 
 /* ===== tab 内容区域 ===== */
@@ -464,11 +487,17 @@ onMounted(() => {});
 .sku-panel { margin-bottom: 10px; }
 .sku-panel-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
 .sku-panel-summary { font-size: 13px; color: hsl(var(--muted-foreground)); padding-top: 4px; }
-.sku-batch-toolbar { display: flex; flex-direction: column; align-items: stretch; gap: 10px; padding: 10px 12px; margin-bottom: 10px; border: 1px solid hsl(var(--border)); border-radius: 12px; background: hsl(var(--primary) / 0.05); }
-.sku-batch-filters { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.sku-batch-toolbar { display: flex; flex-direction: column; align-items: stretch; gap: 10px; padding: 10px 12px; margin-bottom: 10px; border: 1px solid hsl(var(--border)); border-radius: 12px; background: hsl(var(--primary) / 0.05); overflow-x: auto; }
 .sku-batch-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
-.batch-filter-select { width: 170px; }
-.batch-editor { width: 120px; }
+.sku-batch-grid { display: grid; gap: 8px; min-width: max-content; }
+.sku-batch-cell { display: flex; align-items: center; min-height: 32px; }
+.sku-batch-cell :deep(.ant-select),
+.sku-batch-cell :deep(.ant-input-number),
+.sku-batch-cell :deep(.ant-input-affix-wrapper),
+.sku-batch-cell :deep(.ant-input) { width: 100%; }
+.sku-batch-cell-image { justify-content: center; }
+.sku-batch-cell-empty { pointer-events: none; }
+.batch-cell-control { width: 100%; }
 .batch-image-editor { display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 32px; border: 1px solid hsl(var(--border)); border-radius: 10px; background: hsl(var(--card)); }
 .batch-image-editor :deep(.ant-upload-wrapper),
 .batch-image-editor :deep(.ant-upload.ant-upload-select) { width: 100% !important; height: 100% !important; min-width: 100% !important; min-height: 100% !important; border-radius: 10px !important; }
@@ -497,7 +526,6 @@ onMounted(() => {});
   }
 
   .sku-batch-actions {
-    width: 100%;
     justify-content: flex-end;
   }
 }

@@ -211,6 +211,10 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
   const handleRemoveSpec = (idx: number) => {
     attrs.value.splice(idx, 1);
     generateSkuCombinations();
+    nextTick(() => {
+      initSpecDrag();
+      initValueDrag();
+    });
   };
   const addSpecValue = (attrIdx: number) => {
     attrs.value[attrIdx]!.detail.push(createAttrDetail());
@@ -223,10 +227,12 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
     }
     attrs.value[attrIdx]!.detail.splice(detIdx, 1);
     generateSkuCombinations();
+    nextTick(() => initValueDragAt(attrIdx));
   };
   const toggleAddPic = (e: boolean | 0 | 1, idx: number) => {
     if (e) { attrs.value.forEach((a, i) => { if (i !== idx) a.add_pic = 0; }); }
     generateSkuCombinations();
+    nextTick(initValueDrag);
   };
 
   /* ---------- 拖拽 ---------- */
@@ -248,6 +254,10 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
         const moved = attrs.value.splice(oldIndex!, 1)[0]!;
         attrs.value.splice(newIndex!, 0, moved);
         generateSkuCombinations();
+        nextTick(() => {
+          initSpecDrag();
+          initValueDrag();
+        });
       },
     });
   };
@@ -265,6 +275,7 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
         const moved = attrs.value[attrIdx]!.detail.splice(oldIndex!, 1)[0]!;
         attrs.value[attrIdx]!.detail.splice(newIndex!, 0, moved);
         generateSkuCombinations();
+        nextTick(() => initValueDragAt(attrIdx));
       },
     });
   };
