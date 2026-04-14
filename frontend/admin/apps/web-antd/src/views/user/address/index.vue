@@ -1,14 +1,15 @@
 <script lang="ts" setup>
 import type { UserAddressApi } from '#/api/user';
 
-import { h, ref } from 'vue';
+import { h, onMounted, ref } from 'vue';
 
-import { message, Switch, Tag } from 'ant-design-vue';
+import { message, Switch, Tag, Tooltip } from 'ant-design-vue';
 
 import {
   deleteUserAddressApi,
   getUserAddressInfoApi,
   getUserAddressListApi,
+  refreshUserAddressInvalidApi,
   setUserAddressDefaultApi,
 } from '#/api/user';
 import { useTableCrud } from '#/composables/useTableCrud';
@@ -58,6 +59,18 @@ const handleSetDefault = async (record: UserAddressApi.AddressItem) => {
   await loadData(searchParams.value);
 };
 
+const handleRefreshInvalid = async () => {
+  const result = await refreshUserAddressInvalidApi();
+  message.success(
+    `已扫描 ${result.total} 条，恢复 ${result.recovered} 条，仍失效 ${result.invalid} 条`,
+  );
+  await loadData(searchParams.value);
+};
+
+onMounted(async () => {
+  await loadData(searchParams.value);
+});
+
 async function handleSearch() {
   pagination.current = 1;
   await loadData(searchParams.value);
@@ -87,8 +100,21 @@ const columns = [
     dataIndex: 'region_status',
     width: 100,
     customRender: ({ record }: { record: UserAddressApi.AddressItem }) =>
-      h(Tag, { color: record.region_status === 1 ? 'success' : 'error' }, () =>
-        record.region_status === 1 ? '有效' : '失效',
+      h(
+        Tooltip,
+        {
+          title:
+            record.region_status === 1
+              ? undefined
+              : record.region_invalid_reason ||
+                '关联地区已失效，请重新编辑地址',
+        },
+        () =>
+          h(
+            Tag,
+            { color: record.region_status === 1 ? 'success' : 'error' },
+            () => (record.region_status === 1 ? '有效' : '失效'),
+          ),
       ),
   },
   {
@@ -113,6 +139,9 @@ const columns = [
   <div class="p-4">
     <div class="mb-4">
       <a-button type="primary" @click="handleCreate">新增地址</a-button>
+      <a-button class="ml-2" @click="handleRefreshInvalid">
+        更新失效数据
+      </a-button>
       <a-button class="ml-2" @click="() => loadData(searchParams)">
         刷新
       </a-button>

@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import type { FreightTemplateApi } from '#/api/setting/freight-template';
 
-import { h, ref } from 'vue';
+import { h, onMounted, ref } from 'vue';
 
 import { message, Switch, Tag } from 'ant-design-vue';
 
@@ -9,6 +9,7 @@ import {
   deleteFreightTemplateApi,
   getFreightTemplateInfoApi,
   getFreightTemplateListApi,
+  refreshFreightTemplateInvalidApi,
   updateFreightTemplateStatusApi,
 } from '#/api/setting/freight-template';
 import { useTableCrud } from '#/composables/useTableCrud';
@@ -55,6 +56,18 @@ const handleStatusChange = async (
   message.success('状态更新成功');
   await loadData(searchParams.value);
 };
+
+const handleRefreshInvalid = async () => {
+  const result = await refreshFreightTemplateInvalidApi();
+  message.success(
+    `已扫描 ${result.total} 条，恢复 ${result.recovered} 条，仍失效 ${result.invalid} 条`,
+  );
+  await loadData(searchParams.value);
+};
+
+onMounted(async () => {
+  await loadData(searchParams.value);
+});
 
 async function handleSearch() {
   pagination.current = 1;
@@ -112,6 +125,9 @@ const columns = [
   <div class="p-4">
     <div class="mb-4">
       <a-button type="primary" @click="handleCreate">新增模板</a-button>
+      <a-button class="ml-2" @click="handleRefreshInvalid">
+        更新失效数据
+      </a-button>
       <a-button class="ml-2" @click="() => loadData(searchParams)">
         刷新
       </a-button>

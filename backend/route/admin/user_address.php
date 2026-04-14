@@ -12,6 +12,7 @@ Route::group('user/address', function () {
     Route::put('update/:id', 'update')->name('SystemUserAddressUpdate')->option(['_alias' => '编辑地址', '_desc' => '编辑用户收货地址', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::delete('delete/:id', 'delete')->name('SystemUserAddressDelete')->option(['_alias' => '删除地址', '_desc' => '删除用户收货地址', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::put('setDefault/:id', 'setDefault')->name('SystemUserAddressSetDefault')->option(['_alias' => '设为默认', '_desc' => '设置默认地址', '_auth' => true]);
+    Route::put('refreshInvalid', 'refreshInvalid')->name('SystemUserAddressRefreshInvalid')->option(['_alias' => '更新失效数据', '_desc' => '按编码重匹配失效收货地址', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
 })->prefix('user.UserAddressController/')
     ->middleware([JwtAuth::class, CheckPermission::class])
     ->option([

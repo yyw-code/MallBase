@@ -52,4 +52,9 @@ class UserAddressController extends BaseController
         $this->service()->setDefault((int) $id);
         return $this->success(null, '设置成功');
     }
+
+    public function refreshInvalid()
+    {
+        return $this->success($this->service()->refreshInvalidData(), '更新成功');
+    }
 }

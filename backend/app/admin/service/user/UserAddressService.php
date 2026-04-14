@@ -126,6 +126,86 @@ class UserAddressService extends BaseService
         });
     }
 
+    /**
+     * 批量重匹配地址地区数据
+     *
+     * @return array<string, int>
+     */
+    public function refreshInvalidData(): array
+    {
+        $list = $this->model()
+            ->whereNull('delete_time')
+            ->order('id', 'asc')
+            ->select();
+
+        $resolver = app()->make(RegionResolverService::class);
+        $total = 0;
+        $recovered = 0;
+        $invalid = 0;
+
+        foreach ($list as $item) {
+            ++$total;
+            $before = $item->toArray();
+            $state = $resolver->getAddressRegionState($before);
+
+            if ($state['valid']) {
+                $payload = (array) ($state['data'] ?? []);
+                $changed = (int) ($before['region_status'] ?? 0) !== 1
+                    || (int) ($before['province_id'] ?? 0) !== (int) ($payload['province_id'] ?? 0)
+                    || (int) ($before['city_id'] ?? 0) !== (int) ($payload['city_id'] ?? 0)
+                    || (int) ($before['district_id'] ?? 0) !== (int) ($payload['district_id'] ?? 0)
+                    || (int) ($before['street_id'] ?? 0) !== (int) ($payload['street_id'] ?? 0)
+                    || (string) ($before['region_invalid_reason'] ?? '') !== '';
+
+                $item->save($payload);
+                if ($changed) {
+                    ++$recovered;
+                }
+                continue;
+            }
+
+            $item->save([
+                'region_status' => 0,
+                'region_invalid_reason' => $state['reason'] ?? '关联地区已失效，请重新编辑地址',
+            ]);
+            ++$invalid;
+        }
+
+        return compact('total', 'recovered', 'invalid');
+    }
+
+    /**
+     * 根据地区子树标记地址失效
+     *
+     * @param array<int, int> $regionIds
+     */
+    public function invalidateByRegionIds(array $regionIds, string $reason): int
+    {
+        $regionIds = array_values(array_unique(array_map('intval', $regionIds)));
+        if ($regionIds === []) {
+            return 0;
+        }
+
+        $affectedIds = array_merge(
+            $this->model()->whereNull('delete_time')->whereIn('province_id', $regionIds)->column('id'),
+            $this->model()->whereNull('delete_time')->whereIn('city_id', $regionIds)->column('id'),
+            $this->model()->whereNull('delete_time')->whereIn('district_id', $regionIds)->column('id'),
+            $this->model()->whereNull('delete_time')->whereIn('street_id', $regionIds)->column('id'),
+        );
+        $affectedIds = array_values(array_unique(array_map('intval', $affectedIds)));
+
+        if ($affectedIds === []) {
+            return 0;
+        }
+
+        return $this->model()
+            ->whereIn('id', $affectedIds)
+            ->update([
+                'region_status' => 0,
+                'region_invalid_reason' => $reason,
+            ]);
+    }
+
     protected function clearDefaultAddress(int $userId, ?int $excludeId = null): void
     {
         $query = $this->model()->where('user_id', $userId)->whereNull('delete_time');
@@ -141,9 +221,11 @@ class UserAddressService extends BaseService
      */
     protected function refreshRegionState(array $item): array
     {
-        $valid = app()->make(RegionResolverService::class)->isAddressRegionValid($item);
-        $item['region_status'] = $valid ? 1 : 0;
-        $item['region_invalid_reason'] = $valid ? null : '关联街道已失效，请重新编辑地址';
+        $state = app()->make(RegionResolverService::class)->getAddressRegionState($item);
+        $item['region_status'] = ($state['valid'] ?? false) ? 1 : 0;
+        $item['region_invalid_reason'] = $state['valid'] ?? false
+            ? null
+            : ($state['reason'] ?? '关联地区已失效，请重新编辑地址');
         return $item;
     }
 }

@@ -4,6 +4,8 @@ declare(strict_types=1);
 namespace app\admin\service\region;
 
 use app\admin\model\region\Region;
+use app\admin\service\setting\FreightTemplateService;
+use app\admin\service\user\UserAddressService;
 use app\service\RegionResolverService;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
@@ -116,31 +118,16 @@ class RegionService extends BaseService
             throw new BusinessException('地区不存在');
         }
 
-        $children = $this->model()->where('parent_id', $id)->count();
-        if ($children > 0) {
-            throw new BusinessException('请先删除子级地区');
-        }
+        $subtreeIds = $this->collectSubtreeIds($id);
 
-        $addressRef = $this->model(\app\admin\model\user\UserAddress::class)
-            ->where(function ($query) use ($id) {
-                $query->where('province_id', $id)
-                    ->whereOr('city_id', $id)
-                    ->whereOr('district_id', $id)
-                    ->whereOr('street_id', $id);
-            })
-            ->count();
-        if ($addressRef > 0) {
-            throw new BusinessException('该地区已被收货地址引用，不能删除');
-        }
+        return $this->transaction(function () use ($subtreeIds) {
+            app()->make(UserAddressService::class)
+                ->invalidateByRegionIds($subtreeIds, '关联地区已删除，请执行更新失效数据');
+            app()->make(FreightTemplateService::class)
+                ->invalidateRulesByRegionIds($subtreeIds, '关联地区已删除，请执行更新失效数据');
 
-        $ruleRef = $this->model(\app\admin\model\setting\FreightTemplateRule::class)
-            ->whereRaw("JSON_CONTAINS(region_ids, CAST(? AS JSON))", [json_encode($id)])
-            ->count();
-        if ($ruleRef > 0) {
-            throw new BusinessException('该地区已被运费模板引用，不能删除');
-        }
-
-        return (bool) $region->delete();
+            return (bool) $this->model()->whereIn('id', $subtreeIds)->delete();
+        });
     }
 
     protected function assertParentAndLevel(array $data, ?int $currentId = null): void
@@ -181,5 +168,29 @@ class RegionService extends BaseService
         }
 
         return trim((string) $parent->path_codes . ',' . $code, ',');
+    }
+
+    /**
+     * @return array<int, int>
+     */
+    protected function collectSubtreeIds(int $rootId): array
+    {
+        $allIds = [$rootId];
+        $queue = [$rootId];
+
+        while ($queue !== []) {
+            $children = $this->model()
+                ->whereIn('parent_id', $queue)
+                ->column('id');
+
+            $queue = array_values(array_unique(array_map('intval', $children)));
+            if ($queue === []) {
+                continue;
+            }
+
+            $allIds = array_values(array_unique(array_merge($allIds, $queue)));
+        }
+
+        return $allIds;
     }
 }

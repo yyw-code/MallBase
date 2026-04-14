@@ -3,7 +3,7 @@ import type { RegionApi } from '#/api/region';
 
 import { h, onMounted, ref } from 'vue';
 
-import { message, Switch, Tag } from 'ant-design-vue';
+import { message, Modal, Switch, Tag } from 'ant-design-vue';
 
 import {
   deleteRegionApi,
@@ -17,7 +17,7 @@ import RegionModal from './region-modal.vue';
 
 defineOptions({ name: 'RegionManagement' });
 
-const { tableData, loading, pagination, loadData, handleDelete } = useTableCrud<
+const { tableData, loading, pagination, loadData } = useTableCrud<
   RegionApi.RegionItem,
   { keyword?: string; level?: number; status?: number }
 >(
@@ -58,6 +58,19 @@ const handleStatusChange = async (
   await updateRegionStatusApi(record.id, checked ? 1 : 0);
   message.success('状态更新成功');
   await loadData(searchParams.value);
+};
+
+const handleDeleteRegion = (record: RegionApi.RegionItem) => {
+  Modal.confirm({
+    content:
+      `确定要删除地区“${record.name}”吗？这会一并删除该地区及全部子级，` +
+      '相关收货地址和运费规则不会被删除，但会标记为失效。',
+    onOk: async () => {
+      await deleteRegionApi(record.id);
+      message.success('删除成功');
+      await loadData(searchParams.value);
+    },
+  });
 };
 
 onMounted(async () => {
@@ -184,7 +197,7 @@ const columns = [
               type="link"
               danger
               size="small"
-              @click="handleDelete(record, 'name')"
+              @click="handleDeleteRegion(record)"
             >
               删除
             </a-button>

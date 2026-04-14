@@ -55,19 +55,34 @@ export namespace FreightTemplateApi {
   }
 }
 
-export async function getFreightTemplateListApi(params?: FreightTemplateApi.ListParams) {
-  return requestClient.get<{ list: FreightTemplateApi.TemplateItem[]; total: number }>('/setting/freight-template/list', { params });
+export async function getFreightTemplateListApi(
+  params?: FreightTemplateApi.ListParams,
+) {
+  return requestClient.get<{
+    list: FreightTemplateApi.TemplateItem[];
+    total: number;
+  }>('/setting/freight-template/list', { params });
 }
 
 export async function getFreightTemplateInfoApi(id: number) {
-  return requestClient.get<FreightTemplateApi.TemplateItem>(`/setting/freight-template/info/${id}`);
+  return requestClient.get<FreightTemplateApi.TemplateItem>(
+    `/setting/freight-template/info/${id}`,
+  );
 }
 
-export async function createFreightTemplateApi(data: FreightTemplateApi.SaveParams) {
-  return requestClient.post<{ id: number }>('/setting/freight-template/create', data);
+export async function createFreightTemplateApi(
+  data: FreightTemplateApi.SaveParams,
+) {
+  return requestClient.post<{ id: number }>(
+    '/setting/freight-template/create',
+    data,
+  );
 }
 
-export async function updateFreightTemplateApi(id: number, data: FreightTemplateApi.SaveParams) {
+export async function updateFreightTemplateApi(
+  id: number,
+  data: FreightTemplateApi.SaveParams,
+) {
   return requestClient.put(`/setting/freight-template/update/${id}`, data);
 }
 
@@ -75,6 +90,19 @@ export async function deleteFreightTemplateApi(id: number) {
   return requestClient.delete(`/setting/freight-template/delete/${id}`);
 }
 
-export async function updateFreightTemplateStatusApi(id: number, status: number) {
-  return requestClient.put(`/setting/freight-template/updateStatus/${id}`, { status });
+export async function updateFreightTemplateStatusApi(
+  id: number,
+  status: number,
+) {
+  return requestClient.put(`/setting/freight-template/updateStatus/${id}`, {
+    status,
+  });
+}
+
+export async function refreshFreightTemplateInvalidApi() {
+  return requestClient.put<{
+    invalid: number;
+    recovered: number;
+    total: number;
+  }>('/setting/freight-template/refreshInvalid');
 }

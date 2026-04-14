@@ -49,19 +49,29 @@ export namespace UserAddressApi {
   }
 }
 
-export async function getUserAddressListApi(params?: UserAddressApi.ListParams) {
-  return requestClient.get<{ list: UserAddressApi.AddressItem[]; total: number }>('/user/address/list', { params });
+export async function getUserAddressListApi(
+  params?: UserAddressApi.ListParams,
+) {
+  return requestClient.get<{
+    list: UserAddressApi.AddressItem[];
+    total: number;
+  }>('/user/address/list', { params });
 }
 
 export async function getUserAddressInfoApi(id: number) {
-  return requestClient.get<UserAddressApi.AddressItem>(`/user/address/info/${id}`);
+  return requestClient.get<UserAddressApi.AddressItem>(
+    `/user/address/info/${id}`,
+  );
 }
 
 export async function createUserAddressApi(data: UserAddressApi.SaveParams) {
   return requestClient.post<{ id: number }>('/user/address/create', data);
 }
 
-export async function updateUserAddressApi(id: number, data: UserAddressApi.SaveParams) {
+export async function updateUserAddressApi(
+  id: number,
+  data: UserAddressApi.SaveParams,
+) {
   return requestClient.put(`/user/address/update/${id}`, data);
 }
 
@@ -71,4 +81,12 @@ export async function deleteUserAddressApi(id: number) {
 
 export async function setUserAddressDefaultApi(id: number) {
   return requestClient.put(`/user/address/setDefault/${id}`);
+}
+
+export async function refreshUserAddressInvalidApi() {
+  return requestClient.put<{
+    invalid: number;
+    recovered: number;
+    total: number;
+  }>('/user/address/refreshInvalid');
 }

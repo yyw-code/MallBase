@@ -54,4 +54,9 @@ class FreightTemplateController extends BaseController
         $this->service()->updateStatus((int) $id, (int) $data['status']);
         return $this->success(null, '更新成功');
     }
+
+    public function refreshInvalid()
+    {
+        return $this->success($this->service()->refreshInvalidData(), '更新成功');
+    }
 }

@@ -31,8 +31,18 @@ class FreightTemplateService extends BaseService
     {
         $list = $this->buildListQuery($where)->order('id', 'desc')->page($page, $limit)->select()->toArray();
         foreach ($list as &$item) {
-            $ruleCount = $this->model(FreightTemplateRule::class)->where('template_id', $item['id'])->count();
-            $invalidCount = $this->model(FreightTemplateRule::class)->where('template_id', $item['id'])->where('region_status', 0)->count();
+            $rules = $this->model(FreightTemplateRule::class)
+                ->where('template_id', $item['id'])
+                ->select()
+                ->toArray();
+            $ruleCount = count($rules);
+            $invalidCount = 0;
+            foreach ($rules as $rule) {
+                $state = $this->refreshRuleRegionState($rule);
+                if ((int) ($state['region_status'] ?? 0) !== 1) {
+                    ++$invalidCount;
+                }
+            }
             $item['rule_count'] = $ruleCount;
             $item['invalid_rule_count'] = $invalidCount;
         }
@@ -114,6 +124,105 @@ class FreightTemplateService extends BaseService
     }
 
     /**
+     * 批量重匹配失效规则
+     *
+     * @return array<string, int>
+     */
+    public function refreshInvalidData(): array
+    {
+        $rules = $this->model(FreightTemplateRule::class)
+            ->order('template_id', 'asc')
+            ->order('sort', 'asc')
+            ->order('id', 'asc')
+            ->select();
+
+        $grouped = [];
+        foreach ($rules as $rule) {
+            $grouped[(int) $rule->template_id][] = $rule;
+        }
+
+        $total = 0;
+        $recovered = 0;
+        $invalid = 0;
+        $resolver = app()->make(RegionResolverService::class);
+
+        foreach ($grouped as $templateRules) {
+            $usedStreetIds = [];
+            foreach ($templateRules as $rule) {
+                ++$total;
+                $before = $rule->toArray();
+                $state = $resolver->getStreetRuleState($before);
+
+                if (!($state['valid'] ?? false)) {
+                    $rule->save([
+                        'region_status' => 0,
+                        'region_invalid_reason' => $state['reason'] ?? '规则包含已失效街道，请重新选择',
+                    ]);
+                    ++$invalid;
+                    continue;
+                }
+
+                $payload = (array) ($state['data'] ?? []);
+                $matchedIds = array_map('intval', (array) ($payload['region_ids'] ?? []));
+                $conflictIds = array_values(array_intersect($usedStreetIds, $matchedIds));
+                if ($conflictIds !== []) {
+                    $rule->save([
+                        'region_status' => 0,
+                        'region_invalid_reason' => '重匹配后街道与其它规则冲突',
+                    ]);
+                    ++$invalid;
+                    continue;
+                }
+
+                $changed = (int) ($before['region_status'] ?? 0) !== 1
+                    || array_map('intval', (array) ($before['region_ids'] ?? [])) !== $matchedIds
+                    || (string) ($before['region_invalid_reason'] ?? '') !== '';
+
+                $rule->save($payload);
+                $usedStreetIds = array_values(array_unique(array_merge($usedStreetIds, $matchedIds)));
+                if ($changed) {
+                    ++$recovered;
+                }
+            }
+        }
+
+        return compact('total', 'recovered', 'invalid');
+    }
+
+    /**
+     * 根据地区子树标记规则失效
+     *
+     * @param array<int, int> $regionIds
+     */
+    public function invalidateRulesByRegionIds(array $regionIds, string $reason): int
+    {
+        $regionIds = array_values(array_unique(array_map('intval', $regionIds)));
+        if ($regionIds === []) {
+            return 0;
+        }
+
+        $rules = $this->model(FreightTemplateRule::class)->select();
+        $affectedIds = [];
+        foreach ($rules as $rule) {
+            $currentIds = array_map('intval', (array) ($rule->region_ids ?? []));
+            if (array_intersect($regionIds, $currentIds) !== []) {
+                $affectedIds[] = (int) $rule->id;
+            }
+        }
+
+        if ($affectedIds === []) {
+            return 0;
+        }
+
+        return $this->model(FreightTemplateRule::class)
+            ->whereIn('id', $affectedIds)
+            ->update([
+                'region_status' => 0,
+                'region_invalid_reason' => $reason,
+            ]);
+    }
+
+    /**
      * @param array<int, array<string, mixed>> $rules
      * @return array<int, array<string, mixed>>
      */
@@ -178,21 +287,15 @@ class FreightTemplateService extends BaseService
      */
     protected function refreshRuleRegionState(array $rule): array
     {
-        $ids = array_map('intval', (array) ($rule['region_ids'] ?? []));
-        if ($ids === []) {
+        $state = app()->make(RegionResolverService::class)->getStreetRuleState($rule);
+        if (!($state['valid'] ?? false)) {
             $rule['region_status'] = 0;
-            $rule['region_invalid_reason'] = '规则未配置街道';
+            $rule['region_invalid_reason'] = $state['reason'] ?? '规则未配置街道';
             return $rule;
         }
 
-        $regions = $this->model(\app\admin\model\region\Region::class)
-            ->whereIn('id', $ids)
-            ->where('status', 1)
-            ->count();
-
-        $valid = $regions === count($ids);
-        $rule['region_status'] = $valid ? 1 : 0;
-        $rule['region_invalid_reason'] = $valid ? null : '规则包含已失效街道，请重新选择';
+        $rule['region_status'] = 1;
+        $rule['region_invalid_reason'] = null;
         return $rule;
     }
 }
