@@ -30,6 +30,12 @@ const searchParams = ref({
   level: undefined as number | undefined,
   status: undefined as number | undefined,
 });
+
+const getDefaultSearchParams = () => ({
+  keyword: '',
+  level: undefined as number | undefined,
+  status: undefined as number | undefined,
+});
 const modalVisible = ref(false);
 const editingItem = ref<
   null | (RegionApi.RegionItem & { path?: RegionApi.RegionItem[] })
@@ -57,6 +63,17 @@ const handleStatusChange = async (
 onMounted(async () => {
   await loadData(searchParams.value);
 });
+
+async function handleSearch() {
+  pagination.current = 1;
+  await loadData(searchParams.value);
+}
+
+async function handleReset() {
+  searchParams.value = getDefaultSearchParams();
+  pagination.current = 1;
+  await loadData(searchParams.value);
+}
 
 const levelMap: Record<number, string> = {
   1: '省',
@@ -136,17 +153,10 @@ const columns = [
         </a-select>
       </a-form-item>
       <a-form-item>
-        <a-button
-          type="primary"
-          @click="
-            () => {
-              pagination.current = 1;
-              loadData(searchParams);
-            }
-          "
-        >
-          搜索
-        </a-button>
+        <a-space>
+          <a-button type="primary" @click="handleSearch">搜索</a-button>
+          <a-button @click="handleReset">重置</a-button>
+        </a-space>
       </a-form-item>
     </a-form>
     <a-table
