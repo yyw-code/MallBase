@@ -17,6 +17,7 @@ type RegionPickerValue = Array<number | number[]> | number[];
 
 const props = withDefaults(
   defineProps<{
+    leafOnly?: boolean;
     multiple?: boolean;
     placeholder?: string;
     value?: Array<number | number[]> | number[];
@@ -25,6 +26,7 @@ const props = withDefaults(
     value: () => [],
     multiple: false,
     placeholder: '请选择地区',
+    leafOnly: true,
   },
 );
 
@@ -90,11 +92,12 @@ function mapOption(item: RegionApi.RegionItem): CascaderOption {
 async function ensureValueOptions() {
   await loadRootOptions();
 
+  const singlePath = (innerValue.value as number[]) || [];
   const values = props.multiple
     ? ((innerValue.value as Array<number | number[]>) || [])
         .map((item) => (Array.isArray(item) ? item[item.length - 1] : item))
         .filter((item): item is number => typeof item === 'number' && item > 0)
-    : [((innerValue.value as number[]) || [])[3]].filter(
+    : [singlePath[singlePath.length - 1]].filter(
         (item): item is number => typeof item === 'number' && item > 0,
       );
 
@@ -207,6 +210,7 @@ async function handleLoadData(selectedOptions: CascaderOption[]) {
     :placeholder="placeholder"
     :field-names="{ label: 'label', value: 'value', children: 'children' }"
     :display-render="displayRender"
+    :change-on-select="!leafOnly"
     style="width: 100%"
   />
 </template>

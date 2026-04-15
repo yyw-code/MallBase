@@ -103,9 +103,6 @@ function addRule() {
 
 function removeRule(index: number) {
   formData.value.rules.splice(index, 1);
-  if (formData.value.rules.length === 0) {
-    formData.value.rules.push(createRule());
-  }
 }
 
 function normalizeRuleRegionIds(
@@ -125,7 +122,7 @@ async function handleSubmit() {
         (item) => !item.region_ids || item.region_ids.length === 0,
       )
     ) {
-      message.error('每条区域规则都必须选择街道');
+      message.error('已添加的区域规则必须选择地区');
       return;
     }
 
@@ -178,6 +175,12 @@ async function handleSubmit() {
           <a-radio-button value="weight">按重</a-radio-button>
         </a-radio-group>
       </a-form-item>
+      <a-alert
+        class="mb-4"
+        message="全国默认运费（未匹配任何区域规则时使用）"
+        show-icon
+        type="info"
+      />
       <a-row :gutter="16">
         <a-col :span="12">
           <a-form-item label="默认首件/重">
@@ -235,6 +238,12 @@ async function handleSubmit() {
         <h4 class="mb-0">区域规则</h4>
         <a-button type="dashed" @click="addRule">新增规则</a-button>
       </div>
+      <a-alert
+        class="mb-3"
+        message="匹配优先级：街道 > 区县 > 市 > 省 > 全国默认。同一层级的地区不能跨规则重复配置。未添加任何规则时将使用全国默认运费。"
+        show-icon
+        type="info"
+      />
 
       <div
         v-for="(rule, index) in formData.rules"
@@ -243,11 +252,12 @@ async function handleSubmit() {
       >
         <a-row :gutter="16">
           <a-col :span="24">
-            <a-form-item label="街道区域">
+            <a-form-item label="适用地区">
               <RegionPicker
                 v-model:value="rule.region_ids"
                 multiple
-                placeholder="请选择街道（可多选）"
+                :leaf-only="false"
+                placeholder="请选择地区（支持省 / 市 / 区县 / 街道，可多选）"
               />
             </a-form-item>
             <a-alert

@@ -9,6 +9,8 @@ export namespace FreightTemplateApi {
     region_codes?: string[];
     region_names?: string[];
     region_path_texts?: string[];
+    /** 规则最精确层级：1省 2市 3区 4街道（由后端根据选择推导） */
+    match_level?: number;
     first_amount: number;
     first_fee: number;
     continue_amount: number;
