@@ -229,8 +229,27 @@ test.describe('Freight template region display', () => {
     page,
   }) => {
     await page.goto('/auth/login?e2e=1');
-    await authLogin(page);
+    const loginResult = await authLogin(page);
     await expect(page).not.toHaveURL(/\/auth\/login/);
+
+    // 以真实 mb_region 为准，动态获取省级数量，避免硬编码阈值随数据漂移
+    const token = loginResult?.accessToken;
+    test.skip(!token, '登录未返回 access token，跳过该场景');
+    const headers = { Authorization: `Bearer ${token}` };
+    const provincesRes = await page.request.get(
+      `${backendBaseUrl}/admin/api/region/children?parent_id=0`,
+      { headers },
+    );
+    expect(provincesRes.ok()).toBeTruthy();
+    const provincesJson = (await provincesRes.json()) as ApiResponse<
+      RegionItem[]
+    >;
+    test.skip(
+      provincesJson.code !== 200,
+      'region/children 未返回 200，跳过该场景',
+    );
+    const expectedProvinceCount = (provincesJson.data || []).length;
+    test.skip(expectedProvinceCount === 0, 'region 表为空，无法构造测试数据');
 
     // 打开新增模板弹窗：ant-design 会在两个中文字符按钮之间插入空格（"新 增 模 板" 4 字则不插入），
     // 这里保守用正则匹配，容忍任何空格规则
@@ -247,11 +266,10 @@ test.describe('Freight template region display', () => {
     await selectAllBtn.click();
 
     const tagLocator = page.locator('[data-testid="region-picker-tag"]');
-    // 全国省份数通常 ≥ 30（23 省 + 5 自治区 + 4 直辖市 + 2 特别行政区），
-    // 真实 mb_region 可能剔除港澳台，放宽到 30
+    // 动态断言：渲染的 tag 数量应与真实 mb_region 中启用的省级数量一致
     await expect
       .poll(async () => tagLocator.count(), { timeout: 8000 })
-      .toBeGreaterThanOrEqual(30);
+      .toBe(expectedProvinceCount);
 
     const tagTexts = await tagLocator.allInnerTexts();
     for (const raw of tagTexts) {
