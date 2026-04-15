@@ -145,41 +145,78 @@ class FreightTemplateService extends BaseService
         $recovered = 0;
         $invalid = 0;
         $resolver = app()->make(RegionResolverService::class);
+        $levelLabel = [1 => '省', 2 => '市', 3 => '区县', 4 => '街道'];
 
         foreach ($grouped as $templateRules) {
-            $usedStreetIds = [];
+            $usedByLevel = [1 => [], 2 => [], 3 => [], 4 => []];
             foreach ($templateRules as $rule) {
                 ++$total;
                 $before = $rule->toArray();
-                $state = $resolver->getStreetRuleState($before);
+                $state = $resolver->getRegionRuleState($before);
 
                 if (!($state['valid'] ?? false)) {
                     $rule->save([
                         'region_status' => 0,
-                        'region_invalid_reason' => $state['reason'] ?? '规则包含已失效街道，请重新选择',
+                        'region_invalid_reason' => $state['reason'] ?? '规则包含已失效区域，请重新选择',
                     ]);
                     ++$invalid;
                     continue;
                 }
 
                 $payload = (array) ($state['data'] ?? []);
-                $matchedIds = array_map('intval', (array) ($payload['region_ids'] ?? []));
-                $conflictIds = array_values(array_intersect($usedStreetIds, $matchedIds));
-                if ($conflictIds !== []) {
+                $items = (array) ($payload['items'] ?? []);
+                $conflictReason = null;
+                foreach ($items as $item) {
+                    $level = (int) ($item['level'] ?? 0);
+                    $id = (int) ($item['id'] ?? 0);
+                    if ($level < 1 || $level > 4 || $id <= 0) {
+                        continue;
+                    }
+                    if (in_array($id, $usedByLevel[$level] ?? [], true)) {
+                        $conflictReason = sprintf(
+                            '重匹配后与其它规则在%s层级重复',
+                            $levelLabel[$level] ?? '区域'
+                        );
+                        break;
+                    }
+                }
+
+                if ($conflictReason !== null) {
                     $rule->save([
                         'region_status' => 0,
-                        'region_invalid_reason' => '重匹配后街道与其它规则冲突',
+                        'region_invalid_reason' => $conflictReason,
                     ]);
                     ++$invalid;
                     continue;
                 }
 
+                $matchedIds = array_map('intval', (array) ($payload['region_ids'] ?? []));
+                $matchLevel = (int) ($payload['match_level'] ?? 0);
+                $beforeIds = array_map('intval', (array) ($before['region_ids'] ?? []));
                 $changed = (int) ($before['region_status'] ?? 0) !== 1
-                    || array_map('intval', (array) ($before['region_ids'] ?? [])) !== $matchedIds
+                    || $beforeIds !== $matchedIds
+                    || (int) ($before['match_level'] ?? 0) !== $matchLevel
                     || (string) ($before['region_invalid_reason'] ?? '') !== '';
 
-                $rule->save($payload);
-                $usedStreetIds = array_values(array_unique(array_merge($usedStreetIds, $matchedIds)));
+                $rule->save([
+                    'region_ids' => $payload['region_ids'],
+                    'region_codes' => $payload['region_codes'],
+                    'region_names' => $payload['region_names'],
+                    'region_path_texts' => $payload['region_path_texts'],
+                    'match_level' => $matchLevel,
+                    'region_status' => 1,
+                    'region_invalid_reason' => null,
+                ]);
+
+                foreach ($items as $item) {
+                    $level = (int) ($item['level'] ?? 0);
+                    $id = (int) ($item['id'] ?? 0);
+                    if ($level < 1 || $level > 4 || $id <= 0) {
+                        continue;
+                    }
+                    $usedByLevel[$level][] = $id;
+                }
+
                 if ($changed) {
                     ++$recovered;
                 }
@@ -229,23 +266,39 @@ class FreightTemplateService extends BaseService
     protected function normalizeRules(array $rules): array
     {
         $result = [];
-        $usedStreetIds = [];
+        $usedByLevel = [1 => [], 2 => [], 3 => [], 4 => []];
+        $levelLabel = [1 => '省', 2 => '市', 3 => '区县', 4 => '街道'];
+
         foreach ($rules as $index => $rule) {
-            $normalizedRegions = app()->make(RegionResolverService::class)->normalizeStreetSelections((array) ($rule['region_ids'] ?? []));
-            foreach ($normalizedRegions['region_ids'] as $streetId) {
-                if (in_array($streetId, $usedStreetIds, true)) {
-                    throw new BusinessException('同一街道不能重复配置在多个运费规则中');
+            $normalizedRegions = app()->make(RegionResolverService::class)
+                ->normalizeRegionSelections((array) ($rule['region_ids'] ?? []));
+
+            foreach ($normalizedRegions['items'] as $item) {
+                $level = (int) $item['level'];
+                $id = (int) $item['id'];
+                if (in_array($id, $usedByLevel[$level] ?? [], true)) {
+                    throw new BusinessException(sprintf(
+                        '同一%s地区不能跨规则重复配置',
+                        $levelLabel[$level] ?? '区域'
+                    ));
                 }
-                $usedStreetIds[] = $streetId;
+                $usedByLevel[$level][] = $id;
             }
 
-            $result[] = array_merge($normalizedRegions, [
+            $result[] = [
+                'region_ids' => $normalizedRegions['region_ids'],
+                'region_codes' => $normalizedRegions['region_codes'],
+                'region_names' => $normalizedRegions['region_names'],
+                'region_path_texts' => $normalizedRegions['region_path_texts'],
+                'match_level' => (int) $normalizedRegions['match_level'],
+                'region_status' => 1,
+                'region_invalid_reason' => null,
                 'first_amount' => (float) ($rule['first_amount'] ?? 1),
                 'first_fee' => (float) ($rule['first_fee'] ?? 0),
                 'continue_amount' => (float) ($rule['continue_amount'] ?? 1),
                 'continue_fee' => (float) ($rule['continue_fee'] ?? 0),
                 'sort' => (int) ($rule['sort'] ?? $index),
-            ]);
+            ];
         }
 
         return $result;
@@ -287,10 +340,10 @@ class FreightTemplateService extends BaseService
      */
     protected function refreshRuleRegionState(array $rule): array
     {
-        $state = app()->make(RegionResolverService::class)->getStreetRuleState($rule);
+        $state = app()->make(RegionResolverService::class)->getRegionRuleState($rule);
         if (!($state['valid'] ?? false)) {
             $rule['region_status'] = 0;
-            $rule['region_invalid_reason'] = $state['reason'] ?? '规则未配置街道';
+            $rule['region_invalid_reason'] = $state['reason'] ?? '规则未配置区域';
             return $rule;
         }
 
