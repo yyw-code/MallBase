@@ -222,10 +222,13 @@ class UserAddressService extends BaseService
     protected function refreshRegionState(array $item): array
     {
         $state = app()->make(RegionResolverService::class)->getAddressRegionState($item);
-        $item['region_status'] = ($state['valid'] ?? false) ? 1 : 0;
-        $item['region_invalid_reason'] = $state['valid'] ?? false
-            ? null
-            : ($state['reason'] ?? '关联地区已失效，请重新编辑地址');
+        if ($state['valid'] ?? false) {
+            $item = array_merge($item, (array) ($state['data'] ?? []));
+        } else {
+            $item['region_status'] = 0;
+            $item['region_invalid_reason'] = $state['reason'] ?? '关联地区已失效，请重新编辑地址';
+        }
+
         return $item;
     }
 }
