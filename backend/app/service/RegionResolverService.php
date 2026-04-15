@@ -357,17 +357,33 @@ class RegionResolverService
                 throw new BusinessException('所选区域层级不正确');
             }
             if ((int) $region['status'] !== 1) {
-                throw new BusinessException(sprintf('所选%s已停用，请重新选择', $this->levelLabel($level)));
+                throw new BusinessException(sprintf(
+                    '所选%s已停用，请重新选择：%s',
+                    $this->levelLabel($level),
+                    (string) $region['name'],
+                ));
             }
 
             $path = $this->getPath($id);
             if (count($path) !== $level) {
-                throw new BusinessException(sprintf('%s路径数据不完整', $this->levelLabel($level)));
+                throw new BusinessException(sprintf(
+                    '%s路径数据不完整：%s',
+                    $this->levelLabel($level),
+                    (string) $region['name'],
+                ));
             }
 
-            $reason = $this->validatePathStatusByLevel($path, $level);
-            if ($reason !== null) {
-                throw new BusinessException($reason);
+            $pathCheck = $this->validatePathStatusByLevel($path, $level);
+            if ($pathCheck !== null) {
+                $label = (string) ($pathCheck['name'] ?? '');
+                if ($label === '') {
+                    $label = implode(' / ', array_column($path, 'name'));
+                }
+                throw new BusinessException(
+                    $label === ''
+                        ? $pathCheck['reason']
+                        : $pathCheck['reason'] . '：' . $label,
+                );
             }
 
             $pathText = implode(' / ', array_column($path, 'name'));
@@ -459,7 +475,11 @@ class RegionResolverService
             if ((int) $region['status'] !== 1) {
                 return [
                     'success' => false,
-                    'reason' => sprintf('%s已停用：%s', $this->levelLabel($level), $code),
+                    'reason' => sprintf(
+                        '%s已停用：%s',
+                        $this->levelLabel($level),
+                        (string) $region['name'],
+                    ),
                 ];
             }
 
@@ -467,19 +487,29 @@ class RegionResolverService
             if (count($path) !== $level) {
                 return [
                     'success' => false,
-                    'reason' => sprintf('%s路径数据不完整：%s', $this->levelLabel($level), $code),
-                ];
-            }
-
-            $reason = $this->validatePathStatusByLevel($path, $level);
-            if ($reason !== null) {
-                return [
-                    'success' => false,
-                    'reason' => $reason . '：' . $code,
+                    'reason' => sprintf(
+                        '%s路径数据不完整：%s',
+                        $this->levelLabel($level),
+                        (string) $region['name'],
+                    ),
                 ];
             }
 
             $pathText = implode(' / ', array_column($path, 'name'));
+
+            $pathCheck = $this->validatePathStatusByLevel($path, $level);
+            if ($pathCheck !== null) {
+                $label = (string) ($pathCheck['name'] ?? '');
+                if ($label === '') {
+                    $label = $pathText !== '' ? $pathText : (string) $region['name'];
+                }
+                return [
+                    'success' => false,
+                    'reason' => $label === ''
+                        ? $pathCheck['reason']
+                        : $pathCheck['reason'] . '：' . $label,
+                ];
+            }
 
             $ids[] = (int) $region['id'];
             $codes[] = (string) $region['code'];
@@ -668,24 +698,34 @@ class RegionResolverService
     /**
      * 按指定层级校验路径（省=1 层、市=2 层、区=3 层、街道=4 层）
      *
+     * 返回结构化诊断：
+     * - reason：语义化消息（不含 code / name 后缀，由调用方按需补充）
+     * - level：出问题的层级（仅停用场景提供）
+     * - name：出问题的地区中文名（仅停用场景提供，便于前端展示而非裸 ID）
+     *
      * @param array<int, array<string, mixed>> $path
+     * @return array{reason: string, level?: int, name?: string}|null
      */
-    protected function validatePathStatusByLevel(array $path, int $level): ?string
+    protected function validatePathStatusByLevel(array $path, int $level): ?array
     {
         if (count($path) !== $level) {
-            return '地区路径数据不完整';
+            return ['reason' => '地区路径数据不完整'];
         }
 
         foreach ($path as $index => $region) {
             if ((int) ($region['status'] ?? 0) !== 1) {
-                return sprintf('%s已停用', $this->levelLabel($index + 1));
+                return [
+                    'reason' => sprintf('%s已停用', $this->levelLabel($index + 1)),
+                    'level' => $index + 1,
+                    'name' => (string) ($region['name'] ?? ''),
+                ];
             }
         }
 
         $count = count($path);
         for ($i = 1; $i < $count; $i++) {
             if ((int) ($path[$i]['parent_id'] ?? 0) !== (int) ($path[$i - 1]['id'] ?? 0)) {
-                return '地区父子关系不匹配';
+                return ['reason' => '地区父子关系不匹配'];
             }
         }
 
