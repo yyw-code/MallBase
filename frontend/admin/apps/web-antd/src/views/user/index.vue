@@ -3,6 +3,8 @@ import type { ClientUserApi, UserGroupApi, UserTagApi } from '#/api/user';
 
 import { h, onMounted, ref } from 'vue';
 
+import { useAccess } from '@vben/access';
+
 import { message, Modal, Switch, Tag } from 'ant-design-vue';
 
 import {
@@ -19,6 +21,8 @@ import { useTableCrud } from '#/composables/useTableCrud';
 import UserModal from './user-modal.vue';
 
 defineOptions({ name: 'ClientUserManagement' });
+
+const { hasAccessByCodes } = useAccess();
 
 // ==================== 性别映射 ====================
 const GENDER_MAP: Record<number, { color: string; label: string }> = {
@@ -175,6 +179,9 @@ const columns = [
     dataIndex: 'status',
     width: 90,
     customRender: ({ record }: { record: ClientUserApi.UserItem }) => {
+      if (!hasAccessByCodes(['SystemUserUpdateStatus'])) {
+        return record.status === 1 ? '启用' : '禁用';
+      }
       return h(Switch, {
         checked: record.status === 1,
         checkedChildren: '启用',
@@ -241,7 +248,7 @@ onMounted(async () => {
 <template>
   <div class="p-4">
     <div class="mb-4">
-      <a-button type="primary" @click="handleCreate"> 新增用户 </a-button>
+      <a-button type="primary" @click="handleCreate" v-access:code="'SystemUserCreate'"> 新增用户 </a-button>
       <a-button class="ml-2" @click="() => loadData(searchParams)">
         刷新
       </a-button>
@@ -333,13 +340,14 @@ onMounted(async () => {
       <template #bodyCell="{ column, record }">
         <template v-if="column.key === 'action'">
           <a-space>
-            <a-button type="link" size="small" @click="handleEdit(record)">
+            <a-button type="link" size="small" @click="handleEdit(record)" v-access:code="'SystemUserUpdate'">
               编辑
             </a-button>
             <a-button
               type="link"
               size="small"
               @click="handleResetPassword(record)"
+              v-access:code="'SystemUserResetPassword'"
             >
               重置密码
             </a-button>
@@ -348,6 +356,7 @@ onMounted(async () => {
               danger
               size="small"
               @click="handleDelete(record, 'nickname', 'mobile', 'email')"
+              v-access:code="'SystemUserDelete'"
             >
               删除
             </a-button>

@@ -138,8 +138,8 @@ const columns = [
 <template>
   <div class="p-4">
     <div class="mb-4">
-      <a-button type="primary" @click="handleCreate">新增地址</a-button>
-      <a-button class="ml-2" @click="handleRefreshInvalid">
+      <a-button type="primary" @click="handleCreate" v-access:code="'SystemUserAddressCreate'">新增地址</a-button>
+      <a-button class="ml-2" @click="handleRefreshInvalid" v-access:code="'SystemUserAddressRefreshInvalid'">
         更新失效数据
       </a-button>
       <a-button class="ml-2" @click="() => loadData(searchParams)">
@@ -200,7 +200,7 @@ const columns = [
       <template #bodyCell="{ column, record }">
         <template v-if="column.key === 'action'">
           <a-space>
-            <a-button type="link" size="small" @click="handleEdit(record)">
+            <a-button type="link" size="small" @click="handleEdit(record)" v-access:code="'SystemUserAddressUpdate'">
               编辑
             </a-button>
             <a-button
@@ -208,6 +208,7 @@ const columns = [
               danger
               size="small"
               @click="handleDelete(record, 'receiver_name')"
+              v-access:code="'SystemUserAddressDelete'"
             >
               删除
             </a-button>

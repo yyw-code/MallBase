@@ -3,6 +3,8 @@ import type { UserGroupApi } from '#/api/user';
 
 import { h, onMounted, ref } from 'vue';
 
+import { useAccess } from '@vben/access';
+
 import { message, Modal, Switch, Tag } from 'ant-design-vue';
 
 import {
@@ -22,6 +24,8 @@ import { useColorMap } from '#/composables/useColorOptions';
 import GroupModal from './group-modal.vue';
 
 defineOptions({ name: 'UserGroupManagement' });
+
+const { hasAccessByCodes } = useAccess();
 
 // ==================== 颜色映射 ====================
 const colorMap = useColorMap();
@@ -140,6 +144,9 @@ const columns = [
     dataIndex: 'status',
     width: 90,
     customRender: ({ record }: { record: UserGroupApi.GroupItem }) => {
+      if (!hasAccessByCodes(['SystemUserGroupUpdateStatus'])) {
+        return record.status === 1 ? '启用' : '禁用';
+      }
       return h(Switch, {
         checked: record.status === 1,
         checkedChildren: '启用',
@@ -162,7 +169,7 @@ onMounted(() => {
 <template>
   <div class="p-4">
     <div class="mb-4">
-      <a-button type="primary" @click="handleCreate"> 新增分组 </a-button>
+      <a-button type="primary" @click="handleCreate" v-access:code="'SystemUserGroupCreate'"> 新增分组 </a-button>
       <a-button class="ml-2" @click="() => loadData(searchParams)">
         刷新
       </a-button>
@@ -231,10 +238,10 @@ onMounted(() => {
       <template #bodyCell="{ column, record }">
         <template v-if="column.key === 'action'">
           <a-space>
-            <a-button type="link" size="small" @click="handleEdit(record)">
+            <a-button type="link" size="small" @click="handleEdit(record)" v-access:code="'SystemUserGroupUpdate'">
               编辑
             </a-button>
-            <a-button type="link" size="small" @click="handleViewUsers(record)">
+            <a-button type="link" size="small" @click="handleViewUsers(record)" v-access:code="'SystemUserGroupGetUserGroups'">
               查看用户
             </a-button>
             <a-button
@@ -242,6 +249,7 @@ onMounted(() => {
               danger
               size="small"
               @click="handleDelete(record, 'name', 'code')"
+              v-access:code="'SystemUserGroupDelete'"
             >
               删除
             </a-button>
