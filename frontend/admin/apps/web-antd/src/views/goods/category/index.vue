@@ -3,6 +3,7 @@ import type { GoodsCategoryApi } from '#/api/goods';
 
 import { h, onMounted, ref } from 'vue';
 
+import { useAccess } from '@vben/access';
 import { IconifyIcon } from '@vben/icons';
 
 import { Avatar, message, Switch } from 'ant-design-vue';
@@ -18,6 +19,8 @@ import { useTableCrud } from '#/composables/useTableCrud';
 import CategoryModal from './category-modal.vue';
 
 defineOptions({ name: 'GoodsCategoryManagement' });
+
+const { hasAccessByCodes } = useAccess();
 
 /* ---------------- 表格 CRUD ---------------- */
 const { tableData, loading, pagination, loadData, handleDelete } = useTableCrud<
@@ -131,6 +134,9 @@ const columns = [
     dataIndex: 'status',
     width: 90,
     customRender: ({ record }: { record: GoodsCategoryApi.CategoryItem }) => {
+      if (!hasAccessByCodes(['SystemGoodsCategoryUpdateStatus'])) {
+        return record.status === 1 ? '启用' : '禁用';
+      }
       return h(Switch, {
         checked: record.status === 1,
         checkedChildren: '启用',
@@ -152,7 +158,7 @@ onMounted(() => {
 <template>
   <div class="p-4">
     <div class="mb-4">
-      <a-button type="primary" @click="handleCreate"> 新增分类 </a-button>
+      <a-button type="primary" @click="handleCreate" v-access:code="'SystemGoodsCategoryCreate'"> 新增分类 </a-button>
       <a-button class="ml-2" @click="() => loadData(searchParams)">
         刷新
       </a-button>
@@ -213,7 +219,7 @@ onMounted(() => {
       <template #bodyCell="{ column, record }">
         <template v-if="column.key === 'action'">
           <a-space>
-            <a-button type="link" size="small" @click="handleEdit(record)">
+            <a-button type="link" size="small" @click="handleEdit(record)" v-access:code="'SystemGoodsCategoryUpdate'">
               编辑
             </a-button>
             <a-button
@@ -221,6 +227,7 @@ onMounted(() => {
               danger
               size="small"
               @click="handleDelete(record, 'name')"
+              v-access:code="'SystemGoodsCategoryDelete'"
             >
               删除
             </a-button>

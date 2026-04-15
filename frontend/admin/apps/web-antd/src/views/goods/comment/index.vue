@@ -3,6 +3,8 @@ import type { GoodsCommentApi } from '#/api/goods';
 
 import { h, onMounted, ref } from 'vue';
 
+import { useAccess } from '@vben/access';
+
 import { message, Modal, Rate, Switch } from 'ant-design-vue';
 
 import {
@@ -14,6 +16,8 @@ import {
 import { useTableCrud } from '#/composables/useTableCrud';
 
 defineOptions({ name: 'GoodsCommentManagement' });
+
+const { hasAccessByCodes } = useAccess();
 
 /* ---------------- 表格 CRUD ---------------- */
 const { tableData, loading, pagination, loadData, handleDelete } = useTableCrud<
@@ -130,6 +134,9 @@ const columns = [
     dataIndex: 'status',
     width: 90,
     customRender: ({ record }: { record: GoodsCommentApi.CommentItem }) => {
+      if (!hasAccessByCodes(['SystemGoodsCommentUpdateStatus'])) {
+        return record.status === 1 ? '显示' : '隐藏';
+      }
       return h(Switch, {
         checked: record.status === 1,
         checkedChildren: '显示',
@@ -230,6 +237,7 @@ onMounted(() => {
               type="link"
               size="small"
               @click="handleReply(record)"
+              v-access:code="'SystemGoodsCommentReply'"
             >
               回复
             </a-button>
@@ -238,6 +246,7 @@ onMounted(() => {
               danger
               size="small"
               @click="handleDelete(record)"
+              v-access:code="'SystemGoodsCommentDelete'"
             >
               删除
             </a-button>

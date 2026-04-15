@@ -5,6 +5,8 @@ import { h, onMounted, ref } from 'vue';
 
 import { useRouter } from 'vue-router';
 
+import { useAccess } from '@vben/access';
+
 import { Avatar, message, Switch } from 'ant-design-vue';
 
 import {
@@ -20,6 +22,7 @@ import { useTableCrud } from '#/composables/useTableCrud';
 defineOptions({ name: 'GoodsManagement' });
 
 const router = useRouter();
+const { hasAccessByCodes } = useAccess();
 
 /* ---------------- 表格 CRUD ---------------- */
 const { tableData, loading, pagination, loadData, handleDelete } = useTableCrud<
@@ -152,6 +155,9 @@ const columns = [
     dataIndex: 'is_on_sale',
     width: 90,
     customRender: ({ record }: { record: GoodsApi.GoodsItem }) => {
+      if (!hasAccessByCodes(['SystemGoodsUpdateOnSale'])) {
+        return record.is_on_sale === 1 ? '上架' : '下架';
+      }
       return h(Switch, {
         checked: record.is_on_sale === 1,
         checkedChildren: '上架',
@@ -165,6 +171,9 @@ const columns = [
     dataIndex: 'status',
     width: 90,
     customRender: ({ record }: { record: GoodsApi.GoodsItem }) => {
+      if (!hasAccessByCodes(['SystemGoodsUpdateStatus'])) {
+        return record.status === 1 ? '启用' : '禁用';
+      }
       return h(Switch, {
         checked: record.status === 1,
         checkedChildren: '启用',
@@ -188,7 +197,7 @@ onMounted(() => {
 <template>
   <div class="p-4">
     <div class="mb-4">
-      <a-button type="primary" @click="handleCreate"> 新增商品 </a-button>
+      <a-button type="primary" @click="handleCreate" v-access:code="'SystemGoodsCreate'"> 新增商品 </a-button>
       <a-button class="ml-2" @click="() => loadData(searchParams.value)">
         刷新
       </a-button>
@@ -285,7 +294,7 @@ onMounted(() => {
       <template #bodyCell="{ column, record }">
         <template v-if="column.key === 'action'">
           <a-space>
-            <a-button type="link" size="small" @click="handleEdit(record)">
+            <a-button type="link" size="small" @click="handleEdit(record)" v-access:code="'SystemGoodsUpdate'">
               编辑
             </a-button>
             <a-button
@@ -293,6 +302,7 @@ onMounted(() => {
               danger
               size="small"
               @click="handleDelete(record, 'name')"
+              v-access:code="'SystemGoodsDelete'"
             >
               删除
             </a-button>
