@@ -125,9 +125,11 @@ CREATE TABLE `mb_order_log` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='订单流转日志（审计）';
 
 -- -----------------------------
--- 五、售后订单表（退款/退货，预留骨架）
--- type 0=仅退款 1=退货退款
--- status 0=待审核 1=已同意 2=退款中 10=已完成 20=已拒绝 90=关闭
+-- 五、售后订单表（退款/退货）
+-- type 0=仅退款 1=退货退款（MVP 仅启用 0）
+-- status 0=待审核 1=已同意（保留） 2=退款中（保留） 10=已完成 20=已拒绝 90=关闭
+-- 审计字段（admin_remark / reviewed_by / reviewed_at / refunded_at / canceled_at）
+--   由 RefundOrderStatusMachine 在状态流转时原子写入，不引入独立日志表
 -- -----------------------------
 DROP TABLE IF EXISTS `mb_refund_order`;
 CREATE TABLE `mb_refund_order` (
@@ -140,7 +142,12 @@ CREATE TABLE `mb_refund_order` (
   `status` tinyint(1) NOT NULL DEFAULT 0 COMMENT '售后状态（0待审核 1已同意 2退款中 10已完成 20已拒绝 90关闭）',
   `quantity` int(11) unsigned NOT NULL DEFAULT 1 COMMENT '申请数量',
   `refund_amount` decimal(10,2) NOT NULL DEFAULT 0.00 COMMENT '申请退款金额',
-  `reason` varchar(255) DEFAULT NULL COMMENT '售后原因',
+  `reason` varchar(255) DEFAULT NULL COMMENT '售后原因（枚举字符串：MISTAKEN_ORDER 等）',
+  `admin_remark` varchar(255) NOT NULL DEFAULT '' COMMENT '审核意见/驳回原因（由后台审核时写入）',
+  `reviewed_by` int(11) unsigned DEFAULT NULL COMMENT '审核管理员ID',
+  `reviewed_at` datetime DEFAULT NULL COMMENT '审核时间（approve/reject 两路径均写）',
+  `refunded_at` datetime DEFAULT NULL COMMENT '退款完成时间（COMPLETED 态时写入）',
+  `canceled_at` datetime DEFAULT NULL COMMENT '买家撤销时间（CLOSED 态时写入）',
   `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   `delete_time` int(11) unsigned DEFAULT NULL COMMENT '删除时间（软删除）',
@@ -148,5 +155,6 @@ CREATE TABLE `mb_refund_order` (
   UNIQUE KEY `uk_sn` (`sn`),
   KEY `idx_order_status` (`order_id`, `status`),
   KEY `idx_user_id` (`user_id`),
+  KEY `idx_reviewed_at` (`reviewed_at`),
   KEY `idx_delete_time` (`delete_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='售后订单表（退款/退货）';

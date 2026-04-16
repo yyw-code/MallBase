@@ -103,4 +103,66 @@ final class RefundOrderStatus
         }
         return $options;
     }
+
+    /**
+     * @return array<int, array{value:int, label:string}>
+     */
+    public static function typeOptions(): array
+    {
+        $options = [];
+        foreach (self::TYPE_TEXTS as $value => $label) {
+            $options[] = ['value' => $value, 'label' => $label];
+        }
+        return $options;
+    }
+
+    /**
+     * 终态集合（COMPLETED / REJECTED / CLOSED）
+     */
+    private const TERMINAL_STATUSES = [
+        self::COMPLETED,
+        self::REJECTED,
+        self::CLOSED,
+    ];
+
+    public static function isTerminal(int $status): bool
+    {
+        return in_array($status, self::TERMINAL_STATUSES, true);
+    }
+
+    /**
+     * 售后状态流转白名单（MVP）
+     *
+     * PENDING(0)
+     *   ├─ 管理员同意 Mock 退款  → COMPLETED(10)
+     *   ├─ 管理员驳回           → REJECTED(20)
+     *   └─ 买家主动取消          → CLOSED(90)
+     *
+     * COMPLETED / REJECTED / CLOSED 为终态，任何方向都不可再流转。
+     *
+     * APPROVED(1) / REFUNDING(2) 保留常量，MVP 暂不启用，
+     * 后续退货物流、分步退款流程接入时再补白名单。
+     *
+     * @var array<int, array<int, int>>
+     */
+    private const TRANSITIONS = [
+        self::PENDING => [
+            self::COMPLETED,
+            self::REJECTED,
+            self::CLOSED,
+        ],
+    ];
+
+    /**
+     * 判断售后状态是否允许流转
+     */
+    public static function canTransit(int $from, int $to): bool
+    {
+        if (!self::isValid($from) || !self::isValid($to)) {
+            return false;
+        }
+
+        $allowed = self::TRANSITIONS[$from] ?? [];
+        return in_array($to, $allowed, true);
+    }
 }
