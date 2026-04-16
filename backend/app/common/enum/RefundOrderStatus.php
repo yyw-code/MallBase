@@ -83,6 +83,16 @@ final class RefundOrderStatus
     }
 
     /**
+     * 返回所有"进行中"的售后状态（供 OrderService::adminList 聚合 after_sale_tag 使用）
+     *
+     * @return array<int, int>
+     */
+    public static function activeStatuses(): array
+    {
+        return self::ACTIVE_STATUSES;
+    }
+
+    /**
      * @return array<int, array{value:int, label:string}>
      */
     public static function options(): array

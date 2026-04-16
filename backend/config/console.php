@@ -4,6 +4,7 @@
 // +----------------------------------------------------------------------
 use app\command\Docs;
 use app\command\ImportRegions;
+use app\command\OrderExpireCommand;
 use app\command\SyncPermissions;
 
 return [
@@ -12,5 +13,6 @@ return [
         'docs' => Docs::class,
         'region:import' => ImportRegions::class,
         'sync:permissions' => SyncPermissions::class,
+        'order:expire' => OrderExpireCommand::class,
     ],
 ];
