@@ -232,7 +232,7 @@ const itemColumns = [
 
         <a-divider orientation="left" plain class="mt-6">售后工单</a-divider>
         <a-alert
-          message="售后模块待实现（mb_refund_order 已预留表与权限码）"
+          message="售后工单请前往「售后订单」页面查看和管理"
           type="info"
           show-icon
         />
