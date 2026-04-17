@@ -3,11 +3,8 @@
 .LSOverride
 .idea/
 .vscode/
-.clinerules
 CLAUDE.md
-.talkcody/*
 .claude/
-AI-TOOLS-GUIDE.md
 
 # Docker dev data
 data/
