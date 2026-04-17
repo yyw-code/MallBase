@@ -136,8 +136,11 @@ Route::group('/', function () {
         }
 
         // 兜底旧 admin.html
-        return view(
-            app()->getRootPath() . 'public' . DIRECTORY_SEPARATOR . 'admin.html'
-        );
+        $legacyPath = app()->getRootPath() . 'public' . DIRECTORY_SEPARATOR . 'admin.html';
+        if (is_file($legacyPath)) {
+            return view($legacyPath);
+        }
+
+        abort(404, '页面未找到');
     });
 });
