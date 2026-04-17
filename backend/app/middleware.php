@@ -8,4 +8,5 @@ return [
     // Session初始化
     // \think\middleware\SessionInit::class
     \app\middleware\CorsMiddleware::class,
+    \app\middleware\InstallCheckMiddleware::class,
 ];

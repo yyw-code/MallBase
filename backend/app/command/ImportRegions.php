@@ -16,7 +16,7 @@ class ImportRegions extends Command
     {
         $this->setName('region:import')
             ->setDescription('导入中国省市区街道地区库')
-            ->addOption('file', 'f', Option::VALUE_OPTIONAL, '地区 JSON 文件路径', dirname(app()->getRootPath()) . DIRECTORY_SEPARATOR . 'install/data/region/pcas-code.json')
+            ->addOption('file', 'f', Option::VALUE_OPTIONAL, '地区 JSON 文件路径', app_path('install' . DIRECTORY_SEPARATOR . 'data' . DIRECTORY_SEPARATOR . 'region' . DIRECTORY_SEPARATOR . 'pcas-code.json'))
             ->addOption('truncate', 't', Option::VALUE_NONE, '导入前清空地区表');
     }
 

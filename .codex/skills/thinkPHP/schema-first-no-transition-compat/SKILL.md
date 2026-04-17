@@ -40,6 +40,6 @@
 
 ## 自检清单
 
-- [ ] 新增字段是否已同步到真实数据库与 `install/database`。
+- [ ] 新增字段是否已同步到真实数据库与 `backend/app/install/data/schema`。
 - [ ] Service/Controller/Validate/Model/前端类型是否已全部接通。
 - [ ] 代码中是否残留运行时字段探测或静默忽略字段逻辑。

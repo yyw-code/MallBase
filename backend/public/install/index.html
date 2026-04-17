@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MallBase - 系统安装</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--primary:#4f46e5;--primary-hover:#4338ca;--success:#16a34a;--danger:#dc2626;--bg:#f8fafc;--card:#fff;--border:#e2e8f0;--text:#1e293b;--text-secondary:#64748b;--radius:10px}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.container{width:100%;max-width:600px}
+.header{text-align:center;margin-bottom:32px}
+.header h1{font-size:28px;font-weight:700;color:var(--text)}
+.header p{color:var(--text-secondary);margin-top:8px;font-size:14px}
+.steps{display:flex;gap:4px;margin-bottom:24px}
+.step{flex:1;height:4px;border-radius:2px;background:var(--border);transition:background .3s}
+.step.active{background:var(--primary)}
+.step.done{background:var(--success)}
+.card{background:var(--card);border-radius:var(--radius);border:1px solid var(--border);padding:32px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.card h2{font-size:18px;margin-bottom:20px;font-weight:600}
+.form-group{margin-bottom:16px}
+.form-group label{display:block;font-size:13px;font-weight:500;color:var(--text-secondary);margin-bottom:6px}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+input[type="text"],input[type="password"],input[type="number"]{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:6px;font-size:14px;outline:none;transition:border-color .2s}
+input:focus{border-color:var(--primary)}
+.btn{padding:10px 20px;border:none;border-radius:6px;font-size:14px;font-weight:500;cursor:pointer;transition:all .2s;display:inline-flex;align-items:center;gap:6px}
+.btn-primary{background:var(--primary);color:#fff}
+.btn-primary:hover{background:var(--primary-hover)}
+.btn-primary:disabled{opacity:.5;cursor:not-allowed}
+.btn-outline{background:transparent;color:var(--text-secondary);border:1px solid var(--border)}
+.btn-outline:hover{background:#f1f5f9}
+.btn-test{background:#f0fdf4;color:var(--success);border:1px solid #bbf7d0;font-size:13px;padding:8px 14px}
+.btn-test:hover{background:#dcfce7}
+.actions{display:flex;justify-content:space-between;margin-top:24px}
+.check-list{list-style:none}
+.check-item{display:flex;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);font-size:14px}
+.check-item:last-child{border-bottom:none}
+.check-item .name{flex:1}
+.check-item .value{color:var(--text-secondary);margin-right:12px}
+.check-item .icon{width:20px;text-align:center}
+.pass{color:var(--success)}
+.fail{color:var(--danger)}
+.msg{padding:10px 14px;border-radius:6px;font-size:13px;margin-top:12px;display:none}
+.msg.success{display:block;background:#f0fdf4;color:var(--success);border:1px solid #bbf7d0}
+.msg.error{display:block;background:#fef2f2;color:var(--danger);border:1px solid #fecaca}
+.checkbox-group{display:flex;align-items:center;gap:8px;margin-top:12px;font-size:14px}
+.checkbox-group input{width:16px;height:16px}
+.done-icon{font-size:64px;text-align:center;margin-bottom:16px}
+.done-text{text-align:center;color:var(--text-secondary);margin-bottom:24px}
+.done-btn{text-align:center}
+.restart-guide{margin-top:24px;padding:20px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;text-align:left}
+.restart-guide h3{font-size:15px;color:#92400e;margin-bottom:8px}
+.restart-guide p{font-size:13px;color:#78350f;margin-bottom:12px}
+.restart-cmd{margin-bottom:10px}
+.restart-cmd:last-child{margin-bottom:0}
+.restart-cmd strong{display:block;font-size:12px;color:var(--text-secondary);margin-bottom:4px}
+.restart-cmd code{display:block;padding:8px 12px;background:#1e293b;color:#e2e8f0;border-radius:4px;font-size:13px;font-family:monospace}
+.done-hint{text-align:center;color:var(--text-secondary);font-size:13px;margin-top:16px}
+.spinner{width:16px;height:16px;border:2px solid #fff;border-top-color:transparent;border-radius:50%;animation:spin .6s linear infinite;display:inline-block}
+@keyframes spin{to{transform:rotate(360deg)}}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <h1>MallBase</h1>
+    <p>系统安装向导</p>
+  </div>
+
+  <div class="steps">
+    <div class="step" id="s1"></div>
+    <div class="step" id="s2"></div>
+    <div class="step" id="s3"></div>
+    <div class="step" id="s4"></div>
+    <div class="step" id="s5"></div>
+  </div>
+
+  <!-- Step 1: 环境检测 -->
+  <div class="card" id="step1">
+    <h2>1. 环境检测</h2>
+    <ul class="check-list" id="envList"></ul>
+    <div class="msg" id="envMsg"></div>
+    <div class="actions">
+      <span></span>
+      <button class="btn btn-primary" id="envNext" disabled onclick="goStep(2)">下一步</button>
+    </div>
+  </div>
+
+  <!-- Step 2: 数据库配置 -->
+  <div class="card" id="step2" hidden>
+    <h2>2. 数据库配置</h2>
+    <div class="form-row">
+      <div class="form-group">
+        <label>主机地址</label>
+        <input type="text" id="db_host" value="127.0.0.1">
+      </div>
+      <div class="form-group">
+        <label>端口</label>
+        <input type="number" id="db_port" value="3306">
+      </div>
+    </div>
+    <div class="form-group">
+      <label>数据库名</label>
+      <input type="text" id="db_name" value="mallbase">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>用户名</label>
+        <input type="text" id="db_user" value="root">
+      </div>
+      <div class="form-group">
+        <label>密码</label>
+        <input type="password" id="db_pass">
+      </div>
+    </div>
+    <button class="btn btn-test" onclick="testDb()">测试连接</button>
+    <div class="msg" id="dbMsg"></div>
+    <div class="actions">
+      <button class="btn btn-outline" onclick="goStep(1)">上一步</button>
+      <button class="btn btn-primary" id="dbNext" disabled onclick="goStep(3)">下一步</button>
+    </div>
+  </div>
+
+  <!-- Step 3: Redis 配置 -->
+  <div class="card" id="step3" hidden>
+    <h2>3. Redis 配置</h2>
+    <div class="form-row">
+      <div class="form-group">
+        <label>主机地址</label>
+        <input type="text" id="redis_host" value="127.0.0.1">
+      </div>
+      <div class="form-group">
+        <label>端口</label>
+        <input type="number" id="redis_port" value="6379">
+      </div>
+    </div>
+    <div class="form-group">
+      <label>密码（无密码留空）</label>
+      <input type="password" id="redis_password">
+    </div>
+    <button class="btn btn-test" onclick="testRedis()">测试连接</button>
+    <div class="msg" id="redisMsg"></div>
+    <div class="actions">
+      <button class="btn btn-outline" onclick="goStep(2)">上一步</button>
+      <button class="btn btn-primary" id="redisNext" disabled onclick="goStep(4)">下一步</button>
+    </div>
+  </div>
+
+  <!-- Step 4: 管理员 -->
+  <div class="card" id="step4" hidden>
+    <h2>4. 管理员账号</h2>
+    <div class="form-group">
+      <label>用户名</label>
+      <input type="text" id="admin_user" value="admin">
+    </div>
+    <div class="form-group">
+      <label>密码（至少 6 位）</label>
+      <input type="password" id="admin_pass">
+    </div>
+    <div class="form-group">
+      <label>确认密码</label>
+      <input type="password" id="admin_pass2">
+    </div>
+    <div class="form-group">
+      <label>允许跨域的前端地址（多个用逗号分隔，* 表示全部允许）</label>
+      <input type="text" id="cors_origins" value="">
+    </div>
+    <div class="checkbox-group">
+      <input type="checkbox" id="import_demo">
+      <label for="import_demo">导入演示数据</label>
+    </div>
+    <div class="msg" id="adminMsg"></div>
+    <div class="actions">
+      <button class="btn btn-outline" onclick="goStep(3)">上一步</button>
+      <button class="btn btn-primary" id="installBtn" onclick="doInstall()">开始安装</button>
+    </div>
+  </div>
+
+  <!-- Step 5: 完成 -->
+  <div class="card" id="step5" hidden>
+    <div class="done-icon">&#10003;</div>
+    <h2 style="text-align:center">安装完成</h2>
+    <p class="done-text">系统已成功安装，请重启服务后使用管理员账号登录后台。</p>
+    <div class="restart-guide">
+      <h3>&#9888; 重要：请重启服务使配置生效</h3>
+      <p>安装已将数据库和 Redis 配置写入 .env 文件，需要重启 Swoole 服务才能加载新配置。</p>
+      <div class="restart-cmd">
+        <strong>Docker Compose 部署</strong>
+        <code>docker compose restart</code>
+      </div>
+      <div class="restart-cmd">
+        <strong>Docker 单容器部署</strong>
+        <code>docker restart mallbase</code>
+      </div>
+      <div class="restart-cmd">
+        <strong>原生部署</strong>
+        <code>php think swoole:stop &amp;&amp; php think swoole</code>
+      </div>
+    </div>
+    <p class="done-hint">重启完成后，访问 <strong>/admin</strong> 进入后台管理</p>
+  </div>
+</div>
+
+<script>
+const API = '/install/api';
+let currentStep = 1;
+
+function goStep(n) {
+  document.getElementById('step' + currentStep).hidden = true;
+  document.getElementById('step' + n).hidden = false;
+  for (let i = 1; i <= 5; i++) {
+    const el = document.getElementById('s' + i);
+    el.className = 'step' + (i < n ? ' done' : i === n ? ' active' : '');
+  }
+  currentStep = n;
+}
+
+async function api(path, opts = {}) {
+  const res = await fetch(API + path, {
+    headers: { 'Content-Type': 'application/json' },
+    ...opts,
+    body: opts.body ? JSON.stringify(opts.body) : undefined,
+  });
+  return res.json();
+}
+
+function showMsg(id, text, ok) {
+  const el = document.getElementById(id);
+  el.textContent = text;
+  el.className = 'msg ' + (ok ? 'success' : 'error');
+}
+
+document.getElementById('cors_origins').value = window.location.origin;
+
+(async function checkEnv() {
+  const r = await api('/check');
+  const list = document.getElementById('envList');
+  r.data.items.forEach(item => {
+    const li = document.createElement('li');
+    li.className = 'check-item';
+    li.innerHTML = '<span class="name">' + item.name + '</span>'
+      + '<span class="value">' + item.current + '</span>'
+      + '<span class="icon ' + (item.pass ? 'pass' : 'fail') + '">'
+      + (item.pass ? '&#10003;' : '&#10007;') + '</span>';
+    list.appendChild(li);
+  });
+  if (r.data.pass) {
+    document.getElementById('envNext').disabled = false;
+  } else {
+    showMsg('envMsg', '环境检测未通过，请安装缺失的扩展或修复目录权限后刷新页面重试。', false);
+  }
+  goStep(1);
+})();
+
+async function testDb() {
+  const body = {
+    db_host: document.getElementById('db_host').value,
+    db_port: document.getElementById('db_port').value,
+    db_user: document.getElementById('db_user').value,
+    db_pass: document.getElementById('db_pass').value,
+    db_name: document.getElementById('db_name').value,
+  };
+  const r = await api('/test-db', { method: 'POST', body });
+  showMsg('dbMsg', r.data.message, r.data.success);
+  if (r.data.success) document.getElementById('dbNext').disabled = false;
+}
+
+async function testRedis() {
+  const body = {
+    redis_host: document.getElementById('redis_host').value,
+    redis_port: document.getElementById('redis_port').value,
+    redis_password: document.getElementById('redis_password').value,
+  };
+  const r = await api('/test-redis', { method: 'POST', body });
+  showMsg('redisMsg', r.data.message, r.data.success);
+  if (r.data.success) document.getElementById('redisNext').disabled = false;
+}
+
+async function doInstall() {
+  const pass1 = document.getElementById('admin_pass').value;
+  const pass2 = document.getElementById('admin_pass2').value;
+  if (!document.getElementById('admin_user').value) {
+    return showMsg('adminMsg', '请填写管理员用户名', false);
+  }
+  if (pass1.length < 6) {
+    return showMsg('adminMsg', '密码至少 6 位', false);
+  }
+  if (pass1 !== pass2) {
+    return showMsg('adminMsg', '两次密码不一致', false);
+  }
+
+  const btn = document.getElementById('installBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> 安装中...';
+
+  const body = {
+    db_host: document.getElementById('db_host').value,
+    db_port: document.getElementById('db_port').value,
+    db_user: document.getElementById('db_user').value,
+    db_pass: document.getElementById('db_pass').value,
+    db_name: document.getElementById('db_name').value,
+    redis_host: document.getElementById('redis_host').value,
+    redis_port: document.getElementById('redis_port').value,
+    redis_password: document.getElementById('redis_password').value,
+    admin_user: document.getElementById('admin_user').value,
+    admin_pass: pass1,
+    import_demo: document.getElementById('import_demo').checked ? 1 : 0,
+    cors_origins: document.getElementById('cors_origins').value || '*',
+  };
+
+  const r = await api('/execute', { method: 'POST', body });
+
+  if (r.data.success) {
+    goStep(5);
+  } else {
+    btn.disabled = false;
+    btn.textContent = '开始安装';
+    showMsg('adminMsg', '安装失败: ' + r.data.message, false);
+  }
+}
+</script>
+</body>
+</html>
