@@ -1,6 +1,6 @@
 # ==========================================
-# 开发环境扩展：MySQL + Redis 容器
-# 用法: docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
+# 开发环境扩展：MySQL + Redis + 代码映射
+# 用法: docker compose -f docker-compose.prod.yml -f docker-compose.dev.yml up -d --build
 # ==========================================
 
 services:
@@ -45,6 +45,9 @@ services:
       retries: 5
 
   backend:
+    volumes:
+      - ./backend:/app
+      - backend_vendor:/app/vendor
     environment:
       DB_HOST: mysql
       REDIS_HOST: redis
@@ -53,3 +56,6 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+
+volumes:
+  backend_vendor:
