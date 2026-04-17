@@ -125,22 +125,18 @@ Route::group('admin', function () {
 | 根路径兜底
 |--------------------------------------------------------------------------
 */
-Route::group('/', function () {
-    Route::miss(function () {
-        // 优先返回 admin/index.html
-        $indexPath = app()->getRootPath() . 'public' . DIRECTORY_SEPARATOR . 'admin' . DIRECTORY_SEPARATOR . 'index.html';
-        if (is_file($indexPath)) {
-            return response(file_get_contents($indexPath), 200, [
-                'Content-Type' => 'text/html; charset=utf-8',
-            ]);
-        }
+Route::miss(function () {
+    $indexPath = app()->getRootPath() . 'public' . DIRECTORY_SEPARATOR . 'admin' . DIRECTORY_SEPARATOR . 'index.html';
+    if (is_file($indexPath)) {
+        return response(file_get_contents($indexPath), 200, [
+            'Content-Type' => 'text/html; charset=utf-8',
+        ]);
+    }
 
-        // 兜底旧 admin.html
-        $legacyPath = app()->getRootPath() . 'public' . DIRECTORY_SEPARATOR . 'admin.html';
-        if (is_file($legacyPath)) {
-            return view($legacyPath);
-        }
+    $legacyPath = app()->getRootPath() . 'public' . DIRECTORY_SEPARATOR . 'admin.html';
+    if (is_file($legacyPath)) {
+        return view($legacyPath);
+    }
 
-        abort(404, '页面未找到');
-    });
+    abort(404, '页面未找到');
 });
