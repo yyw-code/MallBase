@@ -196,7 +196,9 @@ class InstallService
         $jwtSecret = base64_encode(random_bytes(48));
         $corsOrigins = $params['cors_origins'] ?? '*';
 
-        $this->writeEnvFile($dbConfig, $redisConfig, $jwtSecret, $corsOrigins);
+        if (!getenv('DB_HOST')) {
+            $this->writeEnvFile($dbConfig, $redisConfig, $jwtSecret, $corsOrigins);
+        }
 
         try {
             $pdo = $this->createDatabase($dbConfig);
@@ -309,6 +311,11 @@ ENV;
 
         $files = glob($sqlDir . DIRECTORY_SEPARATOR . '*.sql');
         sort($files);
+
+        $stmt = $pdo->query("SHOW TABLES LIKE 'mb_%'");
+        if (!empty($stmt->fetchAll(PDO::FETCH_COLUMN))) {
+            return;
+        }
 
         foreach ($files as $filePath) {
             $sql = file_get_contents($filePath);

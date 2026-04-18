@@ -44,6 +44,10 @@ RUN composer dump-autoload --optimize --no-dev \
     && mkdir -p runtime public/uploads \
     && chmod -R 777 runtime
 
+COPY deploy/docker/docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
 EXPOSE 8080
 
+ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["php", "think", "swoole"]

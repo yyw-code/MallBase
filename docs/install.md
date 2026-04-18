@@ -202,6 +202,10 @@ pnpm run build --filter=@vben/web-antd
 
 构建产物在 `frontend/admin/apps/web-antd/dist/`。
 
+> 构建前确认 `frontend/admin/apps/web-antd/.env.production` 配置正确：
+> - `VITE_BASE=/admin/` — 与 Nginx 的 `location /admin/` 一致
+> - `VITE_GLOB_API_URL=/admin/api` — 相对路径，由 Nginx 反代到 Swoole
+
 ### 7. 部署前端文件
 
 ```bash
@@ -380,7 +384,7 @@ docker exec mallbase-dev composer install
 | Redis 端口 | `6379` |
 | Redis 密码 | （留空） |
 
-> MySQL 容器首次启动会自动导入建表 SQL，安装向导中可跳过导入步骤。
+> MySQL 容器首次启动会自动导入建表 SQL，安装向导会自动检测已有表并跳过重复导入。Docker 模式下环境变量由 docker-compose 管理，安装向导也会跳过 `.env` 文件写入。
 
 ### 4. 重启容器
 
@@ -522,6 +526,9 @@ cd mall-base/frontend/admin
 pnpm install
 pnpm run build --filter=@vben/web-antd
 ```
+
+> 构建前确认 `.env.production`：`VITE_BASE=/admin/`、`VITE_GLOB_API_URL=/admin/api`。
+> 部署后如需修改 API 地址，可直接编辑 `/var/www/mallbase/admin/_app.config.js`，无需重新构建。
 
 ### 4. 部署前端文件到服务器
 
@@ -670,6 +677,17 @@ lsof -ti :8080 | xargs kill -9
 export NODE_OPTIONS=--max-old-space-size=4096
 pnpm run build --filter=@vben/web-antd
 ```
+
+### 修改前端 API 地址（无需重新构建）
+
+构建产物中的 `_app.config.js` 包含运行时配置。部署后如需修改 API 地址，直接编辑：
+
+```bash
+vim /var/www/mallbase/admin/_app.config.js
+# 修改 VITE_GLOB_API_URL 的值
+```
+
+修改后刷新浏览器即可生效。
 
 ### 验证 CORS 配置
 
