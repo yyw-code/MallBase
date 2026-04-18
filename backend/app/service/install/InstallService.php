@@ -305,7 +305,7 @@ ENV;
 
     private function importSqlFiles(PDO $pdo): void
     {
-        $sqlDir = app_path('install' . DIRECTORY_SEPARATOR . 'data' . DIRECTORY_SEPARATOR . 'schema');
+        $sqlDir = root_path() . 'install' . DIRECTORY_SEPARATOR . 'data' . DIRECTORY_SEPARATOR . 'schema';
 
         $files = glob($sqlDir . DIRECTORY_SEPARATOR . '*.sql');
         sort($files);
@@ -341,7 +341,7 @@ ENV;
 
     private function importDemoData(PDO $pdo): void
     {
-        $demoDir = app_path('install' . DIRECTORY_SEPARATOR . 'data' . DIRECTORY_SEPARATOR . 'demo');
+        $demoDir = root_path() . 'install' . DIRECTORY_SEPARATOR . 'data' . DIRECTORY_SEPARATOR . 'demo';
 
         if (!is_dir($demoDir)) {
             return;
