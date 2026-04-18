@@ -14,7 +14,7 @@ class InstallCheckMiddleware
     {
         $path = $request->pathinfo();
         $isInstallRoute = str_starts_with($path, 'install/') || $path === 'install';
-        $isInstalled = file_exists(app()->getRootPath() . 'install.lock');
+        $isInstalled = file_exists(root_path() . 'install' . DIRECTORY_SEPARATOR . 'install.lock');
 
         if ($isInstalled && $isInstallRoute && str_starts_with($path, 'install/api/')) {
             return json(['code' => 403, 'message' => '系统已安装', 'data' => null], 403);

@@ -370,6 +370,6 @@ ENV;
 
     private function lockFilePath(): string
     {
-        return app()->getRootPath() . 'install.lock';
+        return root_path() . 'install' . DIRECTORY_SEPARATOR . 'install.lock';
     }
 }
