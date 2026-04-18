@@ -4,8 +4,8 @@ declare (strict_types=1);
 
 namespace app\admin\middleware;
 
-use app\admin\model\auth\Admin;
-use app\admin\model\auth\Permission;
+use app\model\auth\Admin;
+use app\model\auth\Permission;
 use app\admin\service\cache\PermissionCacheService;
 use Closure;
 use mall_base\exception\AuthException;

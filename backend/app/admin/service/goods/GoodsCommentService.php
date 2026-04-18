@@ -3,9 +3,9 @@ declare(strict_types=1);
 
 namespace app\admin\service\goods;
 
-use app\admin\model\goods\Goods;
-use app\admin\model\goods\GoodsComment;
-use app\admin\model\user\User;
+use app\model\goods\Goods;
+use app\model\goods\GoodsComment;
+use app\model\user\User;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
 

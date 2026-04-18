@@ -3,8 +3,8 @@ declare(strict_types=1);
 
 namespace app\admin\service\user;
 
-use app\admin\model\user\User;
-use app\admin\model\user\UserAddress;
+use app\model\user\User;
+use app\model\user\UserAddress;
 use app\service\RegionResolverService;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;

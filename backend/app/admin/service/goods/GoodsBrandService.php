@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 namespace app\admin\service\goods;
 
-use app\admin\model\goods\GoodsBrand;
+use app\model\goods\GoodsBrand;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
 
@@ -149,7 +149,7 @@ class GoodsBrandService extends BaseService
      */
     public function getGoodsCount(int $brandId): int
     {
-        return $this->model(\app\admin\model\goods\Goods::class)
+        return $this->model(\app\model\goods\Goods::class)
             ->where('brand_id', $brandId)
             ->count();
     }

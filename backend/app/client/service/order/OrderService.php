@@ -4,14 +4,14 @@ declare(strict_types=1);
 
 namespace app\client\service\order;
 
-use app\admin\model\order\Cart;
-use app\admin\model\order\Order;
-use app\admin\model\order\OrderItem;
-use app\admin\model\order\OrderLog;
+use app\model\order\Cart;
+use app\model\order\Order;
+use app\model\order\OrderItem;
+use app\model\order\OrderLog;
 use app\admin\service\order\OrderSnGenerator;
 use app\admin\service\order\OrderStatusMachine;
 use app\admin\service\order\StockService;
-use app\client\model\user\UserAddress;
+use app\model\user\UserAddress;
 use app\common\enum\OperatorType;
 use app\common\enum\OrderStatus;
 use app\common\enum\PayMethod;

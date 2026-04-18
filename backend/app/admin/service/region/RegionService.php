@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 namespace app\admin\service\region;
 
-use app\admin\model\region\Region;
+use app\model\region\Region;
 use app\admin\service\setting\FreightTemplateService;
 use app\admin\service\user\UserAddressService;
 use app\service\RegionResolverService;

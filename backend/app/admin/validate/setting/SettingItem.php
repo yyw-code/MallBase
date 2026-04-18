@@ -4,7 +4,7 @@ declare (strict_types=1);
 
 namespace app\admin\validate\setting;
 
-use app\admin\model\setting\RuleType;
+use app\model\setting\RuleType;
 use think\Validate;
 
 /**

@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace app\client\service\order;
 
-use app\admin\model\goods\Goods;
-use app\admin\model\goods\GoodsSku;
-use app\admin\model\order\Cart;
+use app\model\goods\Goods;
+use app\model\goods\GoodsSku;
+use app\model\order\Cart;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
 use think\facade\Db;

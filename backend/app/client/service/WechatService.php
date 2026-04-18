@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 namespace app\client\service;
 
-use app\client\model\User;
+use app\model\user\User;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
 use mall_base\log\Logger;

@@ -1,6 +1,6 @@
 <?php
 
-use app\admin\model\auth\Permission;
+use app\model\auth\Permission;
 use think\facade\Route;
 
 // 权限接口路由

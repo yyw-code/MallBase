@@ -3,8 +3,8 @@ declare(strict_types=1);
 
 namespace app\admin\service\setting;
 
-use app\admin\model\setting\FreightTemplate;
-use app\admin\model\setting\FreightTemplateRule;
+use app\model\setting\FreightTemplate;
+use app\model\setting\FreightTemplateRule;
 use app\service\RegionResolverService;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;

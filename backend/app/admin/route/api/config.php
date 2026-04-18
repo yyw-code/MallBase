@@ -2,7 +2,7 @@
 
 use app\admin\controller\ConfigController;
 use app\admin\middleware\JwtAuth;
-use app\admin\model\auth\Permission;
+use app\model\auth\Permission;
 use think\facade\Route;
 
 // 系统配置接口（需要登录）

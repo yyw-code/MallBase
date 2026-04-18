@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 namespace app\admin\service\goods;
 
-use app\admin\model\goods\GoodsCategory;
+use app\model\goods\GoodsCategory;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
 

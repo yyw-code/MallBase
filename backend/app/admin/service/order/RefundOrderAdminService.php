@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace app\admin\service\order;
 
-use app\admin\model\order\RefundOrder;
+use app\model\order\RefundOrder;
 use app\common\enum\OperatorType;
 use app\common\enum\OrderStatus;
 use app\common\enum\RefundOrderStatus;

@@ -4,8 +4,8 @@ declare (strict_types=1);
 
 namespace app\admin\service\auth;
 
-use app\admin\model\auth\Admin as AdminModel;
-use app\admin\model\auth\AdminRole;
+use app\model\auth\Admin as AdminModel;
+use app\model\auth\AdminRole;
 use app\admin\service\cache\PermissionCacheService;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;

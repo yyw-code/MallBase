@@ -3,11 +3,11 @@ declare(strict_types=1);
 
 namespace app\client\service;
 
-use app\client\model\User;
-use app\client\model\user\UserGroup;
-use app\client\model\user\UserGroupRelation;
-use app\client\model\user\UserTag;
-use app\client\model\user\UserTagRelation;
+use app\model\user\User;
+use app\model\user\UserGroup;
+use app\model\user\UserGroupRelation;
+use app\model\user\UserTag;
+use app\model\user\UserTagRelation;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
 use mall_base\service\JwtCacheService;

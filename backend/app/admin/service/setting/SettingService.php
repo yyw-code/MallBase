@@ -4,10 +4,10 @@ declare (strict_types=1);
 
 namespace app\admin\service\setting;
 
-use app\admin\model\auth\Permission;
-use app\admin\model\setting\RuleType;
-use app\admin\model\setting\Setting;
-use app\admin\model\setting\SettingGroup;
+use app\model\auth\Permission;
+use app\model\setting\RuleType;
+use app\model\setting\Setting;
+use app\model\setting\SettingGroup;
 use app\admin\service\cache\SettingCacheService;
 use app\admin\validate\setting\SettingValueValidate;
 use app\service\UploadService;

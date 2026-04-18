@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace app\admin\service\order;
 
-use app\admin\model\goods\GoodsSku;
+use app\model\goods\GoodsSku;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
 use think\facade\Db;

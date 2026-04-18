@@ -3,9 +3,9 @@ declare(strict_types=1);
 
 namespace app\admin\service\user;
 
-use app\admin\model\user\UserGroupRelation;
-use app\admin\model\user\UserTag;
-use app\admin\model\user\UserTagRelation;
+use app\model\user\UserGroupRelation;
+use app\model\user\UserTag;
+use app\model\user\UserTagRelation;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
 

@@ -4,10 +4,10 @@ declare (strict_types=1);
 
 namespace app\admin\service\auth;
 
-use app\admin\model\auth\Admin;
-use app\admin\model\auth\AdminRole;
-use app\admin\model\auth\Permission as PermissionModel;
-use app\admin\model\auth\RolePermission;
+use app\model\auth\Admin;
+use app\model\auth\AdminRole;
+use app\model\auth\Permission as PermissionModel;
+use app\model\auth\RolePermission;
 use app\admin\service\cache\PermissionCacheService;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;

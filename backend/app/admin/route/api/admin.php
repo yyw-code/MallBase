@@ -2,7 +2,7 @@
 
 use app\admin\middleware\CheckPermission;
 use app\admin\middleware\JwtAuth;
-use app\admin\model\auth\Permission;
+use app\model\auth\Permission;
 use think\facade\Route;
 
 // 管理员接口路由

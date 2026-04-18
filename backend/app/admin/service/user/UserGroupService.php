@@ -3,8 +3,8 @@ declare(strict_types=1);
 
 namespace app\admin\service\user;
 
-use app\admin\model\user\UserGroup;
-use app\admin\model\user\UserGroupRelation;
+use app\model\user\UserGroup;
+use app\model\user\UserGroupRelation;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
 

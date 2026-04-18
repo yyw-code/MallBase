@@ -3,13 +3,13 @@ declare(strict_types=1);
 
 namespace app\admin\service\goods;
 
-use app\admin\model\goods\Goods;
-use app\admin\model\goods\GoodsBrand;
-use app\admin\model\goods\GoodsCategory;
-use app\admin\model\goods\GoodsImage;
-use app\admin\model\goods\GoodsSku;
-use app\admin\model\goods\GoodsTag;
-use app\admin\model\goods\GoodsTagRelation;
+use app\model\goods\Goods;
+use app\model\goods\GoodsBrand;
+use app\model\goods\GoodsCategory;
+use app\model\goods\GoodsImage;
+use app\model\goods\GoodsSku;
+use app\model\goods\GoodsTag;
+use app\model\goods\GoodsTagRelation;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
 

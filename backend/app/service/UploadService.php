@@ -581,7 +581,7 @@ class UploadService extends BaseService
      */
     private function getSettingModel()
     {
-        return app()->make(\app\admin\model\setting\Setting::class);
+        return app()->make(\app\model\setting\Setting::class);
     }
 
     /**

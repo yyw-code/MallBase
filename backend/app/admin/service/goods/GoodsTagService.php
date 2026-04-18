@@ -3,8 +3,8 @@ declare(strict_types=1);
 
 namespace app\admin\service\goods;
 
-use app\admin\model\goods\GoodsTag;
-use app\admin\model\goods\GoodsTagRelation;
+use app\model\goods\GoodsTag;
+use app\model\goods\GoodsTagRelation;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
 

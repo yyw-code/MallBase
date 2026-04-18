@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace app\service;
 
-use app\admin\model\setting\FreightTemplate;
-use app\admin\model\setting\FreightTemplateRule;
+use app\model\setting\FreightTemplate;
+use app\model\setting\FreightTemplateRule;
 use app\service\dto\FreightCalculationResult;
 use app\service\dto\RegionPathDto;
 use mall_base\exception\BusinessException;

@@ -3,8 +3,8 @@ declare(strict_types=1);
 
 namespace app\admin\service\goods;
 
-use app\admin\model\goods\GoodsSpec;
-use app\admin\model\goods\GoodsSpecValue;
+use app\model\goods\GoodsSpec;
+use app\model\goods\GoodsSpecValue;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
 

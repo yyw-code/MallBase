@@ -4,11 +4,11 @@ declare (strict_types=1);
 
 namespace app\admin\service\auth;
 
-use app\admin\model\auth\Role as RoleModel;
-use app\admin\model\auth\RolePermission;
-use app\admin\model\auth\Permission;
+use app\model\auth\Role as RoleModel;
+use app\model\auth\RolePermission;
+use app\model\auth\Permission;
 use app\admin\service\cache\PermissionCacheService;
-use app\admin\model\auth\Permission as PermissionModel;
+use app\model\auth\Permission as PermissionModel;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
 
@@ -288,7 +288,7 @@ class RoleService extends BaseService
     protected function clearRoleUsersCache(int $roleId): void
     {
         // 获取拥有该角色的所有用户ID
-        $adminIds = $this->model(\app\admin\model\auth\AdminRole::class)
+        $adminIds = $this->model(\app\model\auth\AdminRole::class)
             ->where('role_id', $roleId)
             ->column('admin_id');
 
