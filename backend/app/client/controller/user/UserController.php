@@ -3,8 +3,8 @@ declare(strict_types=1);
 
 namespace app\client\controller\user;
 
-use app\client\service\UserService;
-use app\client\service\WechatService;
+use app\service\client\UserService;
+use app\service\client\WechatService;
 use app\client\validate\user\UserValidate;
 use mall_base\base\BaseController;
 

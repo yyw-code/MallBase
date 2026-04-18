@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 namespace app\client\controller\order;
 
-use app\client\service\order\CartService;
+use app\service\client\order\CartService;
 use app\client\validate\order\CartValidate;
 use mall_base\base\BaseController;
 

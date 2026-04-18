@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 namespace app\admin\controller\order;
 
-use app\admin\service\order\RefundOrderAdminService;
+use app\service\admin\order\RefundOrderAdminService;
 use app\common\enum\RefundOrderStatus;
 use app\common\enum\RefundReason;
 use mall_base\base\BaseController;

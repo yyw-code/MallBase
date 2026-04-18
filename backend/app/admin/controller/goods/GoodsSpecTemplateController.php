@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 namespace app\admin\controller\goods;
 
-use app\admin\service\goods\GoodsSpecTemplateService;
+use app\service\admin\goods\GoodsSpecTemplateService;
 use app\admin\validate\goods\GoodsSpecTemplateValidate;
 use mall_base\base\BaseController;
 

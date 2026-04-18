@@ -4,7 +4,7 @@ declare (strict_types=1);
 
 namespace app\admin\controller\setting;
 
-use app\admin\service\setting\SettingService;
+use app\service\admin\setting\SettingService;
 use mall_base\base\BaseController;
 
 /**

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace app\command;
 
-use app\admin\service\order\OrderAdminService;
+use app\service\admin\order\OrderAdminService;
 use think\console\Command;
 use think\console\Input;
 use think\console\input\Option;

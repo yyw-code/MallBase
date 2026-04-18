@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 namespace app\admin\controller\user;
 
-use app\admin\service\user\UserAddressService;
+use app\service\admin\user\UserAddressService;
 use app\admin\validate\user\UserAddressValidate;
 use mall_base\base\BaseController;
 

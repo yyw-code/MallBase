@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Service\Order;
 
-use app\client\service\order\RefundService;
+use app\service\client\order\RefundService;
 use app\common\enum\OrderStatus;
 use app\common\enum\RefundOrderStatus;
 use app\common\enum\RefundReason;

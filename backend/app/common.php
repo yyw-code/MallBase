@@ -1,7 +1,7 @@
 <?php
 // 应用公共文件
 
-use app\admin\service\setting\SettingService;
+use app\service\admin\setting\SettingService;
 use app\service\UploadService;
 
 if (!function_exists('convertToRouteName')) {

@@ -5,7 +5,7 @@ declare (strict_types=1);
 namespace app\admin\middleware;
 
 use Closure;
-use app\admin\service\AdminOperationLogService;
+use app\service\admin\AdminOperationLogService;
 use think\Request;
 use think\Response;
 

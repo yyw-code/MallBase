@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 namespace app\admin\controller\region;
 
-use app\admin\service\region\RegionService;
+use app\service\admin\region\RegionService;
 use app\admin\validate\region\RegionValidate;
 use mall_base\base\BaseController;
 

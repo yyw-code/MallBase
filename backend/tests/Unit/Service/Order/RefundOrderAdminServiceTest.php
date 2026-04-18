@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Service\Order;
 
-use app\admin\service\order\RefundOrderAdminService;
+use app\service\admin\order\RefundOrderAdminService;
 use mall_base\exception\BusinessException;
 use PHPUnit\Framework\TestCase;
 

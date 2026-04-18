@@ -4,7 +4,7 @@ declare (strict_types=1);
 
 namespace app\admin\controller\auth;
 
-use app\admin\service\auth\RoleService;
+use app\service\admin\auth\RoleService;
 use app\admin\validate\auth\RoleValidate;
 use mall_base\base\BaseController;
 

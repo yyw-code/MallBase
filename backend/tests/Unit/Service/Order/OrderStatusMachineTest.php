@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Tests\Unit\Service\Order;
 
 use app\model\order\Order;
-use app\admin\service\order\OrderStatusMachine;
+use app\service\order\OrderStatusMachine;
 use app\common\enum\OperatorType;
 use app\common\enum\OrderStatus;
 use mall_base\exception\BusinessException;

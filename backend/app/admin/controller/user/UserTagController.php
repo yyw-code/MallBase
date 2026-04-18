@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 namespace app\admin\controller\user;
 
-use app\admin\service\user\UserTagService;
+use app\service\admin\user\UserTagService;
 use app\admin\validate\user\UserTagValidate;
 use mall_base\base\BaseController;
 

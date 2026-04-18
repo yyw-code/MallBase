@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 namespace app\client\controller\order;
 
-use app\client\service\order\RefundService;
+use app\service\client\order\RefundService;
 use app\client\validate\order\RefundValidate;
 use app\common\enum\RefundOrderStatus;
 use app\common\enum\RefundReason;

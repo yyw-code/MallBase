@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 namespace app\admin\controller\setting;
 
-use app\admin\service\setting\FreightTemplateService;
+use app\service\admin\setting\FreightTemplateService;
 use app\admin\validate\setting\FreightTemplateValidate;
 use mall_base\base\BaseController;
 

@@ -6,7 +6,7 @@ namespace app\admin\middleware;
 
 use app\model\auth\Admin;
 use app\model\auth\Permission;
-use app\admin\service\cache\PermissionCacheService;
+use app\service\cache\PermissionCacheService;
 use Closure;
 use mall_base\exception\AuthException;
 use think\Request;

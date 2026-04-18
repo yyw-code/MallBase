@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 namespace app\admin\controller\order;
 
-use app\admin\service\order\OrderAdminService;
+use app\service\admin\order\OrderAdminService;
 use app\common\enum\OrderStatus;
 use app\common\enum\PayMethod;
 use mall_base\base\BaseController;

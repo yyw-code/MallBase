@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Service\Order;
 
-use app\admin\service\order\RefundSnGenerator;
+use app\service\order\RefundSnGenerator;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 

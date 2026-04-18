@@ -4,7 +4,7 @@ declare (strict_types=1);
 
 namespace app\admin\controller\auth;
 
-use app\admin\service\auth\AdminService;
+use app\service\admin\auth\AdminService;
 use app\admin\validate\auth\AdminValidate;
 use mall_base\base\BaseController;
 

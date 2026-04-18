@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 namespace app\admin\controller\user;
 
-use app\admin\service\user\UserGroupService;
+use app\service\admin\user\UserGroupService;
 use app\admin\validate\user\UserGroupValidate;
 use mall_base\base\BaseController;
 

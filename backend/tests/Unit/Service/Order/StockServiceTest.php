@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Service\Order;
 
-use app\admin\service\order\StockService;
+use app\service\order\StockService;
 use mall_base\exception\BusinessException;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
