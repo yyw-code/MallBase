@@ -1,36 +1,99 @@
 <?php
 
 use think\facade\Route;
+use app\middleware\admin\{
+    JwtAuth,
+    CheckPermission,
+    AdminOperationLogMiddleware,
+    RequestLockMiddleware
+};
 
-/*
-|--------------------------------------------------------------------------
-| 静态文件访问（上传的文件）
-|--------------------------------------------------------------------------
-| /uploads/... 不经过 MultiApp（无 app/uploads/ 目录）
-*/
-Route::group('uploads', function () {
-    Route::miss(function () {
-        $path = request()->pathinfo();
-        $filePath = public_path() . DIRECTORY_SEPARATOR . str_replace('/uploads/', '', $path);
+Route::group('admin', function () {
 
-        if (!file_exists($filePath)) {
-            abort(404, '文件不存在');
+    /*
+    |--------------------------------------------------------------------------
+    | 后台 API
+    |--------------------------------------------------------------------------
+    */
+    Route::group('api/', function () {
+
+        $apiDir = __DIR__ . DIRECTORY_SEPARATOR . 'api' . DIRECTORY_SEPARATOR . 'admin';
+        foreach (glob($apiDir . DIRECTORY_SEPARATOR . '*.php') as $file) {
+            require $file;
         }
 
-        $mimeType = mime_content_type($filePath);
+        Route::miss(function () {
+            return json([
+                'code' => 404,
+                'msg'  => '接口不存在',
+                'data' => null,
+            ]);
+        });
 
-        return response(file_get_contents($filePath), 200, [
-            'Content-Type'  => $mimeType,
-            'Cache-Control' => 'public, max-age=31536000',
+    })
+        ->option([
+            '_lock'       => true,
+            '_group_name' => '后台管理'
+        ])
+        ->middleware([
+            JwtAuth::class,
+            CheckPermission::class,
+            RequestLockMiddleware::class,
+            AdminOperationLogMiddleware::class,
         ]);
-    });
-})->allowCrossDomain();
 
-/*
-|--------------------------------------------------------------------------
-| 全局兜底
-|--------------------------------------------------------------------------
-| 注意：此 miss 会被 Swoole 预加载并 clone 到每个请求，
-| 若在此设置 Route::miss()，会拦截多应用（admin/client/install）的路由匹配。
-| 因此不在此设置全局 miss，各应用自行在 app/{name}/route/app.php 中处理。
-*/
+    /*
+    |--------------------------------------------------------------------------
+    | 后台 SPA 兜底
+    |--------------------------------------------------------------------------
+    | pathinfo 现在包含 admin/ 前缀，需要 strip 后查找静态文件
+    */
+    Route::miss(function () {
+        $path = request()->pathinfo();
+        $path = preg_replace('#^admin/?#', '', $path);
+        $publicPath = app()->getRootPath() . 'public' . DIRECTORY_SEPARATOR;
+
+        $filePath = $publicPath . 'admin' . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $path);
+        if (is_file($filePath)) {
+            $mimeTypes = [
+                'js'    => 'application/javascript',
+                'mjs'   => 'application/javascript',
+                'css'   => 'text/css',
+                'svg'   => 'image/svg+xml',
+                'png'   => 'image/png',
+                'jpg'   => 'image/jpeg',
+                'jpeg'  => 'image/jpeg',
+                'gif'   => 'image/gif',
+                'ico'   => 'image/x-icon',
+                'woff'  => 'font/woff',
+                'woff2' => 'font/woff2',
+                'ttf'   => 'font/ttf',
+                'eot'   => 'application/vnd.ms-fontobject',
+                'json'  => 'application/json',
+            ];
+
+            $ext = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
+            $mimeType = $mimeTypes[$ext] ?? mime_content_type($filePath);
+
+            return response(file_get_contents($filePath), 200, [
+                'Content-Type'  => $mimeType,
+                'Cache-Control' => 'public, max-age=31536000, immutable',
+            ]);
+        }
+
+        $indexPath = $publicPath . 'admin' . DIRECTORY_SEPARATOR . 'index.html';
+        if (is_file($indexPath)) {
+            return response(file_get_contents($indexPath), 200, [
+                'Content-Type' => 'text/html; charset=utf-8',
+            ]);
+        }
+
+        $legacyPath = $publicPath . 'admin.html';
+        if (is_file($legacyPath)) {
+            return view($legacyPath);
+        }
+
+        abort(404, '前端页面未找到，请先构建前端');
+    });
+
+});

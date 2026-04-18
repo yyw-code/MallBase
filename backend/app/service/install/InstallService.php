@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace app\install\service;
+namespace app\service\install;
 
 use PDO;
 use PDOException;

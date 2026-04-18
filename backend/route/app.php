@@ -1,18 +1,38 @@
 <?php
-// +----------------------------------------------------------------------
-// | ThinkPHP [ WE CAN DO IT JUST THINK ]
-// +----------------------------------------------------------------------
-// | Copyright (c) 2006~2018 http://thinkphp.cn All rights reserved.
-// +----------------------------------------------------------------------
-// | Licensed ( http://www.apache.org/licenses/LICENSE-2.0 )
-// +----------------------------------------------------------------------
-// | Author: liu21st <liu21st@gmail.com>
-// +----------------------------------------------------------------------
+
 use think\facade\Route;
 
-Route::get('think', function () {
-    return 'hello,ThinkPHP8!';
-});
+/*
+|--------------------------------------------------------------------------
+| 静态文件访问（上传的文件）
+|--------------------------------------------------------------------------
+*/
+Route::group('uploads', function () {
+    Route::miss(function () {
+        $path = request()->pathinfo();
+        $filePath = public_path() . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $path);
 
-Route::get('hello/:name', 'index/hello');
-Route::get('index', 'index/index');
+        if (!file_exists($filePath)) {
+            abort(404, '文件不存在');
+        }
+
+        $mimeType = mime_content_type($filePath);
+
+        return response(file_get_contents($filePath), 200, [
+            'Content-Type'  => $mimeType,
+            'Cache-Control' => 'public, max-age=31536000',
+        ]);
+    });
+})->allowCrossDomain();
+
+/*
+|--------------------------------------------------------------------------
+| 全局兜底
+|--------------------------------------------------------------------------
+*/
+Route::miss(function () {
+    if (request()->isAjax() || str_contains(request()->header('accept', ''), 'application/json')) {
+        return json(['code' => 404, 'msg' => '接口不存在', 'data' => null]);
+    }
+    abort(404);
+});

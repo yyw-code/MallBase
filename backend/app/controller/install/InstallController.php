@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace app\controller\install;
 
-use app\install\service\InstallService;
+use app\service\install\InstallService;
 use think\Request;
 use think\Response;
 
