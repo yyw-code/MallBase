@@ -1,7 +1,7 @@
 <?php
 
-use app\admin\middleware\CheckPermission;
-use app\admin\middleware\JwtAuth;
+use app\middleware\admin\CheckPermission;
+use app\middleware\admin\JwtAuth;
 use app\model\auth\Permission;
 use think\facade\Route;
 

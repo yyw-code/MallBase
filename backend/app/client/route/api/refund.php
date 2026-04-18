@@ -1,6 +1,6 @@
 <?php
 
-use app\client\middleware\JwtAuth;
+use app\middleware\client\JwtAuth;
 use think\facade\Route;
 
 Route::group('refund', function () {

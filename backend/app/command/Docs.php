@@ -215,8 +215,8 @@ class Docs extends Command
                 $prefix = rtrim($prefix, '/');
 
                 // 将 / 转换为 \ 并添加命名空间前缀
-                // auth/AdminController -> app\admin\controller\auth\AdminController
-                $controllerClass = 'app\\' . $appName . '\\controller\\' . str_replace('/', '\\', $prefix);
+                // auth/AdminController -> app\controller\admin\auth\AdminController
+                $controllerClass = 'app\\controller\\' . $appName . '\\' . str_replace('/', '\\', $prefix);
             }
 
             // 获取参数
@@ -244,7 +244,7 @@ class Docs extends Command
                 $groupName = $option['_group_name'];
             } else if (!empty($controllerClass)) {
                 // 从控制器类名中提取模块名
-                // 例如：app\admin\controller\auth\AdminController -> admin
+                // 例如：app\controller\admin\auth\AdminController -> admin
                 $namespaceParts = explode('\\', $controllerClass);
                 $controllerName = end($namespaceParts); // AdminController
 

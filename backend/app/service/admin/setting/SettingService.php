@@ -9,7 +9,7 @@ use app\model\setting\RuleType;
 use app\model\setting\Setting;
 use app\model\setting\SettingGroup;
 use app\service\cache\SettingCacheService;
-use app\admin\validate\setting\SettingValueValidate;
+use app\validate\admin\setting\SettingValueValidate;
 use app\service\UploadService;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;

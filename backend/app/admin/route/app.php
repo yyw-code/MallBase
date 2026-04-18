@@ -1,7 +1,7 @@
 <?php
 
 use think\facade\Route;
-use app\admin\middleware\{
+use app\middleware\admin\{
     JwtAuth,
     CheckPermission,
     AdminOperationLogMiddleware,

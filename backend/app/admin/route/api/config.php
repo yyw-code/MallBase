@@ -1,7 +1,7 @@
 <?php
 
-use app\admin\controller\ConfigController;
-use app\admin\middleware\JwtAuth;
+use app\controller\admin\ConfigController;
+use app\middleware\admin\JwtAuth;
 use app\model\auth\Permission;
 use think\facade\Route;
 
