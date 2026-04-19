@@ -1,6 +1,8 @@
 # ==========================================
 # 生产环境：单后端容器
-# 用法: docker compose up -d --build
+#
+# 配置源：构建时 backend/.env（镜像内 /app/.env）
+# 用法: docker compose --env-file backend/.env up -d --build
 # 需要：外部 MySQL 8.0+ / Redis 6.0+
 # ==========================================
 
@@ -14,34 +16,8 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
-      - "${APP_PORT:-8080}:8080"
+      - "${SWOOLE_HTTP_PORT:-8080}:${SWOOLE_HTTP_PORT:-8080}"
     environment:
-      APP_DEBUG: ${APP_DEBUG:-false}
-      CRON_ENABLE: ${CRON_ENABLE:-false}
-      DB_TYPE: mysql
-      DB_HOST: ${DB_HOST:-host.docker.internal}
-      DB_NAME: ${DB_NAME:-mallbase}
-      DB_USER: ${DB_USER:-mallbase}
-      DB_PASS: ${DB_PASS:-mallbase123}
-      DB_PORT: ${DB_PORT:-3306}
-      DB_CHARSET: utf8mb4
-      CACHE_DRIVER: redis
-      REDIS_HOST: ${REDIS_HOST:-host.docker.internal}
-      REDIS_PORT: ${REDIS_PORT:-6379}
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
-      REDIS_CACHE_DB: ${REDIS_CACHE_DB:-0}
-      JWT_SECRET: ${JWT_SECRET:-please-change-me}
-      JWT_EXPIRE: ${JWT_EXPIRE:-7200}
-      JWT_REFRESH_EXPIRE: ${JWT_REFRESH_EXPIRE:-2592000}
-      SWOOLE_HTTP_HOST: 0.0.0.0
-      SWOOLE_HTTP_PORT: 8080
-      SWOOLE_WORKER_NUM: ${SWOOLE_WORKER_NUM:-0}
-      SWOOLE_MAX_REQUEST: ${SWOOLE_MAX_REQUEST:-2000}
-      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-*}
-      CORS_ALLOW_METHODS: GET,POST,PUT,DELETE,OPTIONS
-      CORS_ALLOW_HEADERS: Authorization,Content-Type,X-Requested-With
-      LOG_SINGLE: "false"
-      LOG_MAX_FILES: 30
       TZ: Asia/Shanghai
     volumes:
       - backend_runtime:/app/runtime

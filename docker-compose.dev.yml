@@ -1,12 +1,35 @@
 # ==========================================
-# 开发环境：后端容器 + MySQL + Redis
+# 开发环境：后端容器 + MySQL + Redis（+ ensure-env 兜底；可选 frontend-build）
 #
-# 全套启动: docker compose -f docker-compose.dev.yml up -d
-# 仅后端:   docker compose -f docker-compose.dev.yml up -d backend
-#           （仅后端时需自备 MySQL + Redis）
+# 配置源分工（两份独立 .env，不合并）：
+#   - 项目根目录 .env：docker compose 做 ${VAR} 插值（模板：deploy/docker/.example.env）
+#   - backend/.env：   ThinkPHP 运行时业务配置（模板：backend/.example.env，完整 30+ 字段）
+#
+# 两种启动方式（详见 docs/env-files.md）：
+#   1. 零配置：docker compose -f docker-compose.dev.yml up -d
+#              （ensure-env 会自动生成两份 .env + 随机化敏感字段）
+#   2. 自定义：cp deploy/docker/.example.env .env && 按需改 && up -d
+#              （ensure-env 仍会补齐 backend/.env，保持两份同步）
+#
+# 含前端打包：追加 --profile build，启动 frontend-build 容器自动把 Vben 打包到
+#   backend/public/admin：
+#     docker compose -f docker-compose.dev.yml --profile build up -d
+#
+# 仅后端：docker compose -f docker-compose.dev.yml up -d backend
+#         （需自备 MySQL + Redis；建议 DB_HOST=host.docker.internal）
 # ==========================================
 
 services:
+  # 一次性 init 容器：确保 backend/.env 与 根目录 .env 存在且完整
+  ensure-env:
+    image: alpine:3.19
+    container_name: mallbase-ensure-env
+    volumes:
+      - .:/workdir
+      - ./deploy/docker/ensure-env.sh:/ensure-env.sh:ro
+    command: sh /ensure-env.sh
+    restart: "no"
+
   backend:
     build:
       context: .
@@ -16,32 +39,20 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
-      - "${APP_PORT:-8080}:8080"
+      - "${SWOOLE_HTTP_PORT:-8080}:${SWOOLE_HTTP_PORT:-8080}"
     environment:
-      APP_DEBUG: "true"
-      DB_TYPE: mysql
-      DB_HOST: ${DB_HOST:-mysql}
-      DB_NAME: ${DB_NAME:-mallbase}
-      DB_USER: ${DB_USER:-mallbase}
-      DB_PASS: ${DB_PASS:-mallbase123}
-      DB_PORT: ${DB_PORT:-3306}
-      DB_CHARSET: utf8mb4
-      CACHE_DRIVER: redis
-      REDIS_HOST: ${REDIS_HOST:-redis}
-      REDIS_PORT: ${REDIS_PORT:-6379}
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
-      REDIS_CACHE_DB: ${REDIS_CACHE_DB:-0}
-      SWOOLE_HTTP_HOST: 0.0.0.0
-      SWOOLE_HTTP_PORT: 8080
-      SWOOLE_WORKER_NUM: ${SWOOLE_WORKER_NUM:-0}
-      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-*}
-      CORS_ALLOW_METHODS: GET,POST,PUT,DELETE,OPTIONS
-      CORS_ALLOW_HEADERS: Authorization,Content-Type,X-Requested-With
       TZ: Asia/Shanghai
+    env_file:
+      # required: false 让 ensure-env 在首次启动时才生成 backend/.env，
+      # compose parse 阶段不会因文件缺失而报错（需要 Compose 2.20+）
+      - path: ./backend/.env
+        required: false
     volumes:
       - ./backend:/app
       - backend_vendor:/app/vendor
     depends_on:
+      ensure-env:
+        condition: service_completed_successfully
       mysql:
         condition: service_healthy
       redis:
@@ -52,10 +63,10 @@ services:
     container_name: mallbase-mysql
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-mallbase123}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-mallbase-root-123}
       MYSQL_DATABASE: ${DB_NAME:-mallbase}
       MYSQL_USER: ${DB_USER:-mallbase}
-      MYSQL_PASSWORD: ${DB_PASS:-mallbase123}
+      MYSQL_PASSWORD: ${DB_PASS:-mallbase-pass-123}
       TZ: Asia/Shanghai
     ports:
       - "${MYSQL_PORT:-3306}:3306"
@@ -68,10 +79,13 @@ services:
       - --collation-server=utf8mb4_unicode_ci
       - --default-authentication-plugin=mysql_native_password
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-mallbase123}"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-mallbase-root-123}"]
       interval: 10s
       timeout: 5s
       retries: 10
+    depends_on:
+      ensure-env:
+        condition: service_completed_successfully
 
   redis:
     image: redis:7-alpine
@@ -86,6 +100,34 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
+    depends_on:
+      ensure-env:
+        condition: service_completed_successfully
+
+  # 前端一次性打包容器（仅 --profile build 时启动）：
+  #   docker compose -f docker-compose.dev.yml --profile build up -d
+  # 会把 Vben @vben/web-antd 打包后产物复制到 backend/public/admin，供后端 Swoole 静态伺服
+  frontend-build:
+    profiles: ["build"]
+    image: node:20-alpine
+    container_name: mallbase-frontend-build
+    working_dir: /app
+    volumes:
+      - ./frontend/admin:/app
+      - ./backend/public/admin:/dist
+      - frontend_pnpm_store:/root/.local/share/pnpm/store
+    environment:
+      NODE_OPTIONS: "--max-old-space-size=4096"
+    command: >
+      sh -c "corepack enable &&
+             corepack prepare pnpm@latest --activate &&
+             pnpm install --frozen-lockfile &&
+             pnpm run build:antd &&
+             rm -rf /dist/* &&
+             cp -r apps/web-antd/dist/. /dist/ &&
+             echo '[frontend-build] done'"
+    restart: "no"
 
 volumes:
   backend_vendor:
+  frontend_pnpm_store:
