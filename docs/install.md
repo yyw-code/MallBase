@@ -33,10 +33,10 @@
 
 | 方式 | 容器数 | 适合场景 | 前端 |
 |------|-------|---------|------|
-| [方式一：手动安装](#方式一手动安装无-docker) | 0 | 低配服务器、完全控制 | 宿主机 Nginx |
-| [方式二：Docker 开发（仅后端）](#方式二docker-开发仅后端容器) | 1 | 本地开发、已有 MySQL/Redis | 本地 `pnpm dev` |
-| [方式三：Docker 开发（全套）](#方式三docker-开发全套) | 3 | 本地开发、一键启动 | 本地 `pnpm dev` |
-| [方式四：Docker 生产](#方式四docker-生产) | 1 | 生产部署 | 宿主机 Nginx |
+| [方式一：手动安装](#方式一手动安装无-docker) | 0 | 低配服务器、完全控制 | 宿主机 Nginx / 或拷进 `backend/public/admin` |
+| [方式二：Docker 开发（仅后端）](#方式二docker-开发仅后端容器) | 1 | 本地开发、已有 MySQL/Redis | 本地 `pnpm dev:antd` |
+| [方式三：Docker 开发（全套）](#方式三docker-开发全套) | 3（+ 可选前端打包容器） | 本地开发、一键启动 | Docker `--profile build` 自动打包 |
+| [方式四：Docker 生产](#方式四docker-生产) | 1 | 生产部署 | CI 打包后拷进 `backend/public/admin` 或宿主 Nginx |
 
 ---
 
@@ -287,24 +287,49 @@ php think swoole
 - Docker 已安装
 - 宿主机已有 MySQL 8.0+ 和 Redis 6.0+
 
-### 1. 启动后端容器
+### 1. 生成环境变量
+
+项目有两份 `.env` 模板，互不干扰，详见 [env-files.md](./env-files.md)：
+
+- `deploy/docker/.example.env`：docker compose 插值用（8 字段）
+- `backend/.example.env`：ThinkPHP 运行时配置（40+ 字段）
+
+**两种方式任选其一：**
 
 ```bash
-cd mall-base
+# 在项目根目录执行
+cd /path/to/mall-base
+```
 
-# 仅启动后端容器
+**方式 A：零配置（推荐，首次体验）**
+跳过本步，直接 `up -d`，ensure-env 会自动生成两份 `.env` + 随机密码 + 默认端口（8080/3306/6379）。
+
+**方式 B：自定义端口 / 密码**
+```bash
+# 在项目根目录执行
+cp deploy/docker/.example.env .env
+```
+```bash
+# 在项目根目录执行：用你惯用的编辑器改 .env 的端口 / 密码 / 数据库名
+```
+```bash
+# 在项目根目录执行
+cp backend/.example.env backend/.env
+```
+```bash
+# 在项目根目录执行：编辑 backend/.env，把 DB_PASS / JWT_SECRET 的占位符替换成强随机值
+# 生成强随机值：openssl rand -hex 16
+```
+
+> 连宿主机的 MySQL/Redis：编辑生成后的 `backend/.env`，把 `DB_HOST` / `REDIS_HOST` 改成 `host.docker.internal`（Docker Desktop）或宿主机 IP。
+
+### 2. 启动后端容器
+
+```bash
 docker compose -f docker-compose.dev.yml up -d backend
 ```
 
-> 如果宿主机的 MySQL/Redis 不在默认端口或需要密码，创建 `.env` 文件：
->
-> ```bash
-> cp deploy/docker/.env.example .env
-> # 编辑 .env，修改 DB_HOST、REDIS_HOST 等
-> # DB_HOST 填 host.docker.internal（Docker Desktop）或宿主机 IP
-> ```
-
-### 2. 安装 Composer 依赖
+### 3. 安装 Composer 依赖
 
 首次启动后需要安装依赖（因为 vendor 目录走的是 Docker volume）：
 
@@ -312,19 +337,19 @@ docker compose -f docker-compose.dev.yml up -d backend
 docker exec mallbase-dev composer install
 ```
 
-### 3. 访问安装向导
+### 4. 访问安装向导
 
 浏览器打开 `http://localhost:8080/install`，按向导完成安装。
 
 > 数据库地址填 `host.docker.internal`（Docker Desktop）或宿主机实际 IP。
 
-### 4. 重启容器
+### 5. 重启容器
 
 ```bash
 docker compose -f docker-compose.dev.yml restart backend
 ```
 
-### 5. 启动前端开发服务器
+### 6. 启动前端开发服务器
 
 ```bash
 cd mall-base/frontend/admin
@@ -352,115 +377,222 @@ pnpm run dev --filter=@vben/web-antd
 
 ## 方式三：Docker 开发（全套）
 
-一键启动后端 + MySQL + Redis，适合快速搭建完整开发环境。
+一键启动后端 + MySQL + Redis（可选含前端打包），适合快速搭建完整开发环境。
 
-### 1. 启动全套容器
+### 前置要求
 
-```bash
-cd mall-base
-docker compose -f docker-compose.dev.yml up -d
-```
+- Docker Desktop（Mac/Windows）或 Docker Engine + Compose Plugin（Linux）
+- 终端里 `docker --version` 与 `docker compose version` 都能正常输出版本号
 
-等待 MySQL 和 Redis 健康检查通过后，后端容器自动启动。
-
-### 2. 安装 Composer 依赖
+### 1. 进入项目根目录
 
 ```bash
-docker exec mallbase-dev composer install
+# 所有后续命令默认在项目根目录执行，例如 /Users/you/code/mall-base
+cd /path/to/mall-base
+```
+```bash
+# 在项目根目录执行：确认当前位置
+pwd
+# 应输出 .../mall-base
 ```
 
-### 3. 访问安装向导
+### 2.（可选）自定义端口或密码
 
-浏览器打开 `http://localhost:8080/install`，填写：
-
-| 配置项 | 值 |
-|--------|-----|
-| 数据库地址 | `mysql` |
-| 数据库端口 | `3306` |
-| 数据库名 | `mallbase` |
-| 数据库用户 | `mallbase` |
-| 数据库密码 | `mallbase123` |
-| Redis 地址 | `redis` |
-| Redis 端口 | `6379` |
-| Redis 密码 | （留空） |
-
-> MySQL 容器首次启动会自动导入建表 SQL，安装向导会自动检测已有表并跳过重复导入。Docker 模式下环境变量由 docker-compose 管理，安装向导也会跳过 `.env` 文件写入。
-
-### 4. 重启容器
+要改端口 / 密码 / 数据库名，先复制 Docker 模板到根 `.env`：
 
 ```bash
-docker compose -f docker-compose.dev.yml restart
+# 在项目根目录执行
+cp deploy/docker/.example.env .env
+```
+```bash
+# 在项目根目录执行：用你惯用的编辑器打开 .env 修改端口 / 密码 / 数据库名
+# 关键字段：SWOOLE_HTTP_PORT / MYSQL_PORT / REDIS_PORT / DB_NAME / DB_USER / DB_PASS / MYSQL_ROOT_PASSWORD
 ```
 
-### 5. 启动前端开发服务器
+**如果不关心默认值，跳过本步**——`ensure-env` 容器会在第 3 步自动生成两份 `.env`：
+- `backend/.env`：随机化 `DB_PASS` 与 `JWT_SECRET`
+- 根目录 `.env`：随机化 `MYSQL_ROOT_PASSWORD`，并把 `DB_PASS` 与 `backend/.env` 对齐
+
+> 两份 `.env` 的职责分工见 [env-files.md](./env-files.md)。
+
+### 3. 启动所有容器（含前端自动打包）
 
 ```bash
-cd mall-base/frontend/admin
-pnpm install
-pnpm run dev --filter=@vben/web-antd
+# 在项目根目录执行
+docker compose -f docker-compose.dev.yml --profile build up -d
 ```
 
-### 从本地连接容器内的 MySQL
+- `--profile build` 会额外启动 `frontend-build` 容器，自动把 Vben 打包好放到 `backend/public/admin/`
+- 不加 `--profile build` 则跳过前端打包（适合已经有 admin 产物，或只改后端的场景）
 
-容器端口已映射到宿主机，可直接用本地客户端连接：
+**预期看到：**
 
 ```bash
-# 命令行
-mysql -h 127.0.0.1 -P 3306 -u mallbase -p
-# 密码: mallbase123
+# 在项目根目录执行
+docker ps
+# 应该看到 3 个容器在运行：mallbase-dev / mallbase-mysql / mallbase-redis
+```
+```bash
+# 在项目根目录执行：frontend-build 打包完会自动退出（Exited (0) 不会出现在 ps）
+docker logs mallbase-frontend-build
+# 末尾应看到 [frontend-build] done
+```
+```bash
+# 在项目根目录执行：确认前端产物落地
+ls backend/public/admin/index.html
+# 应打印文件路径，不报错
 ```
 
-**GUI 工具**（Navicat / DBeaver / DataGrip 等）：
+### 4. 查看自动生成的密码（首次启动）
 
-| 设置 | 值 |
+```bash
+# 在项目根目录执行：DB_PASS 与 JWT_SECRET 在 backend/.env
+grep -E '^(DB_PASS|JWT_SECRET)=' backend/.env
+```
+```bash
+# 在项目根目录执行：MYSQL_ROOT_PASSWORD 只在根 .env
+grep '^MYSQL_ROOT_PASSWORD=' .env
+```
+
+> 根 `.env` 与 `backend/.env` 的 `DB_PASS` 由 ensure-env 自动对齐；`MYSQL_ROOT_PASSWORD` 仅 MySQL 容器首次初始化用得到，ThinkPHP 不读它，因此不写进 `backend/.env`。
+
+### 5. 浏览器完成安装向导
+
+1. 浏览器访问 `http://localhost:8080/install`
+2. **数据库配置**（⚠️ 重点：这里填**容器服务名**，不是 `127.0.0.1`）：
+
+| 字段 | 值 |
 |------|-----|
-| 主机 | `127.0.0.1` |
-| 端口 | `3306`（或 `.env` 中的 `MYSQL_PORT`） |
-| 用户名 | `mallbase` |
-| 密码 | `mallbase123` |
-| 数据库 | `mallbase` |
+| DB Host | `mysql`（docker-compose.dev.yml 里的服务名，Docker 内置 DNS 自动解析） |
+| DB Port | `3306`（容器内端口固定） |
+| DB User | 读根目录 `.env` 的 `DB_USER` |
+| DB Pass | 读根目录 `.env` 的 `DB_PASS` |
+| DB Name | 读根目录 `.env` 的 `DB_NAME` |
 
-### 从本地连接容器内的 Redis
+3. **Redis 配置**：
+
+| 字段 | 值 |
+|------|-----|
+| Redis Host | `redis` |
+| Redis Port | `6379` |
+| Redis Password | 留空 |
+
+4. **管理员账号**：自己想一个用户名 + 密码（≥6 位）
+5. 勾选"导入 demo 数据"（想要示例商品/订单就勾）
+6. 点"开始安装" → 完成动画 → 5 秒后自动跳转后台，或点"立即进入后台管理"按钮
+
+> 首次启动时 MySQL 容器会自动导入建表 SQL；安装向导会检测已有表并跳过重复导入。
+
+### 6. 改了前端代码想重新打包
 
 ```bash
-# 命令行
+# 在项目根目录执行：单独跑 frontend-build 容器
+docker compose -f docker-compose.dev.yml --profile build up frontend-build
+```
+
+### 7. 从本地客户端连接容器内的 MySQL / Redis
+
+容器端口已映射到宿主机，可用本地客户端连接：
+
+```bash
+# 在任意目录执行
+mysql -h 127.0.0.1 -P 3306 -u <DB_USER> -p
+# 密码：grep '^DB_PASS=' backend/.env 的值
+```
+
+GUI 工具（Navicat / DBeaver / DataGrip）：主机 `127.0.0.1`、端口 `3306`（或根 `.env` 的 `MYSQL_PORT`）、用户名/密码/数据库取自根 `.env`。
+
+```bash
+# 在任意目录执行
 redis-cli -h 127.0.0.1 -p 6379
-
-# GUI 工具（如 RedisInsight / Another Redis Desktop Manager）
-# 主机: 127.0.0.1
-# 端口: 6379
+# 默认无密码
 ```
 
-### 数据持久化
+### 常见错误
 
-MySQL 和 Redis 数据映射到项目根目录的 `data/` 文件夹：
+#### ❌ `Connection refused` 连不上 MySQL
 
-```
-mall-base/
-├── data/
-│   ├── mysql/    ← MySQL 数据文件
-│   └── redis/    ← Redis 数据文件
-```
+**原因**：DB Host 填了 `127.0.0.1`。在 backend 容器里 `127.0.0.1` 指容器自己，不是 MySQL 容器。
 
-容器删除后数据不丢失。如需彻底重置：
+**解决**：改成 `mysql`（compose 文件里的服务名）。
+
+#### ❌ `Access denied for user` 数据库连接被拒
+
+**原因**：`backend/.env` 的 `DB_PASS` 与 MySQL 容器首次初始化时使用的密码不一致。MySQL 容器一旦初始化，密码就无法后期改动。
+
+**解决**：
 
 ```bash
-docker compose -f docker-compose.dev.yml down
-rm -rf data/mysql data/redis
-docker compose -f docker-compose.dev.yml up -d
+# 在项目根目录执行：确认两份 .env 的 DB_PASS 是否一致
+grep '^DB_PASS=' .env backend/.env
+```
+
+若不一致 → 按"第 8 步 完全清零重来"推倒重装。
+
+#### ❌ 访问 `/install` 页面 500 或白屏
+
+**原因**：已经安装过，`backend/install/install.lock` 存在，但浏览器缓存了旧版本页面。
+
+**解决**：新版本页面会自动显示"系统已安装"卡片 + "进入后台管理"按钮。若仍 500，强制刷新（Cmd+Shift+R / Ctrl+F5）清浏览器缓存。
+
+#### ❌ 登录后台后菜单是空的
+
+**原因**：权限数据未同步（安装时会自动同步，但可能失败）。
+
+**解决**：
+
+```bash
+# 在项目根目录执行
+docker exec -it mallbase-dev php think sync:permissions
+```
+
+#### ❌ 访问 `/admin` 404 或白屏
+
+**原因**：前端产物没有落到 `backend/public/admin/`。
+
+**解决**：
+
+```bash
+# 在项目根目录执行：单跑 frontend-build
+docker compose -f docker-compose.dev.yml --profile build up frontend-build
+```
+```bash
+# 在项目根目录执行：确认产物
+ls backend/public/admin/index.html
+```
+
+### 8. 完全清零重来
+
+如果状态混乱想回到全新环境：
+
+```bash
+# 在项目根目录执行：停容器并清卷（⚠️ 会清空所有数据库数据）
+docker compose -f docker-compose.dev.yml down -v
+```
+```bash
+# 在项目根目录执行：清理本地数据 + 配置 + 前端产物
+rm -rf data/
+rm -f backend/install/install.lock
+rm -f backend/.env
+rm -f .env
+rm -rf backend/public/admin/*
+```
+```bash
+# 在项目根目录执行：从模板重来
+docker compose -f docker-compose.dev.yml --profile build up -d
 ```
 
 ### 修改代码
 
-与方式二相同，代码通过 volume 映射，**直接修改宿主机文件即可**。
+代码通过 volume 映射（`./backend:/app`），**直接修改宿主机的 `backend/` 目录即可**，容器内实时同步。`APP_DEBUG=true` 下 Swoole 会监听文件变化并自动 reload（macOS 需要 `brew install fswatch`）。
 
 ### 方式三利弊
 
 | 优点 | 缺点 |
 |------|------|
-| 一键启动完整环境 | 3 个容器，资源占用较高 |
+| 一键启动完整环境 | 3 个容器 + 首次前端打包，资源占用较高 |
 | 零配置，开箱即用 | 2 核 4G 以下服务器可能吃力 |
-| 数据持久化到宿主机 | Docker Desktop 文件映射有性能损耗 |
+| 数据持久化到宿主机 `data/` | Docker Desktop 文件映射有性能损耗 |
 | 本地客户端可直接连接 MySQL/Redis | |
 
 ---
@@ -482,34 +614,51 @@ docker compose -f docker-compose.dev.yml up -d
     └── /               → 301 → /admin/
 ```
 
-### 1. 准备环境变量
+### 1. 生成环境变量
+
+生产单容器模式 `docker-compose.yml` 只用一份 `backend/.env`（构建镜像时 `COPY` 进镜像），**不依赖根目录 `.env`**。
 
 ```bash
-cd mall-base
-
-# 复制并编辑环境变量
-cp deploy/docker/.env.example .env
-vim .env
+# 在项目根目录执行
+cp backend/.example.env backend/.env
+```
+```bash
+# 在 backend 目录执行：生成强随机值
+cd backend
+openssl rand -hex 16
+# 用于 DB_PASS
+```
+```bash
+# 在 backend 目录执行
+openssl rand -hex 32
+# 用于 JWT_SECRET
 ```
 
-关键配置：
+用编辑器打开 `backend/.env`，重点调整以下字段：
 
 ```ini
-# 数据库（填写你的 MySQL 地址）
+# 调试（生产必须 false）
+APP_DEBUG=false
+
+# 数据库（连宿主机 MySQL：host.docker.internal 或宿主机 IP）
 DB_HOST=127.0.0.1
+DB_PORT=3306
 DB_NAME=mallbase
 DB_USER=mallbase
-DB_PASS=your_secure_password
+DB_PASS=<openssl rand -hex 16 的输出>
 
 # Redis
 REDIS_HOST=127.0.0.1
+REDIS_PORT=6379
 
-# JWT（改为随机字符串）
-JWT_SECRET=your-random-64-char-string
+# JWT
+JWT_SECRET=<openssl rand -hex 32 的输出>
 
-# CORS（填写你的域名）
+# CORS（填写你的前端域名）
 CORS_ALLOWED_ORIGINS=https://mall.example.com
 ```
+
+> **⚠️ 安全红线**：`backend/.example.env` 里的 `DB_PASS` / `JWT_SECRET` 占位符为 `please-change-or-leave-for-random`，生产环境必须手动替换成强随机值，**否则等于把密码写在仓库里**。
 
 ### 2. 构建并启动后端容器
 
@@ -656,13 +805,21 @@ Swoole 是常驻内存服务，`.env` 变更后**必须重启**才能加载。
 删除锁文件后重启服务：
 
 ```bash
-# 手动安装
+# 手动安装：在项目根目录执行
 rm backend/install/install.lock
-
-# Docker
+```
+```bash
+# Docker 生产：在项目根目录执行
 docker exec mallbase rm install/install.lock
 docker compose restart
 ```
+```bash
+# Docker 开发：在项目根目录执行
+rm -f backend/install/install.lock
+docker compose -f docker-compose.dev.yml restart backend
+```
+
+> ⚠️ 若 MySQL 数据库已有业务数据但想完全重装，参考方式三的"完全清零重来"序列（会清空所有数据库数据）。
 
 ### Swoole 进程杀不掉
 
@@ -704,25 +861,28 @@ curl -i -X OPTIONS 'http://127.0.0.1:8080/' \
 
 ```
 mall-base/
-├── backend/                  # 后端（PHP/ThinkPHP/Swoole）
-│   ├── app/                  # 应用代码
-│   ├── config/               # 配置文件
-│   ├── install/              # 安装数据
+├── backend/                   # 后端（PHP/ThinkPHP/Swoole）
+│   ├── app/                   # 应用代码
+│   ├── config/                # 配置文件
+│   ├── install/               # 安装数据
 │   │   └── data/
-│   │       ├── schema/       # 建表 SQL
-│   │       ├── demo/         # 演示数据
-│   │       └── region/       # 地区数据
-│   └── public/               # 静态资源
-├── frontend/admin/           # 后台前端（Vben Admin）
+│   │       ├── schema/        # 建表 SQL
+│   │       ├── demo/          # 演示数据
+│   │       └── region/        # 地区数据
+│   ├── public/                # 静态资源（含 admin 前端产物）
+│   │   └── admin/             # Vben Admin 打包产物（gitignored）
+│   └── .example.env           # ThinkPHP 运行时模板（40+ 字段）
+├── frontend/admin/            # 后台前端（Vben Admin，pnpm + turbo monorepo）
 ├── deploy/
 │   ├── docker/
-│   │   ├── Dockerfile        # 后端容器构建
-│   │   ├── .env.example      # 环境变量示例
-│   │   └── mysql/init.sh     # MySQL 初始化脚本
+│   │   ├── Dockerfile         # 后端容器构建
+│   │   ├── ensure-env.sh      # 开发环境 init 容器：补齐 / 派生两份 .env
+│   │   ├── .example.env       # docker compose 变量模板（8 字段）
+│   │   └── mysql/init.sh      # MySQL 初始化脚本
 │   └── nginx/
-│       └── mallbase.conf     # Nginx 配置示例
-├── docker-compose.yml        # 生产环境
-└── docker-compose.dev.yml    # 开发环境
+│       └── mallbase.conf      # Nginx 配置示例
+├── docker-compose.yml         # 生产（单容器，需自备 MySQL/Redis + Nginx）
+└── docker-compose.dev.yml     # 开发（后端 + MySQL + Redis + 可选 frontend-build）
 ```
 
 ## 交流与反馈
