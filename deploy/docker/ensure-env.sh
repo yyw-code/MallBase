@@ -1,33 +1,148 @@
 #!/bin/sh
 # ============================================================
-# ensure-env.sh —— docker compose 零配置启动兜底脚本
+# ensure-env.sh —— Docker 开发全套模式配置派生脚本
 # ============================================================
-# 由 docker-compose.dev.yml 的 ensure-env 服务调用（alpine 容器）。
+# 由 docker-compose.dev.yml 的 ensure-env 服务调用。
 #
-# 两份 .env 的职责：
-#   - backend/.env：ThinkPHP 运行时业务配置（模板：backend/.example.env）
-#   - 根目录 .env：docker compose 做 ${VAR} 插值用（模板：deploy/docker/.example.env）
+# 设计约束：
+#   - 项目根目录 .env 是 Docker 开发全套模式的唯一主配置源
+#   - backend/.env 是 ThinkPHP / Swoole 运行时派生文件，不作为第二真相源
+#   - 若用户已经定义了根 .env 中的值，则绝不重新随机化或覆盖
 #
 # 本脚本负责：
-#   1. backend/.env 不存在 → 从 backend/.example.env 复制 + 随机化 DB_PASS / JWT_SECRET
-#   2. backend/.env 存在但缺字段 → 从 backend/.example.env 补齐（不覆盖已有值）
-#   3. 根目录 .env 不存在 → 从 deploy/docker/.example.env 复制 + 随机化敏感字段
-#   4. 根目录 .env 存在但缺字段 → 从 deploy/docker/.example.env 补齐
-#   5. 同步根 .env 的 DB_NAME/DB_USER/DB_PASS 到 backend/.env
-#      （root 为主，确保 ThinkPHP 能连上 compose 起的 MySQL 容器）
+#   1. 根 .env 缺失时从 deploy/docker/.example.env 生成
+#   2. 根 .env 已存在时仅补齐缺失字段；敏感字段只有在占位符状态下才随机化
+#   3. 基于 backend/.example.env 重新派生 backend/.env，并用根 .env 覆盖共享字段
+#   4. 为 backend/.env 写入中文头注释，明确“请改根 .env，不要改 backend/.env”
 # ============================================================
 set -eu
 
-BACKEND_ENV=/workdir/backend/.env
-BACKEND_TPL=/workdir/backend/.example.env
-ROOT_ENV=/workdir/.env
-ROOT_TPL=/workdir/deploy/docker/.example.env
-
-# 根 .env → backend/.env 的同步字段（确保 ThinkPHP 与 compose 读到同一组凭据）
-SYNC_KEYS="DB_NAME DB_USER DB_PASS"
+WORKDIR=/workdir
+BACKEND_ENV="${WORKDIR}/backend/.env"
+BACKEND_TPL="${WORKDIR}/backend/.example.env"
+ROOT_ENV="${WORKDIR}/.env"
+ROOT_TPL="${WORKDIR}/deploy/docker/.example.env"
+PLACEHOLDER="please-change-or-leave-for-random"
+BACKEND_HEADER_1="# 由 Docker 开发全套模式自动生成，请勿手动修改。"
+BACKEND_HEADER_2="# 唯一主配置源：项目根目录 /.env"
+ROOT_TO_BACKEND_KEYS="SWOOLE_HTTP_PORT DB_NAME DB_USER DB_PASS ADMIN_USER ADMIN_PASS INSTALL_DEMO"
+ROOT_INIT_FROM_BACKEND_KEYS="SWOOLE_HTTP_PORT DB_NAME DB_USER DB_PASS"
 
 rand24() { tr -dc 'A-Za-z0-9' </dev/urandom | head -c 24; }
 rand64() { tr -dc 'A-Za-z0-9' </dev/urandom | head -c 64; }
+
+has_key() {
+    file=$1
+    key=$2
+    grep -q "^${key}=" "$file"
+}
+
+get_value() {
+    file=$1
+    key=$2
+    if [ ! -f "$file" ]; then
+        return 0
+    fi
+    grep "^${key}=" "$file" | head -n1 | sed "s|^${key}=||" || true
+}
+
+escape_sed() {
+    printf '%s' "$1" | sed -e 's/[\/&|]/\\&/g'
+}
+
+set_value() {
+    file=$1
+    key=$2
+    value=$3
+    escaped=$(escape_sed "$value")
+    if has_key "$file" "$key"; then
+        sed -i "s|^${key}=.*|${key}=${escaped}|" "$file"
+    else
+        printf '%s=%s\n' "$key" "$value" >> "$file"
+    fi
+}
+
+fill_missing_from_template() {
+    target=$1
+    template=$2
+
+    while IFS= read -r line || [ -n "$line" ]; do
+        case "$line" in
+            ''|\#*) continue ;;
+        esac
+        key=$(printf '%s' "$line" | awk -F'=' '{print $1}' | tr -d ' ')
+        [ -z "$key" ] && continue
+        if ! has_key "$target" "$key"; then
+            printf '>>> [ensure-env] 补齐 %s 缺失字段：%s\n' "$target" "$key"
+            printf '%s\n' "$line" >> "$target"
+        fi
+    done < "$template"
+}
+
+sync_root_from_existing_backend() {
+    [ -f "$BACKEND_ENV" ] || return 0
+
+    for key in $ROOT_INIT_FROM_BACKEND_KEYS; do
+        backend_val=$(get_value "$BACKEND_ENV" "$key")
+        [ -n "$backend_val" ] || continue
+        if [ "$backend_val" = "$PLACEHOLDER" ]; then
+            continue
+        fi
+        set_value "$ROOT_ENV" "$key" "$backend_val"
+    done
+}
+
+randomize_root_if_placeholder() {
+    current=$(get_value "$ROOT_ENV" "$1")
+    if [ -z "$current" ] || [ "$current" = "$PLACEHOLDER" ]; then
+        set_value "$ROOT_ENV" "$1" "$2"
+    fi
+}
+
+rebuild_backend_env() {
+    tmp_env=$(mktemp)
+    cp "$BACKEND_TPL" "$tmp_env"
+
+    while IFS= read -r line || [ -n "$line" ]; do
+        case "$line" in
+            ''|\#*) continue ;;
+        esac
+
+        key=$(printf '%s' "$line" | awk -F'=' '{print $1}' | tr -d ' ')
+        tpl_val=$(printf '%s' "$line" | sed "s|^${key}=||")
+        current_val=$(get_value "$BACKEND_ENV" "$key")
+        value=$tpl_val
+
+        if [ -n "$current_val" ]; then
+            value=$current_val
+        fi
+
+        for sync_key in $ROOT_TO_BACKEND_KEYS; do
+            if [ "$key" = "$sync_key" ]; then
+                root_val=$(get_value "$ROOT_ENV" "$key")
+                if [ -n "$root_val" ]; then
+                    value=$root_val
+                fi
+                break
+            fi
+        done
+
+        if [ "$key" = "JWT_SECRET" ] && { [ -z "$value" ] || [ "$value" = "$PLACEHOLDER" ]; }; then
+            value=$(rand64)
+        fi
+
+        set_value "$tmp_env" "$key" "$value"
+    done < "$BACKEND_TPL"
+
+    {
+        printf '%s\n' "$BACKEND_HEADER_1"
+        printf '%s\n' "$BACKEND_HEADER_2"
+        printf '\n'
+        cat "$tmp_env"
+    } > "$BACKEND_ENV"
+
+    rm -f "$tmp_env"
+}
 
 if [ ! -f "$BACKEND_TPL" ]; then
     echo ">>> [ensure-env] 致命错误：找不到 $BACKEND_TPL"
@@ -39,69 +154,17 @@ if [ ! -f "$ROOT_TPL" ]; then
     exit 1
 fi
 
-# ---------- 1. 生成 backend/.env ----------
-if [ ! -f "$BACKEND_ENV" ]; then
-    echo ">>> [ensure-env] backend/.env 不存在，从 backend/.example.env 复制 + 随机化敏感字段"
-    cp "$BACKEND_TPL" "$BACKEND_ENV"
-    DB_PASS_VAL=$(rand24)
-    JWT_VAL=$(rand64)
-    sed -i "s|^DB_PASS=.*|DB_PASS=${DB_PASS_VAL}|" "$BACKEND_ENV"
-    sed -i "s|^JWT_SECRET=.*|JWT_SECRET=${JWT_VAL}|" "$BACKEND_ENV"
-else
-    echo ">>> [ensure-env] backend/.env 已存在，跳过随机化"
-fi
-
-# ---------- 2. 补齐 backend/.env 缺失字段 ----------
-while IFS= read -r line || [ -n "$line" ]; do
-    case "$line" in
-        ''|\#*) continue ;;
-    esac
-    key=$(printf '%s' "$line" | awk -F'=' '{print $1}' | tr -d ' ')
-    [ -z "$key" ] && continue
-    if ! grep -q "^${key}=" "$BACKEND_ENV"; then
-        echo ">>> [ensure-env] 补齐 backend/.env 缺失字段：$key"
-        printf '%s\n' "$line" >> "$BACKEND_ENV"
-    fi
-done < "$BACKEND_TPL"
-
-# ---------- 3. 生成根 .env ----------
 if [ ! -f "$ROOT_ENV" ]; then
-    echo ">>> [ensure-env] 根目录 .env 不存在，从 deploy/docker/.example.env 复制 + 随机化敏感字段"
+    echo ">>> [ensure-env] 根目录 .env 不存在，从 deploy/docker/.example.env 生成"
     cp "$ROOT_TPL" "$ROOT_ENV"
-    # DB_PASS 复用 backend/.env 里的值（若已为随机值），确保两份一致
-    DB_PASS_VAL=$(grep "^DB_PASS=" "$BACKEND_ENV" | awk -F'=' '{print $2}' || true)
-    if [ -z "$DB_PASS_VAL" ] || [ "$DB_PASS_VAL" = "please-change-or-leave-for-random" ]; then
-        DB_PASS_VAL=$(rand24)
-    fi
-    MYSQL_ROOT_VAL=$(rand24)
-    esc_db_pass=$(printf '%s' "$DB_PASS_VAL" | sed -e 's/[\/&|]/\\&/g')
-    sed -i "s|^DB_PASS=.*|DB_PASS=${esc_db_pass}|" "$ROOT_ENV"
-    sed -i "s|^MYSQL_ROOT_PASSWORD=.*|MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_VAL}|" "$ROOT_ENV"
+    sync_root_from_existing_backend
 fi
 
-# ---------- 4. 补齐根 .env 缺失字段 ----------
-while IFS= read -r line || [ -n "$line" ]; do
-    case "$line" in
-        ''|\#*) continue ;;
-    esac
-    key=$(printf '%s' "$line" | awk -F'=' '{print $1}' | tr -d ' ')
-    [ -z "$key" ] && continue
-    if ! grep -q "^${key}=" "$ROOT_ENV"; then
-        echo ">>> [ensure-env] 补齐根 .env 缺失字段：$key"
-        printf '%s\n' "$line" >> "$ROOT_ENV"
-    fi
-done < "$ROOT_TPL"
+fill_missing_from_template "$ROOT_ENV" "$ROOT_TPL"
+randomize_root_if_placeholder "DB_PASS" "$(rand24)"
+randomize_root_if_placeholder "MYSQL_ROOT_PASSWORD" "$(rand24)"
 
-# ---------- 5. 同步根 .env → backend/.env（root 为主） ----------
-for key in $SYNC_KEYS; do
-    root_val=$(grep "^${key}=" "$ROOT_ENV" | head -n1 | sed "s|^${key}=||" || true)
-    [ -z "$root_val" ] && continue
-    esc_val=$(printf '%s' "$root_val" | sed -e 's/[\/&|]/\\&/g')
-    if grep -q "^${key}=" "$BACKEND_ENV"; then
-        sed -i "s|^${key}=.*|${key}=${esc_val}|" "$BACKEND_ENV"
-    else
-        printf '%s=%s\n' "$key" "$root_val" >> "$BACKEND_ENV"
-    fi
-done
+echo ">>> [ensure-env] 开始根据根 .env 派生 backend/.env"
+rebuild_backend_env
 
 echo ">>> [ensure-env] 完成"

@@ -406,12 +406,13 @@ cp deploy/docker/.example.env .env
 ```
 ```bash
 # 在项目根目录执行：用你惯用的编辑器打开 .env 修改端口 / 密码 / 数据库名
-# 关键字段：SWOOLE_HTTP_PORT / MYSQL_PORT / REDIS_PORT / DB_NAME / DB_USER / DB_PASS / MYSQL_ROOT_PASSWORD
+# 关键字段：SWOOLE_HTTP_PORT / MYSQL_PORT / REDIS_PORT / DB_NAME / DB_USER / DB_PASS / MYSQL_ROOT_PASSWORD / ADMIN_USER / ADMIN_PASS / INSTALL_DEMO
 ```
 
-**如果不关心默认值，跳过本步**——`ensure-env` 容器会在第 3 步自动生成两份 `.env`：
-- `backend/.env`：随机化 `DB_PASS` 与 `JWT_SECRET`
-- 根目录 `.env`：随机化 `MYSQL_ROOT_PASSWORD`，并把 `DB_PASS` 与 `backend/.env` 对齐
+**如果不关心默认值，跳过本步**——`ensure-env` 容器会在第 3 步自动生成根 `.env`，并继续派生 `backend/.env`。
+
+- 根 `.env`：Docker 开发全套模式唯一主配置源
+- `backend/.env`：ThinkPHP / Swoole 运行时派生文件，文件头会明确提示“请改根 `.env`，不要手改 backend/.env”
 
 > 两份 `.env` 的职责分工见 [env-files.md](./env-files.md)。
 
@@ -425,15 +426,29 @@ docker compose -f docker-compose.dev.yml --profile build up -d
 - `--profile build` 会额外启动 `frontend-build` 容器，自动把 Vben 打包好放到 `backend/public/admin/`
 - 不加 `--profile build` 则跳过前端打包（适合已经有 admin 产物，或只改后端的场景）
 
+启动序列：`ensure-env`（生成根 `.env` + 派生 `backend/.env`）→ `mysql/redis` healthy → `check-db-auth`（校验现有库账号与根 `.env` 一致）→ `install-auto`（零向导自动装）→ `backend`（Swoole 起来）。`install-auto` 容器执行 `php think install:auto`：
+
+- 从 `backend/.env` 读 DB/Redis 连接（不需要手填 `127.0.0.1` / `mysql:3306`）
+- 按 `deploy/install/data/schema/*.sql` 建表
+- 创建超管 `admin / admin123`，并把 `password_changed_at` 标记为 `NULL`（首次登录强制改密）
+- 同步权限菜单
+- 写入 `deploy/install/install.lock` 后退出 0
+
 **预期看到：**
 
 ```bash
 # 在项目根目录执行
 docker ps
-# 应该看到 3 个容器在运行：mallbase-dev / mallbase-mysql / mallbase-redis
+# 应该看到 3 个常驻容器：mallbase-dev / mallbase-mysql / mallbase-redis
+# mallbase-install-auto / mallbase-ensure-env / mallbase-frontend-build 执行完自动 Exited (0)
 ```
 ```bash
-# 在项目根目录执行：frontend-build 打包完会自动退出（Exited (0) 不会出现在 ps）
+# 在项目根目录执行：查看零向导安装日志
+docker logs mallbase-install-auto
+# 末尾应看到 [install:auto] done
+```
+```bash
+# 在项目根目录执行：frontend-build 打包完会自动退出
 docker logs mallbase-frontend-build
 # 末尾应看到 [frontend-build] done
 ```
@@ -443,45 +458,38 @@ ls backend/public/admin/index.html
 # 应打印文件路径，不报错
 ```
 
-### 4. 查看自动生成的密码（首次启动）
+### 4. 查看自动生成的关键配置（首次启动）
 
 ```bash
-# 在项目根目录执行：DB_PASS 与 JWT_SECRET 在 backend/.env
-grep -E '^(DB_PASS|JWT_SECRET)=' backend/.env
+# 在项目根目录执行：Docker 主配置
+grep -E '^(DB_PASS|MYSQL_ROOT_PASSWORD|ADMIN_USER|ADMIN_PASS|INSTALL_DEMO)=' .env
 ```
 ```bash
-# 在项目根目录执行：MYSQL_ROOT_PASSWORD 只在根 .env
-grep '^MYSQL_ROOT_PASSWORD=' .env
+# 在项目根目录执行：派生后的 TP 运行时配置
+grep -E '^(DB_PASS|JWT_SECRET|ADMIN_USER|ADMIN_PASS|INSTALL_DEMO)=' backend/.env
 ```
 
-> 根 `.env` 与 `backend/.env` 的 `DB_PASS` 由 ensure-env 自动对齐；`MYSQL_ROOT_PASSWORD` 仅 MySQL 容器首次初始化用得到，ThinkPHP 不读它，因此不写进 `backend/.env`。
+> Docker 开发全套模式下，根 `.env` 是唯一主配置源；`backend/.env` 会由 ensure-env 自动派生。`MYSQL_ROOT_PASSWORD` 仅 MySQL 容器首次初始化 / 运维脚本使用，不写进 `backend/.env`。
 
-### 5. 浏览器完成安装向导
+### 5. 登录后台（零向导）
 
-1. 浏览器访问 `http://localhost:8080/install`
-2. **数据库配置**（⚠️ 重点：这里填**容器服务名**，不是 `127.0.0.1`）：
+方式三**不需要浏览器向导**——`install-auto` 容器已在启动序列里完成建库、建表、建超管。
 
-| 字段 | 值 |
-|------|-----|
-| DB Host | `mysql`（docker-compose.dev.yml 里的服务名，Docker 内置 DNS 自动解析） |
-| DB Port | `3306`（容器内端口固定） |
-| DB User | 读根目录 `.env` 的 `DB_USER` |
-| DB Pass | 读根目录 `.env` 的 `DB_PASS` |
-| DB Name | 读根目录 `.env` 的 `DB_NAME` |
+1. 浏览器打开 `http://localhost:8080/admin/`（注意带 `/admin/` 尾斜杠）
+2. 输入默认账号登录：
+   - 用户名：`admin`
+   - 密码：`admin123`
+3. 登录成功后会**被强制跳转到"首次登录改密"页**（`/auth/change-password`）
+4. 依次填：当前密码 `admin123` → 新密码（≥6 位，不能再是 `admin123`）→ 确认新密码 → 点"修改密码"
+5. 改密成功后自动退回登录页，使用**新密码**重新登录即可进入后台首页
 
-3. **Redis 配置**：
+之后使用新密码登录不再出现改密页（`password_changed_at` 已记录最新改密时间）。
 
-| 字段 | 值 |
-|------|-----|
-| Redis Host | `redis` |
-| Redis Port | `6379` |
-| Redis Password | 留空 |
+> **想改默认账号？** 启动前直接在根 `.env` 里加 `ADMIN_USER=xxx` / `ADMIN_PASS=yyy`，`ensure-env` 会自动同步到 `backend/.env`。
+> **想自动导入 demo 数据？** 加 `INSTALL_DEMO=1`。
+> 详见 [env-files.md](./env-files.md#八零向导环境变量方式三专用)。
 
-4. **管理员账号**：自己想一个用户名 + 密码（≥6 位）
-5. 勾选"导入 demo 数据"（想要示例商品/订单就勾）
-6. 点"开始安装" → 完成动画 → 5 秒后自动跳转后台，或点"立即进入后台管理"按钮
-
-> 首次启动时 MySQL 容器会自动导入建表 SQL；安装向导会检测已有表并跳过重复导入。
+> 方式一 / 方式二 / 方式四 不走零向导——它们自备 DB/Redis，连接信息必须用户手填，仍走 `/install` 浏览器向导。
 
 ### 6. 改了前端代码想重新打包
 
@@ -497,7 +505,7 @@ docker compose -f docker-compose.dev.yml --profile build up frontend-build
 ```bash
 # 在任意目录执行
 mysql -h 127.0.0.1 -P 3306 -u <DB_USER> -p
-# 密码：grep '^DB_PASS=' backend/.env 的值
+# 密码：grep '^DB_PASS=' .env 的值
 ```
 
 GUI 工具（Navicat / DBeaver / DataGrip）：主机 `127.0.0.1`、端口 `3306`（或根 `.env` 的 `MYSQL_PORT`）、用户名/密码/数据库取自根 `.env`。
@@ -510,6 +518,41 @@ redis-cli -h 127.0.0.1 -p 6379
 
 ### 常见错误
 
+#### ❌ `install-auto` 容器执行失败
+
+**排查**：
+
+```bash
+# 在项目根目录执行：看零向导日志
+docker logs mallbase-install-auto
+```
+
+常见失败原因：
+- `缺少必要 env 变量：DB_HOST, DB_USER, ...` → `ensure-env` 没跑成功，先 `docker logs mallbase-ensure-env` 排查
+- `Access denied` / `业务库账号认证失败` → `data/mysql` 是旧数据，而根 `.env` 的 `DB_PASS` 后来改过；可执行显式改密，或走"第 8 步 完全清零重来"
+- `step=import_schema` → 建表 SQL 导入失败，检查 `deploy/install/data/schema/` 下的 SQL 是否完整
+
+修复问题后重跑：
+
+```bash
+# 在项目根目录执行：重跑 install-auto
+docker compose -f docker-compose.dev.yml rm -f install-auto
+docker compose -f docker-compose.dev.yml up -d install-auto
+```
+
+#### ❌ 打开 `/admin/` 不跳改密页，也不报错
+
+**原因**：`deploy/install/install.lock` 已存在但数据库里 `mb_admin.password_changed_at` 不为 NULL（可能是旧版本升级上来的）。
+
+**解决**：
+
+```bash
+# 在项目根目录执行：把超管标记为"从未改密"
+docker exec -it mallbase-mysql sh -c 'mysql -u root -p"${MYSQL_ROOT_PASSWORD}" "${MYSQL_DATABASE}" -e "UPDATE mb_admin SET password_changed_at=NULL WHERE id=1"'
+```
+
+再次登录即会跳到改密页。
+
 #### ❌ `Connection refused` 连不上 MySQL
 
 **原因**：DB Host 填了 `127.0.0.1`。在 backend 容器里 `127.0.0.1` 指容器自己，不是 MySQL 容器。
@@ -518,20 +561,27 @@ redis-cli -h 127.0.0.1 -p 6379
 
 #### ❌ `Access denied for user` 数据库连接被拒
 
-**原因**：`backend/.env` 的 `DB_PASS` 与 MySQL 容器首次初始化时使用的密码不一致。MySQL 容器一旦初始化，密码就无法后期改动。
+**原因**：当前根 `.env` 的 `DB_PASS` 已经变了，但 `data/mysql` 里现有业务账号的真实密码没跟着变。
 
 **解决**：
 
 ```bash
-# 在项目根目录执行：确认两份 .env 的 DB_PASS 是否一致
-grep '^DB_PASS=' .env backend/.env
+# 在项目根目录执行：先确认根 .env 中的目标新密码
+grep '^DB_PASS=' .env
 ```
 
-若不一致 → 按"第 8 步 完全清零重来"推倒重装。
+如果要**保留现有数据**，执行显式轮换：
+
+```bash
+# 在项目根目录执行：把 MySQL 中的业务账号密码同步为根 .env 的 DB_PASS
+docker compose -f docker-compose.dev.yml --profile tools up rotate-db-password
+```
+
+如果**不要现有数据**，再按“第 8 步 完全清零重来”推倒重装。
 
 #### ❌ 访问 `/install` 页面 500 或白屏
 
-**原因**：已经安装过，`backend/install/install.lock` 存在，但浏览器缓存了旧版本页面。
+**原因**：已经安装过，`deploy/install/install.lock` 存在，但浏览器缓存了旧版本页面。
 
 **解决**：新版本页面会自动显示"系统已安装"卡片 + "进入后台管理"按钮。若仍 500，强制刷新（Cmd+Shift+R / Ctrl+F5）清浏览器缓存。
 
@@ -566,19 +616,48 @@ ls backend/public/admin/index.html
 如果状态混乱想回到全新环境：
 
 ```bash
+# 在项目根目录执行：推荐，一键清理 Docker 开发全套模式产生的本地状态
+sh deploy/docker/cleanup-dev.sh
+```
+```bash
+# 在项目根目录执行：如果连 mysql / redis / node / alpine 这些基础镜像也想一起删
+# ⚠️ 可能影响本机其他项目，下次需要重新拉取
+sh deploy/docker/cleanup-dev.sh --all-images
+```
+
+上面脚本会自动清理：
+- compose 容器 / 网络 / 卷
+- 本项目镜像 `mallbase-backend:dev`
+- `data/`
+- 根 `.env`
+- `backend/.env`
+- `deploy/install/install.lock`
+- `backend/public/admin`
+- `frontend/admin/node_modules`
+- `frontend/admin/apps/web-antd/node_modules`
+- `frontend/admin/apps/web-antd/dist`
+
+如果你想手动分步执行，也可以继续用下面这些命令：
+
+```bash
 # 在项目根目录执行：停容器并清卷（⚠️ 会清空所有数据库数据）
 docker compose -f docker-compose.dev.yml down -v
 ```
 ```bash
-# 在项目根目录执行：清理本地数据 + 配置 + 前端产物
-rm -rf data/
-rm -f backend/install/install.lock
-rm -f backend/.env
-rm -f .env
-rm -rf backend/public/admin/*
+# 在项目根目录执行：删掉已退出的 init 容器（ensure-env / install-auto / frontend-build）
+docker compose -f docker-compose.dev.yml rm -f ensure-env install-auto frontend-build
 ```
 ```bash
-# 在项目根目录执行：从模板重来
+# 在项目根目录执行：清理本地数据 + 配置 + 前端产物
+rm -rf data/
+rm -f deploy/install/install.lock
+rm -f backend/.env
+rm -f .env
+rm -rf backend/public/admin
+rm -rf frontend/admin/apps/web-antd/dist
+```
+```bash
+# 在项目根目录执行：从模板重来，零向导会自动跑一遍
 docker compose -f docker-compose.dev.yml --profile build up -d
 ```
 
@@ -783,6 +862,47 @@ docker exec mallbase-dev php think region:import
 | `CORS_ALLOWED_ORIGINS` | 允许跨域的前端地址 | 安装时配置 |
 | `SWOOLE_WORKER_NUM` | Worker 进程数（`0` = CPU 核数） | `0` |
 
+### 升级已装环境（password_changed_at 列）
+
+若项目是在 `password_changed_at` 特性引入**之前**就已安装的老环境，
+需要跑一次幂等升级命令给 `mb_admin` 表补齐该列：
+
+```bash
+# 手动安装
+cd mall-base/backend
+php think upgrade:admin-schema
+
+# Docker 开发（全套）
+docker compose -f docker-compose.dev.yml exec -T backend php think upgrade:admin-schema
+
+# Docker 生产
+docker compose exec -T backend php think upgrade:admin-schema
+```
+
+命令行为（幂等 + 重试安全 + 基于密码哈希判定）：
+
+- **缺列** → `ALTER TABLE` 补上
+- **有列** → 跳过 DDL
+- **回填阶段**：扫描所有 `password_changed_at IS NULL` 的行，对每行用 `password_verify()` 逐一对照**公开默认密码清单**（当前为 `admin123` + `password`）
+  - **任一命中** → 保留 NULL，下次登录强制改密（哪怕这账号天天登录也不放过）
+  - **全部不中** → 回填为 `NOW()`，视为已改密
+
+> ⚠️ 为什么清单里有两个：老版 `deploy/install/data/schema/01_mb_auth.sql` 的种子哈希对应明文是 `password`；
+> 新版 `createSuperAdmin` 用 `admin123` 并走 `ON DUPLICATE KEY UPDATE` 覆写。
+> 两种 legacy 残留都得拦住，只查 `admin123` 会让仍在用公开 `password` 的老环境静默通过。
+
+> ⚠️ 之前用"登录过"这种代理指标判定的版本是错的——长期用默认密码登录的账号会被误认为"已改密"。
+> 现在改为直接比对密码哈希，任何已知公开默认都永远不会静默通过安全门。
+
+因为回填是按行 `WHERE id=?` 写入，已回填的行下次不会再被 `SELECT`，
+`ALTER` 成功但回填中断的半升级状态，直接再跑一次即可补齐。
+
+新装环境理论上不需要运行（`install:auto` 走的 schema 已包含此列）；
+即便误触发，由于新装超管密码仍命中公开默认清单，哈希检查会保留 NULL，首次改密安全门不会被绕过。
+
+如果升级后想**有选择地**强制某个账号改密，按"常见错误 → 打开 /admin/ 不跳改密页"
+章节里的 `UPDATE mb_admin SET password_changed_at=NULL WHERE id=?` 手工置 NULL 即可。
+
 ---
 
 ## 常见问题
@@ -806,7 +926,7 @@ Swoole 是常驻内存服务，`.env` 变更后**必须重启**才能加载。
 
 ```bash
 # 手动安装：在项目根目录执行
-rm backend/install/install.lock
+rm deploy/install/install.lock
 ```
 ```bash
 # Docker 生产：在项目根目录执行
@@ -815,7 +935,7 @@ docker compose restart
 ```
 ```bash
 # Docker 开发：在项目根目录执行
-rm -f backend/install/install.lock
+rm -f deploy/install/install.lock
 docker compose -f docker-compose.dev.yml restart backend
 ```
 

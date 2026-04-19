@@ -60,8 +60,11 @@ mall-base/
 │
 ├── docs/                           # 文档
 │   ├── install.md                  # 安装指南
+│   ├── env-files.md                # 环境文件职责与 Docker 全套模式配置说明
 │   ├── freight-template-roadmap.md # 运费模板路线图
 │   ├── claude-code-guide.md        # Claude Code 使用指南
+│   ├── issues/                     # 问题记录
+│   │   └── docker-fullstack-first-run.md  # Docker 全套模式首装问题排查记录
 │   └── testing/
 │       └── change-trigger-test-matrix.md  # 测试基线与触发矩阵
 ├── docker-compose.yml              # 单容器部署（默认）
@@ -111,6 +114,8 @@ docker compose restart
 | 文档 | 说明 |
 |------|------|
 | [安装指南](docs/install.md) | Docker / 原生部署、安装向导、配置修改 |
+| [环境文件说明](docs/env-files.md) | 根 `.env`、`backend/.env` 与 Docker 全套模式配置职责 |
+| [Docker 首装问题记录](docs/issues/docker-fullstack-first-run.md) | 方式三首次启动的密码错位、时序问题与修复结论 |
 | [运费模板路线图](docs/freight-template-roadmap.md) | 运费计算能力落地进度与订单接入计划 |
 | [测试基线与触发矩阵](docs/testing/change-trigger-test-matrix.md) | 后端 / 前端测试入口与变更触发规则 |
 | [Claude Code 使用指南](docs/claude-code-guide.md) | AI 工具、Skills、MCP、多 Agent 协作 |

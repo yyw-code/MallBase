@@ -1,15 +1,15 @@
 # ==========================================
 # 开发环境：后端容器 + MySQL + Redis（+ ensure-env 兜底；可选 frontend-build）
 #
-# 配置源分工（两份独立 .env，不合并）：
-#   - 项目根目录 .env：docker compose 做 ${VAR} 插值（模板：deploy/docker/.example.env）
-#   - backend/.env：   ThinkPHP 运行时业务配置（模板：backend/.example.env，完整 30+ 字段）
+# 配置源分工（Docker 开发全套模式）：
+#   - 项目根目录 .env：唯一主配置源；用户只需要维护这一份
+#   - backend/.env：   ThinkPHP/Swoole 运行时派生文件，由 ensure-env 自动生成
 #
 # 两种启动方式（详见 docs/env-files.md）：
 #   1. 零配置：docker compose -f docker-compose.dev.yml up -d
-#              （ensure-env 会自动生成两份 .env + 随机化敏感字段）
+#              （ensure-env 会自动生成根 .env，并派生 backend/.env）
 #   2. 自定义：cp deploy/docker/.example.env .env && 按需改 && up -d
-#              （ensure-env 仍会补齐 backend/.env，保持两份同步）
+#              （ensure-env 会按根 .env 重新派生 backend/.env）
 #
 # 含前端打包：追加 --profile build，启动 frontend-build 容器自动把 Vben 打包到
 #   backend/public/admin：
@@ -20,7 +20,7 @@
 # ==========================================
 
 services:
-  # 一次性 init 容器：确保 backend/.env 与 根目录 .env 存在且完整
+  # 一次性 init 容器：确保根 .env 存在，并据此派生 backend/.env
   ensure-env:
     image: alpine:3.19
     container_name: mallbase-ensure-env
@@ -30,10 +30,56 @@ services:
     command: sh /ensure-env.sh
     restart: "no"
 
+  # 一次性 preflight 容器：在 install:auto 前校验业务库账号能否用当前根 .env 登录。
+  # 目的：尽早发现“data/mysql 是旧数据，但根 .env 的 DB_PASS 后改过”的场景，
+  # 避免失败信息拖到 install-auto 才暴露。
+  check-db-auth:
+    image: mysql:8.0
+    pull_policy: always
+    container_name: mallbase-check-db-auth
+    volumes:
+      - .:/workdir:ro
+      - ./deploy/docker/check-db-auth.sh:/check-db-auth.sh:ro
+    command: sh /check-db-auth.sh
+    restart: "no"
+    depends_on:
+      ensure-env:
+        condition: service_completed_successfully
+      mysql:
+        condition: service_healthy
+
+  # 一次性 init 容器：方式三/四 Docker 全套零向导自动安装（已装则快速退出 0）
+  # 执行 `php think install:auto`，从 backend/.env 读取连接信息完成建库/建表/建超管。
+  # 首次启动时创建 admin/admin123 且 password_changed_at=NULL，前端会强制首次改密。
+  install-auto:
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile
+    image: mallbase-backend:dev
+    pull_policy: never
+    container_name: mallbase-install-auto
+    environment:
+      TZ: Asia/Shanghai
+    volumes:
+      - ./backend:/app
+      - backend_vendor:/app/vendor
+      - ./deploy/install:/app/install
+    command: php think install:auto
+    restart: "no"
+    depends_on:
+      ensure-env:
+        condition: service_completed_successfully
+      check-db-auth:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
   backend:
     build:
       context: .
       dockerfile: deploy/docker/Dockerfile
+    image: mallbase-backend:dev
+    pull_policy: never
     container_name: mallbase-dev
     restart: unless-stopped
     extra_hosts:
@@ -42,16 +88,11 @@ services:
       - "${SWOOLE_HTTP_PORT:-8080}:${SWOOLE_HTTP_PORT:-8080}"
     environment:
       TZ: Asia/Shanghai
-    env_file:
-      # required: false 让 ensure-env 在首次启动时才生成 backend/.env，
-      # compose parse 阶段不会因文件缺失而报错（需要 Compose 2.20+）
-      - path: ./backend/.env
-        required: false
     volumes:
       - ./backend:/app
       - backend_vendor:/app/vendor
-      # 安装 SQL/demo 数据（随仓库跟踪，位于 deploy/install/data；以只读方式映射进容器）
-      - ./deploy/install/data:/app/install/data:ro
+      # 安装目录（包含 schema/demo 数据与 install.lock；宿主落盘到 deploy/install）
+      - ./deploy/install:/app/install
     depends_on:
       ensure-env:
         condition: service_completed_successfully
@@ -59,29 +100,32 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      # install-auto 完成后才启动 Swoole，避免首次启动时对外暴露未完成安装的服务
+      install-auto:
+        condition: service_completed_successfully
 
   mysql:
     image: mysql:8.0
+    pull_policy: always
     container_name: mallbase-mysql
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-mallbase-root-123}
-      MYSQL_DATABASE: ${DB_NAME:-mallbase}
-      MYSQL_USER: ${DB_USER:-mallbase}
-      MYSQL_PASSWORD: ${DB_PASS:-mallbase-pass-123}
       TZ: Asia/Shanghai
     ports:
       - "${MYSQL_PORT:-3306}:3306"
     volumes:
+      - .:/workdir:ro
       - ./data/mysql:/var/lib/mysql
       - ./deploy/install/data/schema:/docker-entrypoint-initdb.d/sql:ro
       - ./deploy/docker/mysql/init.sh:/docker-entrypoint-initdb.d/00-init.sh:ro
+      - ./deploy/docker/mysql-entrypoint.sh:/mysql-entrypoint.sh:ro
+    entrypoint: ["sh", "/mysql-entrypoint.sh"]
     command:
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_unicode_ci
       - --default-authentication-plugin=mysql_native_password
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-mallbase-root-123}"]
+      test: ["CMD-SHELL", "test -f /workdir/.env && . /workdir/.env && mysqladmin ping -h localhost -u root -p\"$$MYSQL_ROOT_PASSWORD\""]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -120,6 +164,10 @@ services:
       - frontend_pnpm_store:/root/.local/share/pnpm/store
     environment:
       NODE_OPTIONS: "--max-old-space-size=4096"
+      # pnpm 在 non-TTY 容器里默认会拒绝 purge 被外部 bind mount 进来的
+      # node_modules/（比如宿主机跑过 pnpm install 生成的那份），需要 CI=true
+      # 让 pnpm 自动确认 purge 再走 --frozen-lockfile。
+      CI: "true"
     command: >
       sh -c "corepack enable &&
              corepack prepare pnpm@latest --activate &&
@@ -129,6 +177,24 @@ services:
              cp -r apps/web-antd/dist/. /dist/ &&
              echo '[frontend-build] done'"
     restart: "no"
+
+  # 工具容器：当根 .env 的 DB_PASS 改了，但想保留现有 data/mysql 时，
+  # 用它把 MySQL 中的业务账号密码显式轮换为根 .env 的值。
+  rotate-db-password:
+    profiles: ["tools"]
+    image: mysql:8.0
+    pull_policy: always
+    container_name: mallbase-rotate-db-password
+    volumes:
+      - .:/workdir
+      - ./deploy/docker/rotate-db-password.sh:/rotate-db-password.sh:ro
+    command: sh /rotate-db-password.sh
+    restart: "no"
+    depends_on:
+      ensure-env:
+        condition: service_completed_successfully
+      mysql:
+        condition: service_healthy
 
 volumes:
   backend_vendor:

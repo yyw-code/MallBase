@@ -10,7 +10,11 @@
 
 # Frontend build artifacts
 backend/public/admin/
+frontend/admin/.pnpm-store/
 
 # Environment files（两份独立 .env，内含敏感信息，均不入库）
 .env
 backend/.env
+
+# Docker dev generated install state
+deploy/install/install.lock
