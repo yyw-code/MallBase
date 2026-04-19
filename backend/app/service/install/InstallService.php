@@ -342,15 +342,20 @@ ENV;
         $sqlDir = $this->installDataPath('schema');
 
         $files = glob($sqlDir . DIRECTORY_SEPARATOR . '*.sql');
+        if ($files === false || $files === []) {
+            throw new \RuntimeException('schema 目录下未找到任何 .sql 文件: ' . $sqlDir);
+        }
         sort($files);
 
-        $stmt = $pdo->query("SHOW TABLES LIKE 'mb_%'");
-        if (!empty($stmt->fetchAll(PDO::FETCH_COLUMN))) {
-            return;
-        }
-
+        // schema SQL 均使用 DROP TABLE IF EXISTS + CREATE TABLE，可安全重入。
+        // 不再根据"已存在 mb_* 表"提前返回——否则上一次安装在中途失败会残留
+        // 部分表，重试时会被误判为已完成并跳过导入，最终写出 install.lock
+        // 却只有半套 schema。
         foreach ($files as $filePath) {
             $sql = file_get_contents($filePath);
+            if ($sql === false || trim($sql) === '') {
+                continue;
+            }
             $pdo->exec($sql);
         }
     }
