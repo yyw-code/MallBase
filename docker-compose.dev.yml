@@ -162,20 +162,14 @@ services:
       - ./frontend/admin:/app
       - ./backend/public/admin:/dist
       - frontend_pnpm_store:/root/.local/share/pnpm/store
+      - ./deploy/docker/frontend-build.sh:/frontend-build.sh:ro
     environment:
       NODE_OPTIONS: "--max-old-space-size=4096"
       # pnpm 在 non-TTY 容器里默认会拒绝 purge 被外部 bind mount 进来的
       # node_modules/（比如宿主机跑过 pnpm install 生成的那份），需要 CI=true
       # 让 pnpm 自动确认 purge 再走 --frozen-lockfile。
       CI: "true"
-    command: >
-      sh -c "corepack enable &&
-             corepack prepare pnpm@latest --activate &&
-             pnpm install --frozen-lockfile &&
-             pnpm run build:antd &&
-             rm -rf /dist/* &&
-             cp -r apps/web-antd/dist/. /dist/ &&
-             echo '[frontend-build] done'"
+    command: sh /frontend-build.sh
     restart: "no"
 
   # 工具容器：当根 .env 的 DB_PASS 改了，但想保留现有 data/mysql 时，

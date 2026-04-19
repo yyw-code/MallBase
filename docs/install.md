@@ -451,6 +451,7 @@ docker logs mallbase-install-auto
 # 在项目根目录执行：frontend-build 打包完会自动退出
 docker logs mallbase-frontend-build
 # 末尾应看到 [frontend-build] done
+# 构建过程中每 15 秒会额外打印一次“进行中，请稍候”，用于提示容器没有卡死
 ```
 ```bash
 # 在项目根目录执行：确认前端产物落地
