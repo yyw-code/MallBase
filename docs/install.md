@@ -840,6 +840,16 @@ pnpm run build --filter=@vben/web-antd
 scp -r frontend/admin/apps/web-antd/dist/* user@server:/var/www/mallbase/admin/
 ```
 
+如果你本地已经把后台静态资源整理到了 `backend/public/admin`，也可以直接使用项目自带脚本打包并上传：
+
+```bash
+sh deploy/upload-public-admin.sh \
+  --host user@server \
+  --remote-dir /var/www/mallbase/admin
+```
+
+脚本说明见 [upload-public-admin.md](./upload-public-admin.md)。
+
 ### 4. 构建并启动后端容器
 
 ```bash
