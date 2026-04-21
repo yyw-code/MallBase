@@ -7,6 +7,7 @@ SOURCE_DIR="$ROOT_DIR/backend/public/admin"
 
 SSH_HOST=""
 SSH_PORT="22"
+SSH_IDENTITY=""
 REMOTE_ROOT=""
 REMOTE_DIR=""
 KEEP_EXTRA="0"
@@ -22,6 +23,7 @@ usage() {
   --remote-dir   直接指定服务器上的最终目录
   --remote-root  指定服务器上的项目根目录，脚本会自动拼成 backend/public/admin
   --port         可选，SSH 端口，默认 22
+  --identity     可选，SSH 私钥文件路径，例如 ~/.ssh/id_ed25519
   --keep-extra   可选，保留服务器目标目录中多余旧文件；默认会先清空目标目录再解压
 
 说明：
@@ -47,6 +49,10 @@ while [ "$#" -gt 0 ]; do
             ;;
         --port)
             SSH_PORT=${2:-}
+            shift 2
+            ;;
+        --identity)
+            SSH_IDENTITY=${2:-}
             shift 2
             ;;
         --keep-extra)
@@ -99,6 +105,11 @@ if [ ! -f "$SOURCE_DIR/index.html" ]; then
     exit 1
 fi
 
+if [ -n "$SSH_IDENTITY" ] && [ ! -f "$SSH_IDENTITY" ]; then
+    echo "SSH 私钥文件不存在：$SSH_IDENTITY"
+    exit 1
+fi
+
 if ! command -v tar >/dev/null 2>&1; then
     echo "缺少命令：tar"
     exit 1
@@ -125,6 +136,14 @@ cleanup_local() {
 
 trap cleanup_local EXIT INT TERM
 
+SCP_ARGS="-P $SSH_PORT"
+SSH_ARGS="-p $SSH_PORT"
+
+if [ -n "$SSH_IDENTITY" ]; then
+    SCP_ARGS="$SCP_ARGS -i $SSH_IDENTITY"
+    SSH_ARGS="$SSH_ARGS -i $SSH_IDENTITY"
+fi
+
 echo ">>> [upload-public-admin] 本地源目录：$SOURCE_DIR"
 echo ">>> [upload-public-admin] 服务器目标：$SSH_HOST:$REMOTE_DIR"
 echo ">>> [upload-public-admin] 打包本地资源"
@@ -132,7 +151,8 @@ echo ">>> [upload-public-admin] 打包本地资源"
 tar -C "$SOURCE_DIR" -czf "$LOCAL_ARCHIVE" .
 
 echo ">>> [upload-public-admin] 上传归档文件"
-scp -P "$SSH_PORT" "$LOCAL_ARCHIVE" "$SSH_HOST:$REMOTE_ARCHIVE"
+# shellcheck disable=SC2086
+scp $SCP_ARGS "$LOCAL_ARCHIVE" "$SSH_HOST:$REMOTE_ARCHIVE"
 
 REMOTE_SHELL=$(cat <<EOF
 set -eu
@@ -146,7 +166,8 @@ EOF
 )
 
 echo ">>> [upload-public-admin] 解压到服务器目录"
-ssh -p "$SSH_PORT" "$SSH_HOST" "$REMOTE_SHELL"
+# shellcheck disable=SC2086
+ssh $SSH_ARGS "$SSH_HOST" "$REMOTE_SHELL"
 
 echo ">>> [upload-public-admin] 完成"
 echo ">>> [upload-public-admin] 已同步到：$SSH_HOST:$REMOTE_DIR"

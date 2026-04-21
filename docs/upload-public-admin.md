@@ -87,6 +87,19 @@ sh deploy/upload-public-admin.sh \
 ```
 
 ```bash
+--identity ~/.ssh/your_key
+```
+
+如果服务器只允许私钥登录，可以显式指定 SSH 私钥文件：
+
+```bash
+sh deploy/upload-public-admin.sh \
+  --host root@165.154.60.251 \
+  --identity ~/.ssh/id_ed25519 \
+  --remote-root /www/wwwroot/mallbase.gosowong.cn/mall-base
+```
+
+```bash
 --keep-extra
 ```
 
@@ -119,12 +132,22 @@ sh deploy/upload-public-admin.sh \
   --remote-root /www/wwwroot/mallbase.gosowong.cn/mall-base
 ```
 
+如果这台服务器只接受密钥登录，补上 `--identity`：
+
+```bash
+sh deploy/upload-public-admin.sh \
+  --host root@165.154.60.251 \
+  --identity ~/.ssh/id_ed25519 \
+  --remote-root /www/wwwroot/mallbase.gosowong.cn/mall-base
+```
+
 ## 注意事项
 
 - 本地源目录固定是 `backend/public/admin`
 - `--remote-dir` 和 `--remote-root` 必须二选一
 - 默认会清空服务器目标目录内容，避免旧版本资源残留
 - 如果你确认服务器目录里还有其他需要保留的文件，再使用 `--keep-extra`
+- 如果你没有 root 密码、只持有私钥，请使用 `--identity`
 
 ## 常见问题
 
