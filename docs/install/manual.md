@@ -216,6 +216,6 @@ ls /var/www/mallbase/admin/index.html
 
 ## 常见下一步
 
-- 查看常用命令集合：[deployment-commands.md](./deployment-commands.md)
-- 查看常见错误：[deployment-troubleshooting.md](./deployment-troubleshooting.md)
+- 查看常用命令集合：[commands.md](./commands.md)
+- 查看常见错误：[troubleshooting.md](./troubleshooting.md)
 - 调整反向代理：[nginx-reverse-proxy.md](./nginx-reverse-proxy.md)

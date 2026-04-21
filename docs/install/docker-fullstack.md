@@ -120,5 +120,5 @@ ls backend/public/admin/index.html
 ## 常见下一步
 
 - 查看 `.env` 机制与零向导变量：[env-files.md](./env-files.md)
-- 看常用命令集合：[deployment-commands.md](./deployment-commands.md)
-- 遇到首装时序或密码问题：[deployment-troubleshooting.md](./deployment-troubleshooting.md) 和 [issues/docker-fullstack-first-run.md](./issues/docker-fullstack-first-run.md)
+- 看常用命令集合：[commands.md](./commands.md)
+- 遇到首装时序或密码问题：[troubleshooting.md](./troubleshooting.md) 和 [issues/docker-fullstack-first-run.md](./issues/docker-fullstack-first-run.md)

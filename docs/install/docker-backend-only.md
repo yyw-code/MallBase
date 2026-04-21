@@ -87,7 +87,7 @@ pnpm run dev:antd
 http://localhost:5666
 ```
 
-如果你只想偶尔打一份后台静态资源，而不是长期跑 dev server，可参考命令集合里的 `frontend-build` 命令：[deployment-commands.md](./deployment-commands.md)。
+如果你只想偶尔打一份后台静态资源，而不是长期跑 dev server，可参考命令集合里的 `frontend-build` 命令：[commands.md](./commands.md)。
 
 ## 完成后验证
 
@@ -105,6 +105,6 @@ curl -I http://127.0.0.1:8080/
 
 ## 常见下一步
 
-- 看完整命令集合：[deployment-commands.md](./deployment-commands.md)
-- 遇到 Docker / MySQL / Redis 问题：[deployment-troubleshooting.md](./deployment-troubleshooting.md)
+- 看完整命令集合：[commands.md](./commands.md)
+- 遇到 Docker / MySQL / Redis 问题：[troubleshooting.md](./troubleshooting.md)
 - 若以后切到 Docker 全套模式，再看 [env-files.md](./env-files.md)

@@ -37,7 +37,7 @@ curl -I http://127.0.0.1:8080/
 ls /var/www/mallbase/admin/index.html
 ```
 
-如果文件不存在，先按 [install.md](./install.md) 完成前端构建和上传。
+如果文件不存在，先按 [index.md](./index.md) 选择对应安装方式，完成前端构建和上传。
 
 ### 3. 前端构建参数正确
 

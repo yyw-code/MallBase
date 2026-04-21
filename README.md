@@ -60,20 +60,22 @@ mall-base/
 │   └── upload-public-admin.sh      # 打包并上传后台静态资源
 │
 ├── docs/                           # 文档
-│   ├── install.md                  # 安装与部署入口
-│   ├── install-manual.md           # 方式一：手动安装（无 Docker）
-│   ├── install-docker-backend-only.md # 方式二：Docker 开发（仅后端）
-│   ├── install-docker-fullstack.md # 方式三：Docker 开发（全套）
-│   ├── install-docker-production.md # 方式四：Docker 生产
-│   ├── deployment-commands.md      # 安装与部署命令集合
-│   ├── deployment-troubleshooting.md # 安装与部署故障排查
-│   ├── env-files.md                # 环境文件职责与 Docker 全套模式配置说明
-│   ├── nginx-reverse-proxy.md      # Nginx 反向代理配置说明
-│   ├── upload-public-admin.md      # 后台静态资源上传脚本说明
+│   ├── install.md                  # 安装入口（兼容旧链接）
+│   ├── install/
+│   │   ├── index.md                # 安装与部署目录页
+│   │   ├── manual.md               # 方式一：手动安装（无 Docker）
+│   │   ├── docker-backend-only.md  # 方式二：Docker 开发（仅后端）
+│   │   ├── docker-fullstack.md     # 方式三：Docker 开发（全套）
+│   │   ├── docker-production.md    # 方式四：Docker 生产
+│   │   ├── commands.md             # 安装与部署命令集合
+│   │   ├── troubleshooting.md      # 安装与部署故障排查
+│   │   ├── env-files.md            # 环境文件职责与 Docker 全套模式配置说明
+│   │   ├── nginx-reverse-proxy.md  # Nginx 反向代理配置说明
+│   │   ├── upload-public-admin.md  # 后台静态资源上传脚本说明
+│   │   └── issues/
+│   │       └── docker-fullstack-first-run.md  # Docker 全套模式首装问题排查记录
 │   ├── freight-template-roadmap.md # 运费模板路线图
 │   ├── claude-code-guide.md        # Claude Code 使用指南
-│   ├── issues/                     # 问题记录
-│   │   └── docker-fullstack-first-run.md  # Docker 全套模式首装问题排查记录
 │   └── testing/
 │       └── change-trigger-test-matrix.md  # 测试基线与触发矩阵
 ├── docker-compose.yml              # 单容器部署（默认）
@@ -122,17 +124,18 @@ docker compose restart
 
 | 文档 | 说明 |
 |------|------|
-| [安装与部署入口](docs/install.md) | 环境要求、安装方式总览、阅读顺序与专题入口 |
-| [方式一：手动安装](docs/install-manual.md) | 无 Docker 场景的完整部署步骤 |
-| [方式二：Docker 开发（仅后端）](docs/install-docker-backend-only.md) | 宿主机 MySQL/Redis + 后端容器的完整步骤 |
-| [方式三：Docker 开发（全套）](docs/install-docker-fullstack.md) | 后端 + MySQL + Redis + 前端自动打包的完整步骤 |
-| [方式四：Docker 生产](docs/install-docker-production.md) | 单后端容器 + 宿主机 Nginx 的完整部署步骤 |
-| [安装与部署命令集合](docs/deployment-commands.md) | 按用途整理的独立命令集合 |
-| [安装与部署故障排查](docs/deployment-troubleshooting.md) | 安装、Docker、前端静态资源与运行时故障处理 |
-| [环境文件说明](docs/env-files.md) | 根 `.env`、`backend/.env` 与 Docker 全套模式配置职责 |
-| [Nginx 反向代理配置说明](docs/nginx-reverse-proxy.md) | `/admin/` 静态资源与 `/admin/api/` 等后端路径的代理规则 |
-| [后台静态资源上传脚本](docs/upload-public-admin.md) | 本地打包 `backend/public/admin` 并上传到服务器目录 |
-| [Docker 首装问题记录](docs/issues/docker-fullstack-first-run.md) | 方式三首次启动的密码错位、时序问题与修复结论 |
+| [安装与部署入口](docs/install.md) | 安装总入口，指向新的安装目录结构 |
+| [安装与部署目录](docs/install/index.md) | 环境要求、安装方式总览、阅读顺序与专题入口 |
+| [方式一：手动安装](docs/install/manual.md) | 无 Docker 场景的完整部署步骤 |
+| [方式二：Docker 开发（仅后端）](docs/install/docker-backend-only.md) | 宿主机 MySQL/Redis + 后端容器的完整步骤 |
+| [方式三：Docker 开发（全套）](docs/install/docker-fullstack.md) | 后端 + MySQL + Redis + 前端自动打包的完整步骤 |
+| [方式四：Docker 生产](docs/install/docker-production.md) | 单后端容器 + 宿主机 Nginx 的完整部署步骤 |
+| [安装与部署命令集合](docs/install/commands.md) | 按用途整理的独立命令集合，含删除与清理命令 |
+| [安装与部署故障排查](docs/install/troubleshooting.md) | 安装、Docker、前端静态资源与运行时故障处理 |
+| [环境文件说明](docs/install/env-files.md) | 根 `.env`、`backend/.env` 与 Docker 全套模式配置职责 |
+| [Nginx 反向代理配置说明](docs/install/nginx-reverse-proxy.md) | `/admin/` 静态资源与 `/admin/api/` 等后端路径的代理规则 |
+| [后台静态资源上传脚本](docs/install/upload-public-admin.md) | 本地打包 `backend/public/admin` 并上传到服务器目录 |
+| [Docker 首装问题记录](docs/install/issues/docker-fullstack-first-run.md) | 方式三首次启动的密码错位、时序问题与修复结论 |
 | [运费模板路线图](docs/freight-template-roadmap.md) | 运费计算能力落地进度与订单接入计划 |
 | [测试基线与触发矩阵](docs/testing/change-trigger-test-matrix.md) | 后端 / 前端测试入口与变更触发规则 |
 | [Claude Code 使用指南](docs/claude-code-guide.md) | AI 工具、Skills、MCP、多 Agent 协作 |

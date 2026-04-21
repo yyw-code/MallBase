@@ -128,5 +128,5 @@ ls /var/www/mallbase/admin/index.html
 
 - 上传静态资源脚本：[upload-public-admin.md](./upload-public-admin.md)
 - Nginx 代理与静态目录：[nginx-reverse-proxy.md](./nginx-reverse-proxy.md)
-- 常用运维命令：[deployment-commands.md](./deployment-commands.md)
-- 安装与部署排障：[deployment-troubleshooting.md](./deployment-troubleshooting.md)
+- 常用运维命令：[commands.md](./commands.md)
+- 安装与部署排障：[troubleshooting.md](./troubleshooting.md)
