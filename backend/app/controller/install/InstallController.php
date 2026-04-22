@@ -48,6 +48,14 @@ class InstallController
         return json(['code' => 200, 'data' => $data, 'message' => 'ok']);
     }
 
+    public function adminReady(): Response
+    {
+        $result = $this->service->checkAdminReady();
+        $code = $result['ready'] ? 200 : 400;
+
+        return json(['code' => $code, 'data' => $result, 'message' => $result['message']]);
+    }
+
     public function testDb(Request $request): Response
     {
         $config = [

@@ -312,6 +312,7 @@ class InstallService
         if ($jwtSecret === '') {
             $jwtSecret = rtrim(strtr(base64_encode(random_bytes(48)), '+/', '-_'), '=');
         }
+        $runtimeMarker = bin2hex(random_bytes(16));
 
         $emit('db_test', 'running', '正在校验数据库连接…');
         $dbTest = $this->testDatabase($dbConfig);
@@ -353,6 +354,7 @@ class InstallService
                 'REDIS_PASSWORD'       => $redisConfig['password'],
                 'CACHE_DRIVER'         => 'redis',
                 'JWT_SECRET'           => $jwtSecret,
+                'INSTALL_RUNTIME_MARKER' => $runtimeMarker,
                 'CORS_ALLOWED_ORIGINS' => $corsOrigins !== '' ? $corsOrigins : '*',
                 'ADMIN_USER'           => $adminUser,
                 'ADMIN_PASS'           => $adminPass,
@@ -448,6 +450,39 @@ class InstallService
         return $result;
     }
 
+    public function checkAdminReady(): array
+    {
+        if (!$this->isInstalled()) {
+            return [
+                'ready'   => false,
+                'message' => '系统尚未安装完成，请先完成安装流程',
+            ];
+        }
+
+        $envValues = $this->readEnvFile();
+        $fileMarker = trim((string) ($envValues['INSTALL_RUNTIME_MARKER'] ?? ''));
+        $runtimeMarker = trim((string) env('INSTALL_RUNTIME_MARKER', ''));
+
+        if ($fileMarker === '') {
+            return [
+                'ready'   => false,
+                'message' => '未检测到运行态标记，请先重启 Swoole 后再进入后台管理',
+            ];
+        }
+
+        if ($runtimeMarker === '' || !hash_equals($fileMarker, $runtimeMarker)) {
+            return [
+                'ready'   => false,
+                'message' => '检测到 Swoole 尚未重启，当前运行进程还没有加载最新配置，请先重启 Swoole 后再进入后台管理',
+            ];
+        }
+
+        return [
+            'ready'   => true,
+            'message' => '已检测到最新运行态配置，可以进入后台管理',
+        ];
+    }
+
     private function buildFailureResponse(string $step, string $message, array $steps, ?string $detail = null): array
     {
         return [
@@ -498,12 +533,17 @@ class InstallService
     private function applyRuntimeConfig(array $envData): void
     {
         foreach ($envData as $key => $value) {
+            if ($key === 'INSTALL_RUNTIME_MARKER') {
+                continue;
+            }
             putenv($key . '=' . $value);
             $_ENV[$key] = $value;
             $_SERVER[$key] = $value;
         }
 
-        app()->env->set($envData);
+        $runtimeEnvData = $envData;
+        unset($runtimeEnvData['INSTALL_RUNTIME_MARKER']);
+        app()->env->set($runtimeEnvData);
 
         $database = Config::get('database', []);
         $database['default'] = 'mysql';
@@ -708,5 +748,28 @@ class InstallService
         }
 
         return $value;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function readEnvFile(): array
+    {
+        $envPath = app()->getRootPath() . '.env';
+        if (!is_file($envPath)) {
+            return [];
+        }
+
+        $data = parse_ini_file($envPath, false, INI_SCANNER_RAW);
+        if (!is_array($data)) {
+            return [];
+        }
+
+        $values = [];
+        foreach ($data as $key => $value) {
+            $values[(string) $key] = is_string($value) ? trim($value) : (string) $value;
+        }
+
+        return $values;
     }
 }

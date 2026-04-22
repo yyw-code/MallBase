@@ -106,7 +106,7 @@ input:focus{border-color:var(--primary)}
         <div class="pulse-ring"></div>
       </div>
       <div class="done-title">系统已安装</div>
-      <p class="done-text">MallBase 已完成安装，可以直接进入后台管理。</p>
+      <p class="done-text">MallBase 已完成安装。如刚完成安装或修改过环境配置，请先重启 Swoole，再进入后台管理。</p>
     </div>
     <div style="margin-top:24px">
       <div class="info-row">
@@ -119,8 +119,9 @@ input:focus{border-color:var(--primary)}
       </div>
     </div>
     <div class="done-btn-group">
-      <a class="btn btn-primary btn-large" href="/admin/">进入后台管理</a>
+      <button class="btn btn-primary btn-large" onclick="enterAdmin('installedMsg')">进入后台管理</button>
     </div>
+    <div class="msg" id="installedMsg"></div>
   </div>
 
   <div id="wizardContainer" hidden>
@@ -255,18 +256,16 @@ input:focus{border-color:var(--primary)}
           <div class="pulse-ring"></div>
         </div>
         <div class="done-title">安装完成</div>
-        <p class="done-text">配置文件、数据库结构、管理员账号和权限数据都已准备就绪。</p>
-        <p class="done-countdown" id="redirectCountdown">5 秒后自动进入后台管理…</p>
+        <p class="done-text">配置文件、数据库结构、管理员账号和权限数据都已准备就绪。请先重启 Swoole，再点击下方按钮进入后台管理。</p>
       </div>
 
       <div class="done-btn-group" id="gotoAdminGroup" hidden>
-        <a class="btn btn-primary btn-large" id="gotoAdminBtn" href="/admin/">立即进入后台管理</a>
+        <button class="btn btn-primary btn-large" id="gotoAdminBtn" onclick="enterAdmin('installMsg')">立即进入后台管理</button>
       </div>
       <p class="done-hint" id="installDoneHint" hidden>使用刚才设置的管理员账号和密码登录</p>
 
       <div class="actions" id="installRetryActions" hidden>
-        <button class="btn btn-outline" onclick="goStep(4)">返回上一步</button>
-        <button class="btn btn-primary" onclick="retryInstall()">重新执行安装</button>
+        <button class="btn btn-primary" onclick="retryInstall()">重新开始安装</button>
       </div>
     </div>
   </div>
@@ -556,6 +555,17 @@ function resetInstallUI() {
   renderProgressList();
 }
 
+function resetValidationState() {
+  validationState.db.valid = false;
+  validationState.db.lastFingerprint = '';
+  validationState.redis.valid = false;
+  validationState.redis.lastFingerprint = '';
+  document.getElementById('dbNext').disabled = true;
+  document.getElementById('redisNext').disabled = true;
+  hideMsg('dbMsg');
+  hideMsg('redisMsg');
+}
+
 function renderProgressList() {
   const list = document.getElementById('progressList');
   list.innerHTML = '';
@@ -611,29 +621,14 @@ function updateProgressStep(event) {
   }
 }
 
-function startRedirectCountdown(seconds) {
-  const el = document.getElementById('redirectCountdown');
-  let remaining = seconds;
-  el.textContent = remaining + ' 秒后自动进入后台管理…';
-  const timer = setInterval(() => {
-    remaining -= 1;
-    if (remaining <= 0) {
-      clearInterval(timer);
-      window.location.href = '/admin/';
-      return;
-    }
-    el.textContent = remaining + ' 秒后自动进入后台管理…';
-  }, 1000);
-}
-
 function finishInstallSuccess(message) {
   installCompleted = true;
   document.getElementById('installStateTitle').textContent = '5. 安装完成';
-  document.getElementById('installStateText').textContent = message || '所有关键步骤都已完成，现在可以进入后台管理。';
+  document.getElementById('installStateText').textContent = message || '所有关键步骤都已完成。请先重启 Swoole，再进入后台管理。';
   document.getElementById('installSuccessBox').hidden = false;
   document.getElementById('gotoAdminGroup').hidden = false;
   document.getElementById('installDoneHint').hidden = false;
-  startRedirectCountdown(5);
+  showMsg('installMsg', '安装已完成。请先重启 Swoole；点击“立即进入后台管理”时会再次帮你检测。', true);
 }
 
 function finishInstallFailure(message) {
@@ -755,9 +750,28 @@ async function doInstall() {
   }
 }
 
-function retryInstall() {
-  goStep(4);
+async function enterAdmin(messageId = 'installMsg') {
+  try {
+    const result = await api('/admin-ready');
+    if (result.data && result.data.ready) {
+      window.location.href = '/admin/';
+      return;
+    }
+
+    showMsg(messageId, (result.data && result.data.message) || '请先重启 Swoole，再进入后台管理', false);
+  } catch (e) {
+    showMsg(messageId, e.message || '后台运行态检测失败，请先重启 Swoole 后重试', false);
+  }
+}
+
+async function retryInstall() {
+  resetValidationState();
   hideMsg('adminMsg');
+  hideMsg('envMsg');
+  document.getElementById('installBtn').disabled = false;
+  document.getElementById('installBtn').textContent = '开始安装';
+  resetInstallUI();
+  await checkEnv();
 }
 
 bootstrap();

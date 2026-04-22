@@ -16,6 +16,7 @@ Route::group('install', function () {
 
     Route::group('api', function () {
         Route::get('status', 'status');
+        Route::get('admin-ready', 'adminReady');
         Route::get('check', 'check');
         Route::get('form-defaults', 'formDefaults');
         Route::post('test-db', 'testDb');
