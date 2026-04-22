@@ -50,6 +50,33 @@ class InstallService
         return is_array($data) ? $data : null;
     }
 
+    public function getInstallPageMeta(): array
+    {
+        $envValues = $this->readEnvFile();
+        $projectRoot = dirname(rtrim(root_path(), DIRECTORY_SEPARATOR));
+        $backendRoot = rtrim(root_path(), DIRECTORY_SEPARATOR);
+        $swooleHost = trim((string) ($envValues['SWOOLE_HTTP_HOST'] ?? '0.0.0.0'));
+        $swoolePort = (int) ($envValues['SWOOLE_HTTP_PORT'] ?? 8080);
+
+        return [
+            'project_root' => $projectRoot,
+            'backend_root' => $backendRoot,
+            'runtime'      => [
+                'swoole_host' => $swooleHost,
+                'swoole_port' => $swoolePort,
+                'db_host'     => trim((string) ($envValues['DB_HOST'] ?? '')),
+                'db_name'     => trim((string) ($envValues['DB_NAME'] ?? '')),
+                'redis_host'  => trim((string) ($envValues['REDIS_HOST'] ?? '')),
+                'redis_db'    => (int) ($envValues['REDIS_CACHE_DB'] ?? 0),
+            ],
+            'restart_commands' => [
+                'docker_dev' => "cd {$projectRoot}\ndocker compose -f docker-compose.dev.yml restart backend",
+                'docker_prod' => "cd {$projectRoot}\ndocker compose restart",
+                'manual' => "cd {$projectRoot}\nlsof -ti :{$swoolePort} | xargs -r kill -9\ncd {$backendRoot}\nphp think swoole",
+            ],
+        ];
+    }
+
     public function checkEnvironment(): array
     {
         $items = [];

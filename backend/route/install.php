@@ -1,5 +1,6 @@
 <?php
 
+use app\middleware\InstallCheckMiddleware;
 use think\facade\Route;
 
 Route::group('install', function () {
@@ -15,8 +16,8 @@ Route::group('install', function () {
     });
 
     Route::group('api', function () {
-        Route::get('status', 'status');
-        Route::get('adminReady', 'adminReady');
+        Route::get('status', 'status')->withoutMiddleware([InstallCheckMiddleware::class]);
+        Route::get('adminReady', 'adminReady')->withoutMiddleware([InstallCheckMiddleware::class]);
         Route::get('check', 'check');
         Route::get('formDefaults', 'formDefaults');
         Route::post('testDb', 'testDb');

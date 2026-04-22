@@ -39,6 +39,7 @@ class InstallController
             'installed'    => $installed,
             'installed_at' => null,
             'version'      => null,
+            'meta'         => $this->service->getInstallPageMeta(),
         ];
         if ($installed) {
             $info = $this->service->getLockInfo() ?? [];

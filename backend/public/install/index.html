@@ -7,8 +7,8 @@
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 :root{--primary:#4f46e5;--primary-hover:#4338ca;--success:#16a34a;--warning:#d97706;--danger:#dc2626;--bg:#f8fafc;--card:#fff;--border:#e2e8f0;--text:#1e293b;--text-secondary:#64748b;--muted:#94a3b8;--radius:10px}
-body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
-.container{width:100%;max-width:720px}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;align-items:flex-start;justify-content:center;padding:20px;overflow-x:hidden}
+.container{width:100%;max-width:1040px}
 .header{text-align:center;margin-bottom:32px}
 .header h1{font-size:28px;font-weight:700;color:var(--text)}
 .header p{color:var(--text-secondary);margin-top:8px;font-size:14px}
@@ -16,7 +16,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 .step{flex:1;height:4px;border-radius:2px;background:var(--border);transition:background .3s}
 .step.active{background:var(--primary)}
 .step.done{background:var(--success)}
-.card{background:var(--card);border-radius:var(--radius);border:1px solid var(--border);padding:32px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.card{background:var(--card);border-radius:var(--radius);border:1px solid var(--border);padding:32px;box-shadow:0 1px 3px rgba(0,0,0,.06);max-width:100%;overflow-x:hidden}
 .card h2{font-size:18px;margin-bottom:20px;font-weight:600}
 .form-group{margin-bottom:16px}
 .form-group label{display:block;font-size:13px;font-weight:500;color:var(--text-secondary);margin-bottom:6px}
@@ -53,7 +53,10 @@ input:focus{border-color:var(--primary)}
 .done-countdown{color:var(--text-secondary);margin-top:18px;font-size:13px}
 .done-btn-group{display:flex;gap:12px;justify-content:center;margin-top:28px}
 .done-hint{text-align:center;color:var(--text-secondary);font-size:13px;margin-top:16px}
-.command-guide{margin-top:24px;border:1px solid var(--border);border-radius:10px;background:#f8fafc;padding:18px;text-align:left}
+.status-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-top:24px}
+.meta-card{border:1px solid var(--border);border-radius:10px;background:#f8fafc;padding:18px}
+.meta-card h3{font-size:14px;font-weight:600;margin-bottom:12px;color:var(--text)}
+.command-guide{border:1px solid var(--border);border-radius:10px;background:#f8fafc;padding:18px;text-align:left}
 .command-guide h3{font-size:14px;font-weight:600;margin-bottom:12px;color:var(--text)}
 .command-item{padding:12px 0;border-top:1px solid var(--border)}
 .command-item:first-of-type{border-top:none;padding-top:0}
@@ -64,6 +67,7 @@ input:focus{border-color:var(--primary)}
 .command-box pre{flex:1;margin:0;padding:10px 12px;background:#0f172a;color:#e2e8f0;border-radius:8px;font-size:12px;line-height:1.7;overflow:auto;white-space:pre-wrap;word-break:break-all}
 .btn-copy{padding:8px 12px;border-radius:6px;border:1px solid var(--border);background:#fff;color:var(--text-secondary);font-size:12px;cursor:pointer;flex-shrink:0}
 .btn-copy:hover{background:#f1f5f9}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace}
 .info-row{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);font-size:14px}
 .info-row:last-child{border-bottom:none}
 .info-row .label{color:var(--text-secondary)}
@@ -97,6 +101,16 @@ input:focus{border-color:var(--primary)}
 .progress-item.error .progress-status{color:var(--danger)}
 .progress-item.skipped .progress-status{color:var(--warning)}
 [hidden]{display:none!important}
+@media (max-width: 900px){
+  .status-grid{grid-template-columns:1fr}
+}
+@media (max-width: 640px){
+  body{padding:12px}
+  .card{padding:20px}
+  .form-row{grid-template-columns:1fr}
+  .command-box{flex-direction:column}
+  .btn-copy{width:100%}
+}
 </style>
 </head>
 <body>
@@ -119,48 +133,60 @@ input:focus{border-color:var(--primary)}
       <div class="done-title">系统已安装</div>
       <p class="done-text">MallBase 已完成安装。如刚完成安装或修改过环境配置，请先重启 Swoole，再进入后台管理。</p>
     </div>
-    <div style="margin-top:24px">
-      <div class="info-row">
-        <span class="label">安装时间</span>
-        <span class="value" id="installedAt">-</span>
+    <div class="status-grid">
+      <div class="meta-card">
+        <h3>安装信息</h3>
+        <div class="info-row">
+          <span class="label">安装时间</span>
+          <span class="value" id="installedAt">-</span>
+        </div>
+        <div class="info-row">
+          <span class="label">系统版本</span>
+          <span class="value" id="installedVersion">-</span>
+        </div>
+        <div class="info-row">
+          <span class="label">Swoole 地址</span>
+          <span class="value mono" id="metaSwooleAddress">-</span>
+        </div>
+        <div class="info-row">
+          <span class="label">数据库</span>
+          <span class="value mono" id="metaDbInfo">-</span>
+        </div>
+        <div class="info-row">
+          <span class="label">Redis</span>
+          <span class="value mono" id="metaRedisInfo">-</span>
+        </div>
       </div>
-      <div class="info-row">
-        <span class="label">系统版本</span>
-        <span class="value" id="installedVersion">-</span>
+      <div class="command-guide" id="installedRestartGuide">
+        <h3>重启 Swoole 后再进入后台</h3>
+        <div class="command-item">
+          <div class="command-title">方式二 / 方式三：Docker 开发</div>
+          <div class="command-desc">在项目根目录执行：<code class="mono" id="projectRootDev">-</code></div>
+          <div class="command-box">
+            <pre id="cmd-dev-restart">-</pre>
+            <button class="btn-copy" onclick="copyCommand('cmd-dev-restart', this)">复制命令</button>
+          </div>
+        </div>
+        <div class="command-item">
+          <div class="command-title">方式四：Docker 生产</div>
+          <div class="command-desc">在项目根目录执行：<code class="mono" id="projectRootProd">-</code></div>
+          <div class="command-box">
+            <pre id="cmd-prod-restart">-</pre>
+            <button class="btn-copy" onclick="copyCommand('cmd-prod-restart', this)">复制命令</button>
+          </div>
+        </div>
+        <div class="command-item">
+          <div class="command-title">方式一：宿主机直跑</div>
+          <div class="command-desc">先在项目根目录停止当前端口的 Swoole，再进入 backend 目录重新启动。</div>
+          <div class="command-box">
+            <pre id="cmd-manual-restart">-</pre>
+            <button class="btn-copy" onclick="copyCommand('cmd-manual-restart', this)">复制命令</button>
+          </div>
+        </div>
       </div>
     </div>
     <div class="done-btn-group">
       <button class="btn btn-primary btn-large" onclick="enterAdmin('installedMsg')">进入后台管理</button>
-    </div>
-    <div class="command-guide" id="installedRestartGuide">
-      <h3>重启 Swoole 后再进入后台</h3>
-      <div class="command-item">
-        <div class="command-title">方式二 / 方式三：Docker 开发</div>
-        <div class="command-desc">在项目根目录执行，也就是包含 <code>docker-compose.dev.yml</code> 的目录。</div>
-        <div class="command-box">
-          <pre id="cmd-dev-restart">docker compose -f docker-compose.dev.yml restart backend</pre>
-          <button class="btn-copy" onclick="copyCommand('cmd-dev-restart', this)">复制命令</button>
-        </div>
-      </div>
-      <div class="command-item">
-        <div class="command-title">方式四：Docker 生产</div>
-        <div class="command-desc">在项目根目录执行，也就是包含 <code>docker-compose.yml</code> 的目录。</div>
-        <div class="command-box">
-          <pre id="cmd-prod-restart">docker compose restart</pre>
-          <button class="btn-copy" onclick="copyCommand('cmd-prod-restart', this)">复制命令</button>
-        </div>
-      </div>
-      <div class="command-item">
-        <div class="command-title">方式一：宿主机直跑</div>
-        <div class="command-desc">先在项目根目录执行停止命令，再进入 <code>backend/</code> 目录重新启动。</div>
-        <div class="command-box">
-          <pre id="cmd-manual-restart">cd mall-base
-lsof -ti :8080 | xargs kill
-cd backend
-php think swoole</pre>
-          <button class="btn-copy" onclick="copyCommand('cmd-manual-restart', this)">复制命令</button>
-        </div>
-      </div>
     </div>
     <div class="msg" id="installedMsg"></div>
   </div>
@@ -347,6 +373,7 @@ const API = '/install/api';
 let currentStep = 1;
 let installCompleted = false;
 let watchersAttached = false;
+let installMeta = null;
 const installStepOrder = [
   { step: 'db_test', title: '校验数据库连接' },
   { step: 'redis_test', title: '校验 Redis 连接' },
@@ -382,6 +409,9 @@ async function api(path, opts = {}) {
 
   const json = await res.json();
   json.httpOk = res.ok;
+  if (json.message === '系统已安装' && path !== '/status') {
+    await refreshInstallStatus();
+  }
   return json;
 }
 
@@ -401,6 +431,8 @@ function showInstalledCard(data) {
   document.getElementById('headerSubtitle').textContent = '系统状态';
   document.getElementById('installedAt').textContent = data.installed_at || '-';
   document.getElementById('installedVersion').textContent = data.version || '-';
+  installMeta = data.meta || null;
+  renderInstallMeta();
   document.getElementById('installedCard').hidden = false;
   document.getElementById('wizardContainer').hidden = true;
 }
@@ -477,6 +509,7 @@ async function bootstrap() {
 async function refreshInstallStatus() {
   try {
     const r = await api('/status');
+    installMeta = (r.data && r.data.meta) ? r.data.meta : installMeta;
     if (r.data && r.data.installed) {
       showInstalledCard(r.data);
       return;
@@ -539,6 +572,10 @@ async function checkEnv() {
 async function testDb() {
   const body = getDbPayload();
   const r = await api('/testDb', { method: 'POST', body });
+  if (!r.data || typeof r.data !== 'object') {
+    showMsg('dbMsg', r.message || '数据库校验失败', false);
+    return false;
+  }
   validationState.db.valid = !!r.data.success;
   validationState.db.lastFingerprint = validationState.db.valid ? getDbFingerprint() : '';
   document.getElementById('dbNext').disabled = !validationState.db.valid;
@@ -549,6 +586,10 @@ async function testDb() {
 async function testRedis() {
   const body = getRedisPayload();
   const r = await api('/testRedis', { method: 'POST', body });
+  if (!r.data || typeof r.data !== 'object') {
+    showMsg('redisMsg', r.message || 'Redis 校验失败', false);
+    return false;
+  }
   validationState.redis.valid = !!r.data.success;
   validationState.redis.lastFingerprint = validationState.redis.valid ? getRedisFingerprint() : '';
   document.getElementById('redisNext').disabled = !validationState.redis.valid;
@@ -712,6 +753,7 @@ function finishInstallSuccess(message) {
   document.getElementById('gotoAdminGroup').hidden = false;
   document.getElementById('installDoneHint').hidden = false;
   document.getElementById('successRestartGuide').hidden = false;
+  renderInstallMeta();
   showMsg('installMsg', '安装已完成。请先重启 Swoole；点击“立即进入后台管理”时会再次帮你检测。', true);
 }
 
@@ -834,6 +876,35 @@ async function doInstall() {
   }
 }
 
+function renderInstallMeta() {
+  if (!installMeta) {
+    return;
+  }
+
+  const runtime = installMeta.runtime || {};
+  const commands = installMeta.restart_commands || {};
+  const projectRoot = installMeta.project_root || '-';
+
+  const setText = (id, value) => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.textContent = value;
+    }
+  };
+
+  setText('metaSwooleAddress', `${runtime.swoole_host || '0.0.0.0'}:${runtime.swoole_port || 8080}`);
+  setText('metaDbInfo', `${runtime.db_host || '-'} / ${runtime.db_name || '-'}`);
+  setText('metaRedisInfo', `${runtime.redis_host || '-'} / DB ${runtime.redis_db ?? 0}`);
+  setText('projectRootDev', projectRoot);
+  setText('projectRootProd', projectRoot);
+  setText('cmd-dev-restart', commands.docker_dev || '-');
+  setText('cmd-prod-restart', commands.docker_prod || '-');
+  setText('cmd-manual-restart', commands.manual || '-');
+  setText('cmd-success-dev-restart', commands.docker_dev || '-');
+  setText('cmd-success-prod-restart', commands.docker_prod || '-');
+  setText('cmd-success-manual-restart', commands.manual || '-');
+}
+
 async function enterAdmin(messageId = 'installMsg') {
   try {
     const result = await api('/adminReady');
@@ -861,7 +932,22 @@ async function retryInstall() {
 async function copyCommand(targetId, btn) {
   const text = document.getElementById(targetId).textContent;
   try {
-    await navigator.clipboard.writeText(text);
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+    } else {
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.setAttribute('readonly', 'readonly');
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      const copied = document.execCommand('copy');
+      document.body.removeChild(textarea);
+      if (!copied) {
+        throw new Error('copy failed');
+      }
+    }
     const original = btn.textContent;
     btn.textContent = '已复制';
     setTimeout(() => {
