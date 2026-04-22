@@ -158,6 +158,7 @@ input:focus{border-color:var(--primary)}
       <div class="form-group">
         <label>数据库名</label>
         <input type="text" id="db_name" value="mallbase">
+        <div class="field-hint">安装要求：目标数据库必须为空；如果该数据库里已有表，请切换到空数据库后再继续。</div>
       </div>
       <div class="form-row">
         <div class="form-group">
@@ -190,9 +191,16 @@ input:focus{border-color:var(--primary)}
           <input type="number" id="redis_port" value="6379">
         </div>
       </div>
-      <div class="form-group">
-        <label>密码（无密码留空）</label>
-        <input type="password" id="redis_password">
+      <div class="form-row">
+        <div class="form-group">
+          <label>DB 编号</label>
+          <input type="number" id="redis_db" value="0" min="0">
+          <div class="field-hint">安装要求：请选择一个空的 Redis DB；如果当前 DB 已有键，请改用其他空 DB 后再继续。</div>
+        </div>
+        <div class="form-group">
+          <label>密码（无密码留空）</label>
+          <input type="password" id="redis_password">
+        </div>
       </div>
       <button class="btn btn-test" onclick="testRedis()">测试连接</button>
       <div class="msg" id="redisMsg"></div>
@@ -329,9 +337,10 @@ function showInstalledCard(data) {
 function showWizard() {
   document.getElementById('installedCard').hidden = true;
   document.getElementById('wizardContainer').hidden = false;
-  document.getElementById('cors_origins').value = window.location.origin;
   attachValidationWatchers();
-  checkEnv();
+  loadFormDefaults().finally(() => {
+    checkEnv();
+  });
 }
 
 function getDbPayload() {
@@ -348,6 +357,7 @@ function getRedisPayload() {
   return {
     redis_host: document.getElementById('redis_host').value.trim(),
     redis_port: document.getElementById('redis_port').value.trim(),
+    redis_db: document.getElementById('redis_db').value.trim(),
     redis_password: document.getElementById('redis_password').value,
   };
 }
@@ -380,6 +390,9 @@ function attachValidationWatchers() {
   ['redis_host', 'redis_port', 'redis_password'].forEach((id) => {
     document.getElementById(id).addEventListener('input', () => invalidateValidation('redis'));
   });
+  ['redis_db'].forEach((id) => {
+    document.getElementById(id).addEventListener('input', () => invalidateValidation('redis'));
+  });
 }
 
 async function bootstrap() {
@@ -393,6 +406,32 @@ async function bootstrap() {
     // status 接口异常时降级到向导模式，不阻塞安装流程
   }
   showWizard();
+}
+
+async function loadFormDefaults() {
+  try {
+    const r = await api('/form-defaults');
+    const data = r.data || {};
+
+    document.getElementById('db_host').value = data.db_host || document.getElementById('db_host').value;
+    document.getElementById('db_port').value = data.db_port || document.getElementById('db_port').value;
+    document.getElementById('db_name').value = data.db_name || document.getElementById('db_name').value;
+    document.getElementById('db_user').value = data.db_user || document.getElementById('db_user').value;
+    document.getElementById('db_pass').value = data.db_pass || '';
+
+    document.getElementById('redis_host').value = data.redis_host || document.getElementById('redis_host').value;
+    document.getElementById('redis_port').value = data.redis_port || document.getElementById('redis_port').value;
+    document.getElementById('redis_db').value = data.redis_db ?? document.getElementById('redis_db').value;
+    document.getElementById('redis_password').value = data.redis_password || '';
+
+    document.getElementById('admin_user').value = data.admin_user || document.getElementById('admin_user').value;
+    document.getElementById('admin_pass').value = data.admin_pass || '';
+    document.getElementById('admin_pass2').value = data.admin_pass || '';
+    document.getElementById('import_demo').checked = String(data.import_demo || '0') === '1';
+    document.getElementById('cors_origins').value = data.cors_origins || window.location.origin;
+  } catch (e) {
+    document.getElementById('cors_origins').value = window.location.origin;
+  }
 }
 
 async function checkEnv() {

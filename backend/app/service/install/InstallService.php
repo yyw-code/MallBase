@@ -143,15 +143,35 @@ class InstallService
             $dbName = $config['name'];
             $stmt = $pdo->query("SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = " . $pdo->quote($dbName));
             $dbExists = $stmt->fetchColumn() !== false;
+            $tableCount = 0;
+            $isEmpty = true;
+
+            if ($dbExists) {
+                $tableStmt = $pdo->query(
+                    "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = " . $pdo->quote($dbName)
+                );
+                $tableCount = (int) $tableStmt->fetchColumn();
+                $isEmpty = $tableCount === 0;
+            }
+
             $version = $pdo->query('SELECT VERSION()')->fetchColumn();
 
             $pdo = null;
 
+            $message = '连接成功，数据库不存在（将自动创建）';
+            if ($dbExists && $isEmpty) {
+                $message = '连接成功，目标数据库为空，可以继续安装';
+            } elseif ($dbExists && !$isEmpty) {
+                $message = sprintf('连接成功，但目标数据库已有 %d 张表，请切换到空数据库后再安装', $tableCount);
+            }
+
             return [
-                'success'   => true,
-                'version'   => $version,
-                'db_exists' => $dbExists,
-                'message'   => $dbExists ? '连接成功，数据库已存在' : '连接成功，数据库不存在（将自动创建）',
+                'success'     => !$dbExists || $isEmpty,
+                'version'     => $version,
+                'db_exists'   => $dbExists,
+                'table_count' => $tableCount,
+                'is_empty'    => !$dbExists || $isEmpty,
+                'message'     => $message,
             ];
         } catch (PDOException $e) {
             return [
@@ -185,14 +205,25 @@ class InstallService
                 $redis->auth($password);
             }
 
+            $db = (int) ($config['db'] ?? 0);
+            $redis->select($db);
             $redis->ping();
+            $keyCount = $redis->dbSize();
             $info = $redis->info('server');
             $redis->close();
 
+            $isEmpty = $keyCount === 0;
+            $message = $isEmpty
+                ? sprintf('连接成功，Redis DB %d 为空，可以继续安装', $db)
+                : sprintf('连接成功，但 Redis DB %d 已有 %d 个键，请切换到空 DB 后再安装', $db, $keyCount);
+
             return [
-                'success' => true,
-                'version' => $info['redis_version'] ?? 'unknown',
-                'message' => '连接成功',
+                'success'   => $isEmpty,
+                'version'   => $info['redis_version'] ?? 'unknown',
+                'db'        => $db,
+                'key_count' => $keyCount,
+                'is_empty'  => $isEmpty,
+                'message'   => $message,
             ];
         } catch (RedisException $e) {
             return [
@@ -224,12 +255,18 @@ class InstallService
             'db_name'        => $get('DB_NAME'),
             'redis_host'     => $get('REDIS_HOST'),
             'redis_port'     => $get('REDIS_PORT') !== '' ? (int) $get('REDIS_PORT') : 6379,
+            'redis_db'       => $get('REDIS_CACHE_DB') !== '' ? (int) $get('REDIS_CACHE_DB') : 0,
             'redis_password' => $get('REDIS_PASSWORD'),
             'admin_user'     => $get('ADMIN_USER') !== '' ? $get('ADMIN_USER') : 'admin',
             'admin_pass'     => $get('ADMIN_PASS') !== '' ? $get('ADMIN_PASS') : 'admin123',
             'import_demo'    => $get('INSTALL_DEMO') === '1',
             'cors_origins'   => $get('CORS_ALLOWED_ORIGINS') !== '' ? $get('CORS_ALLOWED_ORIGINS') : '*',
         ];
+    }
+
+    public function getFormDefaults(): array
+    {
+        return $this->buildParamsFromEnv();
     }
 
     public function execute(array $params, ?callable $progress = null): array
@@ -263,6 +300,7 @@ class InstallService
         $redisConfig = [
             'host'     => trim((string) ($params['redis_host'] ?? '')),
             'port'     => (int) ($params['redis_port'] ?? 6379),
+            'db'       => (int) ($params['redis_db'] ?? 0),
             'password' => (string) ($params['redis_password'] ?? ''),
         ];
 
@@ -281,7 +319,11 @@ class InstallService
             $emit('db_test', 'error', $dbTest['message'], ['detail' => $dbTest['detail'] ?? null]);
             return $this->buildFailureResponse('db_test', $dbTest['message'], $steps, $dbTest['detail'] ?? null);
         }
-        $emit('db_test', 'success', $dbTest['message'], ['db_exists' => $dbTest['db_exists'] ?? false]);
+        $emit('db_test', 'success', $dbTest['message'], [
+            'db_exists'   => $dbTest['db_exists'] ?? false,
+            'table_count' => $dbTest['table_count'] ?? 0,
+            'is_empty'    => $dbTest['is_empty'] ?? false,
+        ]);
 
         $emit('redis_test', 'running', '正在校验 Redis 连接…');
         $redisTest = $this->testRedis($redisConfig);
@@ -289,7 +331,11 @@ class InstallService
             $emit('redis_test', 'error', $redisTest['message'], ['detail' => $redisTest['detail'] ?? null]);
             return $this->buildFailureResponse('redis_test', $redisTest['message'], $steps, $redisTest['detail'] ?? null);
         }
-        $emit('redis_test', 'success', $redisTest['message']);
+        $emit('redis_test', 'success', $redisTest['message'], [
+            'db'        => $redisTest['db'] ?? $redisConfig['db'],
+            'key_count' => $redisTest['key_count'] ?? 0,
+            'is_empty'  => $redisTest['is_empty'] ?? false,
+        ]);
 
         $emit('write_env', 'running', '正在写入 backend/.env…');
         try {
@@ -303,6 +349,7 @@ class InstallService
                 'DB_CHARSET'           => 'utf8mb4',
                 'REDIS_HOST'           => $redisConfig['host'],
                 'REDIS_PORT'           => (string) $redisConfig['port'],
+                'REDIS_CACHE_DB'       => (string) $redisConfig['db'],
                 'REDIS_PASSWORD'       => $redisConfig['password'],
                 'CACHE_DRIVER'         => 'redis',
                 'JWT_SECRET'           => $jwtSecret,

@@ -5,8 +5,11 @@ declare(strict_types=1);
 namespace app\controller\install;
 
 use app\service\install\InstallService;
+use Swoole\Coroutine;
+use Swoole\Coroutine\Channel;
 use think\Request;
 use think\Response;
+use think\swoole\response\Iterator as IteratorResponse;
 
 class InstallController
 {
@@ -20,6 +23,12 @@ class InstallController
     public function check(): Response
     {
         $result = $this->service->checkEnvironment();
+        return json(['code' => 200, 'data' => $result, 'message' => 'ok']);
+    }
+
+    public function formDefaults(): Response
+    {
+        $result = $this->service->getFormDefaults();
         return json(['code' => 200, 'data' => $result, 'message' => 'ok']);
     }
 
@@ -60,6 +69,7 @@ class InstallController
         $config = [
             'host'     => $request->post('redis_host', '127.0.0.1'),
             'port'     => $request->post('redis_port', 6379),
+            'db'       => $request->post('redis_db', 0),
             'password' => $request->post('redis_password', ''),
         ];
 
@@ -86,54 +96,52 @@ class InstallController
     public function executeStream(Request $request)
     {
         $params = $request->post();
-
         $validation = $this->validateInstallInput($params);
-        $this->prepareStreamOutput();
-
         if (!$validation['success']) {
-            $this->sendStreamEvent('complete', [
-                'success' => false,
-                'message' => $validation['message'],
-                'result'  => [
-                    'success'  => false,
-                    'step'     => 'validate',
-                    'message'  => $validation['message'],
-                    'steps'    => [],
-                    'redirect' => false,
-                ],
-            ]);
-            exit;
+            return $this->buildStreamResponse(function (callable $emit) use ($validation): void {
+                $emit('complete', [
+                    'success' => false,
+                    'message' => $validation['message'],
+                    'result'  => [
+                        'success'  => false,
+                        'step'     => 'validate',
+                        'message'  => $validation['message'],
+                        'steps'    => [],
+                        'redirect' => false,
+                    ],
+                ]);
+            });
         }
 
-        try {
-            $result = $this->service->execute($params, function (array $event): void {
-                $name = $event['event'] ?? 'progress';
-                unset($event['event']);
-                $this->sendStreamEvent($name, $event);
-            });
+        return $this->buildStreamResponse(function (callable $emit) use ($params): void {
+            try {
+                $result = $this->service->execute($params, function (array $event) use ($emit): void {
+                    $name = $event['event'] ?? 'progress';
+                    unset($event['event']);
+                    $emit($name, $event);
+                });
 
-            if (!$result['success']) {
-                $this->sendStreamEvent('complete', [
+                if (!$result['success']) {
+                    $emit('complete', [
+                        'success' => false,
+                        'message' => $result['message'],
+                        'result'  => $result,
+                    ]);
+                }
+            } catch (\Throwable $e) {
+                $emit('complete', [
                     'success' => false,
-                    'message' => $result['message'],
-                    'result'  => $result,
+                    'message' => '安装执行异常：' . $e->getMessage(),
+                    'result'  => [
+                        'success'  => false,
+                        'step'     => 'exception',
+                        'message'  => '安装执行异常：' . $e->getMessage(),
+                        'steps'    => [],
+                        'redirect' => false,
+                    ],
                 ]);
             }
-        } catch (\Throwable $e) {
-            $this->sendStreamEvent('complete', [
-                'success' => false,
-                'message' => '安装执行异常：' . $e->getMessage(),
-                'result'  => [
-                    'success'  => false,
-                    'step'     => 'exception',
-                    'message'  => '安装执行异常：' . $e->getMessage(),
-                    'steps'    => [],
-                    'redirect' => false,
-                ],
-            ]);
-        }
-
-        exit;
+        });
     }
 
     private function validateInstallParams(array $params): ?Response
@@ -159,33 +167,59 @@ class InstallController
             return ['success' => false, 'message' => '管理员密码至少 6 位'];
         }
 
+        if (isset($params['redis_db']) && (int) $params['redis_db'] < 0) {
+            return ['success' => false, 'message' => 'Redis DB 编号不能小于 0'];
+        }
+
         return ['success' => true, 'message' => 'ok'];
     }
 
-    private function prepareStreamOutput(): void
+    private function buildStreamResponse(callable $producer): Response
     {
-        ignore_user_abort(true);
-        @set_time_limit(0);
-        @ini_set('output_buffering', 'off');
-        @ini_set('zlib.output_compression', '0');
-
-        while (ob_get_level() > 0) {
-            ob_end_flush();
+        if (!class_exists(IteratorResponse::class) || !class_exists(Channel::class) || !class_exists(Coroutine::class)) {
+            return json([
+                'code'    => 500,
+                'message' => '当前环境不支持流式安装响应',
+                'data'    => null,
+            ]);
         }
 
-        header('Content-Type: text/event-stream; charset=utf-8');
-        header('Cache-Control: no-cache, no-transform');
-        header('X-Accel-Buffering: no');
+        $channel = new Channel(32);
+
+        Coroutine::create(function () use ($channel, $producer): void {
+            try {
+                $emit = function (string $event, array $payload) use ($channel): void {
+                    $channel->push($this->formatStreamChunk($event, $payload));
+                };
+
+                $producer($emit);
+            } finally {
+                $channel->close();
+            }
+        });
+
+        $response = new IteratorResponse((function () use ($channel) {
+            while (true) {
+                $chunk = $channel->pop();
+                if ($chunk === false) {
+                    break;
+                }
+                yield $chunk;
+            }
+        })());
+
+        $response->header([
+            'Content-Type'      => 'text/event-stream; charset=utf-8',
+            'Cache-Control'     => 'no-cache, no-transform',
+            'X-Accel-Buffering' => 'no',
+        ]);
+
+        return $response;
     }
 
-    private function sendStreamEvent(string $event, array $payload): void
+    private function formatStreamChunk(string $event, array $payload): string
     {
-        echo 'event: ' . $event . "\n";
-        echo 'data: ' . json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n\n";
-
-        if (function_exists('ob_flush')) {
-            @ob_flush();
-        }
-        flush();
+        return 'event: ' . $event . "\n"
+            . 'data: ' . json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n\n";
     }
 }
