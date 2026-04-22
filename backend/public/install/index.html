@@ -53,6 +53,17 @@ input:focus{border-color:var(--primary)}
 .done-countdown{color:var(--text-secondary);margin-top:18px;font-size:13px}
 .done-btn-group{display:flex;gap:12px;justify-content:center;margin-top:28px}
 .done-hint{text-align:center;color:var(--text-secondary);font-size:13px;margin-top:16px}
+.command-guide{margin-top:24px;border:1px solid var(--border);border-radius:10px;background:#f8fafc;padding:18px;text-align:left}
+.command-guide h3{font-size:14px;font-weight:600;margin-bottom:12px;color:var(--text)}
+.command-item{padding:12px 0;border-top:1px solid var(--border)}
+.command-item:first-of-type{border-top:none;padding-top:0}
+.command-item:last-child{padding-bottom:0}
+.command-title{font-size:13px;font-weight:600;color:var(--text)}
+.command-desc{font-size:12px;line-height:1.7;color:var(--text-secondary);margin-top:4px}
+.command-box{margin-top:8px;display:flex;gap:8px;align-items:flex-start}
+.command-box pre{flex:1;margin:0;padding:10px 12px;background:#0f172a;color:#e2e8f0;border-radius:8px;font-size:12px;line-height:1.7;overflow:auto;white-space:pre-wrap;word-break:break-all}
+.btn-copy{padding:8px 12px;border-radius:6px;border:1px solid var(--border);background:#fff;color:var(--text-secondary);font-size:12px;cursor:pointer;flex-shrink:0}
+.btn-copy:hover{background:#f1f5f9}
 .info-row{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);font-size:14px}
 .info-row:last-child{border-bottom:none}
 .info-row .label{color:var(--text-secondary)}
@@ -120,6 +131,36 @@ input:focus{border-color:var(--primary)}
     </div>
     <div class="done-btn-group">
       <button class="btn btn-primary btn-large" onclick="enterAdmin('installedMsg')">进入后台管理</button>
+    </div>
+    <div class="command-guide" id="installedRestartGuide">
+      <h3>重启 Swoole 后再进入后台</h3>
+      <div class="command-item">
+        <div class="command-title">方式二 / 方式三：Docker 开发</div>
+        <div class="command-desc">在项目根目录执行，也就是包含 <code>docker-compose.dev.yml</code> 的目录。</div>
+        <div class="command-box">
+          <pre id="cmd-dev-restart">docker compose -f docker-compose.dev.yml restart backend</pre>
+          <button class="btn-copy" onclick="copyCommand('cmd-dev-restart', this)">复制命令</button>
+        </div>
+      </div>
+      <div class="command-item">
+        <div class="command-title">方式四：Docker 生产</div>
+        <div class="command-desc">在项目根目录执行，也就是包含 <code>docker-compose.yml</code> 的目录。</div>
+        <div class="command-box">
+          <pre id="cmd-prod-restart">docker compose restart</pre>
+          <button class="btn-copy" onclick="copyCommand('cmd-prod-restart', this)">复制命令</button>
+        </div>
+      </div>
+      <div class="command-item">
+        <div class="command-title">方式一：宿主机直跑</div>
+        <div class="command-desc">先在项目根目录执行停止命令，再进入 <code>backend/</code> 目录重新启动。</div>
+        <div class="command-box">
+          <pre id="cmd-manual-restart">cd mall-base
+lsof -ti :8080 | xargs kill
+cd backend
+php think swoole</pre>
+          <button class="btn-copy" onclick="copyCommand('cmd-manual-restart', this)">复制命令</button>
+        </div>
+      </div>
     </div>
     <div class="msg" id="installedMsg"></div>
   </div>
@@ -263,6 +304,36 @@ input:focus{border-color:var(--primary)}
         <button class="btn btn-primary btn-large" id="gotoAdminBtn" onclick="enterAdmin('installMsg')">立即进入后台管理</button>
       </div>
       <p class="done-hint" id="installDoneHint" hidden>使用刚才设置的管理员账号和密码登录</p>
+      <div class="command-guide" id="successRestartGuide" hidden>
+        <h3>先按你的部署方式重启 Swoole</h3>
+        <div class="command-item">
+          <div class="command-title">方式二 / 方式三：Docker 开发</div>
+          <div class="command-desc">在项目根目录执行，也就是包含 <code>docker-compose.dev.yml</code> 的目录。</div>
+          <div class="command-box">
+            <pre id="cmd-success-dev-restart">docker compose -f docker-compose.dev.yml restart backend</pre>
+            <button class="btn-copy" onclick="copyCommand('cmd-success-dev-restart', this)">复制命令</button>
+          </div>
+        </div>
+        <div class="command-item">
+          <div class="command-title">方式四：Docker 生产</div>
+          <div class="command-desc">在项目根目录执行，也就是包含 <code>docker-compose.yml</code> 的目录。</div>
+          <div class="command-box">
+            <pre id="cmd-success-prod-restart">docker compose restart</pre>
+            <button class="btn-copy" onclick="copyCommand('cmd-success-prod-restart', this)">复制命令</button>
+          </div>
+        </div>
+        <div class="command-item">
+          <div class="command-title">方式一：宿主机直跑</div>
+          <div class="command-desc">先在项目根目录执行停止命令，再进入 <code>backend/</code> 目录重新启动。</div>
+          <div class="command-box">
+            <pre id="cmd-success-manual-restart">cd mall-base
+lsof -ti :8080 | xargs kill
+cd backend
+php think swoole</pre>
+            <button class="btn-copy" onclick="copyCommand('cmd-success-manual-restart', this)">复制命令</button>
+          </div>
+        </div>
+      </div>
 
       <div class="actions" id="installRetryActions" hidden>
         <button class="btn btn-primary" onclick="retryInstall()">重新开始安装</button>
@@ -275,6 +346,7 @@ input:focus{border-color:var(--primary)}
 const API = '/install/api';
 let currentStep = 1;
 let installCompleted = false;
+let watchersAttached = false;
 const installStepOrder = [
   { step: 'db_test', title: '校验数据库连接' },
   { step: 'redis_test', title: '校验 Redis 连接' },
@@ -383,6 +455,10 @@ function invalidateValidation(type) {
 }
 
 function attachValidationWatchers() {
+  if (watchersAttached) {
+    return;
+  }
+  watchersAttached = true;
   ['db_host', 'db_port', 'db_user', 'db_pass', 'db_name'].forEach((id) => {
     document.getElementById(id).addEventListener('input', () => invalidateValidation('db'));
   });
@@ -395,6 +471,10 @@ function attachValidationWatchers() {
 }
 
 async function bootstrap() {
+  await refreshInstallStatus();
+}
+
+async function refreshInstallStatus() {
   try {
     const r = await api('/status');
     if (r.data && r.data.installed) {
@@ -404,12 +484,14 @@ async function bootstrap() {
   } catch (e) {
     // status 接口异常时降级到向导模式，不阻塞安装流程
   }
-  showWizard();
+  if (document.getElementById('wizardContainer').hidden) {
+    showWizard();
+  }
 }
 
 async function loadFormDefaults() {
   try {
-    const r = await api('/form-defaults');
+    const r = await api('/formDefaults');
     const data = r.data || {};
 
     document.getElementById('db_host').value = data.db_host || document.getElementById('db_host').value;
@@ -456,7 +538,7 @@ async function checkEnv() {
 
 async function testDb() {
   const body = getDbPayload();
-  const r = await api('/test-db', { method: 'POST', body });
+  const r = await api('/testDb', { method: 'POST', body });
   validationState.db.valid = !!r.data.success;
   validationState.db.lastFingerprint = validationState.db.valid ? getDbFingerprint() : '';
   document.getElementById('dbNext').disabled = !validationState.db.valid;
@@ -466,7 +548,7 @@ async function testDb() {
 
 async function testRedis() {
   const body = getRedisPayload();
-  const r = await api('/test-redis', { method: 'POST', body });
+  const r = await api('/testRedis', { method: 'POST', body });
   validationState.redis.valid = !!r.data.success;
   validationState.redis.lastFingerprint = validationState.redis.valid ? getRedisFingerprint() : '';
   document.getElementById('redisNext').disabled = !validationState.redis.valid;
@@ -550,6 +632,7 @@ function resetInstallUI() {
   document.getElementById('installSuccessBox').hidden = true;
   document.getElementById('gotoAdminGroup').hidden = true;
   document.getElementById('installDoneHint').hidden = true;
+  document.getElementById('successRestartGuide').hidden = true;
   document.getElementById('installRetryActions').hidden = true;
   hideMsg('installMsg');
   renderProgressList();
@@ -628,6 +711,7 @@ function finishInstallSuccess(message) {
   document.getElementById('installSuccessBox').hidden = false;
   document.getElementById('gotoAdminGroup').hidden = false;
   document.getElementById('installDoneHint').hidden = false;
+  document.getElementById('successRestartGuide').hidden = false;
   showMsg('installMsg', '安装已完成。请先重启 Swoole；点击“立即进入后台管理”时会再次帮你检测。', true);
 }
 
@@ -727,7 +811,7 @@ async function doInstall() {
   resetInstallUI();
 
   try {
-    const response = await fetch(API + '/execute-stream', {
+    const response = await fetch(API + '/executeStream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -752,7 +836,7 @@ async function doInstall() {
 
 async function enterAdmin(messageId = 'installMsg') {
   try {
-    const result = await api('/admin-ready');
+    const result = await api('/adminReady');
     if (result.data && result.data.ready) {
       window.location.href = '/admin/';
       return;
@@ -773,6 +857,25 @@ async function retryInstall() {
   resetInstallUI();
   await checkEnv();
 }
+
+async function copyCommand(targetId, btn) {
+  const text = document.getElementById(targetId).textContent;
+  try {
+    await navigator.clipboard.writeText(text);
+    const original = btn.textContent;
+    btn.textContent = '已复制';
+    setTimeout(() => {
+      btn.textContent = original;
+    }, 1200);
+  } catch (e) {
+    const messageId = document.getElementById('installedCard').hidden ? 'installMsg' : 'installedMsg';
+    showMsg(messageId, '复制失败，请手动复制命令', false);
+  }
+}
+
+window.addEventListener('pageshow', () => {
+  refreshInstallStatus();
+});
 
 bootstrap();
 </script>

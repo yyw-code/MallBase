@@ -15,7 +15,7 @@ class InstallCheckMiddleware
      */
     private const INSTALLED_WHITELIST = [
         'install/api/status',
-        'install/api/admin-ready',
+        'install/api/adminReady',
     ];
 
     public function handle(Request $request, Closure $next): Response
@@ -29,7 +29,7 @@ class InstallCheckMiddleware
             && str_starts_with($path, 'install/api/')
             && !in_array($path, self::INSTALLED_WHITELIST, true)
         ) {
-            return json(['code' => 403, 'message' => '系统已安装', 'data' => null], 403);
+            return json(['code' => 400, 'message' => '系统已安装', 'data' => null]);
         }
 
         if (!$isInstalled && !$isInstallRoute) {

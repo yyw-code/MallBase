@@ -16,13 +16,13 @@ Route::group('install', function () {
 
     Route::group('api', function () {
         Route::get('status', 'status');
-        Route::get('admin-ready', 'adminReady');
+        Route::get('adminReady', 'adminReady');
         Route::get('check', 'check');
-        Route::get('form-defaults', 'formDefaults');
-        Route::post('test-db', 'testDb');
-        Route::post('test-redis', 'testRedis');
+        Route::get('formDefaults', 'formDefaults');
+        Route::post('testDb', 'testDb');
+        Route::post('testRedis', 'testRedis');
         Route::post('execute', 'execute');
-        Route::post('execute-stream', 'executeStream');
+        Route::post('executeStream', 'executeStream');
     })->prefix('install.InstallController/');
 
 });
