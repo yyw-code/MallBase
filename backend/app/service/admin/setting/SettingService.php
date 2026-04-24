@@ -432,7 +432,10 @@ class SettingService extends BaseService
             // 子分组：使用父分组对应的权限ID
             $parentGroup = $this->model()->find($group->parent_id);
             if ($parentGroup && $parentGroup->permission_id > 0) {
-                return $parentGroup->permission_id;
+                $parentPermission = $this->model(Permission::class)->find($parentGroup->permission_id);
+                if ($parentPermission) {
+                    return $parentPermission->id;
+                }
             }
             return 0;
         }
@@ -486,12 +489,12 @@ class SettingService extends BaseService
     {
         $permissionParentId = $this->resolvePermissionParentId($group);
 
-        $permission = $this->model(Permission::class);
+        $permission = new Permission();
 
         $permissionData = [
             'parent_id' => $permissionParentId,
             'name' => $group->name,
-            'code' => self::PERMISSION_CODE_PREFIX . $group->code,
+            'code' => $this->makeSettingPermissionCode((string) $group->code),
             'type' => Permission::TYPE_MENU,
             'path' => $this->makePermissionPath($group),
             'component' => self::SETTING_COMPONENT,
@@ -536,7 +539,7 @@ class SettingService extends BaseService
         $permission->save([
             'parent_id' => $permissionParentId,
             'name' => $group->name,
-            'code' => self::PERMISSION_CODE_PREFIX . $group->code,
+            'code' => $this->makeSettingPermissionCode((string) $group->code),
             'path' => $this->makePermissionPath($group),
             'icon' => $group->icon ?: null,
             'sort' => $group->sort ?? 0,
@@ -600,6 +603,252 @@ class SettingService extends BaseService
                 }
             }
         }
+    }
+
+    /**
+     * 判断分组是否应具备独立菜单权限
+     *
+     * @param array<string, mixed> $group
+     * @param array<string, mixed>|null $parentGroup
+     */
+    protected function shouldGroupHaveStandalonePermission(array $group, ?array $parentGroup): bool
+    {
+        if (($group['display_type'] ?? SettingGroup::DISPLAY_TYPE_PAGE) === SettingGroup::DISPLAY_TYPE_CATEGORY) {
+            return true;
+        }
+
+        if ((int) ($group['parent_id'] ?? 0) <= 0) {
+            return true;
+        }
+
+        if ($parentGroup === null) {
+            return true;
+        }
+
+        return ($parentGroup['display_type'] ?? SettingGroup::DISPLAY_TYPE_PAGE) !== SettingGroup::DISPLAY_TYPE_TAB;
+    }
+
+    /**
+     * 生成分组对应的权限 code
+     */
+    protected function makeSettingPermissionCode(string $groupCode): string
+    {
+        return self::PERMISSION_CODE_PREFIX . $groupCode;
+    }
+
+    /**
+     * 判断分组当前是否已关联有效权限记录
+     *
+     * @param array<string, mixed> $group
+     * @param array<int, array<string, mixed>> $permissionSnapshots
+     */
+    protected function hasValidPermissionReference(array $group, array $permissionSnapshots): bool
+    {
+        $permissionId = (int) ($group['permission_id'] ?? 0);
+        if ($permissionId <= 0 || !isset($permissionSnapshots[$permissionId])) {
+            return false;
+        }
+
+        $permission = $permissionSnapshots[$permissionId];
+
+        return ($permission['code'] ?? '') === $this->makeSettingPermissionCode((string) ($group['code'] ?? ''))
+            && (int) ($permission['source'] ?? 0) === Permission::SOURCE_SETTING;
+    }
+
+    /**
+     * 计算设置菜单权限的修复顺序
+     *
+     * @param array<int, array<string, mixed>> $groups
+     * @param array<int, array<string, mixed>> $permissionSnapshots
+     * @return array<int, array<string, mixed>>
+     */
+    protected function buildPermissionRepairOrder(array $groups, array $permissionSnapshots): array
+    {
+        if (empty($groups)) {
+            return [];
+        }
+
+        $groupsById = [];
+        $childrenByParent = [];
+        foreach ($groups as $group) {
+            $groupId = (int) ($group['id'] ?? 0);
+            if ($groupId <= 0) {
+                continue;
+            }
+            $group['id'] = $groupId;
+            $group['parent_id'] = (int) ($group['parent_id'] ?? 0);
+            $group['permission_id'] = (int) ($group['permission_id'] ?? 0);
+            $group['sort'] = (int) ($group['sort'] ?? 0);
+            $groupsById[$groupId] = $group;
+            $childrenByParent[$group['parent_id']][] = $groupId;
+        }
+
+        foreach ($childrenByParent as &$childIds) {
+            usort($childIds, function (int $leftId, int $rightId) use ($groupsById): int {
+                $left = $groupsById[$leftId];
+                $right = $groupsById[$rightId];
+
+                return [$left['sort'], $left['id']] <=> [$right['sort'], $right['id']];
+            });
+        }
+        unset($childIds);
+
+        $repairMemo = [];
+        $needsRepair = function (int $groupId) use (&$needsRepair, &$repairMemo, $groupsById, $permissionSnapshots): bool {
+            if (array_key_exists($groupId, $repairMemo)) {
+                return $repairMemo[$groupId];
+            }
+
+            $group = $groupsById[$groupId] ?? null;
+            if ($group === null) {
+                return $repairMemo[$groupId] = false;
+            }
+
+            $parentGroup = null;
+            if ($group['parent_id'] > 0) {
+                $parentGroup = $groupsById[$group['parent_id']] ?? null;
+            }
+
+            $shouldHaveStandalonePermission = $this->shouldGroupHaveStandalonePermission($group, $parentGroup);
+            if (!$shouldHaveStandalonePermission) {
+                return $repairMemo[$groupId] = $group['permission_id'] > 0;
+            }
+
+            $parentNeedsRepair = false;
+            if ($parentGroup !== null && $this->shouldGroupHaveStandalonePermission(
+                $parentGroup,
+                $groupsById[(int) ($parentGroup['parent_id'] ?? 0)] ?? null
+            )) {
+                $parentNeedsRepair = $needsRepair((int) $parentGroup['id']);
+            }
+
+            return $repairMemo[$groupId] = !$this->hasValidPermissionReference($group, $permissionSnapshots) || $parentNeedsRepair;
+        };
+
+        $ordered = [];
+        $visited = [];
+        $visit = function (int $groupId) use (&$visit, &$ordered, &$visited, $groupsById, $childrenByParent, $needsRepair): void {
+            if (isset($visited[$groupId])) {
+                return;
+            }
+
+            $visited[$groupId] = true;
+            if (($groupsById[$groupId] ?? null) === null) {
+                return;
+            }
+
+            if ($needsRepair($groupId)) {
+                $ordered[] = $groupsById[$groupId];
+            }
+
+            foreach ($childrenByParent[$groupId] ?? [] as $childId) {
+                $visit($childId);
+            }
+        };
+
+        foreach ($childrenByParent[0] ?? [] as $rootId) {
+            $visit($rootId);
+        }
+
+        foreach (array_keys($groupsById) as $groupId) {
+            $visit($groupId);
+        }
+
+        return $ordered;
+    }
+
+    /**
+     * 幂等地补齐或修复设置菜单权限
+     *
+     * 使用场景：
+     * - 安装流程末尾直接调用
+     * - 新增 seed 数据后补菜单
+     * - 修复误删 permission / 悬空 permission_id 的情况
+     *
+     * 规则：
+     * - mb_setting_group 为唯一真相源，mb_permission 中设置菜单权限视为派生数据
+     * - 父为 tab 的 page 子不建独立菜单，若遗留 permission_id 会被回收
+     * - 按父先子后的顺序修复，保证子菜单能拿到最新父权限 ID
+     *
+     * @return int 本次新建的 permission 条数
+     */
+    public function rebuildAllPermissions(): int
+    {
+        $groups = $this->model()
+            ->order('parent_id', 'asc')
+            ->order('sort', 'asc')
+            ->order('id', 'asc')
+            ->select()
+            ->toArray();
+
+        if (empty($groups)) {
+            return 0;
+        }
+
+        $referencedPermissionIds = array_values(array_unique(array_filter(array_map(
+            static fn (array $group): int => (int) ($group['permission_id'] ?? 0),
+            $groups
+        ))));
+        $permissionSnapshots = [];
+        if (!empty($referencedPermissionIds)) {
+            $permissions = $this->model(Permission::class)
+                ->whereIn('id', $referencedPermissionIds)
+                ->field(['id', 'code', 'source'])
+                ->select()
+                ->toArray();
+            foreach ($permissions as $permission) {
+                $permissionSnapshots[(int) $permission['id']] = $permission;
+            }
+        }
+
+        $ordered = $this->buildPermissionRepairOrder($groups, $permissionSnapshots);
+        if (empty($ordered)) {
+            return 0;
+        }
+
+        $created = 0;
+        $changed = false;
+        foreach ($ordered as $row) {
+            $group = $this->model()->find((int)$row['id']);
+            if (!$group) {
+                continue;
+            }
+
+            $parentGroup = $group->parent_id > 0 ? $this->model()->find((int) $group->parent_id) : null;
+            if (!$this->shouldGroupHaveStandalonePermission($group->toArray(), $parentGroup?->toArray())) {
+                if ($group->permission_id > 0) {
+                    $permission = $this->model(Permission::class)->find($group->permission_id);
+                    if ($permission) {
+                        $permission->delete();
+                    }
+                    $group->save(['permission_id' => 0]);
+                    $changed = true;
+                }
+                continue;
+            }
+
+            $permission = $group->permission_id > 0
+                ? $this->model(Permission::class)->find($group->permission_id)
+                : null;
+            $hasValidPermissionReference = $this->hasValidPermissionReference($group->toArray(), $permissionSnapshots);
+
+            if ($permission === null || !$hasValidPermissionReference) {
+                $this->syncCreatePermission($group);
+                $created++;
+                $changed = true;
+                continue;
+            }
+
+            $this->syncUpdatePermission($group);
+            $changed = true;
+        }
+
+        if ($changed) {
+            // 清理缓存以反映最新分组
+            $this->cacheService->clearAll();
+        }
+
+        return $created;
     }
 
     // ==================== 表单配置 ====================
@@ -1212,7 +1461,7 @@ class SettingService extends BaseService
         $validate = new SettingValueValidate();
         $errors = $validate->validateGroupValues($allSettings, $values);
         if (!empty($errors)) {
-            $firstError = is_array($errors) ? (string) reset($errors) : '';
+            $firstError = is_array($errors) ? (string)reset($errors) : '';
             throw new BusinessException($firstError !== '' ? $firstError : '配置验证失败');
         }
 

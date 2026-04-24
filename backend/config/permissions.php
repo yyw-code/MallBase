@@ -167,11 +167,11 @@ return [
             'remark' => null,
         ],
         [
-            'name' => '系统管理',
+            'name' => '系统维护',
             'code' => 'System',
             'type' => 1,
             'path' => null,
-            'icon' => 'lucide:settings',
+            'icon' => 'lucide:wrench',
             'component' => null,
             'redirect' => null,
             'sort' => 0,
@@ -197,7 +197,7 @@ return [
                     'remark' => null,
                 ],
                 [
-                    'name' => '设置管理',
+                    'name' => '设置维护',
                     'code' => 'SystemManagement',
                     'type' => 1,
                     'path' => null,
