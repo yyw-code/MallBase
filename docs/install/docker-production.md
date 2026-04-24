@@ -38,7 +38,7 @@ openssl rand -hex 32
 - `REDIS_HOST`
 - `REDIS_PORT`
 - `JWT_SECRET`
-- `CORS_ALLOWED_ORIGINS`
+- `SITE_URL`
 
 ### 2. 构建后台前端静态资源
 
@@ -102,6 +102,12 @@ https://mall.example.com/install
 ```
 
 按向导填写数据库、Redis 和管理员账号。
+
+安装流程完成后会自动执行：
+
+- 路由权限同步
+- 设置菜单权限同步
+- 地区数据导入
 
 ### 7. 重启容器
 

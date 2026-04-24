@@ -37,13 +37,13 @@ docker compose restart
 
 ## Docker 启动与依赖服务
 
-### `install-auto` 容器执行失败
+### 手动执行 `install:auto` 失败
 
 先看日志：
 
 ```bash
-docker logs mallbase-install-auto
 docker logs mallbase-ensure-env
+docker logs mallbase-dev
 ```
 
 常见原因：
@@ -55,8 +55,7 @@ docker logs mallbase-ensure-env
 修复后重跑：
 
 ```bash
-docker compose -f docker-compose.dev.yml rm -f install-auto
-docker compose -f docker-compose.dev.yml up -d install-auto
+docker exec mallbase-dev php think install:auto
 ```
 
 ### `frontend-build` 看起来像卡住
@@ -138,7 +137,7 @@ docker compose -f docker-compose.dev.yml --profile tools up rotate-db-password
 处理：
 
 ```bash
-docker compose -f docker-compose.dev.yml --profile build up frontend-build
+docker compose -f docker-compose.frontend-build.yml up frontend-build
 ls backend/public/admin/index.html
 ```
 
@@ -229,6 +228,8 @@ curl -i -X OPTIONS 'http://127.0.0.1:8080/' \
   -H 'Origin: https://mall.example.com' \
   -H 'Access-Control-Request-Method: GET'
 ```
+
+预期返回 `204` 并带有 `Access-Control-Allow-Origin`、`Access-Control-Allow-Credentials`、`Access-Control-Allow-Methods` / `Headers` 等头。CORS 不通过环境变量配置；如需收紧策略，请直接修改 `backend/app/middleware/CorsMiddleware.php`。
 
 ### Swoole 进程杀不掉
 

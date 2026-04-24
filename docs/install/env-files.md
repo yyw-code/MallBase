@@ -33,9 +33,7 @@ docker compose 的变量插值**只认项目根目录的 `.env`**，无法改路
 | `DB_NAME` | 首次初始化创建的业务库名（`MYSQL_DATABASE`） | |
 | `DB_USER` | 首次初始化创建的业务用户（`MYSQL_USER`） | 必须与 `backend/.env` 同名字段一致 |
 | `DB_PASS` | 首次初始化创建的业务用户密码（`MYSQL_PASSWORD`） | 也会同步到 `backend/.env` |
-| `ADMIN_USER` | 零向导首次安装的超管用户名 | 仅首次 `install:auto` 生效 |
-| `ADMIN_PASS` | 零向导首次安装的超管初始密码 | 仅首次 `install:auto` 生效 |
-| `INSTALL_DEMO` | 是否自动导入 demo 数据 | `1` 导入，`0` 不导入 |
+| `SITE_URL` | 安装页默认站点域名、CLI 安装输入、安装完成后的静态副本 | 安装完成后权威值仍以 `mb_setting.site_url` 为准 |
 
 ### `backend/.env`（~40+ 字段）
 
@@ -49,8 +47,7 @@ docker compose 的变量插值**只认项目根目录的 `.env`**，无法改路
 - 缓存：`CACHE_*`
 - JWT：`JWT_SECRET` / `JWT_EXPIRE` / `JWT_REFRESH_EXPIRE`
 - Swoole：`SWOOLE_HTTP_PORT` / `SWOOLE_*`
-- 跨域 / 日志：`CORS_*` / `LOG_*`
-- 零向导安装：`ADMIN_USER` / `ADMIN_PASS` / `INSTALL_DEMO`
+- 站点域名静态副本：`SITE_URL`
 
 **⚠️ 容易混淆的点**：
 
@@ -59,7 +56,7 @@ docker compose 的变量插值**只认项目根目录的 `.env`**，无法改路
 
 ## 三、两种初始化方式
 
-### 方式 A：零配置（完全自动）
+### 方式 A：零配置（自动生成配置）
 
 适合第一次试用，接受随机生成的密码和默认端口（8080 / 3306 / 6379）。
 
@@ -78,15 +75,16 @@ docker compose -f docker-compose.dev.yml up -d
 - 若根 `.env` 中的 `DB_PASS` / `MYSQL_ROOT_PASSWORD` 仍是占位符，则自动随机化一次
 - 之后根据根 `.env` 重新派生 `backend/.env`
 - `backend/.env` 会写入中文头注释，明确它是自动生成文件
+- `backend`、`mysql`、`redis` 启动后，用户访问 `/install` 并确认执行安装流程
 
 **查看自动生成 / 当前生效的关键值：**
 ```bash
 # 在项目根目录执行：Docker 主配置
-grep -E '^(DB_PASS|MYSQL_ROOT_PASSWORD|ADMIN_USER|ADMIN_PASS|INSTALL_DEMO)=' .env
+grep -E '^(DB_PASS|MYSQL_ROOT_PASSWORD|SITE_URL)=' .env
 ```
 ```bash
 # 在项目根目录执行：派生后的 TP 运行时配置
-grep -E '^(DB_PASS|JWT_SECRET|ADMIN_USER|ADMIN_PASS|INSTALL_DEMO)=' backend/.env
+grep -E '^(DB_PASS|JWT_SECRET|SITE_URL)=' backend/.env
 ```
 
 ### 方式 B：手动自定义（指定端口 / 密码）
@@ -98,7 +96,7 @@ grep -E '^(DB_PASS|JWT_SECRET|ADMIN_USER|ADMIN_PASS|INSTALL_DEMO)=' backend/.env
 cp deploy/docker/.example.env .env
 ```
 ```bash
-# 在项目根目录执行：编辑端口、密码、数据库名、零向导超管参数
+# 在项目根目录执行：编辑端口、密码、数据库名与站点域名兜底
 # 用你习惯的编辑器打开 .env 修改
 ```
 ```bash
@@ -120,7 +118,7 @@ openssl rand -hex 32
 # 32 字节 = 64 位十六进制，适合 JWT_SECRET
 ```
 
-## 四、字段对齐清单（凭据三件套）
+## 四、字段对齐清单（共享字段）
 
 下面这些字段在 Docker 开发全套模式下，都会由根 `.env` 自动同步到 `backend/.env`：
 
@@ -128,15 +126,13 @@ openssl rand -hex 32
 - `DB_USER`
 - `DB_PASS`
 - `SWOOLE_HTTP_PORT`
-- `ADMIN_USER`
-- `ADMIN_PASS`
-- `INSTALL_DEMO`
+- `SITE_URL`
 
 `MYSQL_ROOT_PASSWORD` 只存在于根 `.env`，不会写进 `backend/.env`。
 
 ## 五、常见错误
 
-### ❌ `install-auto` 或安装阶段报 `Access denied for user`
+### ❌ 安装向导或 `install:auto` 报 `Access denied for user`
 **原因**：`data/mysql` 是旧数据，而根 `.env` 的 `DB_PASS` 后来被改过；MySQL 容器里的真实业务账号密码并不会自动跟着变。
 **解决方案**：
 1. 先检查当前根 `.env` 里的目标密码
@@ -230,35 +226,36 @@ A：生产用 `docker-compose.yml`（单容器，镜像构建时 `COPY backend/.
 
 **Q：`deploy/docker/.example.env` 和 `backend/.example.env` 有啥区别？**
 A：
-- `deploy/docker/.example.env`：**Docker 变量模板**，现在包含端口、数据库和零向导安装参数
+- `deploy/docker/.example.env`：**Docker 变量模板**，现在包含端口、数据库和少量运行时兜底字段
 - `backend/.example.env`：**ThinkPHP 运行时模板**，40+ 字段，是应用业务配置
 - 两份模板对应两份 `.env`，职责不重叠
 
-## 八、零向导环境变量（方式三专用）
+## 八、安装与站点域名静态副本
 
-方式三启动时由 `install-auto` 容器执行 `php think install:auto` 自动建库/建表/建超管，以下三个可选变量**覆盖默认值**，只在**首次安装**（`deploy/install/install.lock` 不存在时）生效，之后忽略：
+以下字段仍保留在模板里，但定位已经收敛为”安装期输入或安装完成后的静态副本”，不是第二套主配置源：
 
 | 变量 | 默认值 | 作用 |
 |------|--------|------|
-| `ADMIN_USER` | `admin` | 超管用户名 |
-| `ADMIN_PASS` | `admin123` | 超管初始密码；登录后仍会被强制改密（`password_changed_at=NULL`） |
-| `INSTALL_DEMO` | `0` | `1` 时自动导入 `deploy/install/data/demo/` 下的演示数据（示例商品/订单/会员） |
+| `SITE_URL` | 空 / `http://localhost:8080`（根 `.env` 模板） | 安装页默认站点域名、CLI 无人值守安装输入；安装完成后写回此字段作为静态副本，便于运维直接查看 |
 
-**三个变量的配置位置**：Docker 开发全套模式下，请直接写到**项目根目录 `.env`**。`ensure-env` 会自动把它们同步到 `backend/.env`，再由 `install-auto` 读取。最简做法：
+> 当前 demo 商品规格数据已统一为现行结构：`name + add_pic + values[{value, pic}]`。已安装的旧 demo 数据不做自动兼容；若本地环境仍保留旧结构，请清库后重新安装 demo 数据。
+
+> CORS 策略不通过环境变量配置。`backend/app/middleware/CorsMiddleware.php` 默认反射请求 `Origin` 头并允许 Credentials；如需收紧成白名单，请直接改该中间件文件。
+
+**这些字段的配置位置**：Docker 开发全套模式下，请直接写到**项目根目录 `.env`**。`ensure-env` 会自动把共享字段同步到 `backend/.env`。最简做法：
 
 ```bash
 # 在项目根目录执行：首次启动前追加到根 .env
-cat >> .env <<'EOF'
-ADMIN_USER=gosowong
-ADMIN_PASS=MyStr0ngPass!
-INSTALL_DEMO=1
-EOF
+echo 'SITE_URL=https://mall.example.com' >> .env
 ```
 ```bash
 # 在项目根目录执行
-docker compose -f docker-compose.dev.yml --profile build up -d
+docker compose -f docker-compose.dev.yml up -d
 ```
 
-> 想在已装环境更换这 3 个变量：这些变量仅首次安装有效。已装环境改账号走 `后台 → 管理员管理`，换密码走 `后台 → 个人资料 → 修改密码`，补导演示数据则手动执行 `docker exec -it mallbase-dev php think install:auto` 是没用的（`install.lock` 会让它直接跳过），需要先删 lock + 清库，走"完全清零重来"。
+```bash
+# 浏览器打开安装向导
+http://localhost:8080/install
+```
 
-> 方式一 / 方式二 / 方式四 不走零向导——它们的 DB/Redis 连接必须用户手填，走浏览器 `/install` 向导，与这 3 个变量无关。
+> 这些字段不是数据库主配置源。安装完成后，站点域名仍以 `mb_setting.site_url` 为准；如果需要永久调整上传驱动、上传规则或业务设置，请优先走后台设置页面，而不是把根 `.env` 当成第二套业务配置入口。

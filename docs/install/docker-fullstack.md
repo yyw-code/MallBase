@@ -1,6 +1,6 @@
 # 方式三：Docker 开发（全套）
 
-适合本地一键启动后端、MySQL、Redis，并使用 `frontend-build` 自动把后台前端资源同步到 `backend/public/admin`。
+适合本地一键启动后端、MySQL、Redis，并按需单独执行后台前端静态资源打包。
 
 ## 前提
 
@@ -17,7 +17,7 @@ cd /path/to/mall-base
 pwd
 ```
 
-### 2. （可选）自定义端口、密码、数据库名
+### 2. （可选）自定义端口、密码与站点域名兜底
 
 如果不关心默认值，可以跳过本步；`ensure-env` 会在启动时自动生成根 `.env` 和派生 `backend/.env`。
 
@@ -36,16 +36,14 @@ cp deploy/docker/.example.env .env
 - `DB_USER`
 - `DB_PASS`
 - `MYSQL_ROOT_PASSWORD`
-- `ADMIN_USER`
-- `ADMIN_PASS`
-- `INSTALL_DEMO`
+- `SITE_URL`
 
 `.env` 与 `backend/.env` 的主从关系见 [env-files.md](./env-files.md)。
 
-### 3. 启动所有容器（含前端自动打包）
+### 3. 启动开发运行时服务
 
 ```bash
-docker compose -f docker-compose.dev.yml --profile build up -d
+docker compose -f docker-compose.dev.yml up -d
 ```
 
 启动顺序是：
@@ -53,15 +51,20 @@ docker compose -f docker-compose.dev.yml --profile build up -d
 1. `ensure-env` 生成或补齐配置
 2. `mysql` / `redis` 变为健康
 3. `check-db-auth` 校验库账号
-4. `install-auto` 执行零向导安装
-5. `backend` 启动 Swoole
-6. `frontend-build` 自动构建并同步 `backend/public/admin`
+4. `backend` 启动 Swoole
+5. 用户访问 `/install` 并确认执行统一安装主流程
 
-### 4. 查看关键状态
+### 4. 单独执行后台前端打包
+
+```bash
+docker compose -f docker-compose.frontend-build.yml up frontend-build
+```
+
+### 5. 查看关键状态
 
 ```bash
 docker ps
-docker logs mallbase-install-auto
+docker logs mallbase-check-db-auth
 docker logs mallbase-frontend-build
 ls backend/public/admin/index.html
 ```
@@ -69,14 +72,28 @@ ls backend/public/admin/index.html
 期望结果：
 
 - 常驻容器：`mallbase-dev`、`mallbase-mysql`、`mallbase-redis`
-- 一次性容器：`mallbase-install-auto`、`mallbase-ensure-env`、`mallbase-frontend-build` 最终 `Exited (0)`
+- 一次性容器：`mallbase-ensure-env`、`mallbase-check-db-auth`、`mallbase-frontend-build` 最终 `Exited (0)`
 - `backend/public/admin/index.html` 存在
 
-### 5. 登录后台（零向导）
-
-方式三不需要浏览器安装向导，`install-auto` 已自动建库、建表、建超管。
+### 6. 打开安装向导并确认安装
 
 浏览器打开：
+
+```bash
+http://localhost:8080/install
+```
+
+安装页会默认预填根 `.env` 中的数据库、Redis 和站点域名兜底值。管理员账号与是否导入 demo 统一在安装页确认后提交。安装流程会完成：
+
+- 建库 / 建表
+- 创建管理员账号
+- 路由权限同步
+- 设置菜单同步
+- 地区数据导入
+- 站点域名写入
+- 生成 `install.lock`
+
+### 7. 登录后台
 
 ```bash
 http://localhost:8080/admin/
@@ -84,22 +101,22 @@ http://localhost:8080/admin/
 
 默认账号：
 
-- 用户名：`admin`
-- 密码：`admin123`
+- 用户名：以安装向导里提交的值为准
+- 密码：以安装向导里提交的值为准
 
 首次登录会强制进入改密页。
 
-### 6. 前端改动后重新打包
+### 8. 前端改动后重新打包
 
 如果你改了后台前端代码，重新执行：
 
 ```bash
-docker compose -f docker-compose.dev.yml --profile build up frontend-build
+docker compose -f docker-compose.frontend-build.yml up frontend-build
 ```
 
 它会重新构建 `@vben/web-antd`，并把产物覆盖到 `backend/public/admin`。
 
-### 7. 从宿主机连接 MySQL / Redis
+### 9. 从宿主机连接 MySQL / Redis
 
 ```bash
 mysql -h 127.0.0.1 -P 3306 -u <DB_USER> -p
@@ -111,14 +128,14 @@ redis-cli -h 127.0.0.1 -p 6379
 ## 完成后验证
 
 ```bash
-grep -E '^(DB_PASS|MYSQL_ROOT_PASSWORD|ADMIN_USER|ADMIN_PASS|INSTALL_DEMO)=' .env
-grep -E '^(DB_PASS|JWT_SECRET|ADMIN_USER|ADMIN_PASS|INSTALL_DEMO)=' backend/.env
+grep -E '^(DB_PASS|MYSQL_ROOT_PASSWORD|SITE_URL)=' .env
+grep -E '^(DB_PASS|JWT_SECRET|SITE_URL)=' backend/.env
 curl -I http://127.0.0.1:8080/
 ls backend/public/admin/index.html
 ```
 
 ## 常见下一步
 
-- 查看 `.env` 机制与零向导变量：[env-files.md](./env-files.md)
+- 查看 `.env` 机制与运行时托底字段：[env-files.md](./env-files.md)
 - 看常用命令集合：[commands.md](./commands.md)
 - 遇到首装时序或密码问题：[troubleshooting.md](./troubleshooting.md) 和 [issues/docker-fullstack-first-run.md](./issues/docker-fullstack-first-run.md)
