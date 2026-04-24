@@ -163,3 +163,29 @@ export const requestClient = createRequestClient(apiURL, {
 });
 
 export const baseRequestClient = new RequestClient({ baseURL: apiURL });
+
+function createPublicRequestClient(baseURL: string) {
+  const client = new RequestClient({
+    baseURL,
+    responseReturn: 'data',
+  });
+
+  client.addRequestInterceptor({
+    fulfilled: async (config) => {
+      config.headers['Accept-Language'] = preferences.app.locale;
+      return config;
+    },
+  });
+
+  client.addResponseInterceptor(
+    defaultResponseInterceptor({
+      codeField: 'code',
+      dataField: 'data',
+      successCode: 200,
+    }),
+  );
+
+  return client;
+}
+
+export const publicRequestClient = createPublicRequestClient(apiURL);

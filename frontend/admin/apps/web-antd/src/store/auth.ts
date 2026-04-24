@@ -49,6 +49,11 @@ export const useAuthStore = defineStore('auth', () => {
         if (refreshToken) {
           accessStore.setRefreshToken(refreshToken);
         }
+        accessStore.setMustChangePassword(!!loginResult.must_change_password);
+        accessStore.setIsAccessChecked(false);
+        accessStore.setAccessCodes([]);
+        accessStore.setAccessMenus([]);
+        accessStore.setAccessRoutes([]);
 
         // 获取用户信息
         adminInfo = await fetchUserInfo();
@@ -101,6 +106,7 @@ export const useAuthStore = defineStore('auth', () => {
     // 清除本地状态
     resetAllStores();
     accessStore.setLoginExpired(false);
+    accessStore.setMustChangePassword(false);
 
     // 回登录页带上当前路由地址
     await router.replace({

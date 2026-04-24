@@ -45,6 +45,10 @@ interface AccessState {
    * 登录 accessToken
    */
   refreshToken: AccessToken;
+  /**
+   * 是否处于首次登录强制改密状态
+   */
+  mustChangePassword: boolean;
 }
 
 /**
@@ -96,6 +100,9 @@ export const useAccessStore = defineStore('core-access', {
     setRefreshToken(token: AccessToken) {
       this.refreshToken = token;
     },
+    setMustChangePassword(mustChangePassword: boolean) {
+      this.mustChangePassword = mustChangePassword;
+    },
     unlockScreen() {
       this.isLockScreen = false;
       this.lockScreenPassword = undefined;
@@ -109,6 +116,7 @@ export const useAccessStore = defineStore('core-access', {
       'accessCodes',
       'isLockScreen',
       'lockScreenPassword',
+      'mustChangePassword',
     ],
   },
   state: (): AccessState => ({
@@ -120,6 +128,7 @@ export const useAccessStore = defineStore('core-access', {
     isLockScreen: false,
     lockScreenPassword: undefined,
     loginExpired: false,
+    mustChangePassword: false,
     refreshToken: null,
   }),
 });

@@ -6,6 +6,7 @@ import { computed, markRaw } from 'vue';
 import { AuthenticationLogin, SliderCaptcha, z } from '@vben/common-ui';
 import { $t } from '@vben/locales';
 
+import { loginPageMetaState } from '#/modules/app-meta';
 import { useAuthStore } from '#/store';
 
 defineOptions({ name: 'Login' });
@@ -16,6 +17,13 @@ const isE2EByQuery =
   typeof window !== 'undefined' &&
   new URLSearchParams(window.location.search).get('e2e') === '1';
 const isE2E = isE2EByEnv || isE2EByQuery;
+const loginTitle = computed(
+  () =>
+    loginPageMetaState.loginTitle || `${$t('authentication.welcomeBack')} 👋🏻`,
+);
+const loginSubtitle = computed(
+  () => loginPageMetaState.loginSubtitle || $t('authentication.loginSubtitle'),
+);
 
 const formSchema = computed((): VbenFormSchema[] => {
   const schema: VbenFormSchema[] = [
@@ -62,6 +70,8 @@ const formSchema = computed((): VbenFormSchema[] => {
     :show-qrcode-login="false"
     :show-third-party-login="false"
     :show-register="false"
+    :sub-title="loginSubtitle"
+    :title="loginTitle"
     @submit="authStore.authLogin"
   />
 </template>
