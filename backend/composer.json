@@ -27,7 +27,8 @@
         "topthink/think-trace": "^1.6",
         "topthink/think-queue": "^3.0",
         "topthink/think-swoole": "^4.1",
-        "firebase/php-jwt": "^7.0"
+        "firebase/php-jwt": "^7.0",
+        "w7corp/easywechat": "^6.17"
     },
     "require-dev": {
         "phpunit/phpunit": "^10.5",
