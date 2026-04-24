@@ -2,16 +2,14 @@
 
 declare (strict_types=1);
 
-namespace app\model;
+namespace app\model\auth;
 
-use app\model\auth\Admin;
-use think\Model;
-use think\model\concern\SoftDelete;
+use mall_base\base\BaseModel;
 
 /**
  * 管理员操作日志模型
  */
-class AdminOperationLog extends Model
+class AdminOperationLog extends BaseModel
 {
     // use SoftDelete; // 如果需要软删除，取消注释
 

@@ -4,7 +4,7 @@ declare (strict_types=1);
 
 namespace app\service\admin;
 
-use app\model\AdminOperationLog;
+use app\model\auth\AdminOperationLog;
 use mall_base\base\BaseService;
 
 /**
