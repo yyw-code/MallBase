@@ -32,7 +32,7 @@ ls backend/public/admin/index.html
 如果不存在，先生成后台前端资源，例如：
 
 ```bash
-docker compose -f docker-compose.dev.yml --profile build up frontend-build
+docker compose -f docker-compose.frontend-build.yml up frontend-build
 ```
 
 ### 2. 本机可通过 SSH 登录服务器

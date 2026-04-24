@@ -7,6 +7,7 @@ use app\command\ImportRegions;
 use app\command\InstallAuto;
 use app\command\OrderExpireCommand;
 use app\command\SyncPermissions;
+use app\command\SyncSettingPermissions;
 use app\command\UpgradeAdminSchema;
 
 return [
@@ -15,6 +16,7 @@ return [
         'docs' => Docs::class,
         'region:import' => ImportRegions::class,
         'sync:permissions' => SyncPermissions::class,
+        'settings:sync-permissions' => SyncSettingPermissions::class,
         'order:expire' => OrderExpireCommand::class,
         'install:auto' => InstallAuto::class,
         'upgrade:admin-schema' => UpgradeAdminSchema::class,

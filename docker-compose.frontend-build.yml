@@ -1,0 +1,25 @@
+# ==========================================
+# 前端一次性打包：后台前端资源同步到 backend/public/admin
+#
+# 用法：
+#   docker compose -f docker-compose.frontend-build.yml up frontend-build
+# ==========================================
+
+services:
+  frontend-build:
+    image: node:20-alpine
+    container_name: mallbase-frontend-build
+    working_dir: /app
+    volumes:
+      - ./frontend/admin:/app
+      - ./backend/public/admin:/dist
+      - frontend_pnpm_store:/root/.local/share/pnpm/store
+      - ./deploy/docker/frontend-build.sh:/frontend-build.sh:ro
+    environment:
+      NODE_OPTIONS: "--max-old-space-size=4096"
+      CI: "true"
+    command: sh /frontend-build.sh
+    restart: "no"
+
+volumes:
+  frontend_pnpm_store:

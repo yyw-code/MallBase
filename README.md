@@ -98,7 +98,8 @@ mall-base/
 
 ## 在线演示
 
-- 测试站：[https://mallbase.gosowong.cn](https://mallbase.gosowong.cn)
+- 测试站Admin：[https://mallbase.gosowong.cn/admin](https://mallbase.gosowong.cn/admin)
+- 测试站Uniapp：[https://mallbase.gosowong.cn](https://mallbase.gosowong.cn)
 
 ## 快速开始
 
@@ -128,7 +129,7 @@ docker compose restart
 | [安装与部署目录](docs/install/index.md) | 环境要求、安装方式总览、阅读顺序与专题入口 |
 | [方式一：手动安装](docs/install/manual.md) | 无 Docker 场景的完整部署步骤 |
 | [方式二：Docker 开发（仅后端）](docs/install/docker-backend-only.md) | 宿主机 MySQL/Redis + 后端容器的完整步骤 |
-| [方式三：Docker 开发（全套）](docs/install/docker-fullstack.md) | 后端 + MySQL + Redis + 前端自动打包的完整步骤 |
+| [方式三：Docker 开发（全套）](docs/install/docker-fullstack.md) | 后端 + MySQL + Redis 启动，以及前端独立打包的完整步骤 |
 | [方式四：Docker 生产](docs/install/docker-production.md) | 单后端容器 + 宿主机 Nginx 的完整部署步骤 |
 | [安装与部署命令集合](docs/install/commands.md) | 按用途整理的独立命令集合，含删除与清理命令 |
 | [安装与部署故障排查](docs/install/troubleshooting.md) | 安装、Docker、前端静态资源与运行时故障处理 |

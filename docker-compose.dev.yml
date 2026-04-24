@@ -1,5 +1,5 @@
 # ==========================================
-# 开发环境：后端容器 + MySQL + Redis（+ ensure-env 兜底；可选 frontend-build）
+# 开发环境：后端容器 + MySQL + Redis（+ ensure-env 兜底）
 #
 # 配置源分工（Docker 开发全套模式）：
 #   - 项目根目录 .env：唯一主配置源；用户只需要维护这一份
@@ -11,13 +11,9 @@
 #   2. 自定义：cp deploy/docker/.example.env .env && 按需改 && up -d
 #              （ensure-env 会按根 .env 重新派生 backend/.env）
 #
-# 含前端打包：追加 --profile build，启动 frontend-build 容器自动把 Vben 打包到
-#   backend/public/admin：
-#     docker compose -f docker-compose.dev.yml --profile build up -d
-#
 # 仅后端：docker compose -f docker-compose.dev.yml up -d --no-deps backend
 #         （需自备 MySQL + Redis；建议 DB_HOST=host.docker.internal）
-#         若不加 --no-deps，会把 mysql / redis / install-auto 一并拉起
+#         若不加 --no-deps，会把 ensure-env / mysql / redis 一并拉起
 # ==========================================
 
 services:
@@ -31,9 +27,9 @@ services:
     command: sh /ensure-env.sh
     restart: "no"
 
-  # 一次性 preflight 容器：在 install:auto 前校验业务库账号能否用当前根 .env 登录。
+  # 一次性 preflight 容器：在方式三启动阶段校验业务库账号能否用当前根 .env 登录。
   # 目的：尽早发现“data/mysql 是旧数据，但根 .env 的 DB_PASS 后改过”的场景，
-  # 避免失败信息拖到 install-auto 才暴露。
+  # 避免用户打开安装向导后才发现明显的连接错误。
   check-db-auth:
     image: mysql:8.0
     pull_policy: always
@@ -49,10 +45,10 @@ services:
       mysql:
         condition: service_healthy
 
-  # 一次性 init 容器：方式三/四 Docker 全套零向导自动安装（已装则快速退出 0）
-  # 执行 `php think install:auto`，从 backend/.env 读取连接信息完成建库/建表/建超管。
-  # 首次启动时创建 admin/admin123 且 password_changed_at=NULL，前端会强制首次改密。
+  # 可选 CLI 安装容器：不参与方式三默认启动链路。
+  # 仅用于无人值守或手动执行 `php think install:auto`。
   install-auto:
+    profiles: ["tools"]
     build:
       context: .
       dockerfile: deploy/docker/Dockerfile
@@ -101,9 +97,6 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      # install-auto 完成后才启动 Swoole，避免首次启动时对外暴露未完成安装的服务
-      install-auto:
-        condition: service_completed_successfully
 
   mysql:
     image: mysql:8.0
@@ -150,29 +143,6 @@ services:
     depends_on:
       ensure-env:
         condition: service_completed_successfully
-
-  # 前端一次性打包容器（仅 --profile build 时启动）：
-  #   docker compose -f docker-compose.dev.yml --profile build up -d
-  # 会把 Vben @vben/web-antd 打包后产物复制到 backend/public/admin，供后端 Swoole 静态伺服
-  frontend-build:
-    profiles: ["build"]
-    image: node:20-alpine
-    container_name: mallbase-frontend-build
-    working_dir: /app
-    volumes:
-      - ./frontend/admin:/app
-      - ./backend/public/admin:/dist
-      - frontend_pnpm_store:/root/.local/share/pnpm/store
-      - ./deploy/docker/frontend-build.sh:/frontend-build.sh:ro
-    environment:
-      NODE_OPTIONS: "--max-old-space-size=4096"
-      # pnpm 在 non-TTY 容器里默认会拒绝 purge 被外部 bind mount 进来的
-      # node_modules/（比如宿主机跑过 pnpm install 生成的那份），需要 CI=true
-      # 让 pnpm 自动确认 purge 再走 --frozen-lockfile。
-      CI: "true"
-    command: sh /frontend-build.sh
-    restart: "no"
-
   # 工具容器：当根 .env 的 DB_PASS 改了，但想保留现有 data/mysql 时，
   # 用它把 MySQL 中的业务账号密码显式轮换为根 .env 的值。
   rotate-db-password:
@@ -190,6 +160,3 @@ services:
         condition: service_completed_successfully
       mysql:
         condition: service_healthy
-
-volumes:
-  frontend_pnpm_store:

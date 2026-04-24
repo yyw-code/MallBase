@@ -28,6 +28,7 @@ set -eu
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
 ROOT_DIR=$(CDPATH= cd -- "$SCRIPT_DIR/../.." && pwd)
 COMPOSE_FILE="$ROOT_DIR/docker-compose.dev.yml"
+FRONTEND_COMPOSE_FILE="$ROOT_DIR/docker-compose.frontend-build.yml"
 
 ALL_IMAGES=0
 
@@ -52,8 +53,11 @@ fi
 
 cd "$ROOT_DIR"
 
-echo ">>> [cleanup-dev] 停止并删除 compose 资源（容器 / 网络 / 卷 / orphan）"
-docker compose -f "$COMPOSE_FILE" --profile build --profile tools down -v --remove-orphans || true
+echo ">>> [cleanup-dev] 停止并删除开发 compose 资源（容器 / 网络 / 卷 / orphan）"
+docker compose -f "$COMPOSE_FILE" --profile tools down -v --remove-orphans || true
+
+echo ">>> [cleanup-dev] 停止并删除前端打包 compose 资源"
+docker compose -f "$FRONTEND_COMPOSE_FILE" down -v --remove-orphans || true
 
 echo ">>> [cleanup-dev] 兜底删除可能残留的容器"
 for name in \

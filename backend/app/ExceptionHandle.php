@@ -66,14 +66,23 @@ class ExceptionHandle extends Handle
         }
 
         // 根据环境返回不同详细程度的信息
+        $details = [];
         if (env('app_debug')) {
             $details = [
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
-                'trace' => $e->getTrace(),
             ];
-        } else {
-            $details = [];
+
+            $trace = $e->getTrace();
+            try {
+                $encodedTrace = json_encode($trace, JSON_UNESCAPED_UNICODE);
+                $details['trace'] = $trace;
+                $details['trace_type'] = 'array';
+            } catch (\Exception $e) {
+                $details['trace'] = $e->getTraceAsString();
+                $details['trace_type'] = 'string';
+                $details['trace_error'] = json_last_error_msg();
+            }
         }
         $message = $e->getMessage();
         return json([

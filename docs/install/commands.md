@@ -6,6 +6,7 @@
 ## 快速定位
 
 - 重新打包前端：看“前端构建与重新打包”
+- 前端临时调试容器：看“前端构建与重新打包”
 - 上传后台静态文件：看“静态资源上传”
 - 删除容器、卷和本地生成文件：看“删除与清理”
 - 检查服务状态：看“连接与快速验证”
@@ -22,12 +23,12 @@ pnpm install
 pnpm run build --filter=@vben/web-antd
 ```
 
-### Docker 全套模式自动打包后台前端
+### Docker 全套模式单独打包后台前端
 
 适用：方式三
 
 ```bash
-docker compose -f docker-compose.dev.yml --profile build up -d
+docker compose -f docker-compose.frontend-build.yml up frontend-build
 ```
 
 ### 单独重跑 `frontend-build`
@@ -35,7 +36,7 @@ docker compose -f docker-compose.dev.yml --profile build up -d
 适用：方式三
 
 ```bash
-docker compose -f docker-compose.dev.yml --profile build up frontend-build
+docker compose -f docker-compose.frontend-build.yml up frontend-build
 ```
 
 ### 启动后台前端 dev server
@@ -47,6 +48,47 @@ cd frontend/admin
 pnpm install
 pnpm run dev:antd
 ```
+
+### 启动前端临时调试容器
+
+用于在 `node:20-alpine` 中进入 `frontend/admin` 的临时调试环境。
+
+适用：方式二、方式三；需要本机已安装 Docker
+
+推荐：隔离卷版（`node_modules` 不写回宿主机）
+
+```bash
+docker run --rm -it \
+  -p 5666:5666 \
+  -v "$PWD/frontend/admin:/app" \
+  -v mallbase-pnpm-store:/root/.local/share/pnpm/store \
+  -v mallbase-admin-node_modules:/app/node_modules \
+  -w /app \
+  node:20-alpine \
+  sh -lc 'corepack enable && corepack prepare pnpm@10.28.2 --activate && exec sh'
+```
+
+补充：最小改动版（沿用宿主机目录，不单独挂载 `/app/node_modules`）
+
+```bash
+docker run --rm -it \
+  -p 5666:5666 \
+  -v "$PWD/frontend/admin:/app" \
+  -v mallbase-pnpm-store:/root/.local/share/pnpm/store \
+  -w /app \
+  node:20-alpine \
+  sh -lc 'corepack enable && corepack prepare pnpm@10.28.2 --activate && exec sh'
+```
+
+进入容器后继续执行：
+
+```bash
+pnpm -v
+pnpm install
+pnpm run dev:antd
+```
+
+说明：`node:20-alpine` 基础镜像默认没有激活 `pnpm`。当前项目的前端工作区声明使用 `pnpm@10.28.2`，因此进入容器后需要先启用 `corepack`，再按项目声明激活对应版本的 `pnpm`。
 
 ## 静态资源上传
 
@@ -76,7 +118,7 @@ sh deploy/upload-public-admin.sh \
 
 ```bash
 sh deploy/upload-public-admin.sh \
-  --host root@165.154.60.251 \
+  --host root@server \
   --identity ~/.ssh/id_ed25519 \
   --remote-root /www/wwwroot/mallbase.gosowong.cn/mall-base
 ```
@@ -99,12 +141,13 @@ docker compose -f docker-compose.dev.yml up -d --no-deps backend
 docker compose -f docker-compose.dev.yml up -d
 ```
 
-### 启动 Docker 开发全套并自动打包前端
+### 启动 Docker 开发全套并单独执行前端打包
 
 适用：方式三
 
 ```bash
-docker compose -f docker-compose.dev.yml --profile build up -d
+docker compose -f docker-compose.dev.yml up -d
+docker compose -f docker-compose.frontend-build.yml up frontend-build
 ```
 
 ### 启动 Docker 生产
@@ -124,13 +167,20 @@ docker logs mallbase-dev
 docker logs mallbase
 ```
 
-### 查看 `install-auto` 与 `frontend-build` 日志
+### 查看 `frontend-build` 日志
 
 适用：方式三
 
 ```bash
-docker logs mallbase-install-auto
 docker logs mallbase-frontend-build
+```
+
+### 手动执行 `install:auto`（可选 CLI 安装）
+
+适用：方式三；仅用于无人值守或手动 CLI 安装，不是默认流程
+
+```bash
+docker exec mallbase-dev php think install:auto
 ```
 
 ## 容器内依赖安装
@@ -183,7 +233,8 @@ sh deploy/docker/cleanup-dev.sh --all-images
 
 ```bash
 docker compose -f docker-compose.dev.yml down -v
-docker compose -f docker-compose.dev.yml rm -f ensure-env install-auto frontend-build
+docker compose -f docker-compose.frontend-build.yml down -v
+docker compose -f docker-compose.dev.yml rm -f ensure-env check-db-auth
 ```
 
 ### 手动清理本地生成文件
@@ -232,6 +283,8 @@ redis-cli -h 127.0.0.1 -p 6379
 ### 导入地区数据
 
 适用：方式一、方式二、方式三、方式四
+
+说明：统一安装流程已经默认导入地区数据。以下命令主要用于补同步或手工修复。
 
 ```bash
 cd backend

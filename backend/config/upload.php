@@ -50,7 +50,8 @@ $videoAcceptTypes = [
     'video/mp2t', // .ts
 ];
 
-// 文件上传配置
+// 文件上传默认配置（代码级兜底）
+// 用户日常可调项优先走系统设置；本文件保留驱动默认值、规则模板与安装期兜底。
 return [
     // 默认上传驱动：local（本地）、oss（阿里云OSS）、cos（腾讯云COS）
     'driver' => 'local',

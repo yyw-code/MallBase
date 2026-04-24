@@ -1,20 +1,20 @@
 # Docker 全套模式首装问题记录
 
+> 这是一份历史问题记录，针对“方式三默认自动执行 `install:auto`”时期的首装时序问题。当前默认流程已改为服务启动后由用户访问 `/install` 确认安装；本文保留，是因为其中关于 `ensure-env`、MySQL 变量桥接和密码轮换的结论仍然有效。
+
 ## 适用范围
 
-- 方式三：Docker 开发（全套）
-- 命令：`docker compose -f docker-compose.dev.yml --profile build up -d`
+- 旧版方式三：Docker 开发（全套，默认自动安装）
+- 命令：`docker compose -f docker-compose.dev.yml up -d`
 
 ## 现象
 
-在完全清理后首次执行 `docker compose -f docker-compose.dev.yml --profile build up -d`，曾经出现过以下问题：
+在完全清理后首次执行 `docker compose -f docker-compose.dev.yml up -d`，曾经出现过以下问题：
 
 - `mallbase-mysql` 第一次启动不健康，第二次又恢复正常
 - `mallbase-check-db-auth` 首次执行报业务库账号认证失败
 - `mallbase-install-auto` 因依赖失败没有真正开始执行
 - `deploy/install/install.lock` 没有生成
-- `mallbase-frontend-build` 处于长时间运行状态，用户容易误判为“卡住”或“没打包”
-
 ## 根因分析
 
 这次问题实际由两类初始化时序问题叠加导致。
@@ -97,7 +97,8 @@
 
 ```bash
 sh deploy/docker/cleanup-dev.sh --all-images
-docker compose -f docker-compose.dev.yml --profile build up -d
+docker compose -f docker-compose.dev.yml up -d
+docker compose -f docker-compose.frontend-build.yml up frontend-build
 ```
 
 本次已验证首次启动可以直接跑通：

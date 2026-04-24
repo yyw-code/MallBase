@@ -33,7 +33,7 @@
 |------|---------|----------|----------|------|
 | 方式一：手动安装（无 Docker） | 低配服务器、需要完全控制环境 | [manual.md](./manual.md) | [commands.md](./commands.md) | [troubleshooting.md](./troubleshooting.md) |
 | 方式二：Docker 开发（仅后端） | 本地开发、宿主机已有 MySQL/Redis | [docker-backend-only.md](./docker-backend-only.md) | [commands.md](./commands.md) | [troubleshooting.md](./troubleshooting.md) |
-| 方式三：Docker 开发（全套） | 本地一键启动后端 + MySQL + Redis + 前端自动打包 | [docker-fullstack.md](./docker-fullstack.md) | [commands.md](./commands.md) | [troubleshooting.md](./troubleshooting.md) |
+| 方式三：Docker 开发（全套） | 本地一键启动后端 + MySQL + Redis，前端打包单独执行 | [docker-fullstack.md](./docker-fullstack.md) | [commands.md](./commands.md) | [troubleshooting.md](./troubleshooting.md) |
 | 方式四：Docker 生产 | 单后端容器 + 宿主机 Nginx 的生产部署 | [docker-production.md](./docker-production.md) | [commands.md](./commands.md) | [troubleshooting.md](./troubleshooting.md) |
 
 ## 推荐阅读顺序
@@ -60,9 +60,9 @@
 
 ### 方式三：Docker 开发（全套）
 
-- 适合本地一键起全套环境，并使用 `frontend-build` 自动把后台前端资源同步到 `backend/public/admin`。
+- 适合本地一键起全套环境，后台前端静态资源通过独立前端构建 compose 按需执行。
 - 完整步骤见 [docker-fullstack.md](./docker-fullstack.md)。
-- `.env` 的主从关系与零向导变量见 [env-files.md](./env-files.md)。
+- `.env` 的主从关系与安装默认值变量见 [env-files.md](./env-files.md)。
 
 ### 方式四：Docker 生产
 

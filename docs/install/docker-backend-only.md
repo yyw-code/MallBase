@@ -49,7 +49,7 @@ cp backend/.example.env backend/.env
 docker compose -f docker-compose.dev.yml up -d --no-deps backend
 ```
 
-这里必须带 `--no-deps`，否则 Compose 会顺带把方式三的 MySQL、Redis、`install-auto` 一并拉起。
+这里必须带 `--no-deps`，否则 Compose 会顺带把方式三的 `ensure-env`、MySQL、Redis 一并拉起。
 
 ### 3. 首次启动时等待自动安装 PHP 依赖
 
@@ -74,6 +74,12 @@ http://localhost:8080/install
 ```
 
 安装向导里的数据库和 Redis 地址，填写宿主机可达地址即可。
+
+安装流程完成后会自动执行：
+
+- 路由权限同步
+- 设置菜单权限同步
+- 地区数据导入
 
 ### 5. 重启后端容器
 

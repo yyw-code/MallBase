@@ -113,10 +113,8 @@ MallBase 的 Swoole 服务直接托管 `backend/public/admin` 静态文件。前
 
 ```bash
 # 在项目根目录执行
-docker compose -f docker-compose.dev.yml --profile build up frontend-build
+docker compose -f docker-compose.frontend-build.yml up frontend-build
 ```
-
-> `--profile build` 是 Docker Compose 的"条件服务"机制：不加此参数，`frontend-build` 容器不启动；加了就跑一次性打包并自动退出。
 
 **预期看到：**
 ```bash
