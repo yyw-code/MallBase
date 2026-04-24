@@ -7,7 +7,6 @@ namespace app\service\order;
 use app\model\goods\GoodsSku;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
-use think\facade\Db;
 
 /**
  * 库存扣减/回滚服务（并发核心）
@@ -37,7 +36,7 @@ class StockService extends BaseService
     {
         $this->assertPositiveQty($qty);
 
-        $affected = Db::name('goods_sku')
+        $affected = $this->model()
             ->where('id', $skuId)
             ->where('stock', '>=', $qty)
             ->dec('stock', $qty)
@@ -60,7 +59,7 @@ class StockService extends BaseService
     {
         $this->assertPositiveQty($qty);
 
-        $affected = Db::name('goods_sku')
+        $affected = $this->model()
             ->where('id', $skuId)
             ->inc('stock', $qty)
             ->update();

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace app\service\client\order;
 
+use app\model\goods\Goods;
+use app\model\goods\GoodsSku;
 use app\model\order\Cart;
 use app\model\order\Order;
 use app\model\order\OrderItem;
@@ -18,7 +20,6 @@ use app\common\enum\PayMethod;
 use app\common\service\IdempotencyService;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
-use think\facade\Db;
 
 /**
  * 买家订单服务（下单主链路）
@@ -287,7 +288,7 @@ class OrderService extends BaseService
 
         $data = $order->toArray();
         $data['items'] = $this->fetchItemsByOrderIds([(int) $order->id])[(int) $order->id] ?? [];
-        $data['logs']  = app()->make(OrderLog::class)
+        $data['logs']  = $this->model(OrderLog::class)
             ->where('order_id', (int) $order->id)
             ->order('id', 'asc')
             ->select()
@@ -401,7 +402,7 @@ class OrderService extends BaseService
     private function assertOwnedAddress(int $userId, int $addressId): array
     {
         /** @var UserAddress|null $address */
-        $address = app()->make(UserAddress::class)
+        $address = $this->model(UserAddress::class)
             ->where('id', $addressId)
             ->where('user_id', $userId)
             ->whereNull('delete_time')
@@ -440,7 +441,7 @@ class OrderService extends BaseService
             throw new BusinessException('请选择要结算的购物车商品');
         }
 
-        $carts = app()->make(Cart::class)
+        $carts = $this->model(Cart::class)
             ->where('user_id', $userId)
             ->whereIn('id', $ids)
             ->whereNull('delete_time')
@@ -595,7 +596,7 @@ class OrderService extends BaseService
      */
     private function loadOrderItemsForStock(int $orderId): array
     {
-        return Db::name('order_item')
+        return $this->model(OrderItem::class)
             ->where('order_id', $orderId)
             ->field('sku_id, quantity')
             ->select()
@@ -611,7 +612,7 @@ class OrderService extends BaseService
         if ($orderIds === []) {
             return [];
         }
-        $rows = Db::name('order_item')
+        $rows = $this->model(OrderItem::class)
             ->whereIn('order_id', $orderIds)
             ->select()
             ->toArray();
@@ -633,7 +634,7 @@ class OrderService extends BaseService
         if ($skuIds === []) {
             return [];
         }
-        $rows = Db::name('goods_sku')
+        $rows = $this->model(GoodsSku::class)
             ->whereIn('id', $skuIds)
             ->column('id, goods_id, spec_values, price, stock, status', 'id');
         return is_array($rows) ? $rows : [];
@@ -648,7 +649,7 @@ class OrderService extends BaseService
         if ($goodsIds === []) {
             return [];
         }
-        $rows = Db::name('goods')
+        $rows = $this->model(Goods::class)
             ->whereIn('id', $goodsIds)
             ->whereNull('delete_time')
             ->column('id, name, main_image, status, is_on_sale', 'id');

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace app\service\client\order;
 
+use app\model\order\Order;
+use app\model\order\OrderItem;
 use app\model\order\RefundOrder;
 use app\service\order\RefundOrderStatusMachine;
 use app\service\order\RefundSnGenerator;
@@ -13,7 +15,6 @@ use app\common\enum\RefundOrderStatus;
 use app\common\enum\RefundReason;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
-use think\facade\Db;
 
 /**
  * 买家售后服务（申请 / 取消 / 列表 / 详情）
@@ -193,10 +194,11 @@ class RefundService extends BaseService
         $data = $refund->toArray();
 
         // 关联主订单摘要
-        $order = Db::name('order')
+        $orderModel = $this->model(Order::class)
             ->where('id', (int) $refund->order_id)
             ->field('id, sn, status, pay_amount, receiver_name, receiver_phone, create_time, paid_at, shipped_at, received_at')
             ->find();
+        $order = $orderModel?->toArray();
         if ($order !== null) {
             $order['status_text'] = OrderStatus::textOf((int) $order['status']);
         }
@@ -205,8 +207,9 @@ class RefundService extends BaseService
         // 关联订单项快照
         $orderItemId = (int) ($refund->order_item_id ?? 0);
         if ($orderItemId > 0) {
-            $item = Db::name('order_item')->where('id', $orderItemId)->find();
-            if (is_array($item)) {
+            $itemModel = $this->model(OrderItem::class)->where('id', $orderItemId)->find();
+            $item = $itemModel?->toArray();
+            if ($item !== null) {
                 $item['goods_image_full_url'] = buildUploadUrl((string) ($item['goods_image'] ?? ''));
             }
             $data['order_item'] = $item;
@@ -229,18 +232,20 @@ class RefundService extends BaseService
      */
     private function assertOwnedOrderItem(int $userId, int $orderItemId): array
     {
-        $item = Db::name('order_item')->where('id', $orderItemId)->find();
-        if (!is_array($item)) {
+        $itemModel = $this->model(OrderItem::class)->where('id', $orderItemId)->find();
+        if ($itemModel === null) {
             throw new BusinessException('订单商品不存在');
         }
+        $item = $itemModel->toArray();
 
-        $order = Db::name('order')
+        $orderModel = $this->model(Order::class)
             ->where('id', (int) $item['order_id'])
             ->whereNull('delete_time')
             ->find();
-        if (!is_array($order)) {
+        if ($orderModel === null) {
             throw new BusinessException('订单不存在');
         }
+        $order = $orderModel->toArray();
         if ((int) $order['user_id'] !== $userId) {
             // 严防越权：不暴露具体归属，只给通用错误
             throw new BusinessException('订单不存在');
@@ -348,7 +353,7 @@ class RefundService extends BaseService
 
         $orderMap = [];
         if ($orderIds !== []) {
-            $rows = Db::name('order')
+            $rows = $this->model(Order::class)
                 ->whereIn('id', $orderIds)
                 ->field('id, sn, status')
                 ->select()
@@ -364,7 +369,7 @@ class RefundService extends BaseService
 
         $itemMap = [];
         if ($orderItemIds !== []) {
-            $rows = Db::name('order_item')
+            $rows = $this->model(OrderItem::class)
                 ->whereIn('id', $orderItemIds)
                 ->field('id, goods_id, sku_id, goods_name, goods_image, sku_spec, unit_price, quantity, refunded_quantity')
                 ->select()

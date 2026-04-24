@@ -4,10 +4,18 @@ declare(strict_types=1);
 
 namespace app\service;
 
-use think\facade\Db;
+use app\model\region\Region;
+use mall_base\base\BaseService;
 
-class RegionImportService
+/**
+ * 地区数据导入服务
+ *
+ * @extends BaseService<Region>
+ */
+class RegionImportService extends BaseService
 {
+    protected string $modelClass = Region::class;
+
     /**
      * 从 JSON 文件导入地区数据
      *
@@ -25,22 +33,16 @@ class RegionImportService
             throw new \RuntimeException('地区数据文件格式错误');
         }
 
-        Db::startTrans();
-        try {
+        return $this->transaction(function () use ($data, $truncate): int {
             if ($truncate) {
-                Db::name('region')->delete(true);
+                $this->model()->whereRaw('1=1')->delete(true);
             }
 
             $imported = 0;
             $this->importNodes($data, 0, [], 1, $imported);
 
-            Db::commit();
-
             return $imported;
-        } catch (\Throwable $e) {
-            Db::rollback();
-            throw $e;
-        }
+        });
     }
 
     /**
@@ -67,12 +69,14 @@ class RegionImportService
                 'sort' => $index,
             ];
 
-            $exists = Db::name('region')->where('code', $code)->find();
-            if ($exists) {
-                Db::name('region')->where('id', $exists['id'])->update($record);
-                $id = (int) $exists['id'];
+            $exists = $this->model()->where('code', $code)->find();
+            if ($exists !== null) {
+                $this->model()->where('id', (int) $exists->id)->update($record);
+                $id = (int) $exists->id;
             } else {
-                $id = (int) Db::name('region')->insertGetId($record);
+                /** @var Region $created */
+                $created = $this->model()->create($record);
+                $id = (int) $created->id;
                 $imported++;
             }
 

@@ -4,14 +4,21 @@ declare(strict_types=1);
 
 namespace app\service\admin\order;
 
+use app\model\auth\Admin;
+use app\model\order\Order;
+use app\model\order\OrderItem;
 use app\model\order\RefundOrder;
+use app\model\user\User;
+use app\service\order\MockPaymentAdapter;
+use app\service\order\PaymentAdapter;
+use app\service\order\RefundOrderStatusMachine;
+use app\service\order\StockService;
 use app\common\enum\OperatorType;
 use app\common\enum\OrderStatus;
 use app\common\enum\RefundOrderStatus;
 use app\common\enum\RefundReason;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
-use think\facade\Db;
 
 /**
  * 后台售后服务（审核同意 / 驳回 / 列表 / 详情）
@@ -53,15 +60,15 @@ class RefundOrderAdminService extends BaseService
         $type        = (int) ($refund->type ?? 0);
 
         // 获取 SKU ID 用于库存回滚
-        $orderItem = Db::name('order_item')->where('id', $orderItemId)->find();
-        if (!is_array($orderItem)) {
+        $orderItemModel = $this->model(OrderItem::class)->where('id', $orderItemId)->find();
+        if ($orderItemModel === null) {
             throw new BusinessException('关联订单商品不存在');
         }
-        $skuId = (int) ($orderItem['sku_id'] ?? 0);
+        $skuId = (int) ($orderItemModel->sku_id ?? 0);
 
         // 获取主订单 trade_no 用于退款渠道调用
-        $order = Db::name('order')->where('id', (int) $refund->order_id)->find();
-        $tradeNo = is_array($order) ? (string) ($order['trade_no'] ?? '') : '';
+        $orderModel = $this->model(Order::class)->where('id', (int) $refund->order_id)->find();
+        $tradeNo = $orderModel !== null ? (string) ($orderModel->trade_no ?? '') : '';
 
         /** @var RefundOrderStatusMachine $machine */
         $machine = app()->make(RefundOrderStatusMachine::class);
@@ -90,7 +97,7 @@ class RefundOrderAdminService extends BaseService
             }
 
             // 3. 乐观锁累加 OrderItem.refunded_quantity
-            $affected = Db::name('order_item')
+            $affected = $this->model(OrderItem::class)
                 ->where('id', $orderItemId)
                 ->whereRaw('refunded_quantity + ? <= quantity', [$quantity])
                 ->inc('refunded_quantity', $quantity)
@@ -168,7 +175,7 @@ class RefundOrderAdminService extends BaseService
 
         // 按订单号筛选需要子查询
         if (!empty($filter['order_sn'])) {
-            $orderIds = Db::name('order')
+            $orderIds = $this->model(Order::class)
                 ->where('sn', 'like', '%' . trim((string) $filter['order_sn']) . '%')
                 ->column('id');
             $query->whereIn('order_id', $orderIds ?: [0]);
@@ -176,7 +183,7 @@ class RefundOrderAdminService extends BaseService
 
         // 按买家手机筛选需要 join user 表
         if (!empty($filter['user_phone'])) {
-            $userIds = Db::name('user')
+            $userIds = $this->model(User::class)
                 ->where('phone', 'like', '%' . trim((string) $filter['user_phone']) . '%')
                 ->column('id');
             $query->whereIn('user_id', $userIds ?: [0]);
@@ -203,10 +210,11 @@ class RefundOrderAdminService extends BaseService
         $data   = $refund->toArray();
 
         // 关联主订单摘要
-        $order = Db::name('order')
+        $orderModel = $this->model(Order::class)
             ->where('id', (int) $refund->order_id)
             ->field('id, sn, status, pay_amount, receiver_name, receiver_phone, receiver_province, receiver_city, receiver_district, receiver_address, create_time, paid_at, shipped_at, received_at')
             ->find();
+        $order = $orderModel?->toArray();
         if ($order !== null) {
             $order['status_text'] = OrderStatus::textOf((int) $order['status']);
         }
@@ -215,8 +223,9 @@ class RefundOrderAdminService extends BaseService
         // 关联订单项快照
         $orderItemId = (int) ($refund->order_item_id ?? 0);
         if ($orderItemId > 0) {
-            $item = Db::name('order_item')->where('id', $orderItemId)->find();
-            if (is_array($item)) {
+            $itemModel = $this->model(OrderItem::class)->where('id', $orderItemId)->find();
+            $item = $itemModel?->toArray();
+            if ($item !== null) {
                 $item['goods_image_full_url'] = buildUploadUrl((string) ($item['goods_image'] ?? ''));
             }
             $data['order_item'] = $item;
@@ -225,11 +234,12 @@ class RefundOrderAdminService extends BaseService
         }
 
         // 买家信息
-        $user = Db::name('user')
+        $userModel = $this->model(User::class)
             ->where('id', (int) $refund->user_id)
             ->field('id, nickname, phone, avatar')
             ->find();
-        if (is_array($user) && !empty($user['avatar'])) {
+        $user = $userModel?->toArray();
+        if ($user !== null && !empty($user['avatar'])) {
             $user['avatar_url'] = buildUploadUrl((string) $user['avatar']);
         }
         $data['user'] = $user;
@@ -237,11 +247,11 @@ class RefundOrderAdminService extends BaseService
         // 审核人信息
         $reviewedBy = (int) ($refund->reviewed_by ?? 0);
         if ($reviewedBy > 0) {
-            $reviewer = Db::name('admin')
+            $reviewerModel = $this->model(Admin::class)
                 ->where('id', $reviewedBy)
                 ->field('id, nickname, username')
                 ->find();
-            $data['reviewer'] = $reviewer;
+            $data['reviewer'] = $reviewerModel?->toArray();
         } else {
             $data['reviewer'] = null;
         }
@@ -284,7 +294,7 @@ class RefundOrderAdminService extends BaseService
         )));
         $orderMap = [];
         if ($orderIds !== []) {
-            $rows = Db::name('order')
+            $rows = $this->model(Order::class)
                 ->whereIn('id', $orderIds)
                 ->field('id, sn, status')
                 ->select()
@@ -305,7 +315,7 @@ class RefundOrderAdminService extends BaseService
         )));
         $itemMap = [];
         if ($orderItemIds !== []) {
-            $rows = Db::name('order_item')
+            $rows = $this->model(OrderItem::class)
                 ->whereIn('id', $orderItemIds)
                 ->field('id, goods_name, goods_image, sku_spec, unit_price, quantity')
                 ->select()
@@ -323,7 +333,7 @@ class RefundOrderAdminService extends BaseService
         )));
         $userMap = [];
         if ($userIds !== []) {
-            $rows = Db::name('user')
+            $rows = $this->model(User::class)
                 ->whereIn('id', $userIds)
                 ->field('id, nickname, phone')
                 ->select()

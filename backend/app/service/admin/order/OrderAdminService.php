@@ -5,13 +5,16 @@ declare(strict_types=1);
 namespace app\service\admin\order;
 
 use app\model\order\Order;
+use app\model\order\OrderItem;
 use app\model\order\OrderLog;
+use app\model\order\RefundOrder;
+use app\service\order\OrderStatusMachine;
+use app\service\order\StockService;
 use app\common\enum\OperatorType;
 use app\common\enum\OrderStatus;
 use app\common\enum\RefundOrderStatus;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
-use think\facade\Db;
 
 /**
  * 后台订单服务（发货 / 关闭 / 超时关单 / 管理列表）
@@ -197,7 +200,7 @@ class OrderAdminService extends BaseService
         // 先查出所有存在进行中售后单的 order_id，再 whereIn/whereNotIn
         // MVP 量级够用，百万级可改冗余字段 after_sale_tag
         if (isset($filter['has_after_sale']) && $filter['has_after_sale'] !== null && $filter['has_after_sale'] !== '') {
-            $activeOrderIds = Db::name('refund_order')
+            $activeOrderIds = $this->model(RefundOrder::class)
                 ->whereIn('status', RefundOrderStatus::activeStatuses())
                 ->whereNull('delete_time')
                 ->distinct(true)
@@ -244,7 +247,7 @@ class OrderAdminService extends BaseService
         $data  = $order->toArray();
 
         $data['items']               = $this->fetchItemsByOrderIds([$orderId])[$orderId] ?? [];
-        $data['logs']                = app()->make(OrderLog::class)
+        $data['logs']                = $this->model(OrderLog::class)
             ->where('order_id', $orderId)
             ->order('id', 'asc')
             ->select()
@@ -271,7 +274,7 @@ class OrderAdminService extends BaseService
      */
     private function loadOrderItemsForStock(int $orderId): array
     {
-        return Db::name('order_item')
+        return $this->model(OrderItem::class)
             ->where('order_id', $orderId)
             ->field('sku_id, quantity')
             ->select()
@@ -289,7 +292,7 @@ class OrderAdminService extends BaseService
         if ($orderIds === []) {
             return [];
         }
-        $rows = Db::name('order_item')
+        $rows = $this->model(OrderItem::class)
             ->whereIn('order_id', $orderIds)
             ->select()
             ->toArray();
@@ -315,7 +318,7 @@ class OrderAdminService extends BaseService
         if ($orderIds === []) {
             return [];
         }
-        $rows = Db::name('refund_order')
+        $rows = $this->model(RefundOrder::class)
             ->whereIn('order_id', $orderIds)
             ->whereIn('status', RefundOrderStatus::activeStatuses())
             ->whereNull('delete_time')

@@ -9,7 +9,6 @@ use app\model\goods\GoodsSku;
 use app\model\order\Cart;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
-use think\facade\Db;
 
 /**
  * 买家购物车服务
@@ -231,7 +230,7 @@ class CartService extends BaseService
     private function ensureSaleableSku(int $skuId): array
     {
         /** @var GoodsSku|null $sku */
-        $sku = app()->make(GoodsSku::class)
+        $sku = $this->model(GoodsSku::class)
             ->where('id', $skuId)
             ->where('status', 1)
             ->find();
@@ -239,7 +238,7 @@ class CartService extends BaseService
             throw new BusinessException('商品规格不存在或已下架');
         }
 
-        $goods = app()->make(Goods::class)
+        $goods = $this->model(Goods::class)
             ->where('id', $sku->goods_id)
             ->whereNull('delete_time')
             ->find();
@@ -292,7 +291,7 @@ class CartService extends BaseService
         if ($skuIds === []) {
             return [];
         }
-        $rows = Db::name('goods_sku')
+        $rows = $this->model(GoodsSku::class)
             ->whereIn('id', $skuIds)
             ->column('id,goods_id,spec_values,price,stock,image,status', 'id');
         return is_array($rows) ? $rows : [];
@@ -307,7 +306,7 @@ class CartService extends BaseService
         if ($goodsIds === []) {
             return [];
         }
-        $rows = Db::name('goods')
+        $rows = $this->model(Goods::class)
             ->whereIn('id', $goodsIds)
             ->whereNull('delete_time')
             ->column('id,name,main_image,status,is_on_sale', 'id');

@@ -4,11 +4,17 @@ declare(strict_types=1);
 
 namespace app\service;
 
+use app\model\region\Region;
+use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
-use think\facade\Db;
 
-class RegionResolverService
+/**
+ * @extends BaseService<Region>
+ */
+class RegionResolverService extends BaseService
 {
+    protected string $modelClass = Region::class;
+
     /**
      * @param array<string, mixed> $data
      * @return array<string, mixed>
@@ -157,7 +163,7 @@ class RegionResolverService
      */
     public function getChildren(int $parentId = 0): array
     {
-        return Db::name('region')
+        return $this->model()
             ->where('parent_id', $parentId)
             ->where('status', 1)
             ->order('sort', 'asc')
@@ -171,8 +177,8 @@ class RegionResolverService
      */
     public function getPath(int $id): array
     {
-        $region = Db::name('region')->where('id', $id)->find();
-        if (!$region) {
+        $region = $this->model()->where('id', $id)->find();
+        if ($region === null) {
             throw new BusinessException('地区不存在');
         }
 
@@ -181,7 +187,7 @@ class RegionResolverService
             return [];
         }
 
-        $list = Db::name('region')
+        $list = $this->model()
             ->whereIn('code', $codes)
             ->order('level', 'asc')
             ->select()
@@ -219,7 +225,7 @@ class RegionResolverService
             throw new BusinessException('请选择完整的省市区街道');
         }
 
-        $regions = Db::name('region')
+        $regions = $this->model()
             ->whereIn('id', [$provinceId, $cityId, $districtId, $streetId])
             ->select()
             ->toArray();
@@ -268,7 +274,7 @@ class RegionResolverService
             throw new BusinessException('请选择街道区域');
         }
 
-        $regions = Db::name('region')
+        $regions = $this->model()
             ->whereIn('id', $regionIds)
             ->select()
             ->toArray();
@@ -328,7 +334,7 @@ class RegionResolverService
             throw new BusinessException('请选择区域');
         }
 
-        $regions = Db::name('region')
+        $regions = $this->model()
             ->whereIn('id', $regionIds)
             ->select()
             ->toArray();
@@ -441,7 +447,7 @@ class RegionResolverService
             ];
         }
 
-        $regions = Db::name('region')
+        $regions = $this->model()
             ->whereIn('code', $regionCodes)
             ->select()
             ->toArray();
@@ -631,12 +637,12 @@ class RegionResolverService
             ];
         }
 
-        $region = Db::name('region')
+        $region = $this->model()
             ->where('code', $code)
             ->where('level', $level)
             ->find();
 
-        if (!$region) {
+        if ($region === null) {
             return [
                 'success' => false,
                 'reason' => sprintf('%s编码未匹配', $label),
