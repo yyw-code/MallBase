@@ -17,7 +17,7 @@
 # ============================================================
 set -eu
 
-WORKDIR=/workdir
+WORKDIR="${WORKDIR:-/workdir}"
 BACKEND_ENV="${WORKDIR}/backend/.env"
 BACKEND_TPL="${WORKDIR}/backend/.example.env"
 ROOT_ENV="${WORKDIR}/.env"
@@ -25,11 +25,11 @@ ROOT_TPL="${WORKDIR}/deploy/docker/.example.env"
 PLACEHOLDER="please-change-or-leave-for-random"
 BACKEND_HEADER_1="# 由 Docker 开发全套模式自动生成，请勿手动修改。"
 BACKEND_HEADER_2="# 唯一主配置源：项目根目录 /.env"
-ROOT_TO_BACKEND_KEYS="SWOOLE_HTTP_PORT DB_NAME DB_USER DB_PASS ADMIN_USER ADMIN_PASS INSTALL_DEMO"
-ROOT_INIT_FROM_BACKEND_KEYS="SWOOLE_HTTP_PORT DB_NAME DB_USER DB_PASS"
+ROOT_TO_BACKEND_KEYS="SWOOLE_HTTP_PORT SWOOLE_WORKER_NUM DB_NAME DB_USER DB_PASS SITE_URL"
+ROOT_INIT_FROM_BACKEND_KEYS="SWOOLE_HTTP_PORT SWOOLE_WORKER_NUM DB_NAME DB_USER DB_PASS"
 
-rand24() { tr -dc 'A-Za-z0-9' </dev/urandom | head -c 24; }
-rand64() { tr -dc 'A-Za-z0-9' </dev/urandom | head -c 64; }
+rand24() { LC_ALL=C od -An -N12 -tx1 /dev/urandom | tr -d ' \n'; }
+rand64() { LC_ALL=C od -An -N32 -tx1 /dev/urandom | tr -d ' \n'; }
 
 has_key() {
     file=$1
@@ -56,7 +56,9 @@ set_value() {
     value=$3
     escaped=$(escape_sed "$value")
     if has_key "$file" "$key"; then
-        sed -i "s|^${key}=.*|${key}=${escaped}|" "$file"
+        tmp_file=$(mktemp)
+        sed "s|^${key}=.*|${key}=${escaped}|" "$file" > "$tmp_file"
+        mv "$tmp_file" "$file"
     else
         printf '%s=%s\n' "$key" "$value" >> "$file"
     fi

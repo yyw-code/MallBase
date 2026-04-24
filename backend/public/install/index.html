@@ -341,8 +341,9 @@ body.complete-mode .container{max-width:1220px}
         <input type="password" id="admin_pass2">
       </div>
       <div class="form-group">
-        <label>允许跨域的前端地址（多个用逗号分隔，* 表示全部允许）</label>
-        <input type="text" id="cors_origins" value="">
+        <label>站点域名</label>
+        <input type="text" id="site_url" value="" placeholder="https://example.com">
+        <div class="hint">用作后台入口、Client API 基址、本地上传访问域名。安装后可在「系统设置 → 系统配置 → 基础」修改。</div>
       </div>
       <div class="checkbox-group">
         <input type="checkbox" id="import_demo">
@@ -733,9 +734,9 @@ async function loadFormDefaults() {
     document.getElementById('admin_pass').value = data.admin_pass || '';
     document.getElementById('admin_pass2').value = data.admin_pass || '';
     document.getElementById('import_demo').checked = String(data.import_demo || '0') === '1';
-    document.getElementById('cors_origins').value = data.cors_origins || window.location.origin;
+    document.getElementById('site_url').value = data.site_url || window.location.origin;
   } catch (e) {
-    document.getElementById('cors_origins').value = window.location.origin;
+    document.getElementById('site_url').value = window.location.origin;
   }
 }
 
@@ -862,13 +863,14 @@ function validateAdminFields() {
 function buildInstallPayload() {
   const db = getDbPayload();
   const redis = getRedisPayload();
+  const siteUrl = document.getElementById('site_url').value.trim() || window.location.origin;
   return {
     ...db,
     ...redis,
     admin_user: document.getElementById('admin_user').value.trim(),
     admin_pass: document.getElementById('admin_pass').value,
     import_demo: document.getElementById('import_demo').checked ? 1 : 0,
-    cors_origins: document.getElementById('cors_origins').value.trim() || '*',
+    site_url: siteUrl,
   };
 }
 

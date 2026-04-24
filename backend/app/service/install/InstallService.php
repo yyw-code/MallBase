@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 namespace app\service\install;
 
+use app\service\RegionImportService;
+use app\service\admin\setting\SettingService;
 use mall_base\base\BaseModel;
 use mall_base\base\BaseService;
 use PDO;
 use PDOException;
 use Redis;
 use RedisException;
+use think\facade\Cache;
 use think\facade\Config;
 use think\facade\Console;
 use think\facade\Db;
@@ -24,16 +27,38 @@ class InstallService extends BaseService
      * @var array<string, string>
      */
     private array $stepTitles = [
-        'db_test'          => '校验数据库连接',
-        'redis_test'       => '校验 Redis 连接',
-        'write_env'        => '写入配置文件',
-        'create_db'        => '创建数据库',
-        'import_sql'       => '导入表结构',
-        'create_admin'     => '创建管理员',
-        'import_demo'      => '导入演示数据',
-        'sync_permissions' => '同步权限数据',
-        'write_lock'       => '写入安装锁',
+        'db_test'                  => '校验数据库连接',
+        'redis_test'               => '校验 Redis 连接',
+        'write_env'                => '写入配置文件',
+        'create_db'                => '创建数据库',
+        'import_sql'               => '导入表结构',
+        'create_admin'             => '创建管理员',
+        'import_demo'              => '导入演示数据',
+        'sync_permissions'         => '同步路由权限',
+        'sync_setting_permissions' => '同步系统设置菜单',
+        'import_regions'           => '导入地区数据',
+        'seed_site_url'            => '写入站点域名',
+        'verify_default_assets'    => '检查默认静态资源',
+        'write_lock'               => '写入安装锁',
     ];
+
+    /**
+     * @var array<int, string> 默认静态资源文件清单（相对 backend/public 根）
+     */
+    private array $defaultAssets = [
+        'static/admin/logo.png',
+        'static/admin/favicon.png',
+        'static/admin/slogan.png',
+        'static/admin/avatar-default.png',
+        'static/client/logo.png',
+        'static/client/launch.png',
+        'static/client/share-cover.png',
+    ];
+
+    /**
+     * 默认头像路径（超管创建时使用；与 mb_setting.default_avatar 默认值保持一致）
+     */
+    private const DEFAULT_AVATAR_PATH = '/static/admin/avatar-default.png';
 
     protected string $modelClass = BaseModel::class;
 
@@ -333,10 +358,11 @@ class InstallService extends BaseService
     }
 
     /**
-     * 从进程 env 构建安装参数（方式三 Docker 全套零向导使用）
+     * 从进程 env 构建安装参数
      *
-     * 仅在 env 完备的场景下调用，不尝试推测/填充缺省连接信息。
-     * ADMIN_USER / ADMIN_PASS 允许缺省，INSTALL_DEMO 默认不导入。
+     * 数据库、Redis、站点域名允许从 env 提供默认值；
+     * 管理员账号和演示数据不再作为 env 配置入口，Web 安装统一回到安装表单确认。
+     * 可选 CLI 安装入口仍使用代码内置默认值，避免依赖第二套 env 配置。
      */
     public function buildParamsFromEnv(): array
     {
@@ -355,16 +381,71 @@ class InstallService extends BaseService
             'redis_port'     => $get('REDIS_PORT') !== '' ? (int) $get('REDIS_PORT') : 6379,
             'redis_db'       => $get('REDIS_CACHE_DB') !== '' ? (int) $get('REDIS_CACHE_DB') : 0,
             'redis_password' => $get('REDIS_PASSWORD'),
-            'admin_user'     => $get('ADMIN_USER') !== '' ? $get('ADMIN_USER') : 'admin',
-            'admin_pass'     => $get('ADMIN_PASS') !== '' ? $get('ADMIN_PASS') : 'admin123',
-            'import_demo'    => $get('INSTALL_DEMO') === '1',
-            'cors_origins'   => $get('CORS_ALLOWED_ORIGINS') !== '' ? $get('CORS_ALLOWED_ORIGINS') : '*',
+            'admin_user'     => 'admin',
+            'admin_pass'     => 'admin123',
+            'import_demo'    => false,
+            // 站点域名（用于 Upload 本地域名、邮件/分享链接等全局场景，统一存 mb_setting.site_url，不再写 env）
+            // env 中可预置 SITE_URL 作为 CLI 安装（install:auto）的输入；Web 向导提交空串时会回退到当前 request 域名
+            'site_url'       => $get('SITE_URL'),
         ];
     }
 
     public function getFormDefaults(): array
     {
-        return $this->buildParamsFromEnv();
+        $params = $this->buildParamsFromEnv();
+
+        // site_url 默认值优先使用当前访问域名（安装页首次打开时预填），用户可编辑
+        if ($params['site_url'] === '') {
+            $params['site_url'] = $this->resolveDefaultSiteUrl();
+        }
+
+        return $params;
+    }
+
+    /**
+     * 推导 site_url 默认值。
+     *
+     * 候选优先级（任一命中即返回）：
+     * 1. HTTP 上下文下的当前 request 域名（Web 安装向导走这里）
+     * 2. 环境变量 SITE_URL（运维可在 .env / compose env_file 中预置，主要供 install:auto CLI 场景）
+     * 3. 由 SWOOLE_HTTP_HOST + SWOOLE_HTTP_PORT 拼出的 http://host:port（兜底）
+     *
+     * 返回空串表示完全无法推导，调用方应拒绝继续安装而不是静默装出一个只允许 localhost 的实例。
+     */
+    private function resolveDefaultSiteUrl(): string
+    {
+        // 1. HTTP 请求上下文
+        try {
+            $request = request();
+            if ($request) {
+                $scheme = $request->scheme() ?: 'http';
+                $host = trim((string) $request->host());
+                if ($host !== '') {
+                    return $scheme . '://' . $host;
+                }
+            }
+        } catch (\Throwable $e) {
+            // CLI 无 request，走 env 兜底
+        }
+
+        // 2. env SITE_URL
+        $siteUrlEnv = trim((string) env('SITE_URL', ''));
+        if ($siteUrlEnv !== '') {
+            return rtrim($siteUrlEnv, '/');
+        }
+
+        // 3. 由 SWOOLE host+port 拼 fallback（大概率只对开发环境有意义）
+        $swooleHost = trim((string) env('SWOOLE_HTTP_HOST', ''));
+        $swoolePort = trim((string) env('SWOOLE_HTTP_PORT', ''));
+        if ($swooleHost !== '' && $swoolePort !== '') {
+            // 0.0.0.0 不是合法访问域名，替换为 localhost 作为开发占位
+            if ($swooleHost === '0.0.0.0') {
+                $swooleHost = 'localhost';
+            }
+            return 'http://' . $swooleHost . ':' . $swoolePort;
+        }
+
+        return '';
     }
 
     public function execute(array $params, ?callable $progress = null): array
@@ -405,7 +486,20 @@ class InstallService extends BaseService
         $adminUser = trim((string) ($params['admin_user'] ?? ''));
         $adminPass = (string) ($params['admin_pass'] ?? '');
         $importDemo = !empty($params['import_demo']);
-        $corsOrigins = trim((string) ($params['cors_origins'] ?? '*'));
+        $siteUrl = trim((string) ($params['site_url'] ?? ''));
+        if ($siteUrl === '') {
+            $siteUrl = $this->resolveDefaultSiteUrl();
+        }
+        $siteUrl = rtrim($siteUrl, '/');
+        if ($siteUrl === '') {
+            // 拒绝用空 site_url 继续安装，否则 Upload 本地访问域名、邮件/分享链接等
+            // 全局场景会退化到不可预期状态（静默故障，事后极难排查）
+            return $this->buildFailureResponse(
+                'write_env',
+                '站点域名（site_url）未指定。Web 安装请在表单填写；CLI 安装（install:auto）请设置 SITE_URL 环境变量。',
+                $steps
+            );
+        }
         $jwtSecret = trim((string) ($params['jwt_secret'] ?? ''));
         if ($jwtSecret === '') {
             $jwtSecret = rtrim(strtr(base64_encode(random_bytes(48)), '+/', '-_'), '=');
@@ -438,25 +532,27 @@ class InstallService extends BaseService
 
         $emit('write_env', 'running', '正在写入 backend/.env…');
         try {
+            // 注意：
+            // - SITE_URL 写入 env 作为 **静态副本**，便于运维通过 grep / docker exec printenv
+            //   查看当前实例站点域名。后台改 mb_setting.site_url 后 env SITE_URL 不会自动同步
+            //   （需重新安装或手动改），属于已知取舍。
+            // - JWT_SECRET 保留在 env（敏感，DB 泄露不会连带泄露 Token 签名密钥）
             $envData = [
-                'DB_TYPE'              => 'mysql',
-                'DB_HOST'              => $dbConfig['host'],
-                'DB_NAME'              => $dbConfig['name'],
-                'DB_USER'              => $dbConfig['user'],
-                'DB_PASS'              => $dbConfig['pass'],
-                'DB_PORT'              => (string) $dbConfig['port'],
-                'DB_CHARSET'           => 'utf8mb4',
-                'REDIS_HOST'           => $redisConfig['host'],
-                'REDIS_PORT'           => (string) $redisConfig['port'],
-                'REDIS_CACHE_DB'       => (string) $redisConfig['db'],
-                'REDIS_PASSWORD'       => $redisConfig['password'],
-                'CACHE_DRIVER'         => 'redis',
-                'JWT_SECRET'           => $jwtSecret,
+                'DB_TYPE'                => 'mysql',
+                'DB_HOST'                => $dbConfig['host'],
+                'DB_NAME'                => $dbConfig['name'],
+                'DB_USER'                => $dbConfig['user'],
+                'DB_PASS'                => $dbConfig['pass'],
+                'DB_PORT'                => (string) $dbConfig['port'],
+                'DB_CHARSET'             => 'utf8mb4',
+                'REDIS_HOST'             => $redisConfig['host'],
+                'REDIS_PORT'             => (string) $redisConfig['port'],
+                'REDIS_CACHE_DB'         => (string) $redisConfig['db'],
+                'REDIS_PASSWORD'         => $redisConfig['password'],
+                'CACHE_DRIVER'           => 'redis',
+                'JWT_SECRET'             => $jwtSecret,
                 'INSTALL_RUNTIME_MARKER' => $runtimeMarker,
-                'CORS_ALLOWED_ORIGINS' => $corsOrigins !== '' ? $corsOrigins : '*',
-                'ADMIN_USER'           => $adminUser,
-                'ADMIN_PASS'           => $adminPass,
-                'INSTALL_DEMO'         => $importDemo ? '1' : '0',
+                'SITE_URL'               => $siteUrl,
             ];
             $this->writeEnvFile($envData);
             $this->applyRuntimeConfig($envData);
@@ -510,13 +606,60 @@ class InstallService extends BaseService
         $pdo = null;
 
         try {
-            $emit('sync_permissions', 'running', '正在同步权限与菜单数据…');
+            $emit('sync_permissions', 'running', '正在同步路由权限与菜单…');
             Console::call('sync:permissions');
-            $emit('sync_permissions', 'success', '权限与菜单数据已同步');
+            $emit('sync_permissions', 'success', '路由权限已同步');
         } catch (\Throwable $e) {
             $message = '权限同步失败：' . $e->getMessage();
             $emit('sync_permissions', 'error', $message);
             return $this->buildFailureResponse('sync_permissions', $message, $steps);
+        }
+
+        try {
+            $emit('sync_setting_permissions', 'running', '正在同步系统设置菜单…');
+            app()->make(SettingService::class)->rebuildAllPermissions();
+            $emit('sync_setting_permissions', 'success', '系统设置菜单已同步');
+        } catch (\Throwable $e) {
+            $message = '系统设置菜单同步失败：' . $e->getMessage();
+            $emit('sync_setting_permissions', 'error', $message);
+            return $this->buildFailureResponse('sync_setting_permissions', $message, $steps);
+        }
+
+        try {
+            $emit('import_regions', 'running', '正在导入地区数据…');
+            $imported = app()->make(RegionImportService::class)
+                ->importFromFile($this->installDataPath('region') . DIRECTORY_SEPARATOR . 'pcas-code.json');
+            $emit('import_regions', 'success', "地区数据已导入，本次新增 {$imported} 条");
+        } catch (\Throwable $e) {
+            $message = '地区数据导入失败：' . $e->getMessage();
+            $emit('import_regions', 'error', $message);
+            return $this->buildFailureResponse('import_regions', $message, $steps);
+        }
+
+        try {
+            $emit('seed_site_url', 'running', '正在写入站点域名至 mb_setting.site_url…');
+            $this->seedSiteUrl($siteUrl);
+            $emit('seed_site_url', 'success', '站点域名已写入：' . $siteUrl);
+        } catch (\Throwable $e) {
+            $message = '写入站点域名失败：' . $e->getMessage();
+            $emit('seed_site_url', 'error', $message);
+            return $this->buildFailureResponse('seed_site_url', $message, $steps);
+        }
+
+        try {
+            $emit('verify_default_assets', 'running', '正在检查默认静态资源…');
+            $missing = $this->verifyDefaultAssets();
+            if (empty($missing)) {
+                $emit('verify_default_assets', 'success', '默认静态资源齐全');
+            } else {
+                // 资源缺失不阻断安装，仅提示
+                $emit('verify_default_assets', 'warning', '部分默认素材缺失：' . implode('、', $missing), [
+                    'missing' => $missing,
+                ]);
+            }
+        } catch (\Throwable $e) {
+            // 检查本身出错也不阻断
+            $emit('verify_default_assets', 'warning', '默认静态资源检查异常：' . $e->getMessage());
         }
 
         try {
@@ -769,10 +912,11 @@ class InstallService extends BaseService
     {
         $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
         $now = date('Y-m-d H:i:s');
+        $avatar = self::DEFAULT_AVATAR_PATH;
 
         $stmt = $pdo->prepare(
             "INSERT INTO `mb_admin` (`id`, `username`, `nickname`, `password`, `avatar`, `status`, `password_changed_at`, `create_time`, `update_time`)
-             VALUES (1, :username, :nickname, :password, '', 1, NULL, :create_time, :update_time)
+             VALUES (1, :username, :nickname, :password, :avatar, 1, NULL, :create_time, :update_time)
              ON DUPLICATE KEY UPDATE `username` = :username2, `password` = :password2, `password_changed_at` = NULL, `update_time` = :update_time2"
         );
 
@@ -780,12 +924,68 @@ class InstallService extends BaseService
             ':username'     => $username,
             ':nickname'     => '超级管理员',
             ':password'     => $hashedPassword,
+            ':avatar'       => $avatar,
             ':create_time'  => $now,
             ':update_time'  => $now,
             ':username2'    => $username,
             ':password2'    => $hashedPassword,
             ':update_time2' => $now,
         ]);
+    }
+
+    /**
+     * 把安装表单提交的站点域名写入 mb_setting.site_url
+     * 直接走 ThinkPHP 的 Db facade（sync_permissions 步骤已触发框架引导，此时连接池就绪）
+     */
+    private function seedSiteUrl(string $siteUrl): void
+    {
+        if ($siteUrl === '') {
+            // 安装期已在 execute() 入口校验过一次；此处再次防御，明确报错便于定位
+            throw new \RuntimeException('site_url 为空，无法写入 mb_setting。请检查安装表单或 SITE_URL 环境变量');
+        }
+
+        $updated = Db::table('mb_setting')
+            ->where('code', 'site_url')
+            ->update([
+                'value'       => $siteUrl,
+                'update_time' => date('Y-m-d H:i:s'),
+            ]);
+
+        // 若 setting 表中还没有 site_url 记录（seed 未执行的兜底），拒绝静默失败
+        if ($updated === 0) {
+            $exists = Db::table('mb_setting')->where('code', 'site_url')->count();
+            if ($exists === 0) {
+                throw new \RuntimeException('mb_setting 未包含 site_url seed 数据，请确认 03_mb_setting.sql 导入成功');
+            }
+        }
+
+        // 清理 Redis 设置缓存，防止旧 site_url 还被业务读到
+        try {
+            Cache::delete('setting:value:site_url');
+            Cache::delete('setting:group:SystemBasic');
+            Cache::delete('setting:group:system_read:SystemBasic');
+            Cache::delete('setting:all');
+        } catch (\Throwable $e) {
+            // Redis 未就绪时忽略（安装流程前面的 redis_test 已保证通过，这里仅防御）
+        }
+    }
+
+    /**
+     * 检查默认静态资源是否齐全，返回缺失文件清单（相对 backend/public）
+     *
+     * @return array<int, string>
+     */
+    private function verifyDefaultAssets(): array
+    {
+        $publicRoot = public_path();
+        $missing = [];
+        foreach ($this->defaultAssets as $relative) {
+            $full = rtrim($publicRoot, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $relative);
+            if (!is_file($full)) {
+                $missing[] = $relative;
+            }
+        }
+        return $missing;
     }
 
     private function importDemoData(PDO $pdo): void
