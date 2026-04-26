@@ -1,0 +1,25 @@
+{
+  "name": "mallbase-uniapp",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev:h5": "UNI_INPUT_DIR=. uni",
+    "dev:mp-weixin": "UNI_INPUT_DIR=. uni -p mp-weixin",
+    "build:h5": "UNI_INPUT_DIR=. uni build",
+    "build:mp-weixin": "UNI_INPUT_DIR=. uni build -p mp-weixin"
+  },
+  "dependencies": {
+    "@dcloudio/uni-app": "3.0.0-alpha-5000820260420001",
+    "@dcloudio/uni-components": "3.0.0-alpha-5000820260420001",
+    "@dcloudio/uni-h5": "3.0.0-alpha-5000820260420001",
+    "@dcloudio/uni-mp-weixin": "3.0.0-alpha-5000820260420001",
+    "pinia": "^3.0.4",
+    "vue": "^3.4.21"
+  },
+  "devDependencies": {
+    "@dcloudio/uni-cli-shared": "3.0.0-alpha-5000820260420001",
+    "@dcloudio/vite-plugin-uni": "3.0.0-alpha-5000820260420001",
+    "sass": "^1.99.0",
+    "vite": "^5.2.8"
+  }
+}
