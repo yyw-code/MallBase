@@ -161,42 +161,42 @@ export async function resetClientUserPasswordApi(id: number, password: string) {
  * 前台用户登录
  */
 export async function clientUserLoginApi(data: ClientUserApi.LoginParams) {
-  return requestClient.post<ClientUserApi.LoginResponse>('/client/user/auth/login', data);
+  return requestClient.post<ClientUserApi.LoginResponse>('/client/api/user/auth/login', data);
 }
 
 /**
  * 前台用户注册
  */
 export async function clientUserRegisterApi(data: ClientUserApi.RegisterParams) {
-  return requestClient.post<ClientUserApi.LoginResponse>('/client/user/auth/register', data);
+  return requestClient.post<ClientUserApi.LoginResponse>('/client/api/user/auth/register', data);
 }
 
 /**
  * 前台用户登出
  */
 export async function clientUserLogoutApi() {
-  return requestClient.post('/client/user/my/logout');
+  return requestClient.post('/client/api/user/my/logout');
 }
 
 /**
  * 获取当前前台用户信息
  */
 export async function getClientMyUserInfoApi() {
-  return requestClient.get<ClientUserApi.UserItem>('/client/user/my/info');
+  return requestClient.get<ClientUserApi.UserItem>('/client/api/user/my/info');
 }
 
 /**
  * 更新当前前台用户信息
  */
 export async function updateClientMyUserInfoApi(data: Partial<ClientUserApi.UpdateParams>) {
-  return requestClient.put('/client/user/my/info', data);
+  return requestClient.put('/client/api/user/my/info', data);
 }
 
 /**
  * 修改当前前台用户密码
  */
 export async function changeClientMyPasswordApi(data: ClientUserApi.ChangePasswordParams) {
-  return requestClient.put('/client/user/my/password', data);
+  return requestClient.put('/client/api/user/my/password', data);
 }
 
 // 导出分组和标签 API
