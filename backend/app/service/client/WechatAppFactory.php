@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace app\service\client;
 
-use app\service\SystemSettingService;
 use EasyWeChat\MiniApp\Application as MiniAppApplication;
 use EasyWeChat\OfficialAccount\Application as OfficialAccountApplication;
 use mall_base\exception\BusinessException;
@@ -15,16 +14,12 @@ use mall_base\exception\BusinessException;
  * 设计要点:
  *  - 每次调用返回一个 **新实例**,严格遵守 thinkPHP/service-stateless-swoole 规范,
  *    避免 Swoole 常驻进程下 SDK 内部状态(如 token、http client)跨请求污染
- *  - 配置来源:mb_setting(数据库),通过 SystemSettingService 读取并经 Redis 缓存,
+ *  - 配置来源:mb_setting(数据库),通过全局 getSystemSetting() 读取并经 Redis 缓存,
  *    后台改完即时生效;不读 .env / config/wechat.php
  *  - 缺少 AppID/AppSecret 时立刻抛 BusinessException,不让 SDK 用空字符串去发请求
  */
 class WechatAppFactory
 {
-    public function __construct(
-        private readonly SystemSettingService $settings,
-    ) {
-    }
 
     /**
      * 构造小程序 Application
@@ -33,8 +28,8 @@ class WechatAppFactory
      */
     public function miniApp(): MiniAppApplication
     {
-        $appId = $this->settings->string('wechat_mini_appid');
-        $appSecret = $this->settings->string('wechat_mini_secret');
+        $appId = (string) getSystemSetting('wechat_mini_appid', '');
+        $appSecret = (string) getSystemSetting('wechat_mini_secret', '');
         $this->assertCredentials($appId, $appSecret, '微信小程序');
 
         return new MiniAppApplication([
@@ -50,8 +45,8 @@ class WechatAppFactory
      */
     public function officialAccount(): OfficialAccountApplication
     {
-        $appId = $this->settings->string('wechat_offi_appid');
-        $appSecret = $this->settings->string('wechat_offi_secret');
+        $appId = (string) getSystemSetting('wechat_offi_appid', '');
+        $appSecret = (string) getSystemSetting('wechat_offi_secret', '');
         $this->assertCredentials($appId, $appSecret, '微信公众号');
 
         $config = [
@@ -59,11 +54,11 @@ class WechatAppFactory
             'secret' => $appSecret,
         ];
 
-        $token = $this->settings->string('wechat_offi_token');
+        $token = (string) getSystemSetting('wechat_offi_token', '');
         if ($token !== '') {
             $config['token'] = $token;
         }
-        $aesKey = $this->settings->string('wechat_offi_aes_key');
+        $aesKey = (string) getSystemSetting('wechat_offi_aes_key', '');
         if ($aesKey !== '') {
             $config['aes_key'] = $aesKey;
         }
@@ -78,7 +73,7 @@ class WechatAppFactory
      */
     public function officialOauthScope(): string
     {
-        return $this->settings->bool('wechat_offi_force_userinfo')
+        return in_array((string) getSystemSetting('wechat_offi_force_userinfo', '0'), ['1', 'true', 'on', 'yes'], true)
             ? 'snsapi_userinfo'
             : 'snsapi_base';
     }
@@ -91,7 +86,7 @@ class WechatAppFactory
      */
     public function trustUnionid(): bool
     {
-        return $this->settings->bool('wechat_open_bound');
+        return in_array((string) getSystemSetting('wechat_open_bound', '0'), ['1', 'true', 'on', 'yes'], true);
     }
 
     private function assertCredentials(string $appId, string $secret, string $label): void

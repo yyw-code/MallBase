@@ -1,7 +1,7 @@
 <?php
 // 应用公共文件
 
-use app\service\admin\setting\SettingService;
+use app\service\SystemSettingService;
 use app\service\UploadService;
 
 if (!function_exists('convertToRouteName')) {
@@ -86,7 +86,33 @@ if (!function_exists('getSystemSetting')) {
      */
     function getSystemSetting(string $code, mixed $default = null): mixed
     {
-        return app()->make(SettingService::class)
-            ->getSettingValue($code, $default);
+        try {
+            return app()->make(SystemSettingService::class)
+                ->getSystemSetting($code, $default);
+        } catch (\Throwable) {
+            return $default;
+        }
+    }
+}
+
+if (!function_exists('getSystemSettingGroup')) {
+    /**
+     * 按分组编码批量获取该组下全部键值（图片字段自动返回完整 URL）
+     *
+     * 使用示例：
+     *   getSystemSettingGroup('UploadLocal')
+     *   // => ['local_url_prefix' => '/uploads', 'local_root_path' => 'uploads', 'local_base_url' => '...']
+     *
+     * @param string $groupCode 分组编码（如 UploadLocal、SmsAliyun）
+     * @return array<string, mixed>
+     */
+    function getSystemSettingGroup(string $groupCode): array
+    {
+        try {
+            return app()->make(SystemSettingService::class)
+                ->getSystemSettingGroups([$groupCode]);
+        } catch (\Throwable) {
+            return [];
+        }
     }
 }

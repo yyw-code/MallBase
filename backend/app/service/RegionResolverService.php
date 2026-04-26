@@ -663,17 +663,11 @@ class RegionResolverService extends BaseService
         ];
     }
 
-    /**
-     * @param array<string, mixed> $province
-     * @param array<string, mixed> $city
-     * @param array<string, mixed> $district
-     * @param array<string, mixed> $street
-     */
     protected function validateAddressChain(
-        array $province,
-        array $city,
-        array $district,
-        array $street,
+        array|\ArrayAccess $province,
+        array|\ArrayAccess $city,
+        array|\ArrayAccess $district,
+        array|\ArrayAccess $street,
     ): ?string {
         if ((int) $city['parent_id'] !== (int) $province['id']) {
             return '地区父子关系不匹配';
@@ -776,10 +770,10 @@ class RegionResolverService extends BaseService
      * @return array<string, mixed>
      */
     protected function buildAddressRegionPayload(
-        array $province,
-        array $city,
-        array $district,
-        array $street,
+        array|\ArrayAccess $province,
+        array|\ArrayAccess $city,
+        array|\ArrayAccess $district,
+        array|\ArrayAccess $street,
     ): array {
         return [
             'province_id' => (int) $province['id'],

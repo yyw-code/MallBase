@@ -45,8 +45,9 @@ class LocalUploadDriver extends BaseUploadDriver
     {
         parent::__construct($config);
 
-        $this->rootPath = $config['root_path'] ?: public_path() . 'uploads';
-        $this->urlPrefix = $config['url_prefix'] ?: '/uploads';
+        $rootPath = $config['root_path'] ?? 'uploads';
+        $this->rootPath = str_starts_with($rootPath, '/') ? $rootPath : public_path() . $rootPath;
+        $this->urlPrefix = $config['url_prefix'] ?? '/uploads';
         $this->baseUrl = $config['base_url'] ?? '';
 
         // 确保根路径存在

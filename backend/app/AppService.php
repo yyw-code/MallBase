@@ -30,7 +30,7 @@ class AppService extends Service
             'mock'   => MockSmsDriver::class,
             'aliyun' => AliyunSmsDriver::class,
         ]);
-        DriverManager::setDefault('sms', (string) config('sms.driver', 'mock'));
+        DriverManager::setDefault('sms', (string) getSystemSetting('sms_driver', 'mock'));
     }
 
     public function boot()

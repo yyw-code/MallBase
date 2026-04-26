@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace app\service\client;
 
-use app\service\SystemSettingService;
 use mall_base\base\BaseModel;
 use mall_base\base\BaseService;
 
@@ -47,18 +46,17 @@ class ConfigService extends BaseService
      */
     public function basic(): array
     {
-        /** @var SystemSettingService $sys */
-        $sys = app()->make(SystemSettingService::class);
-
-        $merged = $sys->getSystemSettingGroups(self::PUBLIC_GROUPS);
+        $merged = [];
+        foreach (self::PUBLIC_GROUPS as $groupCode) {
+            $merged = array_merge($merged, getSystemSettingGroup($groupCode));
+        }
 
         // SystemBasic 组走字段级白名单
-        $basicMeta = $sys->getSystemSettingGroupWithMeta('SystemBasic');
         foreach (self::SYSTEM_BASIC_PUBLIC_FIELDS as $code) {
-            if (!isset($basicMeta[$code])) {
-                continue;
+            $value = getSystemSetting($code);
+            if ($value !== null) {
+                $merged[$code] = $value;
             }
-            $merged[$code] = $basicMeta[$code]['value'];
         }
 
         // 版权 {year} 占位替换

@@ -3,7 +3,6 @@ declare(strict_types=1);
 
 namespace app\controller\admin;
 
-use app\service\SystemSettingService;
 use app\service\UploadService;
 use mall_base\base\BaseController;
 use mall_base\log\Logger;
@@ -67,13 +66,10 @@ class ConfigController extends BaseController
      */
     public function appMeta()
     {
-        /** @var SystemSettingService $service */
-        $service = app()->make(SystemSettingService::class);
-
-        $meta = $service->getSystemSettingGroups([
-            'SystemBasic',      // 站点信息 + 后台 Logo/Favicon/Slogan + 登录页文字
-            'SystemCopyright',  // 版权信息（后台与 Client 共用）
-        ]);
+        $meta = array_merge(
+            getSystemSettingGroup('SystemBasic'),
+            getSystemSettingGroup('SystemCopyright'),
+        );
 
         // 版权 {year} 占位替换
         if (!empty($meta['copyright_date']) && is_string($meta['copyright_date'])) {

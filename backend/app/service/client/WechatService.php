@@ -5,7 +5,6 @@ namespace app\service\client;
 
 use app\common\enum\RegisterType;
 use app\model\user\User;
-use app\service\SystemSettingService;
 use EasyWeChat\Kernel\Exceptions\HttpException;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
@@ -45,7 +44,6 @@ class WechatService extends BaseService
 
     public function __construct(
         private readonly WechatAppFactory $factory,
-        private readonly SystemSettingService $settings,
         private readonly SmsService $sms,
     ) {
     }
@@ -88,7 +86,7 @@ class WechatService extends BaseService
             $user->save(['session_key' => $sessionKey]);
         }
 
-        if ($this->settings->bool('wechat_mini_force_mobile') && (string) $user->mobile === '') {
+        if (in_array((string) getSystemSetting('wechat_mini_force_mobile', '0'), ['1', 'true', 'on', 'yes'], true) && (string) $user->mobile === '') {
             return [
                 'need_mobile'        => true,
                 'openid'             => $openid,
@@ -214,7 +212,7 @@ class WechatService extends BaseService
             $user->save($updates);
         }
 
-        if ($this->settings->bool('wechat_offi_force_mobile_bind') && (string) $user->mobile === '') {
+        if (in_array((string) getSystemSetting('wechat_offi_force_mobile_bind', '0'), ['1', 'true', 'on', 'yes'], true) && (string) $user->mobile === '') {
             return [
                 'need_mobile' => true,
                 'openid'      => $openid,

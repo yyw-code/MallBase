@@ -42,59 +42,75 @@ class UploadService extends BaseService
 
     // ==================== 统一配置获取入口（静态方法，供所有模块调用） ====================
 
-    /**
-     * 获取完整上传配置
-     *
-     * @return array
-     */
-    public static function getConfig(): array
-    {
-        return config('upload', []);
-    }
+    private static array $defaultMime = [
+        'image' => ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'],
+        'document' => ['application/pdf', 'application/zip', 'application/x-rar-compressed', 'application/msword', 'application/vnd.ms-excel'],
+        'video' => ['video/mp4', 'video/webm', 'video/quicktime'],
+    ];
+
+    private static array $defaultRules = [
+        'image'  => ['max_size' => 2,   'max_count' => 1,  'mime_key' => 'image'],
+        'images' => ['max_size' => 5,   'max_count' => 9,  'mime_key' => 'image'],
+        'file'   => ['max_size' => 10,  'max_count' => 1,  'mime_key' => 'document'],
+        'files'  => ['max_size' => 10,  'max_count' => 5,  'mime_key' => 'document'],
+        'video'  => ['max_size' => 200, 'max_count' => 1,  'mime_key' => 'video'],
+        'videos' => ['max_size' => 200, 'max_count' => 5,  'mime_key' => 'video'],
+    ];
 
     /**
-     * 获取指定配置项（支持点号分隔的嵌套键名）
-     *
-     * @param string $key 配置键名（如 'driver'、'rules'、'local.base_url'）
-     * @param mixed $default 默认值
-     * @return mixed
+     * 解析 MIME 白名单（数据库逗号分隔字符串 → 数组）
      */
-    public static function get(string $key, mixed $default = null): mixed
+    private static function parseMimeTypes(string $mimeKey): array
     {
-        $config = self::getConfig();
-        $keys = explode('.', $key);
-        $value = $config;
-
-        foreach ($keys as $k) {
-            if (!is_array($value) || !array_key_exists($k, $value)) {
-                return $default;
-            }
-            $value = $value[$k];
+        $dbKeys = ['image' => 'mime_image', 'document' => 'mime_document', 'video' => 'mime_video'];
+        $code = $dbKeys[$mimeKey] ?? null;
+        if ($code === null) {
+            return self::$defaultMime[$mimeKey] ?? [];
         }
 
-        return $value;
+        $raw = (string) getSystemSetting($code, '');
+        if ($raw === '') {
+            return self::$defaultMime[$mimeKey] ?? [];
+        }
+
+        return array_values(array_filter(array_map('trim', explode(',', $raw))));
     }
 
     /**
      * 获取上传规则配置（全部类型）
      *
-     * @return array
+     * @return array<string, array{max_size: float, max_count: int, accept_types: string[]}>
      */
     public static function getRules(): array
     {
-        return self::get('rules', []);
+        $rules = [];
+        foreach (self::$defaultRules as $type => $defaults) {
+            $rules[$type] = self::buildRule($type, $defaults);
+        }
+        return $rules;
     }
 
     /**
      * 获取指定类型的上传规则
-     * 不存在则返回 null
      *
      * @param string $type 上传类型（image/images/file/files/video/videos）
      * @return array|null
      */
     public static function getRuleByType(string $type): ?array
     {
-        return self::get("rules.{$type}");
+        if (!isset(self::$defaultRules[$type])) {
+            return null;
+        }
+        return self::buildRule($type, self::$defaultRules[$type]);
+    }
+
+    private static function buildRule(string $type, array $defaults): array
+    {
+        return [
+            'max_size'     => (float) getSystemSetting("upload_{$type}_max_size", $defaults['max_size']),
+            'max_count'    => (int) getSystemSetting("upload_{$type}_max_count", $defaults['max_count']),
+            'accept_types' => self::parseMimeTypes($defaults['mime_key']),
+        ];
     }
 
     /**
@@ -134,7 +150,7 @@ class UploadService extends BaseService
      */
     public static function getDriver(): string
     {
-        return self::get('driver', 'local');
+        return (string) getSystemSetting('upload_driver', 'local');
     }
 
     /**
@@ -147,12 +163,18 @@ class UploadService extends BaseService
     {
         $driver = self::getDriver();
 
-        return match ($driver) {
-            'local' => self::get('local.base_url', ''),
-            'oss' => self::get('oss.urlPrefix', ''),
-            'cos' => self::get('cos.urlPrefix', ''),
+        $domain = match ($driver) {
+            'local' => (string) getSystemSetting('local_base_url', ''),
+            'oss' => (string) getSystemSetting('oss_url_prefix', ''),
+            'cos' => (string) getSystemSetting('cos_url_prefix', ''),
             default => '',
         };
+
+        if ($driver === 'local' && $domain === '') {
+            $domain = (string) getSystemSetting('site_url', '');
+        }
+
+        return $domain;
     }
 
     /**
@@ -567,7 +589,26 @@ class UploadService extends BaseService
     private function getUploadDriver()
     {
         $driverName = self::getDriver();
-        $driverConfig = self::get($driverName, []);
+
+        $groupMap = [
+            'local' => 'UploadLocal',
+            'oss'   => 'UploadOss',
+            'cos'   => 'UploadCos',
+        ];
+
+        $groupCode = $groupMap[$driverName] ?? null;
+        $rawConfig = $groupCode !== null ? getSystemSettingGroup($groupCode) : [];
+
+        $prefix = $driverName . '_';
+        $prefixLen = strlen($prefix);
+        $driverConfig = [];
+        foreach ($rawConfig as $key => $value) {
+            if (str_starts_with($key, $prefix)) {
+                $driverConfig[substr($key, $prefixLen)] = $value;
+            } else {
+                $driverConfig[$key] = $value;
+            }
+        }
 
         return DriverManager::driver('upload', $driverName, $driverConfig);
     }

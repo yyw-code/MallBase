@@ -83,7 +83,7 @@ class SystemSettingService extends BaseService
 
     /**
      * 多 group 合并（扁平 key->value，含 full_url 的图片字段值自动替换为 full_url）
-     * 典型用途：/admin/api/config/appMeta、/client/setting/basic
+     * 典型用途：/admin/api/config/appMeta、/client/api/setting/basic
      *
      * @param array<int, string> $groupCodes
      * @return array<string, mixed>
