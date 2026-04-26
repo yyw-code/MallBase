@@ -8,7 +8,7 @@ use PHPUnit\Framework\TestCase;
 use Tests\Feature\Support\ApiClientTrait;
 
 /**
- * Client /client/setting/basic 公开接口契约测试（敏感字段过滤）。
+ * Client /client/api/setting/basic 公开接口契约测试（敏感字段过滤）。
  *
  * 硬约束（失败即视为安全回归，必须红）：
  * - 响应 JSON 字符串中**不应出现任何**下列前缀的字段 key：
@@ -26,7 +26,7 @@ final class ConfigControllerClientBasicTest extends TestCase
     {
         $response = $this->requestJson(
             'GET',
-            $this->getBaseUrl() . '/client/setting/basic'
+            $this->getBaseUrl() . '/client/api/setting/basic'
         );
 
         if ($response === null) {
@@ -36,7 +36,7 @@ final class ConfigControllerClientBasicTest extends TestCase
         $this->assertIsArray($response);
         if (($response['code'] ?? null) !== 200) {
             $this->fail(sprintf(
-                '/client/setting/basic 应为公开路由，预期 code=200，实际：%s',
+                '/client/api/setting/basic 应为公开路由，预期 code=200，实际：%s',
                 var_export($response['code'] ?? null, true)
             ));
         }
@@ -53,7 +53,7 @@ final class ConfigControllerClientBasicTest extends TestCase
     {
         $raw = $this->requestJsonRaw(
             'GET',
-            $this->getBaseUrl() . '/client/setting/basic'
+            $this->getBaseUrl() . '/client/api/setting/basic'
         );
 
         if ($raw === null) {
@@ -90,7 +90,7 @@ final class ConfigControllerClientBasicTest extends TestCase
     {
         $response = $this->requestJson(
             'GET',
-            $this->getBaseUrl() . '/client/setting/basic'
+            $this->getBaseUrl() . '/client/api/setting/basic'
         );
 
         if ($response === null) {
@@ -98,7 +98,7 @@ final class ConfigControllerClientBasicTest extends TestCase
         }
 
         if (($response['code'] ?? null) !== 200) {
-            $this->markTestSkipped('/client/setting/basic 未返回 200。');
+            $this->markTestSkipped('/client/api/setting/basic 未返回 200。');
         }
 
         $data = $response['data'] ?? [];

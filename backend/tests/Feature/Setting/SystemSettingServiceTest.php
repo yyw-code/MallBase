@@ -10,7 +10,7 @@ use Tests\Feature\Support\ApiClientTrait;
 /**
  * SystemSettingService 通过两个公开接口间接验证：
  * - GET /admin/api/config/appMeta    返回 SystemBasic + SystemCopyright 扁平合并
- * - GET /client/setting/basic        返回白名单过滤后的客户端配置
+ * - GET /client/api/setting/basic     返回白名单过滤后的客户端配置
  *
  * 核心契约：
  * - 单/批量 / 按 group 三种读取都能正确返回
