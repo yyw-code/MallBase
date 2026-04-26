@@ -20,7 +20,7 @@ class ConfigController extends BaseController
 
     /**
      * 获取客户端基础配置
-     * GET /client/setting/basic
+     * GET /client/api/setting/basic
      *
      * 返回字段白名单（参见 ConfigService::PUBLIC_GROUPS / SYSTEM_BASIC_PUBLIC_FIELDS），
      * 绝不包含 wechat_/pay_/upload_/jwt_/admin_/site_url 等敏感或管理员字段。
