@@ -135,7 +135,9 @@ async function fetchCategories() {
   loadError.value = false
   try {
     const data = await getCategoryTree()
-    categoryTree.value = Array.isArray(data) ? data : []
+    categoryTree.value = Array.isArray(data?.list)
+      ? data.list
+      : (Array.isArray(data) ? data : [])
     activeIndex.value = 0
   } catch {
     categoryTree.value = []
@@ -278,9 +280,9 @@ onLoad(() => {
             >
               <view class="grid__icon-wrap">
                 <image
-                  v-if="sub.image"
+                  v-if="sub.image_full_url || sub.image"
                   class="grid__icon-img"
-                  :src="sub.image"
+                  :src="sub.image_full_url || sub.image"
                   mode="aspectFill"
                   lazy-load
                 />

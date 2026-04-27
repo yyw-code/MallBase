@@ -52,7 +52,7 @@ class SettingItemController extends BaseController
     {
         $data = $this->request->param(['group_id', 'name', 'code', 'value', 'type', 'options', 'rules', 'placeholder', 'remark', 'sort']);
 
-        $this->validate($data, 'setting/SettingItem.create');
+        $this->validate($data, 'admin/setting/SettingItem.create');
 
         $result = $this->service()->createSetting($data);
         return $this->success($result, '创建成功');
@@ -69,7 +69,7 @@ class SettingItemController extends BaseController
 
         $data = $this->request->param(['group_id', 'name', 'code', 'value', 'type', 'options', 'rules', 'placeholder', 'remark', 'sort']);
 
-        $this->validate($data, 'setting/SettingItem.update');
+        $this->validate($data, 'admin/setting/SettingItem.update');
 
         $result = $this->service()->updateSetting((int)$id, $data);
         return $this->success($result, '更新成功');

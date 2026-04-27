@@ -6,6 +6,7 @@ use app\model\auth\Permission;
 use think\facade\Route;
 
 Route::group('goods/category', function () {
+    Route::get('tree', 'tree')->name('SystemGoodsCategoryTree')->option(['_alias' => '分类树', '_desc' => '获取商品分类树', '_auth' => true]);
     Route::get('list', 'list')->name('SystemGoodsCategoryList')->option(['_alias' => '分类列表', '_desc' => '获取商品分类列表', '_auth' => true]);
     Route::get('info/:id', 'info')->name('SystemGoodsCategoryInfo')->option(['_alias' => '分类详情', '_desc' => '获取分类详情', '_auth' => true]);
     Route::get('all', 'getAllCategories')->name('SystemGoodsCategoryAll')->option(['_alias' => '全部分类', '_desc' => '获取所有启用分类（树形）', '_auth' => true]);

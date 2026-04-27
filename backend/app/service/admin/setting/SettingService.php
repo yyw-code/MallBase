@@ -447,16 +447,16 @@ class SettingService extends BaseService
     /**
      * 根据分组生成菜单 path
      * 规则：
-     * - category（目录）：不生成路由，返回空字符串
+     * - category（目录）：生成稳定路由，避免前端用权限 code 兜底为非法 path
      * - page（页面）：顶级 /settings/{code}，子级 /settings/{parent_code}/{code}
      * - tab（选项卡）：/settings/{code}
      * - tab 的子页面：共享父级路由 /settings/{parent_code}
      */
     protected function makePermissionPath(SettingGroup $group): string
     {
-        // 目录类型不生成路由
+        // 目录类型仍生成稳定路由，用于前端菜单树承载
         if ($group->display_type === SettingGroup::DISPLAY_TYPE_CATEGORY) {
-            return '';
+            return '/settings/' . $group->code;
         }
 
         // 选项卡类型生成路由
@@ -758,6 +758,69 @@ class SettingService extends BaseService
     }
 
     /**
+     * 计算设置菜单权限的同步顺序（父级优先，包含全部分组）。
+     *
+     * @param array<int, array<string, mixed>> $groups
+     * @return array<int, array<string, mixed>>
+     */
+    protected function buildPermissionSyncOrder(array $groups): array
+    {
+        if (empty($groups)) {
+            return [];
+        }
+
+        $groupsById = [];
+        $childrenByParent = [];
+        foreach ($groups as $group) {
+            $groupId = (int) ($group['id'] ?? 0);
+            if ($groupId <= 0) {
+                continue;
+            }
+
+            $group['id'] = $groupId;
+            $group['parent_id'] = (int) ($group['parent_id'] ?? 0);
+            $group['sort'] = (int) ($group['sort'] ?? 0);
+            $groupsById[$groupId] = $group;
+            $childrenByParent[$group['parent_id']][] = $groupId;
+        }
+
+        foreach ($childrenByParent as &$childIds) {
+            usort($childIds, function (int $leftId, int $rightId) use ($groupsById): int {
+                $left = $groupsById[$leftId];
+                $right = $groupsById[$rightId];
+
+                return [$left['sort'], $left['id']] <=> [$right['sort'], $right['id']];
+            });
+        }
+        unset($childIds);
+
+        $ordered = [];
+        $visited = [];
+        $visit = function (int $groupId) use (&$visit, &$ordered, &$visited, $groupsById, $childrenByParent): void {
+            if (isset($visited[$groupId]) || ($groupsById[$groupId] ?? null) === null) {
+                return;
+            }
+
+            $visited[$groupId] = true;
+            $ordered[] = $groupsById[$groupId];
+
+            foreach ($childrenByParent[$groupId] ?? [] as $childId) {
+                $visit($childId);
+            }
+        };
+
+        foreach ($childrenByParent[0] ?? [] as $rootId) {
+            $visit($rootId);
+        }
+
+        foreach (array_keys($groupsById) as $groupId) {
+            $visit($groupId);
+        }
+
+        return $ordered;
+    }
+
+    /**
      * 幂等地补齐或修复设置菜单权限
      *
      * 使用场景：
@@ -801,7 +864,7 @@ class SettingService extends BaseService
             }
         }
 
-        $ordered = $this->buildPermissionRepairOrder($groups, $permissionSnapshots);
+        $ordered = $this->buildPermissionSyncOrder($groups);
         if (empty($ordered)) {
             return 0;
         }

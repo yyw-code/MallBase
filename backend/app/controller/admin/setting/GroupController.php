@@ -71,7 +71,7 @@ class GroupController extends BaseController
     {
         $data = $this->request->param(['parent_id', 'name', 'code', 'icon', 'description', 'sort', 'display_type', 'status']);
 
-        $this->validate($data, 'setting/SettingGroup.create');
+        $this->validate($data, 'admin/setting/SettingGroup.create');
 
         $id = $this->service()->createGroup($data);
         return $this->success(['id' => $id], '创建成功');
@@ -88,7 +88,7 @@ class GroupController extends BaseController
 
         $data = $this->request->param(['parent_id', 'name', 'code', 'icon', 'description', 'sort', 'display_type', 'status']);
 
-        $this->validate($data, 'setting/SettingGroup.update');
+        $this->validate($data, 'admin/setting/SettingGroup.update');
 
         $this->service()->updateGroup((int)$id, $data);
         return $this->success(null, '更新成功');

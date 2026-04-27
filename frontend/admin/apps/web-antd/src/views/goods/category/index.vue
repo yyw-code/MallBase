@@ -6,15 +6,14 @@ import { h, onMounted, ref } from 'vue';
 import { useAccess } from '@vben/access';
 import { IconifyIcon } from '@vben/icons';
 
-import { Avatar, message, Switch } from 'ant-design-vue';
+import { Avatar, message, Modal, Switch } from 'ant-design-vue';
 
 import {
   deleteGoodsCategoryApi,
   getGoodsCategoryInfoApi,
-  getGoodsCategoryListApi,
+  getGoodsCategoryTreeApi,
   updateGoodsCategoryStatusApi,
 } from '#/api/goods';
-import { useTableCrud } from '#/composables/useTableCrud';
 
 import CategoryModal from './category-modal.vue';
 
@@ -22,17 +21,9 @@ defineOptions({ name: 'GoodsCategoryManagement' });
 
 const { hasAccessByCodes } = useAccess();
 
-/* ---------------- 表格 CRUD ---------------- */
-const { tableData, loading, pagination, loadData, handleDelete } = useTableCrud<
-  GoodsCategoryApi.CategoryItem,
-  GoodsCategoryApi.ListParams
->(
-  {
-    delete: deleteGoodsCategoryApi,
-    list: getGoodsCategoryListApi,
-  },
-  { immediateLoad: false },
-);
+/* ---------------- 表格数据 ---------------- */
+const tableData = ref<GoodsCategoryApi.CategoryItem[]>([]);
+const loading = ref(false);
 
 /* ---------------- 搜索参数 ---------------- */
 const searchParams = ref({
@@ -45,8 +36,32 @@ const resetSearch = () => {
     name: '',
     status: undefined,
   };
-  pagination.current = 1;
   loadData(searchParams.value);
+};
+
+const loadData = async (
+  params: Pick<GoodsCategoryApi.ListParams, 'name' | 'status'> = {},
+) => {
+  loading.value = true;
+  try {
+    tableData.value = await getGoodsCategoryTreeApi(params);
+  } catch (error) {
+    console.error('加载分类树失败:', error);
+    message.error('加载分类树失败');
+  } finally {
+    loading.value = false;
+  }
+};
+
+const handleDelete = (record: GoodsCategoryApi.CategoryItem) => {
+  Modal.confirm({
+    content: `确定要删除"${record.name || '该分类'}"吗？`,
+    onOk: async () => {
+      await deleteGoodsCategoryApi(record.id);
+      message.success('删除成功');
+      await loadData(searchParams.value);
+    },
+  });
 };
 
 /* ---------------- 弹窗 ---------------- */
@@ -115,7 +130,7 @@ const columns = [
   {
     title: '分类图片',
     dataIndex: 'image',
-    width: 110,
+    width: 60,
     customRender: ({ record }: { record: GoodsCategoryApi.CategoryItem }) => {
       const imageUrl = record.image_full_url || record.image;
       if (!imageUrl) return '-';
@@ -158,7 +173,13 @@ onMounted(() => {
 <template>
   <div class="p-4">
     <div class="mb-4">
-      <a-button type="primary" @click="handleCreate" v-access:code="'SystemGoodsCategoryCreate'"> 新增分类 </a-button>
+      <a-button
+        type="primary"
+        @click="handleCreate"
+        v-access:code="'SystemGoodsCategoryCreate'"
+      >
+        新增分类
+      </a-button>
       <a-button class="ml-2" @click="() => loadData(searchParams)">
         刷新
       </a-button>
@@ -190,7 +211,6 @@ onMounted(() => {
           type="primary"
           @click="
             () => {
-              pagination.current = 1;
               loadData(searchParams);
             }
           "
@@ -205,28 +225,26 @@ onMounted(() => {
       :columns="columns"
       :data-source="tableData"
       :loading="loading"
-      :pagination="pagination"
+      :pagination="false"
       :scroll="{ x: 1020 }"
       row-key="id"
-      @change="
-        (newPagination) => {
-          pagination.current = newPagination.current;
-          pagination.pageSize = newPagination.pageSize;
-          loadData(searchParams);
-        }
-      "
     >
       <template #bodyCell="{ column, record }">
         <template v-if="column.key === 'action'">
           <a-space>
-            <a-button type="link" size="small" @click="handleEdit(record)" v-access:code="'SystemGoodsCategoryUpdate'">
+            <a-button
+              type="link"
+              size="small"
+              @click="handleEdit(record)"
+              v-access:code="'SystemGoodsCategoryUpdate'"
+            >
               编辑
             </a-button>
             <a-button
               type="link"
               danger
               size="small"
-              @click="handleDelete(record, 'name')"
+              @click="handleDelete(record)"
               v-access:code="'SystemGoodsCategoryDelete'"
             >
               删除
@@ -246,26 +264,5 @@ onMounted(() => {
 </template>
 
 <style scoped>
-.category-icon {
-  color: var(--ant-color-text);
-}
 
-.category-image-wrap {
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
-  border: 1px solid var(--ant-color-border-secondary);
-  background: var(--ant-color-bg-container);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-}
-
-.category-image {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
 </style>

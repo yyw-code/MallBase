@@ -1,16 +1,5 @@
-const ENV = {
-  development: {
-    baseUrl: 'http://localhost:8080'
-  },
-  production: {
-    baseUrl: ''
-  }
-}
-
-const env = process.env.NODE_ENV || 'development'
-
 export default {
-  ...ENV[env] || ENV.development,
-  apiPrefix: '/client/api',
-  version: '1.0.0'
+  baseUrl: import.meta.env.VITE_UNIAPP_BASE_URL || '',
+  apiPrefix: import.meta.env.VITE_UNIAPP_API_PREFIX || '/client/api',
+  version: import.meta.env.VITE_UNIAPP_VERSION || '1.0.0'
 }

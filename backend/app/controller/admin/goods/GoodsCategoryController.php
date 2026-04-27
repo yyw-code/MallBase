@@ -29,6 +29,17 @@ class GoodsCategoryController extends BaseController
     }
 
     /**
+     * 获取分类树
+     */
+    public function tree()
+    {
+        $where = $this->request->param(['name', 'status']);
+
+        $tree = $this->service()->getTree($where);
+        return $this->success($tree, '获取成功');
+    }
+
+    /**
      * 获取分类详情
      */
     public function info()

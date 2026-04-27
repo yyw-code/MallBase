@@ -14,6 +14,7 @@ export namespace GoodsCategoryApi {
     status: number;
     create_time: string;
     update_time: string;
+    children?: CategoryItem[];
   }
 
   /** 列表参数 */
@@ -46,6 +47,18 @@ export namespace GoodsCategoryApi {
     sort?: number;
     status?: number;
   }
+}
+
+/**
+ * 获取商品分类树
+ */
+export async function getGoodsCategoryTreeApi(
+  params?: Pick<GoodsCategoryApi.ListParams, 'name' | 'status'>,
+) {
+  return requestClient.get<GoodsCategoryApi.CategoryItem[]>(
+    '/goods/category/tree',
+    { params },
+  );
 }
 
 /**
@@ -107,9 +120,6 @@ export async function deleteGoodsCategoryApi(id: number) {
 /**
  * 更新商品分类状态
  */
-export async function updateGoodsCategoryStatusApi(
-  id: number,
-  status: number,
-) {
+export async function updateGoodsCategoryStatusApi(id: number, status: number) {
   return requestClient.put(`/goods/category/updateStatus/${id}`, { status });
 }

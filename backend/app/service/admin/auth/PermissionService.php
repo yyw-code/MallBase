@@ -339,7 +339,7 @@ class PermissionService extends BaseService
 
             $route = [
                 'name' => convertToRouteName($node['code']),
-                'path' => $node['path'] ?: '/' . strtolower($node['code']),
+                'path' => (string) ($node['path'] ?? ''),
                 'meta' => [
                     'title' => $node['name'],
                     'hideInMenu' => $node['is_show'] === 0,

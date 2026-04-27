@@ -48,6 +48,22 @@ class GoodsCategoryService extends BaseService
     }
 
     /**
+     * 获取分类树（后台分类管理使用，包含启用/禁用）
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function getTree(array $where = []): array
+    {
+        $list = $this->buildListQuery($where)
+            ->order('sort', 'asc')
+            ->order('id', 'asc')
+            ->select()
+            ->toArray();
+
+        return $this->buildTree($list);
+    }
+
+    /**
      * 获取所有启用分类（树形结构，供商品表单使用）
      */
     public function getAllCategories(): array
@@ -203,8 +219,12 @@ class GoodsCategoryService extends BaseService
     protected function buildTree(array $list, int $pid = 0): array
     {
         $tree = [];
+        $ids = array_flip(array_map(static fn (array $item): int => (int) $item['id'], $list));
+
         foreach ($list as $item) {
-            if ((int) $item['pid'] === $pid) {
+            $itemPid = (int) $item['pid'];
+            $isRoot = $pid === 0 && ($itemPid === 0 || !isset($ids[$itemPid]));
+            if ($isRoot || $itemPid === $pid) {
                 $children = $this->buildTree($list, (int) $item['id']);
                 if (!empty($children)) {
                     $item['children'] = $children;
