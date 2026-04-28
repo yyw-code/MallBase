@@ -12,7 +12,7 @@ use think\model\type\Json;
 class Goods extends BaseModel
 {
     protected $name = 'goods';
-    protected $json = ['spec_meta'];
+    protected $json = ['spec_meta', 'images'];
     protected $jsonAssoc = true;
     protected array $append = ['main_image_full_url', 'main_video_full_url'];
 
@@ -40,6 +40,37 @@ class Goods extends BaseModel
         }
 
         return $value;
+    }
+
+    public function getImagesAttr($value, $data): array
+    {
+        if ($value instanceof Json) {
+            $value = $value->value();
+        }
+
+        if (is_string($value)) {
+            $decoded = json_decode($value, true);
+            $value = is_array($decoded) ? $decoded : [];
+        }
+
+        if (!is_array($value)) {
+            return [];
+        }
+
+        $images = [];
+        foreach ($value as $image) {
+            $url = is_array($image) ? (string) ($image['url'] ?? '') : (string) $image;
+            if ($url === '') {
+                continue;
+            }
+
+            $images[] = [
+                'url' => $url,
+                'full_url' => buildUploadUrl($url),
+            ];
+        }
+
+        return $images;
     }
 
     public function getMainImageFullUrlAttr($value, $data): string

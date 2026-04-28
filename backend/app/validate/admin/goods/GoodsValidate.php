@@ -138,11 +138,8 @@ class GoodsValidate extends Validate
         }
 
         foreach ($value as $index => $image) {
-            if (!is_array($image)) {
-                return "图片第" . ($index + 1) . "项数据格式错误";
-            }
-
-            if (empty($image['url'])) {
+            $url = is_array($image) ? (string) ($image['url'] ?? '') : (string) $image;
+            if ($url === '') {
                 return "图片第" . ($index + 1) . "项URL不能为空";
             }
         }

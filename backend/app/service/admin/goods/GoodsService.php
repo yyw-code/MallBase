@@ -6,7 +6,6 @@ namespace app\service\admin\goods;
 use app\model\goods\Goods;
 use app\model\goods\GoodsBrand;
 use app\model\goods\GoodsCategory;
-use app\model\goods\GoodsImage;
 use app\model\goods\GoodsSku;
 use app\model\goods\GoodsTag;
 use app\model\goods\GoodsTagRelation;
@@ -77,14 +76,13 @@ class GoodsService extends BaseService
                 ? $this->model(GoodsBrand::class)->whereIn('id', $brandIds)->column('name', 'id')
                 : [];
 
-            // 批量获取标签
             $goodsIds = array_column($listArray, 'id');
             $tagMap = $this->batchGetGoodsTags($goodsIds);
-            $firstImageMap = $this->batchGetFirstImageMap($goodsIds);
 
             foreach ($listArray as &$item) {
-                if (empty($item['main_image']) && !empty($firstImageMap[$item['id']])) {
-                    $item['main_image'] = $firstImageMap[$item['id']];
+                $firstImageUrl = $this->getFirstImageUrl($item['images'] ?? []);
+                if (empty($item['main_image']) && $firstImageUrl !== '') {
+                    $item['main_image'] = $firstImageUrl;
                     $item['main_image_full_url'] = buildUploadUrl($item['main_image']);
                 }
                 $item['category_name'] = $categories[$item['category_id']] ?? '';
@@ -113,16 +111,10 @@ class GoodsService extends BaseService
         }
 
         $result = $goods->toArray();
-
-        // 获取商品图片
-        $images = $this->model(GoodsImage::class)
-            ->where('goods_id', $id)
-            ->order('sort', 'asc')
-            ->select();
-        $result['images'] = $images->toArray();
-        if (empty($result['main_image']) && !empty($result['images'][0]['url'])) {
-            $result['main_image'] = $result['images'][0]['url'];
-            $result['main_image_full_url'] = $result['images'][0]['full_url'] ?? '';
+        $firstImageUrl = $this->getFirstImageUrl($result['images'] ?? []);
+        if (empty($result['main_image']) && $firstImageUrl !== '') {
+            $result['main_image'] = $firstImageUrl;
+            $result['main_image_full_url'] = buildUploadUrl($firstImageUrl);
         }
 
         // 获取商品SKU
@@ -157,6 +149,7 @@ class GoodsService extends BaseService
      */
     public function create(array $data): int
     {
+        $data = $this->normalizeImages($data);
         $data = $this->normalizeMainImage($data);
         $data = $this->normalizeSpecType($data);
         $data = $this->normalizeSpecMeta($data);
@@ -172,11 +165,6 @@ class GoodsService extends BaseService
             $goods->save($data);
 
             $goodsId = $goods->id;
-
-            // 同步图片 TODO  一会修改
-            if (!empty($data['images']) && is_array($data['images'])) {
-                $this->syncImages($goodsId, $data['images']);
-            }
 
             // 同步SKU
             if (!empty($data['skus']) && is_array($data['skus'])) {
@@ -207,6 +195,7 @@ class GoodsService extends BaseService
      */
     public function update(int $id, array $data): bool
     {
+        $data = $this->normalizeImages($data);
         $data = $this->normalizeMainImage($data);
         $data = $this->normalizeSpecType($data);
         $data = $this->normalizeSpecMeta($data);
@@ -223,26 +212,21 @@ class GoodsService extends BaseService
         $this->validateSkuCodes($data['skus'] ?? [], $id);
 
         // 事务内只做写入
-        $this->transaction(function () use ($id, $goods, $data) {
+        $this->transaction(function () use ($goods, $data) {
             $goods->save($data);
-
-            // 同步图片
-            if (array_key_exists('images', $data) && is_array($data['images'])) {
-                $this->syncImages($id, $data['images']);
-            }
 
             // 同步SKU
             if (array_key_exists('skus', $data) && is_array($data['skus'])) {
-                $this->syncSkus($id, $data['skus']);
+                $this->syncSkus((int) $goods->id, $data['skus']);
             }
 
             // 同步标签
             if (array_key_exists('tag_ids', $data) && is_array($data['tag_ids'])) {
-                $this->syncTags($id, $data['tag_ids']);
+                $this->syncTags((int) $goods->id, $data['tag_ids']);
             }
 
             // 从SKU汇总价格和库存
-            $this->updatePriceAndStock($id);
+            $this->updatePriceAndStock((int) $goods->id);
 
             return true;
         });
@@ -268,7 +252,6 @@ class GoodsService extends BaseService
 
         // 事务内删除关联数据
         return (bool) $this->transaction(function () use ($id, $goods) {
-            $this->model(GoodsImage::class)->where('goods_id', $id)->delete();
             $this->model(GoodsSku::class)->where('goods_id', $id)->delete();
             $this->model(GoodsTagRelation::class)->where('goods_id', $id)->delete();
 
@@ -316,28 +299,6 @@ class GoodsService extends BaseService
         $goods->save(['is_on_sale' => $isOnSale]);
 
         return true;
-    }
-
-    /**
-     * 同步商品图片（先删后增）
-     *
-     * @param int $goodsId 商品 ID
-     * @param array $images 图片数据
-     */
-    protected function syncImages(int $goodsId, array $images): void
-    {
-        $this->model(GoodsImage::class)->where('goods_id', $goodsId)->delete();
-
-        if (!empty($images)) {
-            $data = array_map(function ($image, $index) use ($goodsId) {
-                return [
-                    'goods_id' => $goodsId,
-                    'url' => $image['url'] ?? '',
-                    'sort' => $image['sort'] ?? $index,
-                ];
-            }, $images, array_keys($images));
-            $this->model(GoodsImage::class)->saveAll($data);
-        }
     }
 
     /**
@@ -627,50 +588,60 @@ class GoodsService extends BaseService
     }
 
     /**
-     * 批量获取商品首图（按 sort ASC, id ASC）
-     *
-     * @param array<int> $goodsIds 商品 ID 数组
-     * @return array<int, string> key=goods_id, value=url
+     * 规范化轮播图字段：入库只保存图片路径数组
      */
-    protected function batchGetFirstImageMap(array $goodsIds): array
+    protected function normalizeImages(array $data): array
     {
-        if (empty($goodsIds)) {
-            return [];
+        if (!array_key_exists('images', $data)) {
+            return $data;
         }
 
-        $images = $this->model(GoodsImage::class)
-            ->whereIn('goods_id', $goodsIds)
-            ->order('sort', 'asc')
-            ->order('id', 'asc')
-            ->select()
-            ->toArray();
+        if (!is_array($data['images'])) {
+            $data['images'] = [];
+            return $data;
+        }
 
-        $result = [];
-        foreach ($images as $image) {
-            $goodsId = (int)($image['goods_id'] ?? 0);
-            if ($goodsId <= 0 || isset($result[$goodsId])) {
+        $images = [];
+        foreach ($data['images'] as $image) {
+            $url = is_array($image) ? (string) ($image['url'] ?? '') : (string) $image;
+            if ($url === '') {
                 continue;
             }
-            $result[$goodsId] = (string)($image['url'] ?? '');
+
+            $images[] = $url;
         }
-        return $result;
+
+        $data['images'] = $images;
+        return $data;
     }
 
     /**
-     * 规范化主图字段：main_image 为空时，优先使用 images[0].url
+     * 规范化主图字段：main_image 为空时，优先使用 images[0]
      */
     protected function normalizeMainImage(array $data): array
     {
         if (!empty($data['main_image'])) {
             return $data;
         }
-        if (!empty($data['images']) && is_array($data['images'])) {
-            $first = $data['images'][0] ?? null;
-            if (is_array($first) && !empty($first['url'])) {
-                $data['main_image'] = $first['url'];
-            }
+        $firstImageUrl = $this->getFirstImageUrl($data['images'] ?? []);
+        if ($firstImageUrl !== '') {
+            $data['main_image'] = $firstImageUrl;
         }
         return $data;
+    }
+
+    protected function getFirstImageUrl(mixed $images): string
+    {
+        if (!is_array($images)) {
+            return '';
+        }
+
+        $first = $images[0] ?? null;
+        if (is_array($first)) {
+            return (string) ($first['url'] ?? '');
+        }
+
+        return (string) ($first ?? '');
     }
 
     /**

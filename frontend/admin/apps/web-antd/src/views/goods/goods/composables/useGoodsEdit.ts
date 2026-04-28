@@ -794,9 +794,8 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
         ...formData,
         main_image: typeof formData.main_image === 'object' ? (formData.main_image as FileInfo)?.url || '' : formData.main_image || '',
         main_video: typeof formData.main_video === 'object' ? (formData.main_video as FileInfo)?.url || '' : formData.main_video || '',
-        images: formData.images.map((img: FileInfo | string, index: number) => ({
+        images: formData.images.map((img: FileInfo | string) => ({
           url: typeof img === 'object' ? (img as FileInfo).url : img,
-          sort: index,
         })),
       };
       if (specType.value === 'multi' && skuRows.value.length > 0) {

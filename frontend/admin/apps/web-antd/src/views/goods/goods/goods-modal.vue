@@ -593,7 +593,7 @@ const handleSubmit = async () => {
       ...formData,
       main_image: typeof formData.main_image === 'object' ? formData.main_image?.url || '' : formData.main_image || '',
       main_video: typeof formData.main_video === 'object' ? formData.main_video?.url || '' : formData.main_video || '',
-      images: formData.images.map((img, index) => ({ url: typeof img === 'object' ? img.url : img, sort: index })),
+      images: formData.images.map((img) => ({ url: typeof img === 'object' ? img.url : img })),
     };
 
     if (specType.value === 'multi' && skuRows.value.length > 0) {

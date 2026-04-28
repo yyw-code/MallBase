@@ -48,12 +48,22 @@ const groupCode = computed(() => {
 });
 
 /** 获取当前激活选项卡的设置项 */
+const activeTabConfig = computed(() =>
+  tabs.value.find((tab) => tab.code === activeTab.value),
+);
+
 const currentTabSettings = computed(() => {
   if (!isTabMode.value && !hasTabs.value) return settings.value;
-  const tab = tabs.value.find((t) => t.code === activeTab.value);
-  return tab?.settings || [];
+  return activeTabConfig.value?.settings || [];
 });
 
+/** 获取当前保存范围内的设置项 */
+const currentSaveSettings = computed(() => {
+  if (isTabMode.value) return currentTabSettings.value;
+  if (hasTabs.value)
+    return [...pageSettings.value, ...currentTabSettings.value];
+  return settings.value;
+});
 
 /** 解析 JSON 字符串为对象（给 JsonViewer 用） */
 const getJsonObject = (code: string) => {
@@ -213,21 +223,15 @@ const validateField = (item: SettingApi.SettingItem) => {
   return !error;
 };
 
-/** 获取所有需要验证的设置项（选项卡模式下合并所有选项卡） */
-const allSettingsForValidation = computed(() => {
-  if (!isTabMode.value) return settings.value;
-  return tabs.value.flatMap((t) => t.settings);
-});
-
-/** 验证所有字段 */
+/** 验证当前保存范围内的字段 */
 const validateAll = (): boolean => {
   let allValid = true;
-  // 先清除所有错误
-  for (const key of Object.keys(formErrors)) {
-    delete formErrors[key];
+
+  for (const item of currentSaveSettings.value) {
+    delete formErrors[item.code];
   }
 
-  for (const item of allSettingsForValidation.value) {
+  for (const item of currentSaveSettings.value) {
     const value = formValues.value[item.code];
     const error = validateFieldValue(item, value);
     if (error) {
@@ -241,6 +245,17 @@ const validateAll = (): boolean => {
   }
 
   return allValid;
+};
+
+const buildSubmitData = (items: SettingApi.SettingItem[]) => {
+  const submitData: Record<string, any> = {};
+  for (const item of items) {
+    submitData[item.code] = serializeValue(
+      formValues.value[item.code],
+      item.type,
+    );
+  }
+  return submitData;
 };
 
 /** 获取字段的错误信息 */
@@ -324,8 +339,8 @@ const convertValue = (value: string, type: string, fullUrl?: string) => {
       return value ? value.split(',') : [];
     }
     case 'file':
-    case 'video':
-    case 'image': {
+    case 'image':
+    case 'video': {
       if (value) {
         return {
           url: value,
@@ -336,8 +351,8 @@ const convertValue = (value: string, type: string, fullUrl?: string) => {
       return undefined;
     }
     case 'files':
-    case 'videos':
-    case 'images': {
+    case 'images':
+    case 'videos': {
       if (typeof value === 'string' && value.startsWith('[')) {
         try {
           const urls: string[] = JSON.parse(value);
@@ -379,14 +394,14 @@ const serializeValue = (value: any, type: string): any => {
       return String(value);
     }
     case 'file':
-    case 'video':
-    case 'image': {
+    case 'image':
+    case 'video': {
       if (typeof value === 'object' && value?.url) return value.url;
       return String(value);
     }
     case 'files':
-    case 'videos':
-    case 'images': {
+    case 'images':
+    case 'videos': {
       if (Array.isArray(value)) {
         const urls = value.map((item: any) =>
           typeof item === 'object' ? item.url : item,
@@ -421,7 +436,9 @@ const parseOptions = (options: any) => {
 };
 
 /** 获取上传组件类型 */
-const getUploadType = (type: string): 'file' | 'files' | 'image' | 'images' | 'video' | 'videos' => {
+const getUploadType = (
+  type: string,
+): 'file' | 'files' | 'image' | 'images' | 'video' | 'videos' => {
   return type as 'file' | 'files' | 'image' | 'images' | 'video' | 'videos';
 };
 
@@ -512,35 +529,42 @@ const handleSave = async () => {
   // 前端验证
   if (!validateAll()) {
     // 滚动到第一个前端验证失败的字段
-    const firstError = Object.keys(formErrors)[0];
+    const firstError = currentSaveSettings.value.find(
+      (item) => formErrors[item.code],
+    )?.code;
     if (firstError) scrollToField(firstError);
     return;
   }
 
   saving.value = true;
   try {
-    const submitData: Record<string, any> = {};
-    for (const item of settings.value) {
-      submitData[item.code] = serializeValue(
-        formValues.value[item.code],
-        item.type,
-      );
-    }
-
     if (isTabMode.value) {
-      // 选项卡模式：按选项卡分组提交
-      for (const tab of tabs.value) {
-        const tabData: Record<string, any> = {};
-        for (const item of tab.settings) {
-          tabData[item.code] = serializeValue(
-            formValues.value[item.code],
-            item.type,
-          );
-        }
-        await saveSettingConfigApi(tab.code, tabData);
+      if (!activeTabConfig.value) {
+        message.warning('请先选择要保存的选项卡');
+        return;
+      }
+      await saveSettingConfigApi(
+        activeTabConfig.value.code,
+        buildSubmitData(activeTabConfig.value.settings),
+      );
+    } else if (hasTabs.value) {
+      if (pageSettings.value.length > 0) {
+        await saveSettingConfigApi(
+          groupCode.value,
+          buildSubmitData(pageSettings.value),
+        );
+      }
+      if (activeTabConfig.value) {
+        await saveSettingConfigApi(
+          activeTabConfig.value.code,
+          buildSubmitData(activeTabConfig.value.settings),
+        );
       }
     } else {
-      await saveSettingConfigApi(groupCode.value, submitData);
+      await saveSettingConfigApi(
+        groupCode.value,
+        buildSubmitData(settings.value),
+      );
     }
     message.success('保存成功');
   } catch (error: any) {
@@ -605,7 +629,7 @@ onMounted(loadConfig);
             class="form-item-wrapper"
             :class="{
               'has-error': getFieldError(item.code),
-              'full-row': item.type === 'editor' || item.type === 'json'
+              'full-row': item.type === 'editor' || item.type === 'json',
             }"
           >
             <div class="form-label">
@@ -840,7 +864,7 @@ onMounted(loadConfig);
             class="form-item-wrapper"
             :class="{
               'has-error': getFieldError(item.code),
-              'full-row': item.type === 'editor' || item.type === 'json'
+              'full-row': item.type === 'editor' || item.type === 'json',
             }"
           >
             <div class="form-label">
@@ -1073,7 +1097,7 @@ onMounted(loadConfig);
             class="form-item-wrapper"
             :class="{
               'has-error': getFieldError(item.code),
-              'full-row': item.type === 'editor' || item.type === 'json'
+              'full-row': item.type === 'editor' || item.type === 'json',
             }"
           >
             <div class="form-label">
@@ -1579,5 +1603,4 @@ onMounted(loadConfig);
     grid-template-columns: 1fr;
   }
 }
-
 </style>

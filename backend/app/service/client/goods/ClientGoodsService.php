@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace app\service\client\goods;
 
 use app\model\goods\Goods;
-use app\model\goods\GoodsImage;
 use app\model\goods\GoodsSku;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
@@ -79,14 +78,12 @@ class ClientGoodsService extends BaseService
         }
 
         $data = $goods->toArray();
-
-        // 商品图片(轮播图)
-        $data['images'] = $this->model(GoodsImage::class)
-            ->where('goods_id', $goodsId)
-            ->order('sort', 'asc')
-            ->order('id', 'asc')
-            ->select()
-            ->toArray();
+        $firstImage = $data['images'][0] ?? [];
+        $firstImageUrl = is_array($firstImage) ? (string) ($firstImage['url'] ?? '') : (string) $firstImage;
+        if (empty($data['main_image']) && $firstImageUrl !== '') {
+            $data['main_image'] = $firstImageUrl;
+            $data['main_image_full_url'] = buildUploadUrl($firstImageUrl);
+        }
 
         // SKU 列表(只暴露上架的 SKU)
         $data['skus'] = $this->model(GoodsSku::class)

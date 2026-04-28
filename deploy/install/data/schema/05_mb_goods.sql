@@ -143,6 +143,7 @@ CREATE TABLE `mb_goods` (
   `subtitle` varchar(255) DEFAULT NULL COMMENT '商品副标题',
   `main_image` varchar(255) DEFAULT NULL COMMENT '主图URL',
   `main_video` varchar(255) DEFAULT NULL COMMENT '主视频URL',
+  `images` json DEFAULT NULL COMMENT '商品轮播图 JSON',
   `spec_type` tinyint(1) NOT NULL DEFAULT 1 COMMENT '规格类型（1单规格，2多规格）',
   `spec_meta` json DEFAULT NULL COMMENT '规格设计器元数据 JSON',
   `description` text DEFAULT NULL COMMENT '商品详情（富文本）',
@@ -170,21 +171,7 @@ CREATE TABLE `mb_goods` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='商品主表（SPU）';
 
 -- -----------------------------
--- 七、商品图片表
--- -----------------------------
-DROP TABLE IF EXISTS `mb_goods_image`;
-CREATE TABLE `mb_goods_image` (
-  `id` int(11) unsigned NOT NULL AUTO_INCREMENT COMMENT '图片ID',
-  `goods_id` int(11) unsigned NOT NULL COMMENT '商品ID',
-  `url` varchar(255) NOT NULL COMMENT '图片URL',
-  `sort` int(11) DEFAULT 0 COMMENT '排序（数字越小越靠前）',
-  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  PRIMARY KEY (`id`),
-  KEY `idx_goods_id` (`goods_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='商品图片表';
-
--- -----------------------------
--- 八、商品SKU表
+-- 七、商品SKU表
 -- -----------------------------
 DROP TABLE IF EXISTS `mb_goods_sku`;
 CREATE TABLE `mb_goods_sku` (
@@ -208,7 +195,7 @@ CREATE TABLE `mb_goods_sku` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='商品SKU表';
 
 -- -----------------------------
--- 九、商品标签表
+-- 八、商品标签表
 -- -----------------------------
 DROP TABLE IF EXISTS `mb_goods_tag`;
 CREATE TABLE `mb_goods_tag` (
@@ -233,7 +220,7 @@ INSERT INTO `mb_goods_tag` (`name`, `color`, `sort`) VALUES
 ('精选好物', 'green', 4);
 
 -- -----------------------------
--- 十、商品-标签关联表
+-- 九、商品-标签关联表
 -- -----------------------------
 DROP TABLE IF EXISTS `mb_goods_tag_relation`;
 CREATE TABLE `mb_goods_tag_relation` (
@@ -248,7 +235,7 @@ CREATE TABLE `mb_goods_tag_relation` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='商品标签关联表';
 
 -- -----------------------------
--- 十一、商品评论表
+-- 十、商品评论表
 -- -----------------------------
 DROP TABLE IF EXISTS `mb_goods_comment`;
 CREATE TABLE `mb_goods_comment` (

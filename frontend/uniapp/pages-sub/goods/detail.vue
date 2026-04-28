@@ -92,14 +92,6 @@
         </view>
       </view>
 
-      <!-- Params trigger -->
-      <view class="goods-detail__cell" @tap="onShowParams">
-        <text class="goods-detail__cell-label">主要参数</text>
-        <view class="goods-detail__cell-right">
-          <text class="goods-detail__cell-arrow">&#10095;</text>
-        </view>
-      </view>
-
       <!-- Divider -->
       <view class="goods-detail__divider" />
 
@@ -199,7 +191,10 @@ async function fetchDetail(id) {
 const images = computed(() => {
   if (!goods.value) return []
   const list = Array.isArray(goods.value.images) ? goods.value.images : []
-  if (list.length > 0) return list
+  const urls = list
+    .map((item) => (typeof item === 'string' ? item : item?.full_url || item?.url || ''))
+    .filter(Boolean)
+  if (urls.length > 0) return urls
   return goods.value.main_image_full_url ? [goods.value.main_image_full_url] : []
 })
 
@@ -250,10 +245,6 @@ function contactService() {
   // #ifndef MP-WEIXIN
   uni.showToast({ title: '请联系在线客服', icon: 'none' })
   // #endif
-}
-
-function onShowParams() {
-  uni.showToast({ title: '参数详情开发中', icon: 'none' })
 }
 
 function goHome() {

@@ -610,6 +610,10 @@ class UploadService extends BaseService
             }
         }
 
+        if (empty($driverConfig['base_url'])) {
+            $driverConfig['base_url'] = (string) getSystemSetting('site_url', '');
+        }
+
         return DriverManager::driver('upload', $driverName, $driverConfig);
     }
 
