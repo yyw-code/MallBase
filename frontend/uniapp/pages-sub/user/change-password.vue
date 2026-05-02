@@ -1,5 +1,7 @@
 <template>
   <view class="page">
+    <mb-navbar title="修改密码" />
+
     <view class="page-content">
       <!-- Form -->
       <view class="form-section">

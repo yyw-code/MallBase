@@ -1,5 +1,7 @@
 <template>
   <view class="page">
+    <mb-navbar title="设置" />
+
     <!-- User card -->
     <view v-if="isLoggedIn" class="user-card" @tap="goEditProfile">
       <image

@@ -116,6 +116,8 @@ function onCancelRefund() {
 
 <template>
   <view class="page">
+    <mb-navbar title="退款详情" />
+
     <!-- Loading -->
     <view v-if="loading" class="loading-wrap">
       <mb-skeleton type="card" />

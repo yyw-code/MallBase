@@ -45,7 +45,7 @@
         {
           "path": "list",
           "style": {
-            "navigationBarTitleText": "商品列表"
+            "navigationStyle": "custom"
             // "enablePullDownRefresh": true
           }
         },
@@ -63,25 +63,25 @@
         {
           "path": "confirm",
           "style": {
-            "navigationBarTitleText": "确认订单"
+            "navigationStyle": "custom"
           }
         },
         {
           "path": "list",
           "style": {
-            "navigationBarTitleText": "我的订单"
+            "navigationStyle": "custom"
           }
         },
         {
           "path": "detail",
           "style": {
-            "navigationBarTitleText": "订单详情"
+            "navigationStyle": "custom"
           }
         },
         {
           "path": "pay-result",
           "style": {
-            "navigationBarTitleText": "支付结果"
+            "navigationStyle": "custom"
           }
         }
       ]
@@ -92,19 +92,19 @@
         {
           "path": "apply",
           "style": {
-            "navigationBarTitleText": "申请退款"
+            "navigationStyle": "custom"
           }
         },
         {
           "path": "list",
           "style": {
-            "navigationBarTitleText": "退款列表"
+            "navigationStyle": "custom"
           }
         },
         {
           "path": "detail",
           "style": {
-            "navigationBarTitleText": "退款详情"
+            "navigationStyle": "custom"
           }
         }
       ]
@@ -115,37 +115,37 @@
         {
           "path": "login",
           "style": {
-            "navigationBarTitleText": ""
+            "navigationStyle": "custom"
           }
         },
         {
           "path": "register",
           "style": {
-            "navigationBarTitleText": "注册"
+            "navigationStyle": "custom"
           }
         },
         {
           "path": "bind-mobile",
           "style": {
-            "navigationBarTitleText": "绑定手机号"
+            "navigationStyle": "custom"
           }
         },
         {
           "path": "edit-profile",
           "style": {
-            "navigationBarTitleText": "编辑资料"
+            "navigationStyle": "custom"
           }
         },
         {
           "path": "change-password",
           "style": {
-            "navigationBarTitleText": "修改密码"
+            "navigationStyle": "custom"
           }
         },
         {
           "path": "settings",
           "style": {
-            "navigationBarTitleText": "设置"
+            "navigationStyle": "custom"
           }
         }
       ]
@@ -156,13 +156,13 @@
         {
           "path": "list",
           "style": {
-            "navigationBarTitleText": "收货地址"
+            "navigationStyle": "custom"
           }
         },
         {
           "path": "edit",
           "style": {
-            "navigationBarTitleText": "编辑地址"
+            "navigationStyle": "custom"
           }
         }
       ]
@@ -173,7 +173,7 @@
         {
           "path": "index",
           "style": {
-            "navigationBarTitleText": "搜索"
+            "navigationStyle": "custom"
           }
         }
       ]
@@ -184,7 +184,7 @@
         {
           "path": "post",
           "style": {
-            "navigationBarTitleText": "发表评价"
+            "navigationStyle": "custom"
           }
         }
       ]
@@ -195,7 +195,7 @@
         {
           "path": "detail",
           "style": {
-            "navigationBarTitleText": "物流详情"
+            "navigationStyle": "custom"
           }
         }
       ]

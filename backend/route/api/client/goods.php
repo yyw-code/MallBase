@@ -14,3 +14,8 @@ Route::group('goods/category', function () {
     Route::get('tree', 'tree');
     Route::get('list', 'list');
 })->prefix('client.goods.GoodsCategoryController/');
+
+// 商品评论(无需登录,匿名可访问)
+Route::group('review', function () {
+    Route::get('list', 'list');
+})->prefix('client.goods.GoodsCommentController/');

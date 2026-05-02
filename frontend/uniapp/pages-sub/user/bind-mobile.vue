@@ -1,5 +1,7 @@
 <template>
   <view class="page">
+    <mb-navbar title="绑定手机号" />
+
     <view class="page-content">
       <!-- Header -->
       <view class="header-section">

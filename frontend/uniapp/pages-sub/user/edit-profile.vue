@@ -1,5 +1,7 @@
 <template>
   <view class="page">
+    <mb-navbar title="编辑资料" />
+
     <view class="page-content">
       <!-- Avatar -->
       <view class="avatar-section" @tap="chooseAvatar">

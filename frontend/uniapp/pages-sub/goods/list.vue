@@ -1,6 +1,6 @@
 <template>
   <view class="goods-list">
-    <!-- <mb-navbar title="商品列表" /> -->
+    <mb-navbar title="商品列表" />
 
     <!-- Filter bar -->
     <view class="goods-list__filter-bar">

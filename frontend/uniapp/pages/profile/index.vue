@@ -2,16 +2,9 @@
 import { computed } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { useUserStore } from '@/store/user'
-import { useAppStore } from '@/store/app'
 import { isLoggedIn } from '@/utils/auth'
 
 const userStore = useUserStore()
-const appStore = useAppStore()
-
-const brandName = computed(() => appStore.siteConfig?.site_name || 'MALLBASE')
-
-const systemInfo = uni.getSystemInfoSync()
-const statusBarHeight = systemInfo.statusBarHeight || 0
 
 // ---------- computed ----------
 const logged = computed(() => isLoggedIn())
@@ -55,10 +48,6 @@ onShow(() => {
 // ---------- navigation ----------
 function goLogin() {
   uni.navigateTo({ url: '/pages-sub/user/login' })
-}
-
-function goSearch() {
-  uni.navigateTo({ url: '/pages-sub/search/index' })
 }
 
 function goOrders(shortcut) {
@@ -108,23 +97,7 @@ function handleLogout() {
 
 <template>
   <view class="page">
-    <!-- ========== Top App Bar ========== -->
-    <view
-      class="top-bar"
-      :style="{ paddingTop: statusBarHeight + 'px' }"
-    >
-      <view class="top-bar__inner">
-        <text class="top-bar__brand">{{ brandName }}</text>
-        <view class="top-bar__spacer" />
-        <view class="top-bar__search-btn" @tap="goSearch">
-          <!-- CSS search icon -->
-          <view class="search-icon">
-            <view class="search-icon__lens" />
-            <view class="search-icon__handle" />
-          </view>
-        </view>
-      </view>
-    </view>
+    <mb-navbar title="我的" :back="false" bg-color="#f7f9fb" />
 
     <!-- ========== Profile Header (centered) ========== -->
     <view class="profile-header">
@@ -244,67 +217,6 @@ function handleLogout() {
 .page {
   min-height: 100vh;
   background: $mb-color-bg-secondary;
-}
-
-/* ===========================
-   Top App Bar
-   =========================== */
-.top-bar {
-  background: $mb-color-bg-secondary;
-}
-
-.top-bar__inner {
-  display: flex;
-  align-items: center;
-  height: 88rpx;
-  padding: 0 $mb-spacing-page;
-}
-
-.top-bar__brand {
-  font-size: 30rpx;
-  font-weight: 700;
-  color: $mb-color-text;
-  letter-spacing: 2rpx;
-}
-
-.top-bar__spacer {
-  flex: 1;
-}
-
-.top-bar__search-btn {
-  width: 64rpx;
-  height: 64rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-/* CSS search magnifier icon */
-.search-icon {
-  position: relative;
-  width: 32rpx;
-  height: 32rpx;
-}
-
-.search-icon__lens {
-  width: 22rpx;
-  height: 22rpx;
-  border: 3rpx solid $mb-color-text;
-  border-radius: $mb-radius-full;
-  position: absolute;
-  top: 0;
-  left: 0;
-}
-
-.search-icon__handle {
-  width: 10rpx;
-  height: 3rpx;
-  background: $mb-color-text;
-  position: absolute;
-  bottom: 3rpx;
-  right: 0;
-  transform: rotate(45deg);
-  border-radius: 2rpx;
 }
 
 /* ===========================

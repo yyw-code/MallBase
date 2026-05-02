@@ -1,5 +1,7 @@
 <template>
   <view class="page">
+    <mb-navbar title="注册" />
+
     <view class="page-content">
       <!-- Brand header -->
       <view class="brand">

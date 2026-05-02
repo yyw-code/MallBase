@@ -1,7 +1,7 @@
 <template>
   <view class="goods-detail">
     <!-- Navbar -->
-    <mb-navbar title="MALLBASE">
+    <mb-navbar title="商品详情">
       <template #right>
         <view class="goods-detail__share-btn" @tap="onShare">
           <view class="goods-detail__share-icon" />
@@ -37,7 +37,7 @@
           :current="swiperIndex"
           :indicator-dots="false"
           :autoplay="false"
-          :circular="mediaList.length > 1"
+          :circular="false"
           @change="onSwiperChange"
         >
           <swiper-item
@@ -51,7 +51,6 @@
                 v-if="media.type === 'video'"
                 class="goods-detail__swiper-video"
                 :src="media.url"
-                :poster="media.poster"
                 controls
                 object-fit="contain"
               />
@@ -60,9 +59,7 @@
                 class="goods-detail__swiper-img"
                 :src="media.url"
                 :style="{ height: `${currentMediaHeight}rpx` }"
-                mode="aspectFill"
-                lazy-load
-                @load="onMediaImageLoad(idx, $event)"
+                mode="aspectFit"
                 @tap="previewImage(idx)"
               />
             </view>
@@ -110,6 +107,65 @@
           <text class="goods-detail__cell-value">{{ specDisplayText }}</text>
           <text class="goods-detail__cell-arrow">&#10095;</text>
         </view>
+      </view>
+
+      <!-- Divider -->
+      <view class="goods-detail__divider" />
+
+      <!-- Reviews -->
+      <view class="goods-detail__review-section">
+        <view class="goods-detail__review-header">
+          <view class="goods-detail__review-title-wrap">
+            <text class="goods-detail__review-title">商品评论</text>
+            <text v-if="reviewTotal > 0" class="goods-detail__review-total">共{{ reviewTotal }}条</text>
+          </view>
+        </view>
+        <view v-if="reviewLoading" class="goods-detail__review-loading">
+          <text class="goods-detail__review-empty-text">评论加载中...</text>
+        </view>
+        <view v-else-if="reviewList.length === 0" class="goods-detail__review-empty">
+          <text class="goods-detail__review-empty-text">暂无评论</text>
+        </view>
+        <block v-else>
+          <view
+            v-for="(review, index) in reviewList"
+            :key="review.id"
+            class="goods-detail__review-item"
+            :class="{ 'goods-detail__review-item--first': index === 0 }"
+          >
+            <view class="goods-detail__review-user-row">
+              <view class="goods-detail__review-avatar">
+                <text class="goods-detail__review-avatar-text">{{ review.userInitial }}</text>
+              </view>
+              <view class="goods-detail__review-user-main">
+                <text class="goods-detail__review-user-name">{{ review.userName }}</text>
+                <view class="goods-detail__review-star-row">
+                  <text
+                    v-for="star in 5"
+                    :key="star"
+                    class="goods-detail__review-star"
+                    :class="{ 'goods-detail__review-star--active': star <= review.rating }"
+                  >★</text>
+                </view>
+              </view>
+              <text class="goods-detail__review-time">{{ review.createTimeText }}</text>
+            </view>
+            <text v-if="review.content" class="goods-detail__review-content">{{ review.content }}</text>
+            <view v-if="review.images.length > 0" class="goods-detail__review-images">
+              <image
+                v-for="(image, imageIndex) in review.images"
+                :key="image"
+                class="goods-detail__review-image"
+                :src="image"
+                mode="aspectFill"
+                @tap="previewReviewImage(review, imageIndex)"
+              />
+            </view>
+            <view v-if="review.replyContent" class="goods-detail__review-reply">
+              <text class="goods-detail__review-reply-text">商家回复：{{ review.replyContent }}</text>
+            </view>
+          </view>
+        </block>
       </view>
 
       <!-- Divider -->
@@ -181,11 +237,11 @@
 import { ref, computed, nextTick } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { getGoodsDetail } from '@/api/goods/goods'
+import { getReviewList } from '@/api/goods/review'
 import { useCartStore } from '@/store/cart'
 
-const IMAGE_DEFAULT_HEIGHT = 422
-const IMAGE_MAX_HEIGHT = 1200
-const VIDEO_HEIGHT = 422
+const MEDIA_HEIGHT = 422
+const REVIEW_PREVIEW_LIMIT = 3
 
 const cartStore = useCartStore()
 
@@ -196,7 +252,9 @@ const showSpec = ref(false)
 const specMode = ref('both')
 const selectedSpecs = ref({})
 const selectedSkuId = ref(null)
-const mediaHeights = ref({})
+const reviewLoading = ref(false)
+const reviewTotal = ref(0)
+const reviewList = ref([])
 
 onLoad((query) => {
   if (query?.id) {
@@ -212,8 +270,10 @@ async function fetchDetail(id) {
     const res = await getGoodsDetail(id)
     goods.value = res?.data ?? res ?? null
     resetSelection()
+    await fetchReviews(id)
   } catch {
     goods.value = null
+    resetReviews()
   } finally {
     loading.value = false
   }
@@ -260,7 +320,6 @@ const mediaList = computed(() => {
       key: `video:${videoUrl}`,
       type: 'video',
       url: videoUrl,
-      poster: goods.value.main_image_full_url || normalizeImageUrl(goods.value.images?.[0]) || '',
     })
   }
 
@@ -299,12 +358,7 @@ const mediaList = computed(() => {
   return list
 })
 
-const currentMedia = computed(() => mediaList.value[swiperIndex.value] || null)
-
-const currentMediaHeight = computed(() => {
-  if (currentMedia.value?.type === 'video') return VIDEO_HEIGHT
-  return mediaHeights.value[swiperIndex.value] || IMAGE_DEFAULT_HEIGHT
-})
+const currentMediaHeight = computed(() => MEDIA_HEIGHT)
 
 const imagePreviewUrls = computed(() => mediaList.value
   .filter((item) => item.type === 'image')
@@ -339,13 +393,17 @@ const specDisplayText = computed(() => {
 
 function resetSelection() {
   swiperIndex.value = 0
-  mediaHeights.value = {}
   selectedSpecs.value = {}
   selectedSkuId.value = null
 
   if (!hasMultiSpec.value && skuList.value.length === 1) {
     selectedSkuId.value = skuList.value[0].id
   }
+}
+
+function resetReviews() {
+  reviewTotal.value = 0
+  reviewList.value = []
 }
 
 function normalizeImageUrl(image) {
@@ -393,15 +451,6 @@ function jumpToSpecMedia(specName, specValue) {
   })
 }
 
-function onMediaImageLoad(index, event) {
-  const width = Number(event?.detail?.width || 0)
-  const height = Number(event?.detail?.height || 0)
-  if (width <= 0 || height <= 0) return
-
-  const nextHeight = Math.min(IMAGE_MAX_HEIGHT, Math.ceil((750 * height) / width))
-  mediaHeights.value = { ...mediaHeights.value, [index]: nextHeight }
-}
-
 function normalizeDescriptionHtml(html) {
   if (!html) return ''
 
@@ -415,6 +464,62 @@ function normalizeDescriptionHtml(html) {
 
       return `<img${cleanedAttrs} style="max-width:100%;width:100%;height:auto;display:block;box-sizing:border-box;" />`
     })
+}
+
+async function fetchReviews(goodsId) {
+  reviewLoading.value = true
+  try {
+    const res = await getReviewList(goodsId, {
+      page: 1,
+      limit: REVIEW_PREVIEW_LIMIT,
+    })
+    reviewTotal.value = Number(res?.total || 0)
+    reviewList.value = Array.isArray(res?.list) ? res.list.map(normalizeReview) : []
+  } catch {
+    resetReviews()
+  } finally {
+    reviewLoading.value = false
+  }
+}
+
+function normalizeReview(review) {
+  const userName = normalizeReviewUserName(review)
+
+  return {
+    id: review.id,
+    userName,
+    userInitial: userName.slice(0, 1),
+    rating: Math.max(1, Math.min(5, Number(review.rating || 5))),
+    content: review.content || '',
+    images: normalizeReviewImages(review.images_full_urls || review.images),
+    replyContent: review.reply_content || '',
+    createTimeText: formatReviewTime(review.create_time),
+  }
+}
+
+function normalizeReviewUserName(review) {
+  if (Number(review.is_anonymous || 0) === 1) return '匿名用户'
+  return review.user_nickname || review.nickname || '用户'
+}
+
+function normalizeReviewImages(images) {
+  if (Array.isArray(images)) return images.filter(Boolean)
+  if (!images) return []
+
+  try {
+    const parsed = JSON.parse(images)
+    return Array.isArray(parsed) ? parsed.filter(Boolean) : []
+  } catch {
+    return String(images)
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean)
+  }
+}
+
+function formatReviewTime(time) {
+  if (!time) return ''
+  return String(time).slice(0, 10)
 }
 
 function normalizeRichTextAttrs(attrs = '') {
@@ -466,6 +571,15 @@ function previewImage(mediaIndex) {
   uni.previewImage({
     urls: imagePreviewUrls.value,
     current: media.url,
+  })
+}
+
+function previewReviewImage(review, imageIndex) {
+  if (!review?.images?.length) return
+
+  uni.previewImage({
+    urls: review.images,
+    current: review.images[imageIndex],
   })
 }
 
@@ -797,6 +911,153 @@ function onBuyNow({ sku, quantity }) {
   font-size: 22rpx;
   color: $mb-color-text-tertiary;
   flex-shrink: 0;
+}
+
+// ---------- Review section ----------
+.goods-detail__review-section {
+  background: $mb-color-bg;
+  padding: $mb-spacing-lg $mb-spacing-page;
+}
+
+.goods-detail__review-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: $mb-spacing-md;
+}
+
+.goods-detail__review-title-wrap {
+  display: flex;
+  align-items: baseline;
+  gap: $mb-spacing-sm;
+}
+
+.goods-detail__review-title {
+  font-size: $mb-font-lg;
+  font-weight: 700;
+  color: $mb-color-text-title;
+}
+
+.goods-detail__review-total {
+  font-size: $mb-font-sm;
+  color: $mb-color-text-tertiary;
+}
+
+.goods-detail__review-loading,
+.goods-detail__review-empty {
+  padding: $mb-spacing-lg 0;
+  text-align: center;
+}
+
+.goods-detail__review-empty-text {
+  font-size: $mb-font-md;
+  color: $mb-color-text-tertiary;
+}
+
+.goods-detail__review-item {
+  padding: $mb-spacing-md 0;
+  border-top: 1rpx solid $mb-color-divider;
+}
+
+.goods-detail__review-item--first {
+  border-top: none;
+  padding-top: 0;
+}
+
+.goods-detail__review-user-row {
+  display: flex;
+  align-items: center;
+  gap: $mb-spacing-sm;
+}
+
+.goods-detail__review-avatar {
+  width: 56rpx;
+  height: 56rpx;
+  border-radius: $mb-radius-full;
+  background: $mb-color-bg-secondary;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.goods-detail__review-avatar-text {
+  font-size: $mb-font-sm;
+  font-weight: 600;
+  color: $mb-color-text-secondary;
+}
+
+.goods-detail__review-user-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.goods-detail__review-user-name {
+  display: block;
+  font-size: $mb-font-md;
+  font-weight: 600;
+  color: $mb-color-text;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.goods-detail__review-star-row {
+  display: flex;
+  gap: 2rpx;
+  margin-top: 2rpx;
+}
+
+.goods-detail__review-star {
+  font-size: 22rpx;
+  color: $mb-color-border-light;
+  line-height: 1;
+}
+
+.goods-detail__review-star--active {
+  color: $mb-color-warning;
+}
+
+.goods-detail__review-time {
+  font-size: $mb-font-xs;
+  color: $mb-color-text-tertiary;
+  flex-shrink: 0;
+}
+
+.goods-detail__review-content {
+  display: block;
+  margin-top: $mb-spacing-sm;
+  font-size: $mb-font-md;
+  color: $mb-color-text;
+  line-height: 1.6;
+  word-break: break-all;
+}
+
+.goods-detail__review-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $mb-spacing-sm;
+  margin-top: $mb-spacing-sm;
+}
+
+.goods-detail__review-image {
+  width: 144rpx;
+  height: 144rpx;
+  border-radius: $mb-radius-sm;
+  background: $mb-color-bg-secondary;
+}
+
+.goods-detail__review-reply {
+  margin-top: $mb-spacing-sm;
+  padding: $mb-spacing-sm;
+  border-radius: $mb-radius-sm;
+  background: $mb-color-bg-secondary;
+}
+
+.goods-detail__review-reply-text {
+  font-size: $mb-font-sm;
+  color: $mb-color-text-secondary;
+  line-height: 1.5;
 }
 
 // ---------- Content section ----------

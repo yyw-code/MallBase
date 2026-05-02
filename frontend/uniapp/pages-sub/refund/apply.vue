@@ -121,6 +121,8 @@ async function onSubmit() {
 
 <template>
   <view class="page">
+    <mb-navbar title="申请退款" />
+
     <!-- Product info card -->
     <view class="product-card">
       <image

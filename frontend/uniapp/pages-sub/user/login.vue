@@ -1,5 +1,7 @@
 <template>
   <view class="login-page">
+    <mb-navbar title="登录" />
+
     <view class="login-content">
       <view class="brand">
         <view class="logo-box">

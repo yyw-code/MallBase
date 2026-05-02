@@ -84,6 +84,8 @@ function goDetail(id) {
 
 <template>
   <view class="page">
+    <mb-navbar title="退款列表" />
+
     <!-- Refund list -->
     <view v-if="list.length > 0" class="list">
       <view

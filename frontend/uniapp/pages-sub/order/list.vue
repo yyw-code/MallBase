@@ -11,7 +11,9 @@ onLoad((query) => {
 </script>
 
 <template>
-  <view class="page" />
+  <view class="page">
+    <mb-navbar title="我的订单" />
+  </view>
 </template>
 
 <style scoped>

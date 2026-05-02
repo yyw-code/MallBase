@@ -1,36 +1,19 @@
 <template>
   <view class="page">
-    <!-- Navbar -->
-    <view class="page__navbar">
-      <view class="page__status-bar" :style="{ height: statusBarHeight + 'px' }" />
-      <view class="page__nav-content">
-        <text class="page__nav-title">我的订单</text>
-        <view class="page__nav-icons">
-          <text class="page__nav-icon" @tap="onSearch">&#x2315;</text>
-          <text class="page__nav-icon page__nav-icon--dots" @tap="onMore">&#x22EF;</text>
-        </view>
-      </view>
-    </view>
+    <mb-navbar title="我的订单" :back="false" :accent-line="false" />
 
     <!-- Tabs -->
-    <view class="page__tabs-wrap">
-      <view class="page__tabs-bar" :style="{ height: statusBarHeight + 'px' }" />
-      <view class="page__tabs-nav" />
-      <view class="page__tabs">
-        <view
-          v-for="tab in tabs"
-          :key="tab.key"
-          :class="['page__tab', { 'page__tab--active': currentTab === tab.key }]"
-          @tap="switchTab(tab.key)"
-        >
-          <text class="page__tab-label">{{ tab.label }}</text>
-          <view v-if="currentTab === tab.key" class="page__tab-indicator" />
-        </view>
+    <view class="page__tabs">
+      <view
+        v-for="tab in tabs"
+        :key="tab.key"
+        :class="['page__tab', { 'page__tab--active': currentTab === tab.key }]"
+        @tap="switchTab(tab.key)"
+      >
+        <text class="page__tab-label">{{ tab.label }}</text>
+        <view v-if="currentTab === tab.key" class="page__tab-indicator" />
       </view>
     </view>
-
-    <!-- Placeholder for fixed header -->
-    <view class="page__placeholder" :style="{ height: headerHeight + 'px' }" />
 
     <!-- Loading skeleton -->
     <view v-if="loading && orderList.length === 0" class="page__loading">
@@ -131,12 +114,6 @@ import { ref, computed } from 'vue'
 import { onShow, onReachBottom } from '@dcloudio/uni-app'
 import { getOrderList, payOrder, cancelOrder, confirmReceive } from '@/api/order/order'
 import { isLoggedIn } from '@/utils/auth'
-
-const systemInfo = uni.getSystemInfoSync()
-const statusBarHeight = systemInfo.statusBarHeight || 0
-const navContentPx = uni.upx2px(88)
-const tabBarPx = uni.upx2px(88)
-const headerHeight = statusBarHeight + navContentPx + tabBarPx
 
 const STATUS_MAP = {
   0:  { label: '待付款', theme: 'primary' },
@@ -251,14 +228,6 @@ function switchTab(key) {
   fetchOrders(true)
 }
 
-function onSearch() {
-  // Placeholder for search navigation
-}
-
-function onMore() {
-  // Placeholder for more options
-}
-
 async function handleAction(key, order) {
   if (key === 'cancel') {
     uni.showModal({
@@ -342,67 +311,13 @@ onReachBottom(() => {
   background: $mb-color-bg-secondary;
 }
 
-/* --- Fixed navbar ------------------------------------------ */
-.page__navbar {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 100;
-  background: $mb-color-bg;
-}
-
-.page__nav-content {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: 88rpx;
-  padding: 0 $mb-spacing-lg;
-}
-
-.page__nav-title {
-  font-size: $mb-font-lg;
-  font-weight: 700;
-  color: $mb-color-text-title;
-}
-
-.page__nav-icons {
-  display: flex;
-  align-items: center;
-  gap: $mb-spacing-md;
-}
-
-.page__nav-icon {
-  font-size: 40rpx;
-  color: $mb-color-text;
-  line-height: 1;
-}
-
-.page__nav-icon--dots {
-  font-size: 36rpx;
-  letter-spacing: -2rpx;
-}
-
-/* --- Fixed tab bar ----------------------------------------- */
-.page__tabs-wrap {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 99;
-  background: $mb-color-bg;
-}
-
-.page__tabs-nav {
-  height: 88rpx; // navbar content height spacer
-}
-
 .page__tabs {
   display: flex;
   height: 88rpx;
   align-items: stretch;
   padding: 0 $mb-spacing-sm;
   border-bottom: 1rpx solid $mb-color-divider;
+  background: $mb-color-bg;
 }
 
 .page__tab {
@@ -433,11 +348,6 @@ onReachBottom(() => {
   height: 4rpx;
   background: $mb-color-text;
   border-radius: 2rpx;
-}
-
-/* --- Placeholder ------------------------------------------- */
-.page__placeholder {
-  flex-shrink: 0;
 }
 
 /* --- Loading ----------------------------------------------- */

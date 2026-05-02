@@ -2,14 +2,6 @@
 import { ref, computed } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { getCategoryTree } from '@/api/goods/category'
-import { useAppStore } from '@/store/app'
-
-// ---------- store ----------
-const appStore = useAppStore()
-const brandName = computed(() => appStore.siteConfig?.site_name || 'MALLBASE')
-
-// ---------- system info ----------
-const { statusBarHeight } = uni.getSystemInfoSync()
 
 // ---------- state ----------
 const categoryTree = ref([])
@@ -159,10 +151,6 @@ function onTapSubcategory(sub) {
   })
 }
 
-function goSearch() {
-  uni.navigateTo({ url: '/pages-sub/search/index' })
-}
-
 // ---------- lifecycle ----------
 onLoad(() => {
   fetchCategories()
@@ -171,21 +159,7 @@ onLoad(() => {
 
 <template>
   <view class="page">
-    <!-- ========== Custom Top Bar ========== -->
-    <view class="top-bar" :style="{ paddingTop: statusBarHeight + 'px' }">
-      <view class="top-bar__inner">
-        <text class="top-bar__brand">{{ brandName }}</text>
-        <view class="top-bar__search" @tap="goSearch">
-          <text class="top-bar__search-icon">&#x1F50D;</text>
-        </view>
-      </view>
-    </view>
-
-    <!-- Top bar spacer -->
-    <view
-      class="top-bar__spacer"
-      :style="{ height: (statusBarHeight + 44) + 'px' }"
-    />
+    <mb-navbar title="分类" :back="false" />
 
     <!-- Loading skeleton -->
     <view v-if="loading" class="skeleton-layout">
@@ -332,51 +306,6 @@ onLoad(() => {
   flex-direction: column;
   min-height: 100vh;
   background-color: $mb-color-bg;
-}
-
-/* ===========================
-   Custom Top Bar
-   =========================== */
-.top-bar {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 999;
-  background-color: $mb-color-bg;
-}
-
-.top-bar__inner {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: 88rpx;
-  padding: 0 $mb-spacing-md;
-}
-
-.top-bar__brand {
-  font-size: $mb-font-lg;
-  font-weight: 700;
-  color: $mb-color-text-title;
-  letter-spacing: 2rpx;
-  text-transform: uppercase;
-}
-
-.top-bar__search {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 64rpx;
-  height: 64rpx;
-}
-
-.top-bar__search-icon {
-  font-size: 36rpx;
-  line-height: 1;
-}
-
-.top-bar__spacer {
-  flex-shrink: 0;
 }
 
 /* ===========================
