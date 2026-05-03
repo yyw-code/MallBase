@@ -60,7 +60,12 @@ return [
     'hot_update' => [
         'enable'  => env('APP_DEBUG', false),
         'name'    => ['*.php'],
-        'include' => [app_path()],
+        'include' => [
+            app_path(),
+            config_path(),
+            root_path('route'),
+            root_path('mall_base'),
+        ],
         'exclude' => [],
     ],
     //连接池

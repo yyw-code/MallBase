@@ -14,7 +14,7 @@ use think\facade\Cache;
 class SettingCacheService
 {
     private const TAG_SETTING = 'setting';
-    private const TAG_SETTING_VALUE = 'setting:value';
+    private const SETTING_VALUE_PREFIX = 'setting:value';
     private const CACHE_EXPIRE_SECONDS = 86400;
 
     /**
@@ -32,19 +32,11 @@ class SettingCacheService
     }
 
     /**
-     * 获取分组缓存标签
-     */
-    protected function getGroupCacheTag(string $code): string
-    {
-        return $this->groupPrefix . $code;
-    }
-
-    /**
      * 获取单个设置项缓存 key
      */
     protected function getSettingValueCacheKey(string $code): string
     {
-        return self::TAG_SETTING_VALUE . ':' . $code;
+        return self::SETTING_VALUE_PREFIX . ':' . $code;
     }
 
     /**
@@ -58,7 +50,7 @@ class SettingCacheService
     {
         $cacheKey = $this->getGroupCacheKey($groupCode);
 
-        return Cache::tag([self::TAG_SETTING, $this->getGroupCacheTag($groupCode)])
+        return Cache::tag(self::TAG_SETTING)
             ->remember($cacheKey, $callback, self::CACHE_EXPIRE_SECONDS);
     }
 
@@ -67,14 +59,7 @@ class SettingCacheService
      */
     public function clearGroup(string $groupCode): void
     {
-        $cacheKey = $this->getGroupCacheKey($groupCode);
-        Cache::delete($cacheKey);
-
-        try {
-            Cache::tag($this->getGroupCacheTag($groupCode))->clear();
-        } catch (\Throwable $e) {
-            // 驱动不支持 tag 时忽略，保留上面的精确 key 删除作为兼容兜底
-        }
+        Cache::delete($this->getGroupCacheKey($groupCode));
     }
 
     /**
@@ -113,8 +98,20 @@ class SettingCacheService
     {
         $cacheKey = $this->getSettingValueCacheKey($code);
 
-        return Cache::tag([self::TAG_SETTING, self::TAG_SETTING_VALUE])
-            ->remember($cacheKey, $callback, self::CACHE_EXPIRE_SECONDS);
+        if (Cache::has($cacheKey)) {
+            $cached = Cache::get($cacheKey);
+            if ($cached !== null) {
+                return $cached;
+            }
+            Cache::delete($cacheKey);
+        }
+
+        $value = $callback();
+        if ($value !== null && $value !== '') {
+            Cache::tag(self::TAG_SETTING)->set($cacheKey, $value, self::CACHE_EXPIRE_SECONDS);
+        }
+
+        return $value;
     }
 
     /**
@@ -135,12 +132,6 @@ class SettingCacheService
         $codes = array_values(array_unique(array_filter(array_map('strval', $codes), static fn(string $code): bool => $code !== '')));
         if ($codes === []) {
             return;
-        }
-
-        try {
-            Cache::tag(self::TAG_SETTING_VALUE)->clear();
-        } catch (\Throwable $e) {
-            // 驱动不支持 tag 时忽略，继续执行精确 key 删除
         }
 
         foreach ($codes as $code) {

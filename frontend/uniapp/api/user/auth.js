@@ -18,14 +18,27 @@ export const register = (mobile, password, nickname) =>
 export const wechatLogin = (code) =>
   post('/client/api/user/auth/wechat', { code })
 
-export const wechatBindMobile = (openid, mobile, code) =>
-  post('/client/api/user/auth/wechat/bindMobile', { openid, mobile, code })
+export const wechatBindMobile = (bindToken, mobile, code, profile = {}) =>
+  post('/client/api/user/auth/wechat/bindMobile', { bind_token: bindToken, mobile, code, ...profile })
 
-export const wechatBindByPhoneCode = (openid, phoneCode) =>
-  post('/client/api/user/auth/wechat/bindMobileByPhoneCode', { openid, phone_code: phoneCode })
+export const wechatBindByPhoneCode = (bindToken, phoneCode, profile = {}) =>
+  post('/client/api/user/auth/wechat/bindMobileByPhoneCode', {
+    bind_token: bindToken,
+    phone_code: phoneCode,
+    ...profile,
+  })
+
+export const wechatBindUserInfo = (bindToken, profile = {}) =>
+  post('/client/api/user/auth/wechat/bindUserInfo', { bind_token: bindToken, ...profile })
 
 export const wechatOfficialLogin = (code) =>
   post('/client/api/user/auth/wechat/official', { code })
 
-export const wechatOfficialBindMobile = (openid, mobile, code) =>
-  post('/client/api/user/auth/wechat/official/bindMobile', { openid, mobile, code })
+export const getWechatOfficialOauthUrl = (redirectUri, state = 'login') =>
+  post('/client/api/user/auth/wechat/official/oauthUrl', {
+    redirect_uri: redirectUri,
+    state,
+  })
+
+export const wechatOfficialBindMobile = (bindToken, mobile, code) =>
+  post('/client/api/user/auth/wechat/official/bindMobile', { bind_token: bindToken, mobile, code })

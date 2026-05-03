@@ -2,12 +2,11 @@
 import { computed } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { useUserStore } from '@/store/user'
-import { isLoggedIn } from '@/utils/auth'
 
 const userStore = useUserStore()
 
 // ---------- computed ----------
-const logged = computed(() => isLoggedIn())
+const logged = computed(() => userStore.isLoggedIn)
 
 const nickname = computed(() => userStore.userInfo?.nickname || '')
 const avatar = computed(() => userStore.userInfo?.avatar || '')
@@ -40,7 +39,8 @@ const menuCells = [
 
 // ---------- lifecycle ----------
 onShow(() => {
-  if (isLoggedIn()) {
+  userStore.restoreToken()
+  if (userStore.isLoggedIn) {
     userStore.fetchUserInfo()
   }
 })
@@ -51,7 +51,7 @@ function goLogin() {
 }
 
 function goOrders(shortcut) {
-  if (!isLoggedIn()) {
+  if (!userStore.isLoggedIn) {
     goLogin()
     return
   }
@@ -62,7 +62,7 @@ function goOrders(shortcut) {
 }
 
 function goAllOrders() {
-  if (!isLoggedIn()) {
+  if (!userStore.isLoggedIn) {
     goLogin()
     return
   }
@@ -74,7 +74,7 @@ function goCell(cell) {
     uni.showToast({ title: '即将开放', icon: 'none' })
     return
   }
-  if (!isLoggedIn()) {
+  if (!userStore.isLoggedIn) {
     goLogin()
     return
   }

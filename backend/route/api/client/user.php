@@ -18,13 +18,15 @@ Route::group('user/auth', function () {
     Route::post('sms/send', 'sendSmsCode');
 
     // 微信小程序
-    Route::post('wechat', 'wechatLogin');
     Route::post('wechat/bindMobile', 'bindMobile');                   // 手动绑定(force_mobile=false)
     Route::post('wechat/bindMobileByPhoneCode', 'bindMobileByPhoneCode'); // getPhoneNumber 兑换(force_mobile=true)
+    Route::post('wechat/bindUserInfo', 'bindUserInfo');               // 头像昵称绑定(force_userinfo=true)
+    Route::post('wechat', 'wechatLogin');
 
     // 微信公众号 OAuth(微信浏览器内打开网页)
-    Route::post('wechat/official', 'wechatOfficialLogin');
+    Route::post('wechat/official/oauthUrl', 'wechatOfficialOauthUrl');
     Route::post('wechat/official/bindMobile', 'wechatOfficialBindMobile');
+    Route::post('wechat/official', 'wechatOfficialLogin');
 })->prefix('client.user.UserController/');
 
 Route::group('user/my', function () {

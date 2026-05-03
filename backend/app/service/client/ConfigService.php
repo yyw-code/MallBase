@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace app\service\client;
 
+use app\service\SystemSettingService;
 use mall_base\base\BaseModel;
 use mall_base\base\BaseService;
 
@@ -12,7 +13,7 @@ use mall_base\base\BaseService;
  *
  * 职责：
  * - 聚合 Client 启动所需的非敏感配置（Logo、Banner、分享、协议、版权等）
- * - 显式白名单过滤，禁止任何含 wechat_/pay_/upload_/jwt_/admin_/site_url 前缀的字段外泄
+ * - 显式白名单过滤，禁止 AppID/AppSecret/pay_/upload_/jwt_/admin_/site_url 等敏感或管理字段外泄
  *
  * 数据源：SystemSettingService → mb_setting
  *
@@ -40,6 +41,15 @@ class ConfigService extends BaseService
     ];
 
     /**
+     * 微信小程序组内允许输出给 Client 的展示字段白名单。
+     * 注意：禁止把 AppID/AppSecret/token/aes_key 等凭证字段加入这里。
+     */
+    private const WECHAT_MINI_PUBLIC_FIELDS = [
+        'wechat_mini_name' => 'client_auth_name',
+        'wechat_mini_auth_logo' => 'client_auth_logo',
+    ];
+
+    /**
      * 获取客户端基础配置
      *
      * @return array<string, mixed>
@@ -56,6 +66,20 @@ class ConfigService extends BaseService
             $value = getSystemSetting($code);
             if ($value !== null) {
                 $merged[$code] = $value;
+            }
+        }
+
+        $wechatMini = app()
+            ->make(SystemSettingService::class)
+            ->getSystemSettingGroupWithMeta('WechatMiniProgram');
+        foreach (self::WECHAT_MINI_PUBLIC_FIELDS as $code => $publicCode) {
+            if (!isset($wechatMini[$code])) {
+                continue;
+            }
+            $item = $wechatMini[$code];
+            $value = !empty($item['full_url']) ? $item['full_url'] : ($item['value'] ?? null);
+            if ($value !== null && $value !== '') {
+                $merged[$publicCode] = $value;
             }
         }
 

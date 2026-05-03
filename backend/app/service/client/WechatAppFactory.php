@@ -28,8 +28,8 @@ class WechatAppFactory
      */
     public function miniApp(): MiniAppApplication
     {
-        $appId = (string) getSystemSetting('wechat_mini_appid', '');
-        $appSecret = (string) getSystemSetting('wechat_mini_secret', '');
+        $appId = trim((string) getSystemSetting('wechat_mini_appid', ''));
+        $appSecret = trim((string) getSystemSetting('wechat_mini_secret', ''));
         $this->assertCredentials($appId, $appSecret, '微信小程序');
 
         return new MiniAppApplication([
@@ -45,8 +45,8 @@ class WechatAppFactory
      */
     public function officialAccount(): OfficialAccountApplication
     {
-        $appId = (string) getSystemSetting('wechat_offi_appid', '');
-        $appSecret = (string) getSystemSetting('wechat_offi_secret', '');
+        $appId = trim((string) getSystemSetting('wechat_offi_appid', ''));
+        $appSecret = trim((string) getSystemSetting('wechat_offi_secret', ''));
         $this->assertCredentials($appId, $appSecret, '微信公众号');
 
         $config = [
@@ -76,6 +76,30 @@ class WechatAppFactory
         return in_array((string) getSystemSetting('wechat_offi_force_userinfo', '0'), ['1', 'true', 'on', 'yes'], true)
             ? 'snsapi_userinfo'
             : 'snsapi_base';
+    }
+
+    /**
+     * 生成公众号 OAuth 授权地址。
+     *
+     * 前端只传回调地址，AppID 与 scope 均由后端配置决定，避免把公众号凭据扩散到客户端配置接口。
+     */
+    public function officialOauthUrl(string $redirectUri, string $state = 'login'): string
+    {
+        $appId = trim((string) getSystemSetting('wechat_offi_appid', ''));
+        if ($appId === '') {
+            throw new BusinessException('微信公众号 AppID 未配置,请在后台「设置 → 微信配置」中填写');
+        }
+
+        $state = preg_replace('/[^A-Za-z0-9_-]/', '', $state) ?: 'login';
+        $query = http_build_query([
+            'appid' => $appId,
+            'redirect_uri' => $redirectUri,
+            'response_type' => 'code',
+            'scope' => $this->officialOauthScope(),
+            'state' => $state,
+        ]);
+
+        return 'https://open.weixin.qq.com/connect/oauth2/authorize?' . $query . '#wechat_redirect';
     }
 
     /**

@@ -5,6 +5,7 @@ namespace app\controller\client\user;
 
 use app\service\client\SmsAuthService;
 use app\service\client\UserService;
+use app\service\client\WechatAppFactory;
 use app\service\client\WechatService;
 use app\validate\client\user\UserValidate;
 use mall_base\base\BaseController;
@@ -348,15 +349,15 @@ class UserController extends BaseController
     /**
      * 微信小程序"手动绑定手机号"(force_mobile=false 场景)
      *
-     * 请求参数:openid + mobile + code(SMS 验证码,scene=bind_mobile)
+     * 请求参数:bind_token + mobile + code(SMS 验证码,scene=bind_mobile)
      */
     public function bindMobile()
     {
-        $openid  = (string) $this->request->param('openid', '');
+        $bindToken = (string) $this->request->param('bind_token', '');
         $mobile  = (string) $this->request->param('mobile', '');
         $smsCode = (string) $this->request->param('code', '');
 
-        if ($openid === '' || $mobile === '' || $smsCode === '') {
+        if ($bindToken === '' || $mobile === '' || $smsCode === '') {
             return $this->error('参数不完整');
         }
         if (!preg_match('/^1[3-9]\d{9}$/', $mobile)) {
@@ -365,28 +366,81 @@ class UserController extends BaseController
 
         /** @var WechatService $wechatService */
         $wechatService = app(WechatService::class);
-        $result = $wechatService->miniappBindMobileManual($openid, $mobile, $smsCode);
+        $result = $wechatService->miniappBindMobileManual(
+            $bindToken,
+            $mobile,
+            $smsCode,
+            (string) $this->request->param('nickname', ''),
+            (string) $this->request->param('avatar', '')
+        );
         return $this->success($result, '绑定成功');
     }
 
     /**
      * 微信小程序"获取手机号"绑定(force_mobile=true 场景)
      *
-     * 请求参数:openid + phone_code(button open-type=getPhoneNumber 触发后前端拿到的 code)
+     * 请求参数:bind_token + phone_code(button open-type=getPhoneNumber 触发后前端拿到的 code)
      */
     public function bindMobileByPhoneCode()
     {
-        $openid    = (string) $this->request->param('openid', '');
+        $bindToken = (string) $this->request->param('bind_token', '');
         $phoneCode = (string) $this->request->param('phone_code', '');
 
-        if ($openid === '' || $phoneCode === '') {
+        if ($bindToken === '' || $phoneCode === '') {
             return $this->error('参数不完整');
         }
 
         /** @var WechatService $wechatService */
         $wechatService = app(WechatService::class);
-        $result = $wechatService->miniappBindMobileByPhoneCode($openid, $phoneCode);
+        $result = $wechatService->miniappBindMobileByPhoneCode(
+            $bindToken,
+            $phoneCode,
+            (string) $this->request->param('nickname', ''),
+            (string) $this->request->param('avatar', '')
+        );
         return $this->success($result, '绑定成功');
+    }
+
+    /**
+     * 微信小程序"头像昵称"绑定(force_userinfo=true 场景)
+     */
+    public function bindUserInfo()
+    {
+        $bindToken = (string) $this->request->param('bind_token', '');
+        $nickname = (string) $this->request->param('nickname', '');
+        $avatar = (string) $this->request->param('avatar', '');
+
+        if ($bindToken === '') {
+            return $this->error('参数不完整');
+        }
+
+        /** @var WechatService $wechatService */
+        $wechatService = app(WechatService::class);
+        $result = $wechatService->miniappBindUserInfo($bindToken, $nickname, $avatar);
+        return $this->success($result, '绑定成功');
+    }
+
+    /**
+     * 获取微信公众号 OAuth 授权地址
+     */
+    public function wechatOfficialOauthUrl()
+    {
+        $redirectUri = (string) $this->request->param('redirect_uri', '');
+        $state = (string) $this->request->param('state', 'login');
+
+        if ($redirectUri === '') {
+            return $this->error('redirect_uri 不能为空');
+        }
+        if (!preg_match('#^https?://#i', $redirectUri)) {
+            return $this->error('redirect_uri 必须是完整的 http(s) 地址');
+        }
+
+        /** @var WechatAppFactory $factory */
+        $factory = app(WechatAppFactory::class);
+
+        return $this->success([
+            'url' => $factory->officialOauthUrl($redirectUri, $state),
+        ], '获取成功');
     }
 
     /**
@@ -410,11 +464,11 @@ class UserController extends BaseController
      */
     public function wechatOfficialBindMobile()
     {
-        $openid  = (string) $this->request->param('openid', '');
+        $bindToken = (string) $this->request->param('bind_token', '');
         $mobile  = (string) $this->request->param('mobile', '');
         $smsCode = (string) $this->request->param('code', '');
 
-        if ($openid === '' || $mobile === '' || $smsCode === '') {
+        if ($bindToken === '' || $mobile === '' || $smsCode === '') {
             return $this->error('参数不完整');
         }
         if (!preg_match('/^1[3-9]\d{9}$/', $mobile)) {
@@ -423,7 +477,7 @@ class UserController extends BaseController
 
         /** @var WechatService $wechatService */
         $wechatService = app(WechatService::class);
-        $result = $wechatService->officialBindMobile($openid, $mobile, $smsCode);
+        $result = $wechatService->officialBindMobile($bindToken, $mobile, $smsCode);
         return $this->success($result, '绑定成功');
     }
 }

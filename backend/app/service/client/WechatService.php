@@ -13,6 +13,7 @@ use mall_base\service\JwtCacheService;
 use mall_base\service\JwtService;
 use app\service\sms\SmsScene;
 use app\service\sms\SmsService;
+use think\facade\Cache;
 use think\facade\Request;
 
 /**
@@ -37,6 +38,9 @@ use think\facade\Request;
  */
 class WechatService extends BaseService
 {
+    private const BIND_TOKEN_PREFIX = 'wechat:bind:';
+    private const BIND_TOKEN_TTL = 600;
+
     /**
      * Model 类名
      */
@@ -86,13 +90,15 @@ class WechatService extends BaseService
             $user->save(['session_key' => $sessionKey]);
         }
 
-        if (in_array((string) getSystemSetting('wechat_mini_force_mobile', '0'), ['1', 'true', 'on', 'yes'], true) && (string) $user->mobile === '') {
+        $needMobile = $this->settingBool('wechat_mini_force_mobile') && (string) $user->mobile === '';
+        $needUserInfo = $this->miniappUserInfoRequired($user);
+
+        if ($needMobile || $needUserInfo) {
             return [
-                'need_mobile'        => true,
-                'openid'             => $openid,
-                'unionid'            => $unionid !== '' ? $unionid : null,
-                'session_key'        => $sessionKey,
-                'force_phone_number' => true,
+                'need_mobile'        => $needMobile,
+                'need_userinfo'      => $needUserInfo,
+                'bind_token'         => $this->createBindToken(RegisterType::WECHAT_MINIAPP, $openid),
+                'force_phone_number' => $needMobile,
             ];
         }
 
@@ -104,12 +110,19 @@ class WechatService extends BaseService
      *
      * 用户首次小程序登录后,若开关未开则前端继续使用现有"手机号 + 短信验证码"
      * 表单完成手机号绑定。进入此方法时:
-     *  - openid 是上一次 miniappLogin 返回给前端的 openid
+     *  - bindToken 是上一次 miniappLogin 返回给前端的短期绑定凭证
      *  - mobile 是用户输入的手机号
      *  - smsCode 是 SmsScene::BIND_MOBILE 发出去的验证码
      */
-    public function miniappBindMobileManual(string $openid, string $mobile, string $smsCode): array
+    public function miniappBindMobileManual(
+        string $bindToken,
+        string $mobile,
+        string $smsCode,
+        string $nickname = '',
+        string $avatar = ''
+    ): array
     {
+        $openid = $this->resolveBindToken($bindToken, RegisterType::WECHAT_MINIAPP);
         $this->sms->verifyCode($mobile, SmsScene::BIND_MOBILE, $smsCode);
 
         $user = $this->model()->where('wx_miniapp_openid', $openid)->find();
@@ -129,7 +142,12 @@ class WechatService extends BaseService
             $user->save(['mobile' => $mobile]);
         }
 
-        return $this->issueToken($user, RegisterType::WECHAT_MINIAPP, $openid);
+        $this->applyMiniappProfile($user, $nickname, $avatar, $this->settingBool('wechat_mini_force_userinfo'));
+
+        $result = $this->issueToken($user, RegisterType::WECHAT_MINIAPP, $openid);
+        $this->clearBindToken($bindToken);
+
+        return $result;
     }
 
     /**
@@ -139,8 +157,14 @@ class WechatService extends BaseService
      * 后端调 wxa.business.getuserphonenumber 用 access_token 兑换真实手机号,
      * 然后按 mobile 完成"跨端账号合并 + 落库"
      */
-    public function miniappBindMobileByPhoneCode(string $openid, string $phoneCode): array
+    public function miniappBindMobileByPhoneCode(
+        string $bindToken,
+        string $phoneCode,
+        string $nickname = '',
+        string $avatar = ''
+    ): array
     {
+        $openid = $this->resolveBindToken($bindToken, RegisterType::WECHAT_MINIAPP);
         $mobile = $this->miniappFetchPhoneNumber($phoneCode);
         if ($mobile === '') {
             throw new BusinessException('获取手机号失败,请重试');
@@ -165,7 +189,40 @@ class WechatService extends BaseService
             $user->save(['mobile' => $mobile]);
         }
 
-        return $this->issueToken($user, RegisterType::WECHAT_MINIAPP, $openid);
+        $this->applyMiniappProfile($user, $nickname, $avatar, $this->settingBool('wechat_mini_force_userinfo'));
+
+        $result = $this->issueToken($user, RegisterType::WECHAT_MINIAPP, $openid);
+        $this->clearBindToken($bindToken);
+
+        return $result;
+    }
+
+    /**
+     * 小程序"头像昵称"绑定(force_userinfo=true 或用户主动补全)
+     */
+    public function miniappBindUserInfo(string $bindToken, string $nickname, string $avatar = ''): array
+    {
+        $openid = $this->resolveBindToken($bindToken, RegisterType::WECHAT_MINIAPP);
+        $user = $this->model()->where('wx_miniapp_openid', $openid)->find();
+        if ($user === null) {
+            throw new BusinessException('用户登录态已过期,请重新登录');
+        }
+
+        $this->applyMiniappProfile($user, $nickname, $avatar, $this->settingBool('wechat_mini_force_userinfo'));
+
+        if ($this->settingBool('wechat_mini_force_mobile') && (string) $user->mobile === '') {
+            return [
+                'need_mobile'        => true,
+                'need_userinfo'      => false,
+                'bind_token'         => $bindToken,
+                'force_phone_number' => true,
+            ];
+        }
+
+        $result = $this->issueToken($user, RegisterType::WECHAT_MINIAPP, $openid);
+        $this->clearBindToken($bindToken);
+
+        return $result;
     }
 
     // ============================================================
@@ -179,7 +236,7 @@ class WechatService extends BaseService
      *  1) code → openid + 可选 unionid + 可选 nickname/headimg(via Socialite OAuth)
      *  2) authenticateOrCreate 匹配/创建用户
      *  3) 若开关 wechat_offi_force_mobile_bind 开启且用户尚无 mobile → 返回 need_mobile,
-     *     前端再调 officialBindMobile($openid, $mobile, $smsCode) 完成短信绑定
+     *     前端再调 officialBindMobile($bindToken, $mobile, $smsCode) 完成短信绑定
      *  4) 否则签发 JWT
      */
     public function officialLogin(string $code): array
@@ -215,8 +272,7 @@ class WechatService extends BaseService
         if (in_array((string) getSystemSetting('wechat_offi_force_mobile_bind', '0'), ['1', 'true', 'on', 'yes'], true) && (string) $user->mobile === '') {
             return [
                 'need_mobile' => true,
-                'openid'      => $openid,
-                'unionid'     => $unionid !== '' ? $unionid : null,
+                'bind_token'  => $this->createBindToken(RegisterType::WECHAT_OFFICIAL, $openid),
                 'sms_required'=> true,
             ];
         }
@@ -230,8 +286,9 @@ class WechatService extends BaseService
      * 公众号 OAuth 拿不到手机号,必须用短信验证码绑定。
      * SmsService 会校验 60s 间隔/24h 上限/IP 限制,业务无需自己处理频控
      */
-    public function officialBindMobile(string $openid, string $mobile, string $smsCode): array
+    public function officialBindMobile(string $bindToken, string $mobile, string $smsCode): array
     {
+        $openid = $this->resolveBindToken($bindToken, RegisterType::WECHAT_OFFICIAL);
         $this->sms->verifyCode($mobile, SmsScene::WECHAT_OFFICIAL_BIND, $smsCode);
 
         $user = $this->model()->where('wx_official_openid', $openid)->find();
@@ -251,7 +308,10 @@ class WechatService extends BaseService
             $user->save(['mobile' => $mobile]);
         }
 
-        return $this->issueToken($user, RegisterType::WECHAT_OFFICIAL, $openid);
+        $result = $this->issueToken($user, RegisterType::WECHAT_OFFICIAL, $openid);
+        $this->clearBindToken($bindToken);
+
+        return $result;
     }
 
     // ============================================================
@@ -363,6 +423,40 @@ class WechatService extends BaseService
         };
     }
 
+    private function createBindToken(string $source, string $openid): string
+    {
+        $token = bin2hex(random_bytes(32));
+        Cache::set(self::BIND_TOKEN_PREFIX . $token, [
+            'source' => $source,
+            'openid' => $openid,
+        ], self::BIND_TOKEN_TTL);
+
+        return $token;
+    }
+
+    private function resolveBindToken(string $token, string $source): string
+    {
+        $token = trim($token);
+        if ($token === '') {
+            throw new BusinessException('用户登录态已过期,请重新登录');
+        }
+
+        $payload = Cache::get(self::BIND_TOKEN_PREFIX . $token);
+        if (!is_array($payload)
+            || (string) ($payload['source'] ?? '') !== $source
+            || (string) ($payload['openid'] ?? '') === ''
+        ) {
+            throw new BusinessException('用户登录态已过期,请重新登录');
+        }
+
+        return (string) $payload['openid'];
+    }
+
+    private function clearBindToken(string $token): void
+    {
+        Cache::delete(self::BIND_TOKEN_PREFIX . trim($token));
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -388,6 +482,41 @@ class WechatService extends BaseService
         );
 
         return $token;
+    }
+
+    private function miniappUserInfoRequired(User $user): bool
+    {
+        return $this->settingBool('wechat_mini_force_userinfo')
+            && ((string) $user->nickname === '' || (string) $user->avatar === '');
+    }
+
+    private function applyMiniappProfile(User $user, string $nickname, string $avatar, bool $required): void
+    {
+        $nickname = trim($nickname);
+        $avatar = trim($avatar);
+
+        if ($required && $nickname === '' && (string) $user->nickname === '') {
+            throw new BusinessException('请先填写微信昵称');
+        }
+        if ($required && $avatar === '' && (string) $user->avatar === '') {
+            throw new BusinessException('请先选择微信头像');
+        }
+
+        $updates = [];
+        if ($nickname !== '' && (string) $user->nickname === '') {
+            $updates['nickname'] = mb_substr($nickname, 0, 50);
+        }
+        if ($avatar !== '' && (string) $user->avatar === '') {
+            $updates['avatar'] = $avatar;
+        }
+        if ($updates !== []) {
+            $user->save($updates);
+        }
+    }
+
+    private function settingBool(string $code): bool
+    {
+        return in_array((string) getSystemSetting($code, '0'), ['1', 'true', 'on', 'yes'], true);
     }
 
     // ============================================================

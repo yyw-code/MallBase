@@ -33,9 +33,26 @@ export const useUserStore = defineStore('user', {
       uni.removeStorageSync(REFRESH_KEY)
     },
     async fetchUserInfo() {
-      const data = await get('/client/api/user/my/info')
-      this.userInfo = data
-      return data
+      if (!this.token) {
+        this.restoreToken()
+      }
+      if (!this.token) {
+        this.userInfo = null
+        this.isLoggedIn = false
+        return null
+      }
+
+      try {
+        const data = await get('/client/api/user/my/info')
+        this.userInfo = data
+        this.isLoggedIn = true
+        return data
+      } catch (e) {
+        if (!uni.getStorageSync(TOKEN_KEY)) {
+          this.clearAuth()
+        }
+        throw e
+      }
     },
     async logout() {
       try {

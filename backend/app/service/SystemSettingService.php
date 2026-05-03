@@ -164,8 +164,7 @@ class SystemSettingService extends BaseService
             return $default;
         }
 
-        // 最后兜底：从 config() 读同名配置（升级期安全网）
-        return config($code);
+        return null;
     }
 
     /**

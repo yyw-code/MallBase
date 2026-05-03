@@ -22,8 +22,8 @@ class ConfigController extends BaseController
      * 获取客户端基础配置
      * GET /client/api/setting/basic
      *
-     * 返回字段白名单（参见 ConfigService::PUBLIC_GROUPS / SYSTEM_BASIC_PUBLIC_FIELDS），
-     * 绝不包含 wechat_/pay_/upload_/jwt_/admin_/site_url 等敏感或管理员字段。
+     * 返回字段白名单（参见 ConfigService 内白名单），只包含展示配置，
+     * 绝不包含 AppID/AppSecret/pay_/upload_/jwt_/admin_/site_url 等敏感或管理员字段。
      *
      * 响应带 Cache-Control: public, max-age=60，减轻首屏突刺；
      * 后台保存 → SettingCacheService 清缓存 → 下个 60s 窗口生效。

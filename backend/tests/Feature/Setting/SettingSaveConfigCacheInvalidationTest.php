@@ -15,13 +15,13 @@ final class SettingSaveConfigCacheInvalidationTest extends TestCase
 {
     use ApiClientTrait;
 
-    public function testClearSettingValuesInvalidatesTaggedSingleValueCache(): void
+    public function testGetSettingValueDoesNotCacheNullValue(): void
     {
         if (gethostbyname('redis') === 'redis' && getenv('REDIS_HOST') === false) {
             $this->markTestSkipped('当前宿主机无法解析 redis 容器域名，跳过直接 Redis 缓存断言。');
         }
 
-        $code = 'codex_clear_setting_value_tag_probe';
+        $code = 'codex_null_setting_value_probe';
         $cacheKey = 'setting:value:' . $code;
         $cacheReady = false;
 
@@ -33,10 +33,8 @@ final class SettingSaveConfigCacheInvalidationTest extends TestCase
 
             /** @var SettingCacheService $cacheService */
             $cacheService = $app->make(SettingCacheService::class);
-            $cachedValue = $cacheService->getSettingValue($code, static fn(): string => 'tagged-value');
-            $hasCacheBeforeClear = Cache::has($cacheKey);
-            $cacheService->clearSettingValues([$code]);
-            $hasCacheAfterClear = Cache::has($cacheKey);
+            $cachedValue = $cacheService->getSettingValue($code, static fn(): null => null);
+            $hasCacheAfterRead = Cache::has($cacheKey);
         } catch (Throwable $e) {
             $this->markTestSkipped('缓存服务不可用，跳过直接缓存断言：' . $e->getMessage());
         } finally {
@@ -45,9 +43,61 @@ final class SettingSaveConfigCacheInvalidationTest extends TestCase
             }
         }
 
+        $this->assertNull($cachedValue);
+        $this->assertFalse($hasCacheAfterRead, '单值读取返回 null 时不应写入 Redis，避免出现 N; 缓存占位。');
+    }
+
+    public function testSystemSettingDoesNotFallbackToConfigFile(): void
+    {
+        $source = file_get_contents(dirname(__DIR__, 3) . '/app/service/SystemSettingService.php');
+
+        $this->assertIsString($source);
+        $this->assertStringNotContainsString('config($code)', $source, '数据库设置缺失时不应再回退读取 config($code)。');
+    }
+
+    public function testClearSettingValuesInvalidatesOnlyRequestedSingleValueCache(): void
+    {
+        if (gethostbyname('redis') === 'redis' && getenv('REDIS_HOST') === false) {
+            $this->markTestSkipped('当前宿主机无法解析 redis 容器域名，跳过直接 Redis 缓存断言。');
+        }
+
+        $code = 'codex_clear_setting_value_tag_probe';
+        $otherCode = 'codex_clear_setting_value_other_probe';
+        $cacheKey = 'setting:value:' . $code;
+        $otherCacheKey = 'setting:value:' . $otherCode;
+        $cacheReady = false;
+
+        try {
+            $app = new App(dirname(__DIR__, 3));
+            $app->initialize();
+            $cacheReady = true;
+            Cache::delete($cacheKey);
+            Cache::delete($otherCacheKey);
+
+            /** @var SettingCacheService $cacheService */
+            $cacheService = $app->make(SettingCacheService::class);
+            $cachedValue = $cacheService->getSettingValue($code, static fn(): string => 'tagged-value');
+            $otherCachedValue = $cacheService->getSettingValue($otherCode, static fn(): string => 'other-tagged-value');
+            $hasCacheBeforeClear = Cache::has($cacheKey);
+            $hasOtherCacheBeforeClear = Cache::has($otherCacheKey);
+            $cacheService->clearSettingValues([$code]);
+            $hasCacheAfterClear = Cache::has($cacheKey);
+            $hasOtherCacheAfterClear = Cache::has($otherCacheKey);
+        } catch (Throwable $e) {
+            $this->markTestSkipped('缓存服务不可用，跳过直接缓存断言：' . $e->getMessage());
+        } finally {
+            if ($cacheReady) {
+                Cache::delete($cacheKey);
+                Cache::delete($otherCacheKey);
+            }
+        }
+
         $this->assertSame('tagged-value', $cachedValue);
+        $this->assertSame('other-tagged-value', $otherCachedValue);
         $this->assertTrue($hasCacheBeforeClear, '单值缓存预热后应写入 Redis。');
-        $this->assertFalse($hasCacheAfterClear, 'clearSettingValues 应通过 setting:value tag 清除单值缓存。');
+        $this->assertTrue($hasOtherCacheBeforeClear, '旁路单值缓存预热后应写入 Redis。');
+        $this->assertFalse($hasCacheAfterClear, 'clearSettingValues 应精确清除传入 code 的单值缓存。');
+        $this->assertTrue($hasOtherCacheAfterClear, 'clearSettingValues 不应清除未传入 code 的单值缓存。');
     }
 
     public function testSaveSystemBasicInvalidatesSingleValueCacheUsedByUploadUrl(): void
@@ -98,7 +148,11 @@ final class SettingSaveConfigCacheInvalidationTest extends TestCase
                 'saveConfig 更新 site_url 后，依赖 getSystemSetting(site_url) 的上传 URL 应立即使用新值。'
             );
         } finally {
-            $this->saveConfigValues('SystemBasic', $originalSystemBasic, $headers);
+            try {
+                $this->saveConfigValues('SystemBasic', $originalSystemBasic, $headers);
+            } catch (Throwable) {
+                // 接口不可达或测试已跳过时，恢复失败不应覆盖原始测试结论。
+            }
         }
     }
 

@@ -125,6 +125,12 @@
           }
         },
         {
+          "path": "agreement",
+          "style": {
+            "navigationStyle": "custom"
+          }
+        },
+        {
           "path": "bind-mobile",
           "style": {
             "navigationStyle": "custom"
