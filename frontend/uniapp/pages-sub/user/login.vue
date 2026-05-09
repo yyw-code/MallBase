@@ -1,10 +1,17 @@
 <template>
   <view class="login-page">
-    <mb-navbar title="" bgColor="transparent" />
+    <view class="nebula-bg" />
+    <view class="blob blob--1" />
+    <view class="blob blob--2" />
+    <view class="blob blob--3" />
+    <view class="stars" />
+
+    <mb-navbar title="" bgColor="transparent" textColor="#ffffff" />
 
     <view class="login-content">
       <view class="brand">
         <view class="brand-mark">
+          <view class="brand-mark__sheen" />
           <image v-if="loginLogo" class="brand-mark__image" :src="loginLogo" mode="aspectFit" />
           <view v-else class="brand-mark__bag">
             <view class="brand-mark__bag-body" />
@@ -165,24 +172,33 @@
 
         <view class="secondary-actions">
           <text class="secondary-action" @tap="handleForgotPassword">忘记密码</text>
-          <text class="secondary-divider">·</text>
           <text class="secondary-action" @tap="goRegister">立即注册</text>
+        </view>
+
+        <view class="methods-divider">
+          <view class="divider-line" />
+          <text class="divider-label">其他方式登录</text>
+          <view class="divider-line" />
         </view>
 
         <!-- #ifdef MP-WEIXIN -->
         <view class="wechat-entry" @tap="handleWechatMiniLogin">
-          <view class="wechat-entry__icon">
-            <view class="wechat-entry__bubble" />
-            <view class="wechat-entry__bubble wechat-entry__bubble--r" />
+          <view class="wechat-entry-circle">
+            <view class="wechat-entry__icon">
+              <view class="wechat-entry__bubble" />
+              <view class="wechat-entry__bubble wechat-entry__bubble--r" />
+            </view>
           </view>
           <text class="wechat-entry__text">微信一键登录</text>
         </view>
         <!-- #endif -->
         <!-- #ifndef MP-WEIXIN -->
         <view v-if="isWechatH5" class="wechat-entry" @tap="handleWechatOfficialLogin">
-          <view class="wechat-entry__icon">
-            <view class="wechat-entry__bubble" />
-            <view class="wechat-entry__bubble wechat-entry__bubble--r" />
+          <view class="wechat-entry-circle">
+            <view class="wechat-entry__icon">
+              <view class="wechat-entry__bubble" />
+              <view class="wechat-entry__bubble wechat-entry__bubble--r" />
+            </view>
           </view>
           <text class="wechat-entry__text">微信一键登录</text>
         </view>
@@ -622,10 +638,70 @@ function goRegister() {
 </script>
 
 <style lang="scss" scoped>
+$glass-primary: #0d50d5;
+$glass-accent: #4fe3d7;
+
 .login-page {
+  position: relative;
   min-height: 100vh;
   display: flex;
-  background: $mb-color-bg-secondary;
+  background: #0b1a4d;
+  overflow: hidden;
+}
+
+.nebula-bg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, #0b1a4d 0%, #0d50d5 50%, #1e2a6b 100%);
+  z-index: 0;
+}
+
+.blob {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.blob--1 {
+  top: -200rpx;
+  left: -180rpx;
+  width: 800rpx;
+  height: 800rpx;
+  background: radial-gradient(circle at center, rgba(255, 92, 182, 0.55) 0%, rgba(255, 92, 182, 0) 70%);
+}
+
+.blob--2 {
+  top: 80rpx;
+  right: -240rpx;
+  width: 760rpx;
+  height: 760rpx;
+  background: radial-gradient(circle at center, rgba(79, 227, 215, 0.55) 0%, rgba(79, 227, 215, 0) 70%);
+}
+
+.blob--3 {
+  bottom: 200rpx;
+  right: -120rpx;
+  width: 840rpx;
+  height: 840rpx;
+  background: radial-gradient(circle at center, rgba(124, 92, 255, 0.32) 0%, rgba(124, 92, 255, 0) 70%);
+}
+
+.stars {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.55) 1rpx, transparent 0);
+  background-size: 160rpx 160rpx;
+  background-position: 0 0;
+  opacity: 0.18;
+  z-index: 0;
+  pointer-events: none;
 }
 
 .login-content {
@@ -635,7 +711,7 @@ function goRegister() {
   flex-direction: column;
   position: relative;
   z-index: 1;
-  padding: 24rpx $mb-spacing-page calc(40rpx + env(safe-area-inset-bottom));
+  padding: 24rpx 48rpx calc(48rpx + env(safe-area-inset-bottom));
 }
 
 // ---- Brand ----
@@ -644,31 +720,51 @@ function goRegister() {
   flex-direction: column;
   align-items: center;
   text-align: center;
-  margin-bottom: 32rpx;
+  margin-top: 32rpx;
+  margin-bottom: 56rpx;
 }
 
 .brand-mark {
-  width: 104rpx;
-  height: 104rpx;
+  position: relative;
+  width: 168rpx;
+  height: 168rpx;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 24rpx;
-  border-radius: 28rpx;
-  background: #ffffff;
-  border: 1rpx solid rgba(13, 80, 213, 0.12);
+  margin-bottom: 32rpx;
+  border-radius: 48rpx;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1rpx solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 16rpx 40rpx rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+  /* #ifdef H5 */
+  backdrop-filter: blur(30px);
+  -webkit-backdrop-filter: blur(30px);
+  /* #endif */
+}
+
+.brand-mark__sheen {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 50%;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.28) 0%, rgba(255, 255, 255, 0) 100%);
+  pointer-events: none;
 }
 
 .brand-mark__image {
-  width: 104rpx;
-  height: 104rpx;
-  border-radius: 28rpx;
+  position: relative;
+  width: 168rpx;
+  height: 168rpx;
+  border-radius: 48rpx;
 }
 
 .brand-mark__bag {
   position: relative;
-  width: 68rpx;
-  height: 76rpx;
+  width: 76rpx;
+  height: 84rpx;
+  z-index: 1;
 }
 
 .brand-mark__bag-body {
@@ -676,85 +772,109 @@ function goRegister() {
   bottom: 0;
   left: 4rpx;
   right: 4rpx;
-  height: 54rpx;
-  border: 3rpx solid $mb-color-primary;
-  border-radius: 8rpx 8rpx 14rpx 14rpx;
-  background: rgba(13, 80, 213, 0.06);
+  height: 60rpx;
+  border: 3rpx solid #ffffff;
+  border-radius: 10rpx 10rpx 16rpx 16rpx;
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .brand-mark__bag-handle {
   position: absolute;
-  top: 2rpx;
+  top: 0;
   left: 50%;
   transform: translateX(-50%);
-  width: 30rpx;
-  height: 24rpx;
-  border: 3rpx solid $mb-color-primary;
+  width: 36rpx;
+  height: 28rpx;
+  border: 3rpx solid #ffffff;
   border-bottom: none;
-  border-radius: 16rpx 16rpx 0 0;
+  border-radius: 18rpx 18rpx 0 0;
 }
 
 .brand-title {
   max-width: 100%;
-  font-size: 52rpx;
+  font-size: 56rpx;
   font-weight: 700;
-  letter-spacing: 0;
-  color: $mb-color-text-title;
+  letter-spacing: -1rpx;
+  color: #ffffff;
   line-height: 1.15;
   word-break: break-word;
+  text-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.18);
 }
 
 .brand-subtitle {
-  margin-top: 12rpx;
-  font-size: 24rpx;
-  color: $mb-color-text-tertiary;
+  margin-top: 16rpx;
+  font-size: 26rpx;
+  color: rgba(255, 255, 255, 0.65);
   letter-spacing: 0;
   line-height: 1.45;
 }
 
-// ---- Form ----
+// ---- Glass card ----
 .form-section {
   width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 20rpx;
-  padding: 28rpx;
-  background: rgba(255, 255, 255, 0.98);
-  border-radius: 24rpx;
-  border: 1rpx solid $mb-color-divider;
+  gap: 24rpx;
+  padding: 56rpx 40rpx 48rpx;
+  position: relative;
+  border-radius: 56rpx;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1rpx solid rgba(255, 255, 255, 0.25);
+  box-shadow: 0 28rpx 80rpx rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+  /* #ifdef H5 */
+  backdrop-filter: blur(40px);
+  -webkit-backdrop-filter: blur(40px);
+  /* #endif */
+  /* #ifndef H5 */
+  background: rgba(255, 255, 255, 0.2);
+  /* #endif */
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 35%;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0) 100%);
+    pointer-events: none;
+  }
 }
 
 .auth-panel {
   margin-bottom: 24rpx;
 }
 
+// ---- Tabs ----
 .login-tabs {
+  position: relative;
   display: flex;
   align-items: center;
-  padding: 6rpx;
-  background: $mb-color-bg-secondary;
-  border: 1rpx solid $mb-color-divider;
-  border-radius: 18rpx;
+  padding: 8rpx;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1rpx solid rgba(255, 255, 255, 0.12);
+  border-radius: 999rpx;
 }
 
 .login-tabs__item {
   flex: 1;
-  height: 72rpx;
+  height: 80rpx;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 14rpx;
-  color: $mb-color-text-tertiary;
+  border-radius: 999rpx;
+  color: rgba(255, 255, 255, 0.6);
+  transition: background 0.2s, color 0.2s;
 }
 
 .login-tabs__item--active {
-  background: #ffffff;
-  color: $mb-color-primary;
-  box-shadow: 0 1rpx 4rpx rgba(13, 80, 213, 0.08);
+  background: rgba(255, 255, 255, 0.92);
+  color: $glass-primary;
 }
 
 .login-tabs__text {
-  font-size: 24rpx;
+  font-size: 26rpx;
   font-weight: 600;
   letter-spacing: 0;
 }
@@ -762,61 +882,67 @@ function goRegister() {
 .login-fields {
   display: flex;
   flex-direction: column;
-  gap: 16rpx;
+  gap: 24rpx;
 }
 
+// ---- Inputs ----
 .input-line {
+  position: relative;
   display: flex;
   align-items: center;
-  min-height: 88rpx;
-  border: 1rpx solid $mb-color-border;
-  border-radius: $mb-radius-sm;
-  background: $mb-color-bg-surface;
-  padding: 0 24rpx;
-  transition: border-color 0.2s, background-color 0.2s;
+  min-height: 104rpx;
+  border: 1rpx solid rgba(255, 255, 255, 0.2);
+  border-radius: 28rpx;
+  background: rgba(255, 255, 255, 0.1);
+  padding: 0 28rpx;
+  transition: border-color 0.2s, background-color 0.2s, box-shadow 0.2s;
 
   &:focus-within {
-    border-color: rgba(13, 80, 213, 0.45);
-    background: #ffffff;
+    border-color: rgba(255, 255, 255, 0.5);
+    background: rgba(255, 255, 255, 0.16);
+    box-shadow: 0 0 0 4rpx rgba(255, 255, 255, 0.08);
   }
 }
 
 .area-code {
   font-size: 28rpx;
   font-weight: 500;
-  color: $mb-color-text;
+  color: #ffffff;
   flex-shrink: 0;
 }
 
 .chevron {
   font-size: 20rpx;
-  color: $mb-color-text-tertiary;
-  margin-left: 4rpx;
+  color: rgba(255, 255, 255, 0.6);
+  margin-left: 6rpx;
   flex-shrink: 0;
 }
 
 .input-label {
   font-size: 28rpx;
-  color: $mb-color-text-tertiary;
+  color: rgba(255, 255, 255, 0.6);
   flex-shrink: 0;
 }
 
 .input-line--icon {
-  gap: 16rpx;
+  gap: 20rpx;
 }
 
 .field-icon {
   position: relative;
   flex-shrink: 0;
-  width: 32rpx;
-  height: 32rpx;
-  color: $mb-color-text-tertiary;
+  width: 36rpx;
+  height: 36rpx;
+  color: rgba(255, 255, 255, 0.7);
 }
 
 .field-icon--phone::before {
   content: '';
   position: absolute;
-  inset: 2rpx 6rpx;
+  top: 2rpx;
+  left: 8rpx;
+  right: 8rpx;
+  bottom: 2rpx;
   border: 3rpx solid currentColor;
   border-radius: 8rpx;
 }
@@ -824,8 +950,8 @@ function goRegister() {
 .field-icon--phone::after {
   content: '';
   position: absolute;
-  left: 13rpx;
-  bottom: 3rpx;
+  left: 15rpx;
+  bottom: 5rpx;
   width: 6rpx;
   height: 4rpx;
   border-radius: 999rpx;
@@ -836,7 +962,7 @@ function goRegister() {
   content: '';
   position: absolute;
   top: 2rpx;
-  left: 7rpx;
+  left: 9rpx;
   width: 18rpx;
   height: 18rpx;
   border: 3rpx solid currentColor;
@@ -846,8 +972,8 @@ function goRegister() {
 .field-icon--user::after {
   content: '';
   position: absolute;
-  left: 4rpx;
-  bottom: 2rpx;
+  left: 6rpx;
+  bottom: 4rpx;
   width: 24rpx;
   height: 12rpx;
   border: 3rpx solid currentColor;
@@ -858,8 +984,8 @@ function goRegister() {
 .field-icon--lock::before {
   content: '';
   position: absolute;
-  left: 7rpx;
-  top: 12rpx;
+  left: 9rpx;
+  top: 14rpx;
   width: 18rpx;
   height: 14rpx;
   border: 3rpx solid currentColor;
@@ -869,8 +995,8 @@ function goRegister() {
 .field-icon--lock::after {
   content: '';
   position: absolute;
-  left: 11rpx;
-  top: 4rpx;
+  left: 13rpx;
+  top: 6rpx;
   width: 10rpx;
   height: 10rpx;
   border: 3rpx solid currentColor;
@@ -881,7 +1007,10 @@ function goRegister() {
 .field-icon--code::before {
   content: '';
   position: absolute;
-  inset: 6rpx 4rpx;
+  top: 6rpx;
+  left: 4rpx;
+  right: 4rpx;
+  bottom: 6rpx;
   border: 3rpx solid currentColor;
   border-radius: 6rpx;
 }
@@ -889,8 +1018,8 @@ function goRegister() {
 .field-icon--code::after {
   content: '';
   position: absolute;
-  left: 10rpx;
-  top: 13rpx;
+  left: 12rpx;
+  top: 14rpx;
   width: 12rpx;
   height: 3rpx;
   background: currentColor;
@@ -901,8 +1030,8 @@ function goRegister() {
   flex: 1;
   min-width: 0;
   height: 100%;
-  font-size: 28rpx;
-  color: $mb-color-text;
+  font-size: 30rpx;
+  color: #ffffff;
   margin-left: 0;
 }
 
@@ -911,21 +1040,23 @@ function goRegister() {
 }
 
 .placeholder {
-  color: $mb-color-border-light;
+  color: rgba(255, 255, 255, 0.4);
 }
 
 .sms-btn {
   flex-shrink: 0;
-  font-size: 24rpx;
+  font-size: 26rpx;
   font-weight: 600;
-  color: $mb-color-primary;
+  color: $glass-accent;
   white-space: nowrap;
   letter-spacing: 0;
-  padding-left: 18rpx;
+  padding-left: 20rpx;
+  border-left: 1rpx solid rgba(255, 255, 255, 0.18);
+  margin-left: 12rpx;
 }
 
 .sms-btn--off {
-  color: $mb-color-border-light;
+  color: rgba(255, 255, 255, 0.35);
 }
 
 // ---- Eye toggle ----
@@ -942,7 +1073,7 @@ function goRegister() {
 .eye-shape {
   width: 36rpx;
   height: 24rpx;
-  border: 2rpx solid $mb-color-text-tertiary;
+  border: 2rpx solid rgba(255, 255, 255, 0.65);
   border-radius: 50%;
   position: relative;
 
@@ -955,7 +1086,7 @@ function goRegister() {
     width: 10rpx;
     height: 10rpx;
     border-radius: 50%;
-    background: $mb-color-text-tertiary;
+    background: rgba(255, 255, 255, 0.85);
   }
 }
 
@@ -965,24 +1096,37 @@ function goRegister() {
   left: 50%;
   width: 2rpx;
   height: 32rpx;
-  background: $mb-color-text-tertiary;
+  background: rgba(255, 255, 255, 0.65);
   transform: translateX(-50%) rotate(45deg);
 }
 
-// ---- Buttons ----
+// ---- Primary button ----
 .primary-btn {
-  height: 92rpx;
-  border-radius: $mb-radius-sm;
-  background: $mb-color-primary;
+  position: relative;
+  height: 104rpx;
+  border-radius: 32rpx;
+  background: rgba(255, 255, 255, 0.96);
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-top: 4rpx;
-  transition: opacity 0.15s, transform 0.15s;
+  margin-top: 16rpx;
+  box-shadow: 0 0 32rpx rgba(255, 255, 255, 0.25), 0 12rpx 32rpx rgba(0, 0, 0, 0.18);
+  overflow: hidden;
+  transition: transform 0.15s, opacity 0.15s, box-shadow 0.15s;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 12rpx;
+    right: 12rpx;
+    height: 1rpx;
+    background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.95) 50%, transparent 100%);
+  }
 
   &:active {
-    opacity: 0.85;
-    transform: scale(0.985);
+    transform: scale(0.98);
+    opacity: 0.92;
   }
 }
 
@@ -992,31 +1136,36 @@ function goRegister() {
 }
 
 .primary-btn-text {
-  font-size: 30rpx;
-  font-weight: 600;
-  color: $mb-color-text-inverse;
-  letter-spacing: 0;
+  font-size: 32rpx;
+  font-weight: 700;
+  color: $glass-primary;
+  letter-spacing: 4rpx;
 }
 
+// ---- WeChat one-tap (full-width) ----
 .btn-wechat {
   width: 100%;
-  height: 92rpx;
-  border-radius: $mb-radius-sm;
-  background: #ffffff;
+  height: 104rpx;
+  border-radius: 32rpx;
+  background: rgba(255, 255, 255, 0.14);
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 14rpx;
-  border: 1rpx solid rgba(7, 193, 96, 0.16);
+  border: 1rpx solid rgba(255, 255, 255, 0.28);
   padding: 0;
   margin: 0;
+  /* #ifdef H5 */
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  /* #endif */
 
   &::after {
     display: none;
   }
 
   &:active {
-    opacity: 0.88;
+    opacity: 0.85;
   }
 }
 
@@ -1026,63 +1175,87 @@ function goRegister() {
 }
 
 .btn-wechat-label {
-  font-size: 26rpx;
+  font-size: 28rpx;
   font-weight: 600;
-  color: $mb-color-text;
+  color: #ffffff;
   letter-spacing: 0;
 }
 
+// ---- Secondary actions ----
 .secondary-actions {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 12rpx;
-  padding-top: 4rpx;
+  justify-content: space-between;
+  padding: 4rpx 12rpx 0;
 }
 
 .secondary-action {
-  font-size: 22rpx;
-  color: $mb-color-text-secondary;
+  font-size: 24rpx;
+  color: rgba(255, 255, 255, 0.7);
 }
 
 .secondary-divider {
-  font-size: 20rpx;
-  color: $mb-color-border-light;
+  display: none;
 }
 
+// ---- Other-method divider ----
+.methods-divider {
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+  margin: 32rpx 0 8rpx;
+}
+
+.divider-line {
+  flex: 1;
+  height: 1rpx;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.divider-label {
+  font-size: 22rpx;
+  color: rgba(255, 255, 255, 0.45);
+  letter-spacing: 4rpx;
+  white-space: nowrap;
+}
+
+// ---- WeChat circular entry ----
 .wechat-entry {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 14rpx;
-  height: 84rpx;
-  border-radius: $mb-radius-sm;
-  border: 1rpx solid $mb-color-border;
-  background: $mb-color-bg;
+  height: auto;
+  padding: 8rpx 0;
+  border: none;
+  background: transparent;
+  margin-top: 16rpx;
 }
 
 .wechat-entry__icon {
   position: relative;
-  width: 34rpx;
-  height: 28rpx;
+  width: 44rpx;
+  height: 36rpx;
+  margin: 12rpx 0;
 }
 
 .wechat-entry__bubble {
   position: absolute;
   bottom: 0;
   left: 0;
-  width: 22rpx;
-  height: 18rpx;
+  width: 28rpx;
+  height: 22rpx;
   border-radius: 999rpx;
   background: #07c160;
 
   &::after {
     content: '';
     position: absolute;
-    bottom: -3rpx;
-    left: 4rpx;
-    width: 8rpx;
-    height: 6rpx;
+    bottom: -4rpx;
+    left: 6rpx;
+    width: 10rpx;
+    height: 8rpx;
     background: #07c160;
     clip-path: polygon(0 0, 100% 0, 35% 100%);
   }
@@ -1091,45 +1264,62 @@ function goRegister() {
 .wechat-entry__bubble--r {
   left: auto;
   right: 0;
-  bottom: 6rpx;
-  width: 18rpx;
-  height: 14rpx;
+  bottom: 8rpx;
+  width: 22rpx;
+  height: 18rpx;
 
   &::after {
     left: auto;
-    right: 3rpx;
+    right: 4rpx;
     clip-path: polygon(0 0, 100% 0, 65% 100%);
   }
 }
 
-.wechat-entry__text {
-  font-size: 24rpx;
-  color: $mb-color-text;
-  font-weight: 500;
+.wechat-entry-circle {
+  width: 96rpx;
+  height: 96rpx;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1rpx solid rgba(255, 255, 255, 0.28);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* #ifdef H5 */
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  /* #endif */
 }
 
+.wechat-entry__text {
+  font-size: 22rpx;
+  color: rgba(255, 255, 255, 0.7);
+  font-weight: 500;
+  letter-spacing: 1rpx;
+}
+
+// ---- WeChat bind helpers ----
 .bind-hint {
-  font-size: 24rpx;
-  color: $mb-color-text-secondary;
+  font-size: 26rpx;
+  color: rgba(255, 255, 255, 0.7);
   text-align: center;
-  margin-bottom: $mb-spacing-sm;
+  margin-bottom: 16rpx;
 }
 
 .profile-card {
   display: flex;
   align-items: center;
   gap: 24rpx;
-  margin-bottom: 20rpx;
-  padding: 20rpx 0;
-  border-bottom: 1rpx solid $mb-color-divider;
+  margin-bottom: 12rpx;
+  padding: 16rpx 0;
+  border-bottom: 1rpx solid rgba(255, 255, 255, 0.16);
 }
 
 .avatar-picker {
-  width: 96rpx;
-  height: 96rpx;
-  border-radius: $mb-radius-full;
-  background: $mb-color-bg-secondary;
-  border: 2rpx solid $mb-color-border;
+  width: 104rpx;
+  height: 104rpx;
+  border-radius: 999rpx;
+  background: rgba(255, 255, 255, 0.12);
+  border: 2rpx solid rgba(255, 255, 255, 0.28);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1143,41 +1333,21 @@ function goRegister() {
 }
 
 .avatar-image {
-  width: 96rpx;
-  height: 96rpx;
+  width: 104rpx;
+  height: 104rpx;
 }
 
 .avatar-plus {
-  font-size: 44rpx;
-  color: $mb-color-text-tertiary;
+  font-size: 48rpx;
+  color: rgba(255, 255, 255, 0.65);
   line-height: 1;
 }
 
 .nickname-input {
   flex: 1;
-  height: 80rpx;
+  height: 84rpx;
   font-size: 30rpx;
-  color: $mb-color-text;
-}
-
-// ---- Dividers (WeChat bind only) ----
-.methods-divider {
-  display: flex;
-  align-items: center;
-  gap: $mb-spacing-md;
-  margin-bottom: 24rpx;
-}
-
-.divider-line {
-  flex: 1;
-  height: 2rpx;
-  background: $mb-color-divider;
-}
-
-.divider-label {
-  font-size: $mb-font-sm;
-  color: $mb-color-border-light;
-  white-space: nowrap;
+  color: #ffffff;
 }
 
 // ---- Agreement ----
@@ -1185,22 +1355,23 @@ function goRegister() {
   display: flex;
   flex-direction: column;
   align-items: center;
-  margin-top: 16rpx;
-  padding: 0 20rpx;
+  margin-top: 32rpx;
+  padding: 0 24rpx;
 }
 
 .agree-toggle {
   display: flex;
   align-items: center;
-  gap: 10rpx;
+  gap: 12rpx;
   margin-bottom: 8rpx;
 }
 
 .agree-box {
-  width: 28rpx;
-  height: 28rpx;
-  border: 2rpx solid $mb-color-border;
-  border-radius: $mb-radius-sm;
+  width: 32rpx;
+  height: 32rpx;
+  border: 1rpx solid rgba(255, 255, 255, 0.4);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.06);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1208,19 +1379,20 @@ function goRegister() {
 }
 
 .agree-box--checked {
-  background: $mb-color-primary;
-  border-color: $mb-color-primary;
+  background: rgba(255, 255, 255, 0.92);
+  border-color: rgba(255, 255, 255, 0.92);
 }
 
 .agree-mark {
-  font-size: 20rpx;
+  font-size: 22rpx;
   line-height: 1;
-  color: $mb-color-text-inverse;
+  color: $glass-primary;
+  font-weight: 700;
 }
 
 .agree-text {
-  font-size: 20rpx;
-  color: $mb-color-text-tertiary;
+  font-size: 22rpx;
+  color: rgba(255, 255, 255, 0.55);
 }
 
 .agree-links {
@@ -1232,13 +1404,16 @@ function goRegister() {
 }
 
 .agree-link {
-  font-size: 20rpx;
-  color: $mb-color-primary;
+  font-size: 22rpx;
+  color: rgba(255, 255, 255, 0.95);
   font-weight: 500;
+  text-decoration: underline;
+  text-decoration-color: rgba(255, 255, 255, 0.3);
+  text-underline-offset: 4rpx;
 }
 
 .agree-sep {
-  font-size: 20rpx;
-  color: $mb-color-text-tertiary;
+  font-size: 22rpx;
+  color: rgba(255, 255, 255, 0.55);
 }
 </style>

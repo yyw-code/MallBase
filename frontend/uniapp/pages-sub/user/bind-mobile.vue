@@ -1,6 +1,12 @@
 <template>
   <view class="page">
-    <mb-navbar title="绑定手机号" />
+    <view class="nebula-bg" />
+    <view class="blob blob--1" />
+    <view class="blob blob--2" />
+    <view class="blob blob--3" />
+    <view class="stars" />
+
+    <mb-navbar title="绑定手机号" bgColor="transparent" textColor="#ffffff" />
 
     <view class="page-content">
       <!-- Header -->
@@ -143,80 +149,166 @@ async function handleBind() {
 </script>
 
 <style lang="scss" scoped>
+$glass-primary: #0d50d5;
+$glass-accent: #4fe3d7;
+
 .page {
+  position: relative;
   min-height: 100vh;
-  background: $mb-color-bg-secondary;
+  background: #0b1a4d;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+}
+
+.nebula-bg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, #0b1a4d 0%, #0d50d5 50%, #1e2a6b 100%);
+  z-index: 0;
+}
+
+.blob {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.blob--1 {
+  top: -200rpx;
+  left: -180rpx;
+  width: 800rpx;
+  height: 800rpx;
+  background: radial-gradient(circle at center, rgba(255, 92, 182, 0.55) 0%, rgba(255, 92, 182, 0) 70%);
+}
+
+.blob--2 {
+  top: 80rpx;
+  right: -240rpx;
+  width: 760rpx;
+  height: 760rpx;
+  background: radial-gradient(circle at center, rgba(79, 227, 215, 0.55) 0%, rgba(79, 227, 215, 0) 70%);
+}
+
+.blob--3 {
+  bottom: 200rpx;
+  right: -120rpx;
+  width: 840rpx;
+  height: 840rpx;
+  background: radial-gradient(circle at center, rgba(124, 92, 255, 0.32) 0%, rgba(124, 92, 255, 0) 70%);
+}
+
+.stars {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.55) 1rpx, transparent 0);
+  background-size: 160rpx 160rpx;
+  background-position: 0 0;
+  opacity: 0.18;
+  z-index: 0;
+  pointer-events: none;
 }
 
 .page-content {
   width: 100%;
-  padding: 0 $mb-spacing-page calc(140rpx + env(safe-area-inset-bottom));
+  position: relative;
+  z-index: 1;
+  padding: 24rpx 48rpx calc(140rpx + env(safe-area-inset-bottom));
 }
 
 // ---- Header ----
 .header-section {
-  padding: $mb-spacing-xl 0 $mb-spacing-md;
-  margin-bottom: $mb-spacing-md;
+  padding: 64rpx 0 24rpx;
+  margin-bottom: 16rpx;
 }
 
 .page-title {
   display: block;
-  font-size: 52rpx;
-  font-weight: 600;
-  color: $mb-color-text-title;
-  letter-spacing: 0;
+  font-size: 56rpx;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: -1rpx;
   line-height: 1.2;
   margin-bottom: 16rpx;
+  text-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.18);
 }
 
 .page-hint {
   display: block;
-  font-size: 28rpx;
-  color: $mb-color-text-tertiary;
+  font-size: 26rpx;
+  color: rgba(255, 255, 255, 0.65);
   line-height: 1.5;
 }
 
-// ---- Form ----
+// ---- Glass card ----
 .form-section {
   width: 100%;
   display: flex;
   flex-direction: column;
-  gap: $mb-spacing-md;
-  padding: $mb-spacing-lg;
-  background: $mb-color-bg;
-  border-radius: $mb-radius-lg;
-  border: 1rpx solid $mb-color-border;
+  gap: 24rpx;
+  padding: 56rpx 40rpx 48rpx;
+  position: relative;
+  border-radius: 56rpx;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1rpx solid rgba(255, 255, 255, 0.25);
+  box-shadow: 0 28rpx 80rpx rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+  /* #ifdef H5 */
+  backdrop-filter: blur(40px);
+  -webkit-backdrop-filter: blur(40px);
+  /* #endif */
+  /* #ifndef H5 */
+  background: rgba(255, 255, 255, 0.2);
+  /* #endif */
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 35%;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0) 100%);
+    pointer-events: none;
+  }
 }
 
 .input-pill {
+  position: relative;
   display: flex;
   align-items: center;
-  height: 100rpx;
-  border-radius: $mb-radius-sm;
-  background: $mb-color-bg-secondary;
-  border: 1rpx solid $mb-color-border;
-  padding: 0 32rpx;
-  transition: border-color 0.2s, background-color 0.2s;
+  height: 104rpx;
+  border-radius: 28rpx;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1rpx solid rgba(255, 255, 255, 0.2);
+  padding: 0 28rpx;
+  transition: border-color 0.2s, background-color 0.2s, box-shadow 0.2s;
 
   &:focus-within {
-    border-color: rgba(13, 80, 213, 0.3);
-    background: $mb-color-bg;
+    border-color: rgba(255, 255, 255, 0.5);
+    background: rgba(255, 255, 255, 0.16);
+    box-shadow: 0 0 0 4rpx rgba(255, 255, 255, 0.08);
   }
 }
 
 .area-code {
   font-size: 30rpx;
   font-weight: 500;
-  color: $mb-color-text;
+  color: #ffffff;
   flex-shrink: 0;
 }
 
 .pill-sep {
-  width: 2rpx;
+  width: 1rpx;
   height: 36rpx;
-  background: $mb-color-border;
+  background: rgba(255, 255, 255, 0.22);
   margin: 0 24rpx;
   flex-shrink: 0;
 }
@@ -224,40 +316,53 @@ async function handleBind() {
 .pill-input {
   flex: 1;
   font-size: 30rpx;
-  color: $mb-color-text;
+  color: #ffffff;
   height: 100%;
 }
 
 .placeholder {
-  color: $mb-color-border-light;
+  color: rgba(255, 255, 255, 0.4);
 }
 
 .sms-btn {
   flex-shrink: 0;
   font-size: 26rpx;
-  font-weight: 500;
-  color: $mb-color-primary;
+  font-weight: 600;
+  color: $glass-accent;
   white-space: nowrap;
 }
 
 .sms-btn--off {
-  color: $mb-color-border-light;
+  color: rgba(255, 255, 255, 0.35);
 }
 
-// ---- Buttons ----
+// ---- Primary button ----
 .primary-btn {
-  height: 100rpx;
-  border-radius: $mb-radius-sm;
-  background: $mb-color-primary;
+  position: relative;
+  height: 104rpx;
+  border-radius: 32rpx;
+  background: rgba(255, 255, 255, 0.96);
   display: flex;
   align-items: center;
   justify-content: center;
   margin-top: 24rpx;
-  transition: opacity 0.15s, transform 0.15s;
+  box-shadow: 0 0 32rpx rgba(255, 255, 255, 0.25), 0 12rpx 32rpx rgba(0, 0, 0, 0.18);
+  overflow: hidden;
+  transition: transform 0.15s, opacity 0.15s, box-shadow 0.15s;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 12rpx;
+    right: 12rpx;
+    height: 1rpx;
+    background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.95) 50%, transparent 100%);
+  }
 
   &:active {
-    opacity: 0.85;
     transform: scale(0.98);
+    opacity: 0.92;
   }
 }
 
@@ -268,8 +373,8 @@ async function handleBind() {
 
 .primary-btn-text {
   font-size: 32rpx;
-  font-weight: 600;
-  color: #ffffff;
-  letter-spacing: 0;
+  font-weight: 700;
+  color: $glass-primary;
+  letter-spacing: 4rpx;
 }
 </style>
