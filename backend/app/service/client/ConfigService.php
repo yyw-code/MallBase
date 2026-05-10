@@ -69,6 +69,17 @@ class ConfigService extends BaseService
             }
         }
 
+        $systemBasic = app()
+            ->make(SystemSettingService::class)
+            ->getSystemSettingGroupWithMeta('SystemBasic');
+        if (isset($systemBasic['admin_favicon'])) {
+            $favicon = $systemBasic['admin_favicon'];
+            $value = !empty($favicon['full_url']) ? $favicon['full_url'] : ($favicon['value'] ?? null);
+            if ($value !== null && $value !== '') {
+                $merged['site_favicon'] = $value;
+            }
+        }
+
         $wechatMini = app()
             ->make(SystemSettingService::class)
             ->getSystemSettingGroupWithMeta('WechatMiniProgram');
