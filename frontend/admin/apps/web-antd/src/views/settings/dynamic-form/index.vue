@@ -12,6 +12,8 @@ import { getSettingConfigApi, saveSettingConfigApi } from '#/api/setting';
 import RichTextEditor from '#/components/rich-text-editor/index.vue';
 import Upload from '#/components/upload/index.vue';
 
+import { sanitizeEditorHtml } from './editor-html-sanitize';
+
 defineOptions({ name: 'SettingDynamicForm' });
 
 const route = useRoute();
@@ -479,7 +481,7 @@ const jsonPlaceholder = '{"key": "value"}';
 
 /** 获取 editor 预览内容 */
 const getEditorHtml = (code: string) => {
-  return formValues.value[code] || '';
+  return sanitizeEditorHtml(formValues.value[code]);
 };
 
 /** 字段值变更时触发验证 */
@@ -799,10 +801,12 @@ onMounted(loadConfig);
                 </a-tab-pane>
                 <a-tab-pane key="preview" tab="预览">
                   <div class="editor-preview">
+                    <!-- eslint-disable vue/no-v-html -->
                     <div
                       v-if="getEditorHtml(item.code)"
                       v-html="getEditorHtml(item.code)"
                     ></div>
+                    <!-- eslint-enable vue/no-v-html -->
                     <span v-else class="text-gray-300">暂无内容</span>
                   </div>
                 </a-tab-pane>
@@ -1034,10 +1038,12 @@ onMounted(loadConfig);
                 </a-tab-pane>
                 <a-tab-pane key="preview" tab="预览">
                   <div class="editor-preview">
+                    <!-- eslint-disable vue/no-v-html -->
                     <div
                       v-if="getEditorHtml(item.code)"
                       v-html="getEditorHtml(item.code)"
                     ></div>
+                    <!-- eslint-enable vue/no-v-html -->
                     <span v-else class="text-gray-300">暂无内容</span>
                   </div>
                 </a-tab-pane>
@@ -1267,10 +1273,12 @@ onMounted(loadConfig);
                 </a-tab-pane>
                 <a-tab-pane key="preview" tab="预览">
                   <div class="editor-preview">
+                    <!-- eslint-disable vue/no-v-html -->
                     <div
                       v-if="getEditorHtml(item.code)"
                       v-html="getEditorHtml(item.code)"
                     ></div>
+                    <!-- eslint-enable vue/no-v-html -->
                     <span v-else class="text-gray-300">暂无内容</span>
                   </div>
                 </a-tab-pane>

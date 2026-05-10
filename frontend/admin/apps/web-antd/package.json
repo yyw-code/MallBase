@@ -47,6 +47,7 @@
     "@wangeditor/editor-for-vue": "^5.1.12",
     "ant-design-vue": "catalog:",
     "dayjs": "catalog:",
+    "dompurify": "catalog:",
     "pinia": "catalog:",
     "sortablejs": "catalog:",
     "vue": "catalog:",

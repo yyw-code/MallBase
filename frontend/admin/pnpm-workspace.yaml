@@ -65,7 +65,7 @@ catalog:
   ant-design-vue: ^4.2.6
   archiver: ^7.0.1
   autoprefixer: ^10.4.23
-  axios: ^1.13.4
+  axios: ^1.15.2
   axios-mock-adapter: ^2.1.0
   cac: ^6.7.14
   chalk: ^5.6.2
@@ -81,6 +81,7 @@ catalog:
   cz-git: ^1.12.0
   czg: ^1.12.0
   dayjs: ^1.11.19
+  dompurify: ^3.3.1
   defu: ^6.1.4
   depcheck: ^1.4.7
   dotenv: ^16.6.1
