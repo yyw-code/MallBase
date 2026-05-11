@@ -17,6 +17,16 @@
 # ==========================================
 
 services:
+  # 一次性 preflight 容器：确保 MySQL / Redis 宿主机数据目录存在且容器可写。
+  prepare-data-dirs:
+    image: alpine:3.19
+    container_name: mallbase-prepare-data-dirs
+    volumes:
+      - .:/workdir
+      - ./deploy/docker/prepare-data-dirs.sh:/prepare-data-dirs.sh:ro
+    command: sh /prepare-data-dirs.sh
+    restart: "no"
+
   # 一次性 init 容器：确保根 .env 存在，并据此派生 backend/.env
   ensure-env:
     image: alpine:3.19
@@ -26,6 +36,9 @@ services:
       - ./deploy/docker/ensure-env.sh:/ensure-env.sh:ro
     command: sh /ensure-env.sh
     restart: "no"
+    depends_on:
+      prepare-data-dirs:
+        condition: service_completed_successfully
 
   # 一次性 preflight 容器：在方式三启动阶段校验业务库账号能否用当前根 .env 登录。
   # 目的：尽早发现“data/mysql 是旧数据，但根 .env 的 DB_PASS 后改过”的场景，
@@ -124,6 +137,8 @@ services:
       timeout: 5s
       retries: 10
     depends_on:
+      prepare-data-dirs:
+        condition: service_completed_successfully
       ensure-env:
         condition: service_completed_successfully
 
@@ -141,6 +156,8 @@ services:
       timeout: 3s
       retries: 5
     depends_on:
+      prepare-data-dirs:
+        condition: service_completed_successfully
       ensure-env:
         condition: service_completed_successfully
   # 工具容器：当根 .env 的 DB_PASS 改了，但想保留现有 data/mysql 时，
