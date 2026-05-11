@@ -158,7 +158,7 @@ sudo mkdir -p /var/www/mallbase/admin
 sudo cp -r frontend/admin/apps/web-antd/dist/* /var/www/mallbase/admin/
 ```
 
-如果你更想走打包后的上传脚本，参考 [upload-public-admin.md](./upload-public-admin.md)。
+如果你更想走打包后的上传脚本，参考 [upload-frontend.md](./upload-frontend.md)。
 
 如果已经构建了 H5，同步到发布目录：
 

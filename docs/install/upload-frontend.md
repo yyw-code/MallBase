@@ -10,7 +10,7 @@
 ## 脚本位置
 
 ```bash
-deploy/upload-public-admin.sh
+deploy/upload-frontend.sh
 ```
 
 脚本会：
@@ -57,6 +57,70 @@ docker compose -f docker-compose.uniapp-build.yml up uniapp-build
 - `scp`
 - `ssh`
 
+推荐用 SSH 密钥登录（不需要知道服务器密码）。如果你已经能通过密钥连上服务器（比如云厂商创建实例时已注入公钥），跳过这一节，直接用 `--identity` 指定私钥路径即可。否则按下面四步配置一次：
+
+**① 在本机生成密钥对**（已有 `~/.ssh/id_ed25519` 可跳过）：
+
+```bash
+ssh-keygen -t ed25519 -C "mallbase-deploy"
+```
+
+一路回车即可（passphrase 可留空）。生成两个文件：
+
+- `~/.ssh/id_ed25519`：私钥，留在本机，**不要外传**
+- `~/.ssh/id_ed25519.pub`：公钥，需要放到服务器上
+
+**② 把公钥装到服务器**（这一步需要你当前还能登录服务器，比如有初始密码、或云控制台的 VNC/Web 终端）：
+
+```bash
+ssh-copy-id -i ~/.ssh/id_ed25519.pub root@服务器IP
+```
+
+如果没有 `ssh-copy-id`，手动追加也行：
+
+```bash
+cat ~/.ssh/id_ed25519.pub | ssh root@服务器IP "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 700 ~/.ssh && chmod 600 ~/.ssh/authorized_keys"
+```
+
+**③ 验证免密登录**：
+
+```bash
+ssh -i ~/.ssh/id_ed25519 root@服务器IP
+```
+
+能直接进、不再要密码，就配好了。
+
+**④ 跑上传脚本时带上私钥**：
+
+```bash
+sh deploy/upload-frontend.sh \
+  --host root@服务器IP \
+  --identity ~/.ssh/id_ed25519 \
+  --remote-root /www/wwwroot/example.com/mall-base
+```
+
+> 注意：如果服务器禁止 root 直接 SSH，把上面的 `root` 换成你能登录的用户（比如 `ubuntu`），并确认该用户对目标静态目录有写权限（必要时先 `sudo chown -R 用户:用户 目标目录`）。
+
+### 3. 可选：用本地配置文件免去重复输入参数
+
+为了不在仓库里写真实的服务器地址、私钥路径和远端目录，可以复制一份本地配置：
+
+```bash
+cp deploy/upload-frontend.local.sh.example deploy/upload-frontend.local.sh
+```
+
+然后在 `deploy/upload-frontend.local.sh` 里填真实值（`SSH_HOST`、`SSH_PORT`、`SSH_IDENTITY`、`SSH_PASSWORD`、`REMOTE_ROOT` 或 `REMOTE_ADMIN_DIR` / `REMOTE_CLIENT_DIR`、`KEEP_EXTRA`）。该文件已在 `.gitignore` 中忽略，不会进入版本库。
+
+如果服务器只能用密码登录，把密码写到 `SSH_PASSWORD`（需要本机安装 `sshpass`：macOS `brew install hudochenkov/sshpass/sshpass`，Debian/Ubuntu `apt-get install sshpass`）。密码建议只写在本地配置文件里，不要用命令行 `--password`，否则会出现在进程列表。
+
+之后直接运行脚本即可，无需再带一长串参数：
+
+```bash
+sh deploy/upload-frontend.sh
+```
+
+命令行参数仍会覆盖本地配置中的同名值，临时换目标时依然可以用 `--host` 等参数临时指定。也可以用环境变量 `MALLBASE_UPLOAD_CONFIG` 指定其它配置文件路径。
+
 ## 用法
 
 ### 方式一：直接指定服务器目标目录
@@ -67,7 +131,7 @@ docker compose -f docker-compose.uniapp-build.yml up uniapp-build
 - H5：`/var/www/mallbase/client`
 
 ```bash
-sh deploy/upload-public-admin.sh \
+sh deploy/upload-frontend.sh \
   --host user@server \
   --remote-dir /var/www/mallbase/admin
 ```
@@ -79,7 +143,7 @@ sh deploy/upload-public-admin.sh \
 适合服务器上也有 MallBase 项目目录，希望自动上传到对应的 `backend/public/admin` 和 `backend/public/client`。
 
 ```bash
-sh deploy/upload-public-admin.sh \
+sh deploy/upload-frontend.sh \
   --host root@server \
   --remote-root /www/wwwroot/example.com/mall-base
 ```
@@ -100,7 +164,7 @@ sh deploy/upload-public-admin.sh \
 自定义 SSH 端口，例如：
 
 ```bash
-sh deploy/upload-public-admin.sh \
+sh deploy/upload-frontend.sh \
   --host user@server \
   --port 2222 \
   --remote-dir /var/www/mallbase/admin
@@ -113,10 +177,23 @@ sh deploy/upload-public-admin.sh \
 如果服务器只允许私钥登录，可以显式指定 SSH 私钥文件：
 
 ```bash
-sh deploy/upload-public-admin.sh \
-  --host root@165.154.60.251 \
+sh deploy/upload-frontend.sh \
+  --host root@your-server \
   --identity ~/.ssh/id_ed25519 \
   --remote-root /www/wwwroot/mallbase.gosowong.cn/mall-base
+```
+
+```bash
+--password '你的密码'
+```
+
+服务器只能用密码登录时使用（需要本机安装 `sshpass`）。注意密码会出现在进程列表里，更推荐把密码写到 `deploy/upload-frontend.local.sh` 的 `SSH_PASSWORD`：
+
+```bash
+sh deploy/upload-frontend.sh \
+  --host root@your-server \
+  --password 'your-password' \
+  --remote-root /www/wwwroot/example.com/mall-base
 ```
 
 ```bash
@@ -126,7 +203,7 @@ sh deploy/upload-public-admin.sh \
 默认脚本会先清空服务器目标目录，再解压新文件。如果你想保留服务器目录里额外文件，可以加这个参数：
 
 ```bash
-sh deploy/upload-public-admin.sh \
+sh deploy/upload-frontend.sh \
   --host user@server \
   --remote-dir /var/www/mallbase/admin \
   --keep-extra
@@ -139,7 +216,7 @@ sh deploy/upload-public-admin.sh \
 如果 H5 目录不是后台目录的同级 `client`，可以显式指定：
 
 ```bash
-sh deploy/upload-public-admin.sh \
+sh deploy/upload-frontend.sh \
   --host user@server \
   --remote-dir /var/www/mallbase/admin \
   --client-dir /data/www/mallbase-h5
@@ -150,7 +227,7 @@ sh deploy/upload-public-admin.sh \
 ### Nginx 直接托管静态文件
 
 ```bash
-sh deploy/upload-public-admin.sh \
+sh deploy/upload-frontend.sh \
   --host user@server \
   --remote-dir /var/www/mallbase/admin
 ```
@@ -160,7 +237,7 @@ sh deploy/upload-public-admin.sh \
 ### Docker 生产环境，代码目录里托管后台静态文件
 
 ```bash
-sh deploy/upload-public-admin.sh \
+sh deploy/upload-frontend.sh \
   --host root@server \
   --remote-root /www/wwwroot/mallbase.gosowong.cn/mall-base
 ```
@@ -168,8 +245,8 @@ sh deploy/upload-public-admin.sh \
 如果这台服务器只接受密钥登录，补上 `--identity`：
 
 ```bash
-sh deploy/upload-public-admin.sh \
-  --host root@165.154.60.251 \
+sh deploy/upload-frontend.sh \
+  --host root@your-server \
   --identity ~/.ssh/id_ed25519 \
   --remote-root /www/wwwroot/mallbase.gosowong.cn/mall-base
 ```

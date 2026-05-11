@@ -1,0 +1,37 @@
+# shellcheck shell=sh
+# upload-frontend.sh 的本地配置示例
+#
+# 用法：
+#   cp deploy/upload-frontend.local.sh.example deploy/upload-frontend.local.sh
+#   按需修改下面的值（真实主机、私钥、远程目录等）
+#
+# 说明：
+#   1. deploy/upload-frontend.local.sh 已在 .gitignore 中忽略，不会进入版本库
+#   2. 这里设置的值会被命令行参数覆盖，例如临时换主机时仍可用 --host 覆盖
+#   3. 也可以只设置部分变量，其余仍走脚本默认值或命令行参数
+
+# 必填：SSH 目标，例如 deploy@example.com
+SSH_HOST="user@server"
+
+# 可选：SSH 端口，默认 22
+SSH_PORT="22"
+
+# 可选：SSH 私钥路径，例如 "$HOME/.ssh/id_ed25519"
+SSH_IDENTITY=""
+
+# 可选：SSH 登录密码。设置后用密码登录，需要本机安装 sshpass
+#   - macOS：brew install hudochenkov/sshpass/sshpass
+#   - Debian/Ubuntu：apt-get install sshpass
+#   留空则走私钥 / 默认认证
+SSH_PASSWORD=""
+
+# 远程目录：REMOTE_ROOT 与 REMOTE_ADMIN_DIR 二选一
+#   - 指定项目根目录，脚本自动拼成 backend/public/admin 和 backend/public/client
+REMOTE_ROOT="/www/wwwroot/example.com/mall-base"
+#   - 或直接指定后台最终目录（与 REMOTE_ROOT 互斥，取消注释后请清空 REMOTE_ROOT）
+# REMOTE_ADMIN_DIR="/var/www/mallbase/admin"
+#   - 可选：单独指定 H5 最终目录
+# REMOTE_CLIENT_DIR="/var/www/mallbase/client"
+
+# 可选：设为 "1" 时保留服务器目标目录里的多余旧文件，默认会先清空再解压
+KEEP_EXTRA="0"

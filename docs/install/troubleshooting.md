@@ -157,7 +157,7 @@ ls backend/public/admin/index.html
 - 清缓存后重试
 - 检查 `_app.config.js`
 
-如果你使用上传脚本，参见 [upload-public-admin.md](./upload-public-admin.md)。
+如果你使用上传脚本，参见 [upload-frontend.md](./upload-frontend.md)。
 
 ### 前端构建内存不足
 

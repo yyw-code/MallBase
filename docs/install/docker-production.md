@@ -78,12 +78,12 @@ scp -r frontend/admin/apps/web-antd/dist/* user@server:/var/www/mallbase/admin/
 方式 B：如果你本地已经准备好了 `backend/public/admin` 和 `backend/public/client`，直接用项目脚本上传：
 
 ```bash
-sh deploy/upload-public-admin.sh \
+sh deploy/upload-frontend.sh \
   --host user@server \
   --remote-dir /var/www/mallbase/admin
 ```
 
-完整脚本说明见 [upload-public-admin.md](./upload-public-admin.md)。
+完整脚本说明见 [upload-frontend.md](./upload-frontend.md)。
 
 ### 5. 构建并启动后端容器
 
@@ -146,7 +146,7 @@ ls /var/www/mallbase/admin/index.html
 
 ## 常见下一步
 
-- 上传静态资源脚本：[upload-public-admin.md](./upload-public-admin.md)
+- 上传静态资源脚本：[upload-frontend.md](./upload-frontend.md)
 - Nginx 代理与静态目录：[nginx-reverse-proxy.md](./nginx-reverse-proxy.md)
 - 常用运维命令：[commands.md](./commands.md)
 - 安装与部署排障：[troubleshooting.md](./troubleshooting.md)

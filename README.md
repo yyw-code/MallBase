@@ -59,7 +59,8 @@ mall-base/
 │   │   └── mysql/                  # MySQL 初始化脚本
 │   ├── nginx/
 │   │   └── mallbase.conf           # Nginx 配置示例
-│   └── upload-public-admin.sh      # 打包并上传前端静态资源
+│   ├── upload-frontend.sh          # 打包并上传前端静态资源（后台 admin + H5 client）
+│   └── upload-frontend.local.sh.example  # 上传脚本本地配置示例（复制为 upload-frontend.local.sh，已被 git 忽略）
 │
 ├── docs/                           # 文档
 │   ├── install.md                  # 安装入口（兼容旧链接）
@@ -73,7 +74,7 @@ mall-base/
 │   │   ├── troubleshooting.md      # 安装与部署故障排查
 │   │   ├── env-files.md            # 环境文件职责与 Docker 全套模式配置说明
 │   │   ├── nginx-reverse-proxy.md  # Nginx 反向代理配置说明
-│   │   ├── upload-public-admin.md  # 后台静态资源上传脚本说明
+│   │   ├── upload-frontend.md      # 前端静态资源上传脚本说明
 │   │   └── issues/
 │   │       └── docker-fullstack-first-run.md  # Docker 全套模式首装问题排查记录
 │   ├── freight-template-roadmap.md # 运费模板路线图
@@ -139,7 +140,7 @@ docker compose restart
 | [安装与部署故障排查](docs/install/troubleshooting.md) | 安装、Docker、前端静态资源与运行时故障处理 |
 | [环境文件说明](docs/install/env-files.md) | 根 `.env`、`backend/.env` 与 Docker 全套模式配置职责 |
 | [Nginx 反向代理配置说明](docs/install/nginx-reverse-proxy.md) | `/admin/` 静态资源与 `/admin/api/` 等后端路径的代理规则 |
-| [前端静态资源上传脚本](docs/install/upload-public-admin.md) | 本地打包 `backend/public/admin`，并在存在 H5 产物时同步上传 `backend/public/client` |
+| [前端静态资源上传脚本](docs/install/upload-frontend.md) | 本地打包 `backend/public/admin`，并在存在 H5 产物时同步上传 `backend/public/client` |
 | [Docker 首装问题记录](docs/install/issues/docker-fullstack-first-run.md) | 方式三首次启动的密码错位、时序问题与修复结论 |
 | [UniApp H5 打包说明](docs/uniapp-h5-build.md) | 根目录 Docker Compose 一键打包 H5 与产物位置 |
 | [运费模板路线图](docs/freight-template-roadmap.md) | 运费计算能力落地进度与订单接入计划 |

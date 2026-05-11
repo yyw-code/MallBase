@@ -105,7 +105,7 @@ docker compose -f docker-compose.uniapp-build.yml up uniapp-build
 适用：方式四
 
 ```bash
-sh deploy/upload-public-admin.sh \
+sh deploy/upload-frontend.sh \
   --host user@server \
   --remote-dir /var/www/mallbase/admin
 ```
@@ -117,7 +117,7 @@ sh deploy/upload-public-admin.sh \
 适用：方式四
 
 ```bash
-sh deploy/upload-public-admin.sh \
+sh deploy/upload-frontend.sh \
   --host root@server \
   --remote-root /www/wwwroot/example.com/mall-base
 ```
@@ -127,7 +127,7 @@ sh deploy/upload-public-admin.sh \
 适用：方式四
 
 ```bash
-sh deploy/upload-public-admin.sh \
+sh deploy/upload-frontend.sh \
   --host root@server \
   --identity ~/.ssh/id_ed25519 \
   --remote-root /www/wwwroot/mallbase.gosowong.cn/mall-base

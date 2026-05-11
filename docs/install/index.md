@@ -41,7 +41,7 @@
 1. 先根据上表选择安装方式。
 2. 进入对应的完整步骤文档，从头按顺序执行，不要只看命令集合拼装流程。
 3. 涉及 Docker 全套模式时，优先阅读 [env-files.md](./env-files.md)。
-4. 涉及 Nginx 或前端静态文件发布时，配合阅读 [nginx-reverse-proxy.md](./nginx-reverse-proxy.md) 和 [upload-public-admin.md](./upload-public-admin.md)。
+4. 涉及 Nginx 或前端静态文件发布时，配合阅读 [nginx-reverse-proxy.md](./nginx-reverse-proxy.md) 和 [upload-frontend.md](./upload-frontend.md)。
 5. 遇到报错时，先查 [troubleshooting.md](./troubleshooting.md)；如果是方式三首装时序问题，再看 [issues/docker-fullstack-first-run.md](./issues/docker-fullstack-first-run.md)。
 
 ## 各方式摘要
@@ -68,7 +68,7 @@
 
 - 适合单后端容器 + 宿主机 Nginx 的生产部署方式。
 - 完整步骤见 [docker-production.md](./docker-production.md)。
-- 前端文件上传脚本见 [upload-public-admin.md](./upload-public-admin.md)。
+- 前端文件上传脚本见 [upload-frontend.md](./upload-frontend.md)。
 
 ## 专题文档
 
@@ -78,7 +78,7 @@
 | [troubleshooting.md](./troubleshooting.md) | 安装与部署相关的总故障排查 |
 | [env-files.md](./env-files.md) | 根 `.env`、`backend/.env` 与 Docker 全套模式配置职责 |
 | [nginx-reverse-proxy.md](./nginx-reverse-proxy.md) | `/admin/`、`/admin/api/`、`/install` 等路径的代理规则 |
-| [upload-public-admin.md](./upload-public-admin.md) | 把本地 `backend/public/admin` 打包上传到服务器；如果存在 `backend/public/client`，会同步上传 H5 |
+| [upload-frontend.md](./upload-frontend.md) | 把本地 `backend/public/admin` 打包上传到服务器；如果存在 `backend/public/client`，会同步上传 H5 |
 | [issues/docker-fullstack-first-run.md](./issues/docker-fullstack-first-run.md) | Docker 全套模式首次启动的时序与密码问题专题记录 |
 
 ## 重要提醒
