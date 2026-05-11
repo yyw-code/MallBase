@@ -40,9 +40,11 @@ mkdir -p /dist
 rm -rf /dist/*
 cp -r /app/dist/build/h5/. /dist/
 
-if [ -d /app/static ]; then
-    echo ">>> [uniapp-build] 同步 UniApp static 静态资源"
-    mkdir -p /dist/static
+# H5 构建产物里通常已包含 static/（uniapp 会把项目根的 static/ 一并拷进去）。
+# 只有在构建产物缺少 static/ 时，才从项目根补一份；否则用 cp 把 /app/static/images
+# 拷进已存在的 /dist/static/ 会套进同名目录，变成 static/images/images 这种多层嵌套。
+if [ -d /app/static ] && [ ! -d /dist/static ]; then
+    echo ">>> [uniapp-build] 构建产物缺少 static/，从项目根补充"
     cp -r /app/static/. /dist/static/
 fi
 

@@ -213,11 +213,13 @@ if [ "$UPLOAD_CLIENT" = "1" ]; then
 fi
 echo ">>> [upload-frontend] 打包后台资源"
 
-tar -C "$ADMIN_SOURCE_DIR" -czf "$LOCAL_ADMIN_ARCHIVE" .
+# COPYFILE_DISABLE=1：macOS 上的 tar 默认会把扩展属性/资源叉打包成 ._* 文件，
+# 解包到服务器后会留下一堆 ._xxx 垃圾文件；这里关掉，并再排除一次 ._*、.DS_Store。
+COPYFILE_DISABLE=1 tar -C "$ADMIN_SOURCE_DIR" --exclude='._*' --exclude='.DS_Store' -czf "$LOCAL_ADMIN_ARCHIVE" .
 
 if [ "$UPLOAD_CLIENT" = "1" ]; then
     echo ">>> [upload-frontend] 打包 H5 资源"
-    tar -C "$CLIENT_SOURCE_DIR" -czf "$LOCAL_CLIENT_ARCHIVE" .
+    COPYFILE_DISABLE=1 tar -C "$CLIENT_SOURCE_DIR" --exclude='._*' --exclude='.DS_Store' -czf "$LOCAL_CLIENT_ARCHIVE" .
 fi
 
 echo ">>> [upload-frontend] 上传后台归档文件"
