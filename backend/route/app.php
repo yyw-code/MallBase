@@ -2,6 +2,10 @@
 
 use think\facade\Route;
 
+Route::get('/', function () {
+    return redirect('/client/');
+});
+
 /*
 |--------------------------------------------------------------------------
 | 静态文件访问（上传的文件）
@@ -22,4 +26,3 @@ Route::miss(function () {
         'Cache-Control' => 'public, max-age=31536000',
     ]);
 });
-

@@ -39,9 +39,11 @@ echo ">>> [uniapp-build] 同步 H5 产物到 backend/public/client"
 mkdir -p /dist
 rm -rf /dist/*
 cp -r /app/dist/build/h5/. /dist/
-if [ -d /app/static/images/tabbar ]; then
-    mkdir -p /dist/static/images
-    cp -r /app/static/images/tabbar /dist/static/images/
+
+if [ -d /app/static ]; then
+    echo ">>> [uniapp-build] 同步 UniApp static 静态资源"
+    mkdir -p /dist/static
+    cp -r /app/static/. /dist/static/
 fi
 
 echo "[uniapp-build] done"

@@ -12,9 +12,8 @@ MallBase 的前后端路径拆分规则如下：
 
 | 路径 | 处理方式 | 说明 |
 |------|----------|------|
-| `/` | Nginx 直接返回静态文件 | UniApp H5 入口，兜底到 `/client/index.html` |
-| `/assets/` | Nginx 直接返回静态文件 | UniApp H5 构建资源，映射到 `/client/assets/` |
-| `/static/images/tabbar/` | Nginx 直接返回静态文件 | UniApp H5 tabBar 图标，映射到 `/client/static/images/tabbar/` |
+| `/` | 反向代理到 Swoole | 进入安装检查；已安装后由后端跳转到 `/client/` |
+| `/client/` | Nginx 直接返回静态文件 | UniApp H5 入口与构建资源 |
 | `/admin/` | Nginx 直接返回静态文件 | 后台前端入口与静态资源 |
 | `/admin/api/` | 反向代理到 Swoole | 后台 API |
 | `/install` | 反向代理到 Swoole | 安装向导 |
@@ -62,6 +61,8 @@ VITE_UNIAPP_API_PREFIX=/client/api
 
 这样 H5 会使用当前访问域名下的 `/client/api/...`，避免打包时写死域名。
 
+`frontend/uniapp/vite.config.js` 应保持 `base: '/client/'`，这样 H5 构建产物里的 JS/CSS 会使用 `/client/assets/...` 前缀。
+
 ## Nginx 配置示例
 
 项目已提供示例文件：`deploy/nginx/mallbase.conf`。下面给出一个可直接理解的精简版。
@@ -82,6 +83,14 @@ server {
     root /var/www/mallbase/backend/public;
     index index.html;
 
+    location = / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
     location = /client/api {
         proxy_pass http://127.0.0.1:8080;
         proxy_set_header Host $host;
@@ -96,6 +105,15 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location = /client {
+        return 301 /client/;
+    }
+
+    location ^~ /client/ {
+        alias /var/www/mallbase/backend/public/client/;
+        try_files $uri $uri/ /client/index.html;
     }
 
     location = /admin {
@@ -130,30 +148,8 @@ server {
         proxy_pass http://127.0.0.1:8080;
     }
 
-    location ^~ /static/images/tabbar/ {
-        try_files /client$uri =404;
-        expires 7d;
-        add_header Cache-Control "public, immutable";
-    }
-
-    location ^~ /assets/ {
-        try_files /client$uri =404;
-        expires 7d;
-        add_header Cache-Control "public, immutable";
-    }
-
-    location ^~ /static/ {
-        try_files $uri =404;
-        expires 7d;
-        add_header Cache-Control "public, immutable";
-    }
-
-    location = / {
-        try_files /client/index.html =404;
-    }
-
     location / {
-        try_files $uri $uri/ /client/index.html;
+        try_files $uri $uri/ =404;
     }
 }
 ```
@@ -164,8 +160,8 @@ server {
 
 - 80 → 443 自动跳转
 - `ssl_certificate` / `ssl_certificate_key`
-- 与 HTTP 版一致的路径拆分规则：根路径进入 H5，`/admin` 进入后台
-- 站点 `root` 指向 `backend/public`，H5 由 `/client/index.html` 承接
+- 与 HTTP 版一致的路径拆分规则：根路径进入安装检查，`/client` 进入 H5，`/admin` 进入后台
+- 站点 `root` 指向 `backend/public`，H5 由 `/client/` 承接
 
 ## 推荐部署步骤
 
@@ -190,10 +186,11 @@ server {
 
 ```bash
 curl -I http://mall.example.com/
+curl -I http://mall.example.com/client/
 curl -I http://mall.example.com/admin/
 ```
 
-预期都返回 `200 OK`；其中根路径是 H5，`/admin/` 是后台。
+预期根路径未安装时跳转到 `/install`，已安装时跳转到 `/client/`；`/client/` 是 H5，`/admin/` 是后台。
 
 ### 2. 检查后台 API 已经过代理
 
@@ -238,16 +235,15 @@ curl -I http://127.0.0.1:8080/
 
 确认后端本身可访问，再排查 Nginx。
 
-### `/` 不是 H5 页面
+### `/client/` 不是 H5 页面
 
 优先检查两点：
 
 - `/var/www/mallbase/backend/public/client/index.html` 是否存在
-- server 块里的 `root` 是否指向 `/var/www/mallbase/backend/public`
+- H5 构建产物里的 JS/CSS 是否使用 `/client/assets/...` 前缀
+- Nginx 是否保留了 `/client/` 静态 alias
 
-H5 生产构建默认使用根路径资源，例如 `/assets/...`。tabBar 图标会请求 `/static/images/tabbar/...`。所以需要保留 `/assets/` 到 `/client/assets/`、`/static/images/tabbar/` 到 `/client/static/images/tabbar/` 的映射，并让根路径兜底到 `/client/index.html`。如果站点 `index` 中 `index.php` 排在 `index.html` 前面，还需要保留 `location = /`，避免根路径先进入后端入口。
-
-如果站点里同时配置了后端公共静态目录，例如 `location ^~ /static/`，必须把 `/static/images/tabbar/` 放在它前面。`^~ /static/` 会优先接管所有 `/static/...` 请求；顺序不正确时，H5 tabBar 图标会被错误地从 `backend/public/static` 查找。
+H5 生产构建应使用 `/client/` 作为 base。构建后 `index.html` 里的主资源应类似 `/client/assets/index-*.js`、`/client/assets/index-*.css`。如果仍然是 `/assets/...`，说明 H5 构建配置没有生效，需要重新构建并部署 `backend/public/client/`。
 
 ### 前端能打开，但接口走成了错误地址
 
