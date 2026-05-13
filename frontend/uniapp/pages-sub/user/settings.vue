@@ -51,6 +51,18 @@
         </view>
       </view>
 
+      <view class="cell">
+        <text class="cell__label">启动页</text>
+        <view class="cell__right">
+          <switch
+            :checked="splashEnabled"
+            color="#0d50d5"
+            style="transform: scale(0.82)"
+            @change="onSplashChange"
+          />
+        </view>
+      </view>
+
       <view class="cell" @tap="goAbout">
         <text class="cell__label">关于我们</text>
         <view class="cell__right">
@@ -93,6 +105,7 @@ const userStore = useUserStore()
 const logoutLoading = ref(false)
 const cacheSize = ref('0 KB')
 const themeMode = ref('system')
+const splashEnabled = ref(true)
 
 const themeOptions = ['light', 'dark', 'system']
 const themeLabelMap = {
@@ -113,7 +126,15 @@ onShow(() => {
   if (saved && themeOptions.includes(saved)) {
     themeMode.value = saved
   }
+  splashEnabled.value = uni.getStorageSync('mb_splash_enabled') !== false
 })
+
+function onSplashChange(e) {
+  const enabled = !!e.detail.value
+  splashEnabled.value = enabled
+  uni.setStorageSync('mb_splash_enabled', enabled)
+  uni.showToast({ title: enabled ? '已开启启动页' : '已关闭启动页', icon: 'none' })
+}
 
 function calculateCacheSize() {
   try {
