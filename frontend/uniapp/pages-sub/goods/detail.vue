@@ -26,13 +26,8 @@
           <view class="goods-detail__float-btn" @tap="goBack">
             <view class="goods-detail__back-icon" />
           </view>
-          <view class="goods-detail__float-right">
-            <view class="goods-detail__float-btn" @tap="onShare">
-              <view class="goods-detail__share-icon" />
-            </view>
-            <view class="goods-detail__float-btn" @tap="showMore">
-              <view class="goods-detail__more-icon" />
-            </view>
+          <view class="goods-detail__float-btn goods-detail__float-btn--share" @tap="onShare">
+            <view class="goods-detail__share-icon" />
           </view>
         </view>
         <swiper
@@ -132,8 +127,16 @@
       <view class="goods-detail__review-section">
         <view class="goods-detail__review-header">
           <view class="goods-detail__review-title-wrap">
-            <text class="goods-detail__review-title">商品评论</text>
-            <text v-if="reviewTotal > 0" class="goods-detail__review-total">共{{ reviewTotal }}条</text>
+            <text class="goods-detail__review-title">评价</text>
+            <text v-if="reviewTotal > 0" class="goods-detail__review-total">({{ reviewTotal }})</text>
+          </view>
+          <view
+            v-if="reviewTotal > 0"
+            class="goods-detail__review-view-all"
+            @tap="onViewAllReviews"
+          >
+            <text class="goods-detail__review-view-all-text">查看全部</text>
+            <text class="goods-detail__review-view-all-arrow">&#10095;</text>
           </view>
         </view>
         <view v-if="reviewLoading" class="goods-detail__review-loading">
@@ -144,10 +147,9 @@
         </view>
         <block v-else>
           <view
-            v-for="(review, index) in reviewList"
+            v-for="review in reviewList"
             :key="review.id"
             class="goods-detail__review-item"
-            :class="{ 'goods-detail__review-item--first': index === 0 }"
           >
             <view class="goods-detail__review-user-row">
               <view class="goods-detail__review-avatar">
@@ -251,18 +253,21 @@
 
 <script setup>
 import { ref, computed, nextTick } from 'vue'
-import { onLoad } from '@dcloudio/uni-app'
+import { onLoad, onShareAppMessage, onShareTimeline } from '@dcloudio/uni-app'
 import { getGoodsDetail } from '@/api/goods/goods'
 import { getReviewList } from '@/api/goods/review'
 import { useCartStore } from '@/store/cart'
+import { useAppStore } from '@/store/app'
 
 const MEDIA_HEIGHT = 422
 const REVIEW_PREVIEW_LIMIT = 3
 
 const cartStore = useCartStore()
+const appStore = useAppStore()
 
 const loading = ref(true)
 const goods = ref(null)
+const goodsId = ref('')
 const swiperIndex = ref(0)
 const showSpec = ref(false)
 const specMode = ref('both')
@@ -274,6 +279,7 @@ const reviewList = ref([])
 
 onLoad((query) => {
   if (query?.id) {
+    goodsId.value = String(query.id)
     fetchDetail(query.id)
   } else {
     loading.value = false
@@ -610,14 +616,57 @@ function onSpecChange(payload) {
   }
 }
 
+function buildShareTarget() {
+  const config = appStore.siteConfig || {}
+  const title = goods.value?.name || config.client_share_title || config.site_name || 'MallBase'
+  const id = goodsId.value
+  const path = `/pages-sub/goods/detail?id=${id}`
+  const query = `id=${id}`
+  const imageUrl =
+    goods.value?.main_image_full_url ||
+    goods.value?.main_image ||
+    config.client_share_cover ||
+    ''
+  return { title, path, query, imageUrl }
+}
+
 function onShare() {
   // #ifdef MP-WEIXIN
-  // WeChat mini-program share is handled by onShareAppMessage
+  uni.showToast({ title: '点右上角 ··· 转发', icon: 'none' })
   // #endif
-  // #ifndef MP-WEIXIN
-  uni.showToast({ title: '分享功能开发中', icon: 'none' })
+  // #ifdef H5
+  const { title } = buildShareTarget()
+  const url = (typeof location !== 'undefined' && location.href) || ''
+  const ua = ((typeof navigator !== 'undefined' && navigator.userAgent) || '').toLowerCase()
+  const inWechat = ua.includes('micromessenger')
+  if (!inWechat && typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+    navigator.share({ title, text: title, url }).catch(() => {})
+    return
+  }
+  uni.setClipboardData({
+    data: url,
+    success: () => {
+      uni.showToast({
+        title: inWechat ? '链接已复制，点右上角 ··· 分享' : '链接已复制',
+        icon: 'none',
+      })
+    },
+  })
+  // #endif
+  // #ifdef APP-PLUS
+  uni.showToast({ title: '请使用系统分享', icon: 'none' })
   // #endif
 }
+
+onShareAppMessage(() => {
+  const { title, path, imageUrl } = buildShareTarget()
+  return { title, path, imageUrl }
+})
+
+onShareTimeline(() => {
+  const { title, query, imageUrl } = buildShareTarget()
+  return { title, query, imageUrl }
+})
 
 function contactService() {
   // #ifdef MP-WEIXIN
@@ -632,22 +681,16 @@ function goBack() {
   uni.navigateBack({ fail: () => goHome() })
 }
 
-function showMore() {
-  uni.showActionSheet({
-    itemList: ['返回首页', '购物车'],
-    success: (res) => {
-      if (res.tapIndex === 0) goHome()
-      if (res.tapIndex === 1) goCart()
-    },
-  })
-}
-
 function goHome() {
   uni.switchTab({ url: '/pages/index/index' })
 }
 
 function goCart() {
   uni.switchTab({ url: '/pages/cart/index' })
+}
+
+function onViewAllReviews() {
+  uni.showToast({ title: '评论列表页待开发', icon: 'none' })
 }
 
 function onOpenSpec(mode) {
@@ -698,12 +741,6 @@ function onBuyNow({ sku, quantity }) {
   align-items: center;
 }
 
-.goods-detail__float-right {
-  display: flex;
-  align-items: center;
-  gap: $mb-spacing-sm;
-}
-
 .goods-detail__float-btn {
   display: flex;
   align-items: center;
@@ -725,45 +762,41 @@ function onBuyNow({ sku, quantity }) {
 }
 
 .goods-detail__share-icon {
-  width: 36rpx;
-  height: 36rpx;
+  width: 26rpx;
+  height: 26rpx;
   position: relative;
-  color: currentColor;
 
   &::before {
     content: '';
-    display: block;
-    width: 16rpx;
-    height: 16rpx;
-    border-radius: 50%;
-    border: 3rpx solid currentColor;
     position: absolute;
     top: 0;
-    right: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 0;
+    border-left: 7rpx solid transparent;
+    border-right: 7rpx solid transparent;
+    border-bottom: 10rpx solid currentColor;
   }
 
   &::after {
     content: '';
-    display: block;
-    width: 20rpx;
-    height: 3rpx;
-    background: currentColor;
     position: absolute;
     top: 8rpx;
-    right: 12rpx;
-    transform: rotate(-30deg);
-    transform-origin: right center;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 4rpx;
+    height: 16rpx;
+    background: currentColor;
   }
 }
 
-.goods-detail__more-icon {
-  width: 34rpx;
-  height: 8rpx;
-  border-radius: $mb-radius-full;
-  background: currentColor;
-  box-shadow: -12rpx 0 0 currentColor, 12rpx 0 0 currentColor;
-  transform: scale(0.45);
+/* 微信小程序右上角胶囊已自带"转发"，分享按钮重复且会被胶囊遮挡，故隐藏 */
+/* #ifdef MP-WEIXIN */
+.goods-detail__float-btn--share {
+  display: none;
 }
+/* #endif */
 
 // ---------- Loading skeleton ----------
 .goods-detail__loading {
@@ -1030,41 +1063,68 @@ function onBuyNow({ sku, quantity }) {
 
 // ---------- Review section ----------
 .goods-detail__review-section {
-  background: $mb-color-bg;
-  padding: $mb-spacing-lg $mb-spacing-page;
-  margin: 0 $mb-spacing-md;
-  border: 1rpx solid $mb-color-divider;
-  border-radius: $mb-radius-lg;
+  background: transparent;
+  padding: 0 $mb-spacing-md $mb-spacing-md;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
 }
 
 .goods-detail__review-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: $mb-spacing-md;
+  margin: 0 0 $mb-spacing-md;
+  padding: 0 $mb-spacing-sm;
 }
 
 .goods-detail__review-title-wrap {
   display: flex;
   align-items: baseline;
-  gap: $mb-spacing-sm;
+  gap: $mb-spacing-xs;
 }
 
 .goods-detail__review-title {
-  font-size: $mb-font-lg;
+  font-size: $mb-font-xl;
   font-weight: 700;
   color: $mb-color-text-title;
+  letter-spacing: -0.5rpx;
 }
 
 .goods-detail__review-total {
-  font-size: $mb-font-sm;
+  font-size: $mb-font-md;
   color: $mb-color-text-tertiary;
+  font-weight: 600;
+}
+
+.goods-detail__review-view-all {
+  display: flex;
+  align-items: center;
+  gap: 4rpx;
+
+  &:active {
+    opacity: 0.6;
+  }
+}
+
+.goods-detail__review-view-all-text {
+  font-size: $mb-font-md;
+  color: $mb-color-primary;
+  font-weight: 600;
+}
+
+.goods-detail__review-view-all-arrow {
+  font-size: 22rpx;
+  color: $mb-color-primary;
+  line-height: 1;
 }
 
 .goods-detail__review-loading,
 .goods-detail__review-empty {
   padding: $mb-spacing-lg 0;
   text-align: center;
+  background: $mb-color-bg;
+  border-radius: $mb-radius-lg;
 }
 
 .goods-detail__review-empty-text {
@@ -1073,13 +1133,11 @@ function onBuyNow({ sku, quantity }) {
 }
 
 .goods-detail__review-item {
-  padding: $mb-spacing-md 0;
-  border-top: 1rpx solid $mb-color-divider;
-}
-
-.goods-detail__review-item--first {
-  border-top: none;
-  padding-top: 0;
+  padding: $mb-spacing-lg;
+  background: $mb-color-bg;
+  border: 1rpx solid $mb-color-divider;
+  border-radius: $mb-radius-lg;
+  margin-bottom: $mb-spacing-sm;
 }
 
 .goods-detail__review-user-row {
@@ -1089,10 +1147,10 @@ function onBuyNow({ sku, quantity }) {
 }
 
 .goods-detail__review-avatar {
-  width: 56rpx;
-  height: 56rpx;
+  width: 80rpx;
+  height: 80rpx;
   border-radius: $mb-radius-full;
-  background: $mb-color-bg-secondary;
+  background: linear-gradient(135deg, $mb-color-primary 0%, $mb-color-primary-light 100%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1100,9 +1158,10 @@ function onBuyNow({ sku, quantity }) {
 }
 
 .goods-detail__review-avatar-text {
-  font-size: $mb-font-sm;
-  font-weight: 600;
-  color: $mb-color-text-secondary;
+  font-size: $mb-font-lg;
+  font-weight: 700;
+  color: #ffffff;
+  line-height: 1;
 }
 
 .goods-detail__review-user-main {
@@ -1113,7 +1172,7 @@ function onBuyNow({ sku, quantity }) {
 .goods-detail__review-user-name {
   display: block;
   font-size: $mb-font-md;
-  font-weight: 600;
+  font-weight: 700;
   color: $mb-color-text;
   overflow: hidden;
   white-space: nowrap;
@@ -1122,12 +1181,12 @@ function onBuyNow({ sku, quantity }) {
 
 .goods-detail__review-star-row {
   display: flex;
-  gap: 2rpx;
-  margin-top: 2rpx;
+  gap: 4rpx;
+  margin-top: 6rpx;
 }
 
 .goods-detail__review-star {
-  font-size: 22rpx;
+  font-size: 26rpx;
   color: $mb-color-border-light;
   line-height: 1;
 }
@@ -1140,36 +1199,38 @@ function onBuyNow({ sku, quantity }) {
   font-size: $mb-font-xs;
   color: $mb-color-text-tertiary;
   flex-shrink: 0;
+  align-self: flex-start;
+  margin-top: 4rpx;
 }
 
 .goods-detail__review-content {
   display: block;
-  margin-top: $mb-spacing-sm;
+  margin-top: $mb-spacing-md;
   font-size: $mb-font-md;
   color: $mb-color-text;
   line-height: 1.6;
-  word-break: break-all;
+  word-break: break-word;
 }
 
 .goods-detail__review-images {
   display: flex;
   flex-wrap: wrap;
   gap: $mb-spacing-sm;
-  margin-top: $mb-spacing-sm;
+  margin-top: $mb-spacing-md;
 }
 
 .goods-detail__review-image {
-  width: 144rpx;
-  height: 144rpx;
-  border-radius: $mb-radius-sm;
+  width: 168rpx;
+  height: 168rpx;
+  border-radius: $mb-radius-md;
   background: $mb-color-bg-secondary;
 }
 
 .goods-detail__review-reply {
-  margin-top: $mb-spacing-sm;
-  padding: $mb-spacing-sm;
-  border-radius: $mb-radius-sm;
-  background: $mb-color-bg-secondary;
+  margin-top: $mb-spacing-md;
+  padding: $mb-spacing-md;
+  border-radius: $mb-radius-md;
+  background: $mb-color-bg-surface;
 }
 
 .goods-detail__review-reply-text {
