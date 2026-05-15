@@ -25,6 +25,8 @@
 - `thinkPHP/goods-media-contract`
 - `thinkPHP/backend-test-baseline`
 - `thinkPHP/dev-no-upgrade-sql`
+- `thinkPHP/wechat-pay-stateless`
+- `thinkPHP/payment-notify-idempotency`
 
 ### 2.2 Vben Admin
 
@@ -241,6 +243,9 @@
 - 商品图片与媒体规则：
   - `thinkPHP/goods-image-main-sync`
   - `thinkPHP/goods-media-contract`
+- 支付链路（出账 / 回调）：
+  - `thinkPHP/wechat-pay-stateless`
+  - `thinkPHP/payment-notify-idempotency`
 - 后端测试基线：
   - `thinkPHP/backend-test-baseline`
 - 数据库 seed 与升级策略：
