@@ -53,6 +53,22 @@ class TemplateController extends BaseController
         return $this->success(null, '删除成功');
     }
 
+    /**
+     * 从阿里云导入已审核模板(只调 QuerySmsTemplate,不调 AddSmsTemplate)
+     */
+    public function import()
+    {
+        $data = $this->request->param(['provider_id', 'template_code']);
+        if (empty($data['provider_id']) || empty($data['template_code'])) {
+            return $this->error('服务商和模板编码必填');
+        }
+        $id = $this->service()->importFromRemote(
+            (int) $data['provider_id'],
+            trim((string) $data['template_code']),
+        );
+        return $this->success(['id' => $id], '导入成功');
+    }
+
     public function syncStatus($id)
     {
         $info = $this->service()->syncStatus((int) $id);

@@ -26,6 +26,11 @@ export namespace SmsSignApi {
     limit?: number;
   }
 
+  export interface SignFileItem {
+    file_contents: string; // base64 (不含 data: 前缀)
+    file_suffix: string;   // jpg / png / pdf / jpeg
+  }
+
   export interface CreateParams {
     provider_id: number;
     sign_name: string;
@@ -33,6 +38,12 @@ export namespace SmsSignApi {
     sign_type: number;
     remark?: string;
     qualification_id?: number;
+    sign_files: SignFileItem[];
+  }
+
+  export interface ImportParams {
+    provider_id: number;
+    sign_name: string;
   }
 }
 
@@ -49,6 +60,10 @@ export async function getSmsSignInfoApi(id: number) {
 
 export async function createSmsSignApi(data: SmsSignApi.CreateParams) {
   return requestClient.post<{ id: number }>('/sms/sign/create', data);
+}
+
+export async function importSmsSignApi(data: SmsSignApi.ImportParams) {
+  return requestClient.post<{ id: number }>('/sms/sign/import', data);
 }
 
 export async function deleteSmsSignApi(id: number) {

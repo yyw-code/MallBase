@@ -47,7 +47,10 @@ Route::group('sms/sign', function () {
         '_alias' => '详情', '_desc' => '签名详情', '_auth' => true,
     ]);
     Route::post('create', 'create')->name('SmsSignCreate')->option([
-        '_alias' => '创建', '_desc' => '提交签名审核', '_auth' => true, '_type' => Permission::TYPE_BUTTON,
+        '_alias' => '创建', '_desc' => '提交签名审核(带资质文件)', '_auth' => true, '_type' => Permission::TYPE_BUTTON,
+    ]);
+    Route::post('import', 'import')->name('SmsSignImport')->option([
+        '_alias' => '导入', '_desc' => '从阿里云导入已审核签名', '_auth' => true, '_type' => Permission::TYPE_BUTTON,
     ]);
     Route::delete('delete/:id', 'delete')->name('SmsSignDelete')->option([
         '_alias' => '删除', '_desc' => '删除签名(同时撤回远端)', '_auth' => true, '_type' => Permission::TYPE_BUTTON,
@@ -81,6 +84,9 @@ Route::group('sms/template', function () {
     ]);
     Route::post('create', 'create')->name('SmsTemplateCreate')->option([
         '_alias' => '创建', '_desc' => '提交模板审核', '_auth' => true, '_type' => Permission::TYPE_BUTTON,
+    ]);
+    Route::post('import', 'import')->name('SmsTemplateImport')->option([
+        '_alias' => '导入', '_desc' => '从阿里云导入已审核模板', '_auth' => true, '_type' => Permission::TYPE_BUTTON,
     ]);
     Route::put('update/:id', 'update')->name('SmsTemplateUpdate')->option([
         '_alias' => '更新', '_desc' => '修改模板(自动触发重新审核)', '_auth' => true, '_type' => Permission::TYPE_BUTTON,

@@ -156,6 +156,46 @@ class SmsTemplateService extends BaseService
         $row->delete();
     }
 
+    /**
+     * 从阿里云导入已经存在并审核通过的模板(只查询,不调 AddSmsTemplate)
+     *
+     * 适用场景:
+     *  - 你在阿里云控制台已经申请并审核通过的模板,想接入 mallbase
+     *  - 旧线上数据迁移
+     */
+    public function importFromRemote(int $providerId, string $templateCode): int
+    {
+        $provider = SmsProvider::find($providerId);
+        if ($provider === null) {
+            throw new BusinessException('服务商不存在');
+        }
+
+        $exists = $this->model()
+            ->where('provider_id', $providerId)
+            ->where('template_code', $templateCode)
+            ->find();
+        if ($exists !== null) {
+            throw new BusinessException("模板编码 [{$templateCode}] 已存在本地,请直接点击同步状态");
+        }
+
+        $manager = SmsDriverFactory::manager($provider);
+        $remote = $manager->queryTemplate($templateCode);
+
+        $row = $this->model();
+        $row->save([
+            'provider_id' => $providerId,
+            'template_name' => $remote['template_name'] ?: $templateCode,
+            'template_code' => $templateCode,
+            'template_type' => $remote['template_type'],
+            'template_content' => $remote['template_content'] ?: '(远端未返回内容)',
+            'remark' => '从阿里云导入',
+            'audit_status' => $remote['audit_status'],
+            'audit_reason' => $remote['audit_reason'] ?? null,
+            'last_synced_at' => date('Y-m-d H:i:s'),
+        ]);
+        return (int) $row->id;
+    }
+
     public function syncStatus(int $id): array
     {
         $row = $this->model()->find($id);

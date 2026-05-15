@@ -33,6 +33,11 @@ export namespace SmsTemplateApi {
     template_content: string;
     remark?: string;
   }
+
+  export interface ImportParams {
+    provider_id: number;
+    template_code: string;
+  }
 }
 
 export async function getSmsTemplateListApi(params?: SmsTemplateApi.ListParams) {
@@ -50,6 +55,10 @@ export async function getSmsTemplateInfoApi(id: number) {
 
 export async function createSmsTemplateApi(data: SmsTemplateApi.SaveParams) {
   return requestClient.post<{ id: number }>('/sms/template/create', data);
+}
+
+export async function importSmsTemplateApi(data: SmsTemplateApi.ImportParams) {
+  return requestClient.post<{ id: number }>('/sms/template/import', data);
 }
 
 export async function updateSmsTemplateApi(

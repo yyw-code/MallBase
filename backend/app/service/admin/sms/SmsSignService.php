@@ -48,8 +48,18 @@ class SmsSignService extends BaseService
     }
 
     /**
-     * 创建本地记录 + 调用阿里云 AddSmsSign
+     * 创建本地记录 + 调用阿里云 AddSmsSign(把资质文件 base64 透传到 SignFileList)
      * 远端失败时本地仍入库,状态置为 local_only,便于用户后续修复重试
+     *
+     * @param array{
+     *     provider_id:int,
+     *     sign_name:string,
+     *     sign_source:int,
+     *     sign_type:int,
+     *     remark?:string,
+     *     qualification_id?:int,
+     *     sign_files?:array<int, array{file_contents:string, file_suffix:string}>
+     * } $data
      */
     public function create(array $data): int
     {
@@ -76,6 +86,7 @@ class SmsSignService extends BaseService
                 'sign_source' => $payload['sign_source'],
                 'sign_type' => $payload['sign_type'],
                 'remark' => $payload['remark'] ?? '',
+                'sign_files' => $data['sign_files'] ?? [],
             ]);
             $payload['audit_status'] = SmsSign::AUDIT_PENDING;
             $payload['last_synced_at'] = date('Y-m-d H:i:s');
@@ -85,6 +96,45 @@ class SmsSignService extends BaseService
 
         $row = $this->model();
         $row->save($payload);
+        return (int) $row->id;
+    }
+
+    /**
+     * 从阿里云导入已经存在并审核通过的签名(只查询,不调 AddSmsSign)
+     *
+     * 适用场景:
+     *  - 你在阿里云控制台已经申请并审核通过了某签名,想接入到 mallbase
+     *  - 旧线上数据迁移
+     */
+    public function importFromRemote(int $providerId, string $signName): int
+    {
+        $provider = SmsProvider::find($providerId);
+        if ($provider === null) {
+            throw new BusinessException('服务商不存在');
+        }
+
+        $exists = $this->model()
+            ->where('provider_id', $providerId)
+            ->where('sign_name', $signName)
+            ->find();
+        if ($exists !== null) {
+            throw new BusinessException("签名 [{$signName}] 已存在本地,请直接点击同步状态");
+        }
+
+        $manager = SmsDriverFactory::manager($provider);
+        $remote = $manager->querySign($signName);
+
+        $row = $this->model();
+        $row->save([
+            'provider_id' => $providerId,
+            'sign_name' => $signName,
+            'sign_source' => 0,
+            'sign_type' => 1,
+            'remark' => '从阿里云导入',
+            'audit_status' => $remote['audit_status'],
+            'audit_reason' => $remote['audit_reason'] ?? null,
+            'last_synced_at' => date('Y-m-d H:i:s'),
+        ]);
         return (int) $row->id;
     }
 

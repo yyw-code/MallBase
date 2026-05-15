@@ -14,6 +14,7 @@ import {
   deleteSmsTemplateApi,
   getSmsTemplateInfoApi,
   getSmsTemplateListApi,
+  importSmsTemplateApi,
   syncAllSmsTemplateApi,
   syncSmsTemplateStatusApi,
   updateSmsTemplateApi,
@@ -104,9 +105,13 @@ const handleSync = async (row: SmsTemplateApi.TemplateItem) => {
 };
 
 const handleSyncAll = async () => {
-  const providerId = searchParams.value.provider_id;
+  let providerId = searchParams.value.provider_id;
+  // 只有 1 个服务商时自动选中,免去人工筛选
+  if (!providerId && providers.value.length === 1) {
+    providerId = providers.value[0]!.id;
+  }
   if (!providerId) {
-    message.warning('请先选择服务商再批量同步');
+    message.warning('当前存在多个服务商,请先在上方筛选中选择要同步的服务商');
     return;
   }
   const stat = await syncAllSmsTemplateApi(providerId);
@@ -122,6 +127,43 @@ const resetSearch = () => {
   };
   pagination.current = 1;
   loadData(searchParams.value);
+};
+
+// ------------------- 导入已审核模板 -------------------
+
+const importModalVisible = ref(false);
+const importFormData = ref<SmsTemplateApi.ImportParams>({
+  provider_id: 0,
+  template_code: '',
+});
+const importing = ref(false);
+
+const openImportModal = async () => {
+  if (providers.value.length === 0) await loadProviders();
+  importFormData.value = {
+    provider_id: providers.value[0]?.id || 0,
+    template_code: '',
+  };
+  importModalVisible.value = true;
+};
+
+const handleImportSubmit = async () => {
+  if (
+    !importFormData.value.provider_id ||
+    !importFormData.value.template_code
+  ) {
+    message.error('请完整填写服务商和模板编码');
+    return;
+  }
+  importing.value = true;
+  try {
+    await importSmsTemplateApi(importFormData.value);
+    message.success('导入成功');
+    importModalVisible.value = false;
+    loadData(searchParams.value);
+  } finally {
+    importing.value = false;
+  }
 };
 
 const auditStatusTag = (status: string) =>
@@ -140,7 +182,7 @@ const columns = [
   { title: '模板编码', dataIndex: 'template_code', width: 180 },
   { title: '类型', dataIndex: 'template_type', width: 100 },
   { title: '审核状态', dataIndex: 'audit_status', width: 120 },
-  { title: '审核备注', dataIndex: 'audit_reason', ellipsis: true },
+  { title: '审核备注', dataIndex: 'audit_reason', width: 360 },
   { title: '最近同步', dataIndex: 'last_synced_at', width: 180 },
   { title: '操作', key: 'action', width: 260 },
 ];
@@ -154,20 +196,35 @@ if (hasAccessByCodes(['SmsTemplateList'])) {
 <template>
   <div class="p-4">
     <div class="mb-4">
-      <a-button
-        type="primary"
-        @click="handleCreate"
-        v-access:code="'SmsTemplateCreate'"
+      <a-tooltip title="本地新建模板内容,推送到阿里云审核(通常 2 小时内出结果)">
+        <a-button
+          type="primary"
+          @click="handleCreate"
+          v-access:code="'SmsTemplateCreate'"
+        >
+          新增模板（推送阿里云）
+        </a-button>
+      </a-tooltip>
+      <a-tooltip title="已经在阿里云审核通过的模板编码(SMS_xxx)拉回本地,不触发新审核">
+        <a-button
+          class="ml-2"
+          @click="openImportModal"
+          v-access:code="'SmsTemplateImport'"
+        >
+          导入已审核模板
+        </a-button>
+      </a-tooltip>
+      <a-tooltip
+        title="把本地所有模板一次性向阿里云查最新审核状态并回写,适合提交后过段时间批量刷新"
       >
-        新增模板
-      </a-button>
-      <a-button
-        class="ml-2"
-        @click="handleSyncAll"
-        v-access:code="'SmsTemplateSyncAll'"
-      >
-        批量同步状态
-      </a-button>
+        <a-button
+          class="ml-2"
+          @click="handleSyncAll"
+          v-access:code="'SmsTemplateSyncAll'"
+        >
+          批量同步状态
+        </a-button>
+      </a-tooltip>
       <a-button class="ml-2" @click="refresh" v-access:code="'SmsTemplateList'">
         刷新
       </a-button>
@@ -247,6 +304,14 @@ if (hasAccessByCodes(['SmsTemplateList'])) {
         <template v-if="column.dataIndex === 'template_code'">
           <span v-if="record.template_code">{{ record.template_code }}</span>
           <a-tag v-else color="default">未提交</a-tag>
+        </template>
+        <template v-if="column.dataIndex === 'audit_reason'">
+          <div
+            class="whitespace-pre-wrap break-all text-xs leading-relaxed"
+            style="max-height: 120px; overflow-y: auto"
+          >
+            {{ record.audit_reason || '-' }}
+          </div>
         </template>
         <template v-if="column.key === 'action'">
           <a-space>
@@ -335,6 +400,35 @@ if (hasAccessByCodes(['SmsTemplateList'])) {
             v-model:value="formData.remark"
             :rows="3"
             placeholder="向阿里云说明使用场景,有助审核"
+          />
+        </a-form-item>
+      </a-form>
+    </a-modal>
+
+    <a-modal
+      v-model:open="importModalVisible"
+      title="从阿里云导入已审核模板"
+      width="520px"
+      :confirm-loading="importing"
+      @ok="handleImportSubmit"
+    >
+      <a-alert
+        type="info"
+        show-icon
+        message="只调用 QuerySmsTemplate 把阿里云上已审核通过的模板拉回本地,不会触发新审核"
+        class="mb-4"
+      />
+      <a-form :label-col="{ span: 6 }" :wrapper-col="{ span: 16 }">
+        <a-form-item label="服务商" required>
+          <a-select
+            v-model:value="importFormData.provider_id"
+            :options="providers.map((p) => ({ label: p.name, value: p.id }))"
+          />
+        </a-form-item>
+        <a-form-item label="模板编码" required>
+          <a-input
+            v-model:value="importFormData.template_code"
+            placeholder="阿里云分配的 SMS_xxxxxxxxx"
           />
         </a-form-item>
       </a-form>

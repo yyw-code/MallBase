@@ -33,10 +33,29 @@ class SignController extends BaseController
 
     public function create()
     {
-        $data = $this->request->param(['provider_id', 'sign_name', 'sign_source', 'sign_type', 'remark', 'qualification_id']);
+        $data = $this->request->param([
+            'provider_id', 'sign_name', 'sign_source', 'sign_type',
+            'remark', 'qualification_id', 'sign_files',
+        ]);
         $this->validate($data, SmsSignValidate::class . '.create');
         $id = $this->service()->create($data);
         return $this->success(['id' => $id], '创建已提交,等待审核');
+    }
+
+    /**
+     * 从阿里云导入已审核签名(只调 QuerySmsSign,不调 AddSmsSign)
+     */
+    public function import()
+    {
+        $data = $this->request->param(['provider_id', 'sign_name']);
+        if (empty($data['provider_id']) || empty($data['sign_name'])) {
+            return $this->error('服务商和签名名称必填');
+        }
+        $id = $this->service()->importFromRemote(
+            (int) $data['provider_id'],
+            trim((string) $data['sign_name']),
+        );
+        return $this->success(['id' => $id], '导入成功');
     }
 
     public function delete($id)

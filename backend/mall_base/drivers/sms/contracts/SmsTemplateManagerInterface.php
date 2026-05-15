@@ -53,7 +53,15 @@ interface SmsTemplateManagerInterface
     /**
      * 创建签名
      *
-     * @param array{sign_name:string, sign_source:int, sign_type:int, remark?:string} $data
+     * 阿里云硬性要求 SignFileList(资质证明文件 base64),否则报 SMS_SIGN_FILE_REQUIRED。
+     *
+     * @param array{
+     *     sign_name:string,
+     *     sign_source:int,
+     *     sign_type:int,
+     *     remark?:string,
+     *     sign_files?:array<int, array{file_contents:string, file_suffix:string}>
+     * } $data
      * @return array{sign_name:string}
      * @throws SmsException
      */

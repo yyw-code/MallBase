@@ -6,6 +6,7 @@ namespace mall_base\drivers\sms;
 
 use AlibabaCloud\SDK\Dysmsapi\V20170525\Dysmsapi;
 use AlibabaCloud\SDK\Dysmsapi\V20170525\Models\AddSmsSignRequest;
+use AlibabaCloud\SDK\Dysmsapi\V20170525\Models\AddSmsSignRequest\signFileList as AddSmsSignFileItem;
 use AlibabaCloud\SDK\Dysmsapi\V20170525\Models\AddSmsTemplateRequest;
 use AlibabaCloud\SDK\Dysmsapi\V20170525\Models\DeleteSmsSignRequest;
 use AlibabaCloud\SDK\Dysmsapi\V20170525\Models\DeleteSmsTemplateRequest;
@@ -212,11 +213,25 @@ class AliyunSmsDriver extends BaseSmsDriver implements SmsTemplateManagerInterfa
     {
         $this->ensureClient();
         try {
+            $signFiles = $data['sign_files'] ?? [];
+            if (empty($signFiles)) {
+                throw new SmsException('阿里云签名审核必须附上资质证明文件,请上传至少 1 个文件');
+            }
+
+            $fileList = [];
+            foreach ($signFiles as $f) {
+                $fileList[] = new AddSmsSignFileItem([
+                    'fileContents' => (string) ($f['file_contents'] ?? ''),
+                    'fileSuffix' => (string) ($f['file_suffix'] ?? 'jpg'),
+                ]);
+            }
+
             $req = new AddSmsSignRequest([
                 'signName' => $data['sign_name'],
                 'signSource' => (int) $data['sign_source'],
                 'signType' => (int) $data['sign_type'],
                 'remark' => $data['remark'] ?? '',
+                'signFileList' => $fileList,
             ]);
             $resp = $this->client->addSmsSign($req);
             $body = $resp->body;
