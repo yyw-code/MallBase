@@ -197,6 +197,63 @@ class OrderService extends BaseService
     }
 
     /**
+     * 回调驱动：确认订单已支付（真实渠道走此入口）
+     *
+     * 与 {@see pay()} 的差异：
+     *  - pay() 是同步 Mock 支付入口（PayMethod::MOCK 测试用）
+     *  - confirmPaid() 是异步回调入口，由 NotifyService 在验签 + 金额比对通过后调用
+     *
+     * 幂等：订单已是 PAID 状态时直接返回，不抛异常（应对重复回调）
+     *
+     * @return array{order_id:int, sn:string, status:int}
+     */
+    public function confirmPaid(string $sn, string $transactionId, int $payMethod, int $payScene): array
+    {
+        if (!PayMethod::isValid($payMethod)) {
+            throw new BusinessException('支付方式不合法');
+        }
+
+        /** @var Order|null $order */
+        $order = $this->model()->where('sn', $sn)->whereNull('delete_time')->find();
+        if ($order === null) {
+            throw new BusinessException('订单不存在');
+        }
+        if ((int) $order->status === OrderStatus::PAID) {
+            // 幂等：重复回调直接返回，不报错
+            return [
+                'order_id' => (int) $order->id,
+                'sn'       => (string) $order->sn,
+                'status'   => OrderStatus::PAID,
+            ];
+        }
+        if ((int) $order->status !== OrderStatus::PENDING_PAY) {
+            throw new BusinessException('订单已关闭或状态不允许支付');
+        }
+
+        $machine = app()->make(OrderStatusMachine::class);
+        $this->transaction(function () use ($order, $transactionId, $payMethod, $payScene, $machine): void {
+            $order->pay_method = $payMethod;
+            $order->pay_scene  = $payScene;
+            $order->trade_no   = mb_substr($transactionId, 0, 64);
+            $order->save();
+
+            $machine->transit(
+                order: $order,
+                toStatus: OrderStatus::PAID,
+                operatorType: OperatorType::SYSTEM,
+                operatorId: null,
+                remark: sprintf('支付成功（%s）', PayMethod::textOf($payMethod)),
+            );
+        });
+
+        return [
+            'order_id' => (int) $order->id,
+            'sn'       => (string) $order->sn,
+            'status'   => OrderStatus::PAID,
+        ];
+    }
+
+    /**
      * 买家主动取消（仅 PENDING_PAY 可取消）
      *
      * 事务内：状态机流转 CLOSED → 批量回滚库存
