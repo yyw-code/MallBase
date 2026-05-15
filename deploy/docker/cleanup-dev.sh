@@ -14,6 +14,7 @@ set -eu
 #      - backend/vendor
 #      - deploy/install/install.lock
 #      - backend/public/admin
+#      - backend/public/client
 #      - frontend/admin/node_modules
 #      - frontend/admin/apps/web-antd/node_modules
 #      - frontend/admin/apps/web-antd/dist
@@ -95,6 +96,7 @@ rm -f "$ROOT_DIR/backend/.env"
 rm -rf "$ROOT_DIR/backend/vendor"
 rm -f "$ROOT_DIR/deploy/install/install.lock"
 rm -rf "$ROOT_DIR/backend/public/admin"
+rm -rf "$ROOT_DIR/backend/public/client"
 rm -rf "$ROOT_DIR/frontend/admin/node_modules"
 rm -rf "$ROOT_DIR/frontend/admin/apps/web-antd/node_modules"
 rm -rf "$ROOT_DIR/frontend/admin/apps/web-antd/dist"
