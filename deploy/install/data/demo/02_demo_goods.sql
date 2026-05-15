@@ -97,6 +97,109 @@ INSERT INTO `mb_goods_tag_relation` (`goods_id`, `tag_id`) VALUES
 (4, 2),
 (5, 4);
 
+-- ============================================
+-- 演示数据：潮流商品（与 Stitch 设计图配套）
+-- ============================================
+
+-- ---- 商品 6：StreetWave Air 1 复古潮流运动鞋（多规格）----
+INSERT INTO `mb_goods` (`id`, `category_id`, `brand_id`, `name`, `subtitle`, `main_image`, `images`, `spec_type`, `spec_meta`, `description`, `price`, `market_price`, `stock`, `sales`, `unit`, `is_on_sale`, `is_recommend`, `is_new`, `is_hot`, `sort`) VALUES
+(6, 2, NULL, 'StreetWave Air 1 复古潮流运动鞋', '2025 春季新款 限量 500 双', '/static/demo/goods/streetwave-air-1/main-0.png',
+ '["/static/demo/goods/streetwave-air-1/main-0.png","/static/demo/goods/streetwave-air-1/swiper-0.png","/static/demo/goods/streetwave-air-1/swiper-1.png","/static/demo/goods/streetwave-air-1/swiper-2.png","/static/demo/goods/streetwave-air-1/detail-0.png"]', 2,
+ '[{"name":"颜色","add_pic":1,"values":[{"value":"白蓝","pic":"/static/demo/goods/streetwave-air-1/main-0.png"},{"value":"烤白","pic":"/static/demo/goods/streetwave-air-1/swiper-0.png"},{"value":"蛋红","pic":"/static/demo/goods/streetwave-air-1/swiper-1.png"},{"value":"米色","pic":"/static/demo/goods/streetwave-air-1/swiper-2.png"}]},{"name":"尺码","add_pic":0,"values":[{"value":"39","pic":""},{"value":"40","pic":""},{"value":"41","pic":""},{"value":"42","pic":""},{"value":"43","pic":""},{"value":"44","pic":""}]}]',
+ '<p><img src="/static/demo/goods/streetwave-air-1/detail-0.png" alt="" style="max-width:100%"/></p><p>StreetWave Air 1 复古潮流运动鞋，2025 春季新款，限量 500 双发售。鞋面采用透气网布与人造革拼接，缓震中底贴合脚型，街头穿搭百搭单品。</p><p><img src="/static/demo/goods/streetwave-air-1/detail-1.png" alt="" style="max-width:100%"/></p>',
+ 899.00, 1299.00, 23, 1287, '双', 1, 1, 1, 1, 5);
+
+INSERT INTO `mb_goods_sku` (`goods_id`, `spec_values`, `price`, `market_price`, `stock`, `sku_code`) VALUES
+(6, '白蓝,39', 899.00, 1299.00, 5, 'SWA1-WB-39'),
+(6, '白蓝,40', 899.00, 1299.00, 4, 'SWA1-WB-40'),
+(6, '白蓝,41', 899.00, 1299.00, 3, 'SWA1-WB-41'),
+(6, '白蓝,42', 899.00, 1299.00, 6, 'SWA1-WB-42'),
+(6, '白蓝,43', 899.00, 1299.00, 3, 'SWA1-WB-43'),
+(6, '白蓝,44', 899.00, 1299.00, 2, 'SWA1-WB-44'),
+(6, '烤白,40', 899.00, 1299.00, 5, 'SWA1-CW-40'),
+(6, '烤白,41', 899.00, 1299.00, 4, 'SWA1-CW-41'),
+(6, '烤白,42', 899.00, 1299.00, 5, 'SWA1-CW-42'),
+(6, '烤白,43', 899.00, 1299.00, 3, 'SWA1-CW-43'),
+(6, '蛋红,40', 899.00, 1299.00, 4, 'SWA1-ER-40'),
+(6, '蛋红,41', 899.00, 1299.00, 3, 'SWA1-ER-41'),
+(6, '蛋红,42', 899.00, 1299.00, 3, 'SWA1-ER-42'),
+(6, '米色,40', 899.00, 1299.00, 4, 'SWA1-BG-40'),
+(6, '米色,41', 899.00, 1299.00, 3, 'SWA1-BG-41'),
+(6, '米色,42', 899.00, 1299.00, 4, 'SWA1-BG-42');
+
+-- ---- 商品 7：NebulaWave 短袖 T 恤（多规格）----
+INSERT INTO `mb_goods` (`id`, `category_id`, `brand_id`, `name`, `subtitle`, `main_image`, `images`, `spec_type`, `spec_meta`, `description`, `price`, `market_price`, `stock`, `sales`, `unit`, `is_on_sale`, `is_recommend`, `is_new`, `sort`) VALUES
+(7, 7, NULL, 'NebulaWave 街头潮流短袖 T 恤', '300g 重磅纯棉 落肩剪裁', '/static/demo/goods/nebulawave-tee/main-0.png',
+ '["/static/demo/goods/nebulawave-tee/main-0.png","/static/demo/goods/nebulawave-tee/swiper-0.png","/static/demo/goods/nebulawave-tee/swiper-1.png","/static/demo/goods/nebulawave-tee/swiper-2.png"]', 2,
+ '[{"name":"颜色","add_pic":1,"values":[{"value":"黑色","pic":"/static/demo/goods/nebulawave-tee/main-0.png"},{"value":"白色","pic":"/static/demo/goods/nebulawave-tee/swiper-0.png"},{"value":"蓝色","pic":"/static/demo/goods/nebulawave-tee/swiper-1.png"}]},{"name":"尺码","add_pic":0,"values":[{"value":"S","pic":""},{"value":"M","pic":""},{"value":"L","pic":""},{"value":"XL","pic":""}]}]',
+ '<p><img src="/static/demo/goods/nebulawave-tee/detail-0.png" alt="" style="max-width:100%"/></p><p>NebulaWave 街头潮流短袖 T 恤，300g 重磅纯棉面料，落肩剪裁更显廓形，胸前抽象图案印花。日常搭配卫裤、牛仔裤均合宜。</p>',
+ 199.00, 299.00, 240, 612, '件', 1, 1, 1, 6);
+
+INSERT INTO `mb_goods_sku` (`goods_id`, `spec_values`, `price`, `market_price`, `stock`, `sku_code`) VALUES
+(7, '黑色,S', 199.00, 299.00, 22, 'NWT-BK-S'),
+(7, '黑色,M', 199.00, 299.00, 30, 'NWT-BK-M'),
+(7, '黑色,L', 199.00, 299.00, 28, 'NWT-BK-L'),
+(7, '黑色,XL', 199.00, 299.00, 18, 'NWT-BK-XL'),
+(7, '白色,S', 199.00, 299.00, 24, 'NWT-WH-S'),
+(7, '白色,M', 199.00, 299.00, 30, 'NWT-WH-M'),
+(7, '白色,L', 199.00, 299.00, 26, 'NWT-WH-L'),
+(7, '白色,XL', 199.00, 299.00, 16, 'NWT-WH-XL'),
+(7, '蓝色,M', 199.00, 299.00, 18, 'NWT-BL-M'),
+(7, '蓝色,L', 199.00, 299.00, 16, 'NWT-BL-L'),
+(7, '蓝色,XL', 199.00, 299.00, 12, 'NWT-BL-XL');
+
+-- ---- 商品 8：CityRunner 连帽卫衣（多规格）----
+INSERT INTO `mb_goods` (`id`, `category_id`, `brand_id`, `name`, `subtitle`, `main_image`, `images`, `spec_type`, `spec_meta`, `description`, `price`, `market_price`, `stock`, `sales`, `unit`, `is_on_sale`, `is_recommend`, `is_hot`, `sort`) VALUES
+(8, 7, NULL, 'CityRunner 城市连帽卫衣', '抓绒内里 防风袖口 通勤百搭', '/static/demo/goods/cityrunner-hoodie/main-0.png',
+ '["/static/demo/goods/cityrunner-hoodie/main-0.png","/static/demo/goods/cityrunner-hoodie/swiper-0.png","/static/demo/goods/cityrunner-hoodie/swiper-1.png","/static/demo/goods/cityrunner-hoodie/swiper-2.png"]', 2,
+ '[{"name":"颜色","add_pic":1,"values":[{"value":"碳灰","pic":"/static/demo/goods/cityrunner-hoodie/main-0.png"},{"value":"卡其","pic":"/static/demo/goods/cityrunner-hoodie/swiper-0.png"},{"value":"墨绿","pic":"/static/demo/goods/cityrunner-hoodie/swiper-1.png"}]},{"name":"尺码","add_pic":0,"values":[{"value":"M","pic":""},{"value":"L","pic":""},{"value":"XL","pic":""},{"value":"2XL","pic":""}]}]',
+ '<p><img src="/static/demo/goods/cityrunner-hoodie/detail-0.png" alt="" style="max-width:100%"/></p><p>CityRunner 城市连帽卫衣，抓绒内里保暖透气，袖口与下摆罗纹收紧防风，胸前贴布 logo 设计。秋冬通勤运动两用。</p>',
+ 399.00, 599.00, 150, 318, '件', 1, 1, 1, 7);
+
+INSERT INTO `mb_goods_sku` (`goods_id`, `spec_values`, `price`, `market_price`, `stock`, `sku_code`) VALUES
+(8, '碳灰,M', 399.00, 599.00, 18, 'CRH-CG-M'),
+(8, '碳灰,L', 399.00, 599.00, 22, 'CRH-CG-L'),
+(8, '碳灰,XL', 399.00, 599.00, 16, 'CRH-CG-XL'),
+(8, '碳灰,2XL', 399.00, 599.00, 8,  'CRH-CG-2XL'),
+(8, '卡其,M', 399.00, 599.00, 14, 'CRH-KH-M'),
+(8, '卡其,L', 399.00, 599.00, 20, 'CRH-KH-L'),
+(8, '卡其,XL', 399.00, 599.00, 12, 'CRH-KH-XL'),
+(8, '墨绿,M', 399.00, 599.00, 10, 'CRH-MG-M'),
+(8, '墨绿,L', 399.00, 599.00, 14, 'CRH-MG-L'),
+(8, '墨绿,XL', 399.00, 599.00, 8,  'CRH-MG-XL');
+
+-- ---- 商品 9：StreetWave 帆布单肩包（单规格）----
+INSERT INTO `mb_goods` (`id`, `category_id`, `brand_id`, `name`, `subtitle`, `main_image`, `images`, `spec_type`, `description`, `price`, `market_price`, `stock`, `sales`, `unit`, `is_on_sale`, `is_new`, `sort`) VALUES
+(9, 4, NULL, 'StreetWave 复古帆布单肩包', '加厚帆布 大容量 街头风格', '/static/demo/goods/streetwave-bag/main-0.png',
+ '["/static/demo/goods/streetwave-bag/main-0.png","/static/demo/goods/streetwave-bag/swiper-0.png","/static/demo/goods/streetwave-bag/swiper-1.png"]', 1,
+ '<p><img src="/static/demo/goods/streetwave-bag/detail-0.png" alt="" style="max-width:100%"/></p><p>StreetWave 复古帆布单肩包，加厚 16oz 帆布面料，大容量主仓 + 拉链暗袋，肩带可调节。日常通勤、短途旅行皆可。</p>',
+ 129.00, 199.00, 320, 482, '只', 1, 1, 8);
+
+INSERT INTO `mb_goods_sku` (`goods_id`, `spec_values`, `price`, `market_price`, `stock`, `sku_code`) VALUES
+(9, '', 129.00, 199.00, 320, 'SWB-CV-STD');
+
+-- ---- 商品 10：MetroFit 运动棒球帽（多规格）----
+INSERT INTO `mb_goods` (`id`, `category_id`, `brand_id`, `name`, `subtitle`, `main_image`, `images`, `spec_type`, `spec_meta`, `description`, `price`, `market_price`, `stock`, `sales`, `unit`, `is_on_sale`, `sort`) VALUES
+(10, 2, NULL, 'MetroFit 运动棒球帽', '速干面料 防晒透气 男女通用', '/static/demo/goods/metrofit-cap/main-0.png',
+ '["/static/demo/goods/metrofit-cap/main-0.png","/static/demo/goods/metrofit-cap/swiper-0.png","/static/demo/goods/metrofit-cap/swiper-1.png","/static/demo/goods/metrofit-cap/swiper-2.png"]', 2,
+ '[{"name":"颜色","add_pic":1,"values":[{"value":"黑色","pic":"/static/demo/goods/metrofit-cap/main-0.png"},{"value":"白色","pic":"/static/demo/goods/metrofit-cap/swiper-0.png"},{"value":"红色","pic":"/static/demo/goods/metrofit-cap/swiper-1.png"},{"value":"藏青","pic":"/static/demo/goods/metrofit-cap/swiper-2.png"}]}]',
+ '<p><img src="/static/demo/goods/metrofit-cap/detail-0.png" alt="" style="max-width:100%"/></p><p>MetroFit 运动棒球帽，速干面料，UPF 50+ 防晒，后部魔术贴可调节，男女通用。运动跑步、街头穿搭都合适。</p>',
+ 89.00, 129.00, 540, 921, '顶', 1, 9);
+
+INSERT INTO `mb_goods_sku` (`goods_id`, `spec_values`, `price`, `market_price`, `stock`, `sku_code`) VALUES
+(10, '黑色', 89.00, 129.00, 150, 'MFC-BK'),
+(10, '白色', 89.00, 129.00, 140, 'MFC-WH'),
+(10, '红色', 89.00, 129.00, 130, 'MFC-RD'),
+(10, '藏青', 89.00, 129.00, 120, 'MFC-NV');
+
+-- 新增商品标签
+INSERT INTO `mb_goods_tag_relation` (`goods_id`, `tag_id`) VALUES
+(6, 1), (6, 2), (6, 3),
+(7, 1), (7, 3),
+(8, 3), (8, 4),
+(9, 4),
+(10, 4);
+
 -- 演示用首页轮播图（images 类型以 JSON 数组存储路径）
 UPDATE `mb_setting` SET `value` = '["/static/demo/banner-digital.png","/static/demo/banner-fashion.png","/static/demo/banner-home.png"]'
 WHERE `code` = 'client_home_banners';

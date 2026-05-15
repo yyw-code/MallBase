@@ -233,6 +233,8 @@ INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`
 (105, '客户端站点名称', 'client_site_name', 'Mall Base', 'input', NULL, NULL, NULL, NULL, 10),
 (105, '客户端图标', 'client_logo', '/static/client/logo.png', 'image', NULL, NULL, NULL, '推荐 1:1，建议 512×512 PNG 透明，<200KB', 20),
 (105, '启动屏图', 'client_launch_image', '/static/client/launch.png', 'image', NULL, NULL, NULL, 'App 启动全屏图，推荐 9:16，建议 1080×2340 JPG，<500KB', 30),
+(105, '启用启动页', 'client_splash_enabled', '1', 'switch', NULL, NULL, NULL, '关闭后客户端不再展示启动页', 110),
+(105, '启动页时长(ms)', 'client_splash_duration', '3000', 'input', NULL, NULL, NULL, '启动页自动关闭倒计时，单位毫秒，建议 2000-5000', 120),
 (105, '首页轮播图', 'client_home_banners', '["/static/client/banner-1.png","/static/client/banner-2.png","/static/client/banner-3.png"]', 'images', NULL, NULL, NULL, '推荐 16:9 或 2:1，建议 750×360 JPG/PNG，单张<300KB', 40),
 (105, '分享默认标题', 'client_share_title', '', 'input', NULL, NULL, NULL, NULL, 50),
 (105, '分享默认简介', 'client_share_desc', '', 'input', NULL, NULL, NULL, NULL, 60),
