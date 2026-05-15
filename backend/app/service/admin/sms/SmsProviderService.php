@@ -118,15 +118,25 @@ class SmsProviderService extends BaseService
 
         try {
             $manager = SmsDriverFactory::manager($provider);
-            // 用不存在的签名探测,若返回 OK 或 SignNotExist 等业务错误,说明凭证可用
+            // 用不存在的签名探测,若返回 OK 或"签名不存在/非法"等业务错误,说明凭证可用
             $manager->querySign('__mb_connection_probe__');
             return ['ok' => true, 'message' => '凭证可用'];
         } catch (\Throwable $e) {
             $message = $e->getMessage();
-            // 阿里云对"签名不存在"返回业务错误码,这恰好证明凭证有效
-            if (str_contains($message, 'NotFound') || str_contains($message, 'SignNotExist') || str_contains($message, '不存在')) {
-                return ['ok' => true, 'message' => '凭证可用(签名探测正常)'];
+            // 阿里云对"签名不存在/非法"返回业务错误码,这恰好证明 AccessKey 验证已通过
+            $businessErrorKeywords = [
+                'SMS_SIGNATURE_ILLEGAL', // 该账号下找不到对应签名
+                'SignNotExist',
+                'NotFound',
+                '找不到',
+                '不存在',
+            ];
+            foreach ($businessErrorKeywords as $keyword) {
+                if (str_contains($message, $keyword)) {
+                    return ['ok' => true, 'message' => '凭证可用(签名探测正常)'];
+                }
             }
+            // AccessKey 凭证错误的典型码:InvalidAccessKeyId.NotFound / SignatureDoesNotMatch / Forbidden.RAM
             return ['ok' => false, 'message' => $message];
         }
     }
