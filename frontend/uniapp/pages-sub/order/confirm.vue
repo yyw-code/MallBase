@@ -260,8 +260,12 @@ async function handleSubmit() {
       ? {
           source: 'sku',
           address_id: address.value.id,
-          sku_id: skuId.value,
-          quantity: quantity.value,
+          items: [
+            {
+              sku_id: Number(skuId.value),
+              quantity: Number(quantity.value) || 1,
+            },
+          ],
           buyer_remark: remark.value,
           idempotency_key: idempotencyKey.value,
         }
