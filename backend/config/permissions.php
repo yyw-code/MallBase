@@ -210,6 +210,21 @@ return [
                     'affix_tab' => 0,
                     'no_basic_layout' => 0,
                     'remark' => null,
+                ],
+                [
+                    'name' => '短信配置',
+                    'code' => 'SmsConfig',
+                    'type' => 1,
+                    'path' => '/sms',
+                    'icon' => 'lucide:message-square',
+                    'component' => null,
+                    'redirect' => null,
+                    'sort' => 10,
+                    'status' => 1,
+                    'is_show' => 1,
+                    'affix_tab' => 0,
+                    'no_basic_layout' => 0,
+                    'remark' => '服务商 / 签名 / 模板 / 场景绑定 / 频控设置',
                 ]
             ]
         ],
