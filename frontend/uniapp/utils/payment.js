@@ -1,0 +1,141 @@
+/**
+ * 微信支付触发器
+ *
+ * 调用方式：在已创建订单的页面调用 triggerPay(sn)，内部按运行平台自动分流：
+ *  - mp-weixin   → JSAPI（scene=mini），调 uni.requestPayment
+ *  - h5-wechat   → JSAPI（scene=offi），调 WeixinJSBridge.invoke('getBrandWCPayRequest')
+ *  - h5          → MWEB（scene=h5），拿到 mweb_url 后 window.location.href 跳转
+ *
+ * 不在前端传 openid：后端从已登录 user 表取，避免泄露 + 防篡改。
+ */
+
+import { payOrder } from '@/api/order/order'
+import { getPlatform } from '@/utils/platform'
+
+const PAY_METHOD_WECHAT = 1
+
+/**
+ * 根据当前 platform 决定 scene
+ * @returns {'mini'|'offi'|'h5'|null}
+ */
+function detectScene() {
+  const platform = getPlatform()
+  if (platform === 'mp-weixin') return 'mini'
+  if (platform === 'h5-wechat') return 'offi'
+  if (platform === 'h5') return 'h5'
+  return null
+}
+
+/**
+ * 调起 JSAPI 五元组（小程序）
+ * @param {{ appId: string, timeStamp: string, nonceStr: string, package: string, signType: string, paySign: string }} payload
+ */
+function invokeMiniRequestPayment(payload) {
+  return new Promise((resolve, reject) => {
+    uni.requestPayment({
+      provider: 'wxpay',
+      timeStamp: payload.timeStamp,
+      nonceStr: payload.nonceStr,
+      package: payload.package,
+      signType: payload.signType,
+      paySign: payload.paySign,
+      success: (res) => resolve(res),
+      fail: (err) => reject(err),
+    })
+  })
+}
+
+/**
+ * 调起公众号 JSAPI（WeixinJSBridge）
+ */
+function invokeOffiRequestPayment(payload) {
+  return new Promise((resolve, reject) => {
+    const launch = () => {
+      // eslint-disable-next-line no-undef
+      WeixinJSBridge.invoke(
+        'getBrandWCPayRequest',
+        {
+          appId: payload.appId,
+          timeStamp: payload.timeStamp,
+          nonceStr: payload.nonceStr,
+          package: payload.package,
+          signType: payload.signType,
+          paySign: payload.paySign,
+        },
+        (res) => {
+          if (res && res.err_msg === 'get_brand_wcpay_request:ok') {
+            resolve(res)
+          } else {
+            reject(res)
+          }
+        }
+      )
+    }
+    // eslint-disable-next-line no-undef
+    if (typeof WeixinJSBridge === 'undefined') {
+      document.addEventListener('WeixinJSBridgeReady', launch, false)
+    } else {
+      launch()
+    }
+  })
+}
+
+/**
+ * 跳转 MWEB
+ */
+function redirectMweb(mwebUrl) {
+  // #ifdef H5
+  window.location.href = mwebUrl
+  // #endif
+}
+
+/**
+ * 发起支付（统一入口）
+ *
+ * @param {string} sn 订单号
+ * @returns {Promise<{status: 'success'|'pending'|'fail', message?: string}>}
+ *   - success：JSAPI 已调起且 SDK 回调成功（订单是否真转 PAID 仍以服务端为准，需要轮询）
+ *   - pending：MWEB 已跳转，无法在前端判断结果
+ *   - fail：调起失败 / 用户取消
+ */
+export async function triggerPay(sn) {
+  const scene = detectScene()
+  if (!scene) {
+    return { status: 'fail', message: '当前环境不支持微信支付' }
+  }
+
+  let prepay
+  try {
+    prepay = await payOrder(sn, { scene, pay_method: PAY_METHOD_WECHAT })
+  } catch (e) {
+    return { status: 'fail', message: e?.message || '获取支付参数失败' }
+  }
+
+  const payload = prepay?.payload || {}
+
+  try {
+    if (scene === 'mini') {
+      await invokeMiniRequestPayment(payload)
+      return { status: 'success' }
+    }
+    if (scene === 'offi') {
+      await invokeOffiRequestPayment(payload)
+      return { status: 'success' }
+    }
+    if (scene === 'h5') {
+      const mwebUrl = payload.mweb_url || prepay?.mweb_url
+      if (!mwebUrl) {
+        return { status: 'fail', message: '未拿到 MWEB 跳转地址' }
+      }
+      redirectMweb(mwebUrl)
+      return { status: 'pending' }
+    }
+  } catch (e) {
+    return {
+      status: 'fail',
+      message: e?.errMsg || e?.err_msg || e?.message || '支付被取消',
+    }
+  }
+
+  return { status: 'fail', message: '未知支付场景' }
+}

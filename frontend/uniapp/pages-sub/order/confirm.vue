@@ -117,7 +117,8 @@ import { ref, computed, onUnmounted } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
 import { useCartStore } from '@/store/cart'
 import { getAddressList } from '@/api/user/address'
-import { createOrder, payOrder } from '@/api/order/order'
+import { createOrder } from '@/api/order/order'
+import { triggerPay } from '@/utils/payment'
 
 const cartStore = useCartStore()
 
@@ -277,13 +278,16 @@ async function handleSubmit() {
     const sn = order.sn
     const orderId = order.order_id
 
-    // 调用支付
-    try {
-      await payOrder(sn)
-      uni.redirectTo({ url: `/pages-sub/order/pay-result?sn=${sn}&order_id=${orderId}&status=success` })
-    } catch {
-      uni.redirectTo({ url: `/pages-sub/order/pay-result?sn=${sn}&order_id=${orderId}&status=fail` })
-    }
+    // 调用支付（按运行平台分流 mini/offi/h5，h5 会发生页面跳转）
+    const payResult = await triggerPay(sn)
+    const status = payResult.status === 'success'
+      ? 'success'
+      : payResult.status === 'pending'
+        ? 'pending'
+        : 'fail'
+    uni.redirectTo({
+      url: `/pages-sub/order/pay-result?sn=${sn}&order_id=${orderId}&status=${status}`,
+    })
   } catch {
     // 创建订单失败，刷新幂等 key 以允许重试
     idempotencyKey.value = generateKey()

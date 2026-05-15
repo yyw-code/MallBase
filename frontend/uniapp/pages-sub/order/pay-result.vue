@@ -1,6 +1,7 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onUnmounted } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
+import { getOrderDetail } from '@/api/order/order'
 
 const sn = ref('')
 const orderId = ref('')
@@ -8,12 +9,65 @@ const status = ref('fail')
 const amount = ref('')
 
 const isSuccess = computed(() => status.value === 'success')
+const isPending = computed(() => status.value === 'pending')
+
+// 轮询配置：2s/次，最多 30 次（共 1min）
+const POLL_INTERVAL_MS = 2000
+const POLL_MAX_TIMES = 30
+const ORDER_STATUS_PAID = 2 // 与后端 OrderStatus::PAID 保持一致
+
+let pollTimer = null
+let pollCount = 0
+
+function clearPoll() {
+  if (pollTimer) {
+    clearTimeout(pollTimer)
+    pollTimer = null
+  }
+}
+
+async function pollOrderStatus() {
+  if (!orderId.value || pollCount >= POLL_MAX_TIMES) {
+    clearPoll()
+    if (status.value === 'pending') {
+      status.value = 'fail'
+    }
+    return
+  }
+  pollCount += 1
+  try {
+    const detail = await getOrderDetail(orderId.value)
+    const orderStatus = Number(detail?.status ?? 0)
+    if (orderStatus === ORDER_STATUS_PAID) {
+      status.value = 'success'
+      clearPoll()
+      return
+    }
+  } catch {
+    // 忽略单次失败，继续下一轮
+  }
+  pollTimer = setTimeout(pollOrderStatus, POLL_INTERVAL_MS)
+}
 
 onLoad((query) => {
   sn.value = query?.sn || ''
   orderId.value = query?.order_id || ''
-  status.value = query?.status === 'success' ? 'success' : 'fail'
+  const queryStatus = query?.status
+  status.value = queryStatus === 'success'
+    ? 'success'
+    : queryStatus === 'pending'
+      ? 'pending'
+      : 'fail'
   amount.value = query?.amount || ''
+
+  // 兜底回调延迟 / 丢失：success 或 pending 都先轮询确认
+  if (status.value === 'success' || status.value === 'pending') {
+    pollTimer = setTimeout(pollOrderStatus, POLL_INTERVAL_MS)
+  }
+})
+
+onUnmounted(() => {
+  clearPoll()
 })
 
 function goOrderDetail() {
@@ -43,7 +97,9 @@ function goRetryPay() {
       </view>
 
       <!-- status text -->
-      <text class="result__title">{{ isSuccess ? '支付成功' : '支付失败' }}</text>
+      <text class="result__title">
+        {{ isSuccess ? '支付成功' : isPending ? '支付结果确认中…' : '支付失败' }}
+      </text>
 
       <!-- amount -->
       <text v-if="isSuccess && amount" class="result__amount">¥ {{ amount }}</text>
