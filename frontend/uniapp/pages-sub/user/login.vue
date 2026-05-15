@@ -275,7 +275,11 @@ const brandName = computed(() => (
   || 'MallBase'
 ))
 const brandSubtitle = computed(() => appStore.siteConfig?.site_slogan || '欢迎回来，继续你的品质购物体验')
-const loginLogo = computed(() => appStore.siteConfig?.client_auth_logo || appStore.siteConfig?.client_logo || '')
+const loginLogo = computed(() => (
+  appStore.siteConfig?.client_auth_logo
+  || appStore.siteConfig?.client_logo
+  || '/static/logo-light.png'
+))
 
 onLoad((query) => {
   if (query?.redirect) {
@@ -647,6 +651,12 @@ $glass-accent: #4fe3d7;
   display: flex;
   background: #0b1a4d;
   overflow: hidden;
+
+  /* #ifdef MP-WEIXIN */
+  /* 小程序顶部胶囊会占空间，整页 column 居中以避免内容堆顶 */
+  flex-direction: column;
+  justify-content: center;
+  /* #endif */
 }
 
 .nebula-bg {
@@ -712,7 +722,18 @@ $glass-accent: #4fe3d7;
   position: relative;
   z-index: 1;
   padding: 24rpx 48rpx calc(48rpx + env(safe-area-inset-bottom));
+
+  /* #ifdef MP-WEIXIN */
+  /* 小程序下整体居中，去掉顶部多余 padding；mb-navbar 仍按其自身占位 */
+  padding-top: 0;
+  /* #endif */
 }
+
+/* #ifdef MP-WEIXIN */
+.brand {
+  margin-top: 0 !important;
+}
+/* #endif */
 
 // ---- Brand ----
 .brand {
@@ -1103,8 +1124,8 @@ $glass-accent: #4fe3d7;
 // ---- Primary button ----
 .primary-btn {
   position: relative;
-  height: 104rpx;
-  border-radius: 32rpx;
+  height: 96rpx;
+  border-radius: 999rpx;
   background: rgba(255, 255, 255, 0.96);
   display: flex;
   align-items: center;
@@ -1145,8 +1166,8 @@ $glass-accent: #4fe3d7;
 // ---- WeChat one-tap (full-width) ----
 .btn-wechat {
   width: 100%;
-  height: 104rpx;
-  border-radius: 32rpx;
+  height: 96rpx;
+  border-radius: 999rpx;
   background: rgba(255, 255, 255, 0.14);
   display: flex;
   align-items: center;

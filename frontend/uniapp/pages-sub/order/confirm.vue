@@ -633,7 +633,7 @@ async function handleSubmit() {
 .submit-bar__btn {
   height: 88rpx;
   min-width: 260rpx;
-  border-radius: $mb-radius-sm;
+  border-radius: $mb-radius-full;
   background: $mb-color-primary;
   display: flex;
   align-items: center;

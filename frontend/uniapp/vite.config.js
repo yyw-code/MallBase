@@ -3,5 +3,12 @@ import uni from '@dcloudio/vite-plugin-uni'
 
 export default defineConfig({
   base: '/client/',
-  plugins: [uni()]
+  plugins: [uni()],
+  css: {
+    preprocessorOptions: {
+      scss: {
+        additionalData: `@import "@/uni.scss";`,
+      },
+    },
+  },
 })

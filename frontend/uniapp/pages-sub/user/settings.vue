@@ -51,7 +51,7 @@
         </view>
       </view>
 
-      <view class="cell">
+      <view v-if="splashRemoteEnabled" class="cell">
         <text class="cell__label">启动页</text>
         <view class="cell__right">
           <switch
@@ -99,8 +99,16 @@
 import { ref, computed } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { useUserStore } from '@/store/user'
+import { useAppStore } from '@/store/app'
 
 const userStore = useUserStore()
+const appStore = useAppStore()
+
+const splashRemoteEnabled = computed(() => {
+  const v = appStore.siteConfig?.client_splash_enabled
+  if (v === undefined || v === null || v === '') return true
+  return Number(v) === 1 || v === true || v === '1' || v === 'true'
+})
 
 const logoutLoading = ref(false)
 const cacheSize = ref('0 KB')

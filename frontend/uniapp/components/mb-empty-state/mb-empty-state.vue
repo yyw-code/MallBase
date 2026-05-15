@@ -113,10 +113,10 @@ const iconClass = computed(() => (normalizedIcon.value ? 'mb-empty__icon--text' 
 }
 
 .mb-empty__action {
-  min-width: 192rpx;
-  height: 72rpx;
-  padding: 0 40rpx;
-  border-radius: var(--radius-sm, 8rpx);
+  min-width: 224rpx;
+  height: 80rpx;
+  padding: 0 48rpx;
+  border-radius: 999rpx;
   background: var(--color-primary, #0d50d5);
   display: flex;
   align-items: center;

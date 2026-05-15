@@ -20,6 +20,8 @@ $mb-color-text-inverse: #ffffff;
 $mb-color-success: #34c759;
 $mb-color-warning: #f0ad4e;
 $mb-color-error: #ba1a1a;
+$mb-color-price:   #ff5a1f;
+$mb-color-star:    #f5a623;
 
 /* Border */
 $mb-color-border: #e0e4e8;
@@ -53,3 +55,14 @@ $mb-font-display: 64rpx;
 /* Shared commerce surface: Stitch uses tonal layering, not card shadows. */
 $mb-shadow-card: none;
 $mb-shadow-bar: 0 -1rpx 0 rgba(224, 228, 232, 0.9);
+
+/* Button geometry: pill-shaped, three sizes */
+$mb-btn-height-lg: 96rpx;
+$mb-btn-height-md: 72rpx;
+$mb-btn-height-sm: 56rpx;
+$mb-btn-padding-x-lg: 48rpx;
+$mb-btn-padding-x-md: 32rpx;
+$mb-btn-padding-x-sm: 20rpx;
+$mb-btn-font-lg: $mb-font-lg;
+$mb-btn-font-md: $mb-font-md;
+$mb-btn-font-sm: $mb-font-sm;

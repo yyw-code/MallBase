@@ -657,7 +657,7 @@ function goGoodsDetail(item) {
   align-items: center;
   justify-content: center;
   background-color: $mb-color-primary;
-  border-radius: $mb-radius-sm;
+  border-radius: $mb-radius-full;
   transition: opacity 0.15s;
 }
 

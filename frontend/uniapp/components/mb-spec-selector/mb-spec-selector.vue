@@ -29,6 +29,7 @@
               :key="val"
               class="mb-spec__tag"
               :class="{
+                'mb-spec__tag--color': isColorGroup(group.name),
                 'mb-spec__tag--active': selectedSpecs[group.name] === val,
                 'mb-spec__tag--disabled': isSpecDisabled(group.name, val),
               }"
@@ -137,6 +138,12 @@ function findSkuBySpecs(specs) {
 
   const selectedStr = selectedValues.join(',')
   return props.skuList.find((sku) => sku.spec_values === selectedStr) || null
+}
+
+function isColorGroup(name) {
+  if (!name) return false
+  const s = String(name).toLowerCase()
+  return s.includes('颜色') || s.includes('color') || s.includes('款式')
 }
 
 function isSpecDisabled(groupName, value) {
@@ -305,10 +312,21 @@ watch(currentStock, (stock) => {
 }
 
 .mb-spec__tag {
-  padding: 12rpx 32rpx;
-  border-radius: var(--radius-sm, 8rpx);
+  min-width: 96rpx;
+  height: 64rpx;
+  padding: 0 28rpx;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 16rpx;
   background: var(--color-bg-secondary, #faf8ff);
   border: 2rpx solid transparent;
+  box-sizing: border-box;
+}
+
+.mb-spec__tag--color {
+  border-radius: 999rpx;
+  padding: 0 36rpx;
 }
 
 .mb-spec__tag--active {
@@ -324,6 +342,7 @@ watch(currentStock, (stock) => {
 .mb-spec__tag-text {
   font-size: 26rpx;
   color: var(--color-text, #191b23);
+  line-height: 1;
 }
 
 .mb-spec__tag--active .mb-spec__tag-text {
@@ -371,15 +390,20 @@ watch(currentStock, (stock) => {
 
 .mb-spec__btn {
   height: 88rpx;
-  border-radius: var(--radius-sm, 8rpx);
+  border-radius: 999rpx;
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: opacity 0.15s;
+}
+
+.mb-spec__btn:active {
+  opacity: 0.85;
 }
 
 .mb-spec__btn--cart {
-  background: var(--color-bg-secondary, #faf8ff);
-  border: 2rpx solid var(--color-border, #e0e4e8);
+  background: #ffffff;
+  border: 2rpx solid var(--color-primary, #0d50d5);
 }
 
 .mb-spec__btn--buy {
@@ -399,7 +423,7 @@ watch(currentStock, (stock) => {
 .mb-spec__btn-text {
   font-size: 28rpx;
   font-weight: 600;
-  color: var(--color-text, #191b23);
+  color: var(--color-primary, #0d50d5);
 }
 
 .mb-spec__btn-text--light {
