@@ -27,13 +27,6 @@ CREATE TABLE `mb_goods_category` (
   KEY `idx_delete_time` (`delete_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='商品分类表';
 
--- 插入默认分类数据
-INSERT INTO `mb_goods_category` (`pid`, `name`, `sort`, `status`) VALUES
-(0, '手机数码', 1, 1),
-(0, '服装鞋帽', 2, 1),
-(0, '食品饮料', 3, 1),
-(0, '家居生活', 4, 1);
-
 -- -----------------------------
 -- 二、商品品牌表
 -- -----------------------------
@@ -54,12 +47,6 @@ CREATE TABLE `mb_goods_brand` (
   KEY `idx_delete_time` (`delete_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='商品品牌表';
 
--- 插入默认品牌数据
-INSERT INTO `mb_goods_brand` (`name`, `sort`, `status`) VALUES
-('Apple', 1, 1),
-('华为', 2, 1),
-('小米', 3, 1);
-
 -- -----------------------------
 -- 三、商品规格组表（如：颜色、尺码、内存）
 -- -----------------------------
@@ -79,12 +66,6 @@ CREATE TABLE `mb_goods_spec` (
   KEY `idx_delete_time` (`delete_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='商品规格组表';
 
--- 插入默认规格组数据
-INSERT INTO `mb_goods_spec` (`name`, `description`, `sort`, `status`) VALUES
-('颜色', '商品颜色规格', 1, 1),
-('内存', '商品内存规格', 2, 1),
-('尺码', '商品尺码规格', 3, 1);
-
 -- -----------------------------
 -- 四、商品规格值表（如：红色、XL、128G）
 -- -----------------------------
@@ -100,19 +81,6 @@ CREATE TABLE `mb_goods_spec_value` (
   KEY `idx_spec_id` (`spec_id`),
   KEY `idx_sort` (`sort`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='商品规格值表';
-
--- 插入默认规格值数据
-INSERT INTO `mb_goods_spec_value` (`spec_id`, `value`, `sort`) VALUES
-(1, '黑色', 1),
-(1, '白色', 2),
-(1, '金色', 3),
-(2, '128G', 1),
-(2, '256G', 2),
-(2, '512G', 3),
-(3, 'S', 1),
-(3, 'M', 2),
-(3, 'L', 3),
-(3, 'XL', 4);
 
 -- -----------------------------
 -- 五、商品规格模板表
@@ -211,13 +179,6 @@ CREATE TABLE `mb_goods_tag` (
   KEY `idx_status` (`status`),
   KEY `idx_delete_time` (`delete_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='商品标签表';
-
--- 插入默认标签数据
-INSERT INTO `mb_goods_tag` (`name`, `color`, `sort`) VALUES
-('新品上市', 'blue', 1),
-('限时特惠', 'red', 2),
-('热销推荐', 'orange', 3),
-('精选好物', 'green', 4);
 
 -- -----------------------------
 -- 九、商品-标签关联表
