@@ -172,7 +172,6 @@
 
         <view class="secondary-actions">
           <text class="secondary-action" @tap="handleForgotPassword">忘记密码</text>
-          <text class="secondary-action" @tap="goRegister">立即注册</text>
         </view>
 
         <view class="methods-divider">
@@ -644,9 +643,6 @@ function openAgreement(type) {
   })
 }
 
-function goRegister() {
-  uni.navigateTo({ url: '/pages-sub/user/register' })
-}
 </script>
 
 <style lang="scss" scoped>

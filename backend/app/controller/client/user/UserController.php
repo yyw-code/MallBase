@@ -23,23 +23,6 @@ class UserController extends BaseController
     protected string $serviceClass = UserService::class;
 
     /**
-     * 用户注册
-     */
-    public function register()
-    {
-        $data = $this->request->param(['mobile', 'password', 'nickname']);
-
-        if (empty($data['mobile'])) {
-            return $this->error('请输入手机号');
-        }
-
-        $this->validate($data, UserValidate::class . '.register');
-
-        $result = $this->service()->register($data['mobile'], $data['password'], 'mobile');
-        return $this->success($result, '注册成功');
-    }
-
-    /**
      * 用户登录(手机号 + 密码)
      */
     public function login()
@@ -92,25 +75,6 @@ class UserController extends BaseController
 
         $result = $this->service()->loginBySms($data['mobile'], $data['code']);
         return $this->success($result, '登录成功');
-    }
-
-    /**
-     * 用户名注册(账号密码,无 SMS)
-     */
-    public function registerByUsername()
-    {
-        $data = $this->request->param(['username', 'password', 'nickname']);
-
-        if (empty($data['username']) || empty($data['password'])) {
-            return $this->error('请输入用户名和密码');
-        }
-
-        $result = $this->service()->registerByUsername(
-            $data['username'],
-            $data['password'],
-            $data['nickname'] ?? null,
-        );
-        return $this->success($result, '注册成功');
     }
 
     /**

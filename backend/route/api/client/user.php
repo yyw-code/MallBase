@@ -4,12 +4,7 @@ use app\middleware\client\JwtAuth;
 use think\facade\Route;
 
 Route::group('user/auth', function () {
-    // 注册(手机号 + 密码,无 SMS,沿用历史路径)
-    Route::post('register', 'register');
-    // 注册(用户名 + 密码,无 SMS)
-    Route::post('register/username', 'registerByUsername');
-
-    // 登录(三种入口并存)
+    // 登录(三种入口并存,手机号 + 短信验证码登录会自动建号)
 
     Route::post('login/username', 'loginByUsername');       // 用户名 + 密码
     Route::post('login/sms', 'loginBySms');                 // 手机号 + SMS

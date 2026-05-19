@@ -30,47 +30,6 @@ class UserService extends BaseService
     protected string $modelClass = User::class;
 
     /**
-     * 用户注册
-     */
-    public function register(string $account, string $password, string $registerType): array
-    {
-        // C 端注册仅开放手机号路径,邮箱仅保留给后台管理员创建用户
-        $exists = $this->model()->where('mobile', $account)->find();
-        if ($exists) {
-            throw new BusinessException('该手机号已被注册');
-        }
-
-        // 创建用户
-        $user = $this->model();
-        $user->save([
-            'mobile' => $account,
-            'password' => $password,
-            'register_type' => $registerType,
-            'register_ip' => Request::ip(),
-            'nickname' => $this->generateNickname($registerType, $account),
-            'status' => 1,
-        ]);
-
-        // 生成 JWT Token
-        $jwtService = app()->make(JwtService::class);
-        $token = $jwtService->encode([
-            'user_id' => $user->id,
-            'account' => $account,
-            'register_type' => $registerType,
-        ]);
-
-        // 存储 refresh_token 到 Redis
-        $jwtCacheService = app()->make(JwtCacheService::class);
-        $jwtCacheService->storeRefreshToken(
-            $token['refresh_token'],
-            $user->id,
-            $jwtService->getRefreshExpire()
-        );
-
-        return $token;
-    }
-
-    /**
      * 用户登录(手机号 + 密码)
      */
     public function login(string $account, string $password): array
@@ -148,39 +107,6 @@ class UserService extends BaseService
         }
 
         return $this->finishLogin($user, $mobile);
-    }
-
-    /**
-     * 用户名注册(账号密码,无 SMS)
-     *
-     * 仅注册一个 username + password 账号,不要求 mobile,适合不愿暴露手机号的场景
-     */
-    public function registerByUsername(string $username, string $password, ?string $nickname = null): array
-    {
-        $username = trim($username);
-        if ($username === '' || !preg_match('/^[a-zA-Z][\w\-]{3,29}$/', $username)) {
-            throw new BusinessException('用户名需为 4-30 位字母/数字/下划线/横杠,且以字母开头');
-        }
-        if (mb_strlen($password) < 6) {
-            throw new BusinessException('密码至少 6 位');
-        }
-
-        $exists = $this->model()->where('username', $username)->find();
-        if ($exists !== null) {
-            throw new BusinessException('该用户名已被使用');
-        }
-
-        $user = $this->model();
-        $user->save([
-            'username'      => $username,
-            'password'      => $password,
-            'nickname'      => $nickname !== null && $nickname !== '' ? mb_substr($nickname, 0, 50) : $username,
-            'register_type' => RegisterType::H5,
-            'register_ip'   => Request::ip(),
-            'status'        => 1,
-        ]);
-
-        return $this->finishLogin($user, $username);
     }
 
     /**

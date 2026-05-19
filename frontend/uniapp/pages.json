@@ -125,12 +125,6 @@
           }
         },
         {
-          "path": "register",
-          "style": {
-            "navigationStyle": "custom"
-          }
-        },
-        {
           "path": "agreement",
           "style": {
             "navigationStyle": "custom"
