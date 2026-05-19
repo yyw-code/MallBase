@@ -23,6 +23,10 @@ import {
   getGoodsInfoApi,
   updateGoodsApi,
 } from '#/api/goods';
+import {
+  getFreightTemplateListApi,
+  type FreightTemplateApi,
+} from '#/api/setting/freight-template';
 
 export interface AttrDetail {
   id: string;
@@ -76,6 +80,7 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
     subtitle: '',
     category_id: undefined as number | undefined,
     brand_id: undefined as number | undefined,
+    freight_template_id: undefined as number | undefined,
     unit: '件',
     price: 0,
     market_price: 0,
@@ -106,6 +111,7 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
   /* ---------- 分类 / 品牌 / 标签 ---------- */
   const categoryTreeData = ref<any[]>([]);
   const brandOptions = ref<GoodsBrandApi.BrandItem[]>([]);
+  const freightTemplateOptions = ref<FreightTemplateApi.TemplateItem[]>([]);
   const tagOptions = ref<GoodsTagApi.TagItem[]>([]);
   const buildTree = (list: GoodsCategoryApi.CategoryItem[], pid = 0): any[] =>
     list.filter((item) => item.pid === pid)
@@ -662,13 +668,19 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
       brandOptions.value = brands;
       tagOptions.value = tags;
     } catch { /* silent */ }
+    // 运费模板独立加载：其失败不应阻塞分类 / 品牌 / 标签等核心选项
+    try {
+      const freightTemplates = await getFreightTemplateListApi({ status: 1, limit: 200 });
+      freightTemplateOptions.value = freightTemplates.list || [];
+    } catch { /* silent */ }
   };
 
   /* ---------- 重置 ---------- */
   const resetForm = () => {
     formRef.value?.resetFields();
     Object.assign(formData, {
-      name: '', subtitle: '', category_id: undefined, brand_id: undefined, unit: '件',
+      name: '', subtitle: '', category_id: undefined, brand_id: undefined,
+      freight_template_id: undefined, unit: '件',
       price: 0, market_price: 0, stock: 0, main_image: undefined, main_video: undefined, images: [],
       description: '', sort: 0, status: 1, is_on_sale: 0, is_recommend: 0, is_new: 0, is_hot: 0, tag_ids: [],
     });
@@ -690,6 +702,7 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
       Object.assign(formData, {
         name: detail.name || '', subtitle: detail.subtitle || '',
         category_id: detail.category_id || undefined, brand_id: detail.brand_id || undefined,
+        freight_template_id: detail.freight_template_id ?? undefined,
         unit: detail.unit || '件', price: detail.price || 0, market_price: detail.market_price || 0,
         stock: detail.stock || 0,
         main_image: detail.main_image
@@ -840,7 +853,7 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
 
   return {
     formData, rules, formRef, loading, activeTab, isFullscreen, isEdit,
-    toggleFullscreen, categoryTreeData, brandOptions, tagOptions,
+    toggleFullscreen, categoryTreeData, brandOptions, freightTemplateOptions, tagOptions,
     specType, attrs, canAddPic, getPicPreviewUrl, getPicUrl,
     getSkuPreviewImage,
     handleAddSpec, handleRemoveSpec, addSpecValue, removeSpecValue, toggleAddPic,

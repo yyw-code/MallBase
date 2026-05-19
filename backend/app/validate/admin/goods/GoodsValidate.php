@@ -18,6 +18,7 @@ class GoodsValidate extends Validate
         'subtitle' => 'max:200',
         'category_id' => 'require|integer',
         'brand_id' => 'integer',
+        'freight_template_id' => 'integer|egt:0',
         'price' => 'float|egt:0',
         'market_price' => 'float|egt:0',
         'stock' => 'integer|egt:0',
@@ -47,6 +48,8 @@ class GoodsValidate extends Validate
         'category_id.require' => '商品分类不能为空',
         'category_id.integer' => '商品分类必须是整数',
         'brand_id.integer' => '品牌必须是整数',
+        'freight_template_id.integer' => '运费模板必须是整数',
+        'freight_template_id.egt' => '运费模板不合法',
         'price.float' => '价格必须是数字',
         'price.egt' => '价格必须大于等于0',
         'market_price.float' => '市场价必须是数字',
@@ -73,14 +76,14 @@ class GoodsValidate extends Validate
      */
     protected $scene = [
         'create' => [
-            'name', 'subtitle', 'category_id', 'brand_id',
+            'name', 'subtitle', 'category_id', 'brand_id', 'freight_template_id',
             'price', 'market_price', 'stock', 'main_image', 'main_video', 'spec_type', 'spec_meta',
             'unit', 'sort', 'description',
             'status', 'is_on_sale', 'is_recommend', 'is_new', 'is_hot',
             'images', 'skus', 'tag_ids',
         ],
         'update' => [
-            'name', 'subtitle', 'category_id', 'brand_id',
+            'name', 'subtitle', 'category_id', 'brand_id', 'freight_template_id',
             'price', 'market_price', 'stock', 'main_image', 'main_video', 'spec_type', 'spec_meta',
             'unit', 'sort', 'description',
             'status', 'is_on_sale', 'is_recommend', 'is_new', 'is_hot',
@@ -119,6 +122,12 @@ class GoodsValidate extends Validate
             // stock 必须是大于等于0的整数
             if (isset($sku['stock']) && (!is_numeric($sku['stock']) || $sku['stock'] < 0)) {
                 return "SKU第" . ($index + 1) . "项库存必须大于等于0";
+            }
+
+            // weight 选填，填写时必须是大于等于0的数字（单位：克）
+            if (isset($sku['weight']) && $sku['weight'] !== ''
+                && (!is_numeric($sku['weight']) || $sku['weight'] < 0)) {
+                return "SKU第" . ($index + 1) . "项重量必须大于等于0";
             }
         }
 

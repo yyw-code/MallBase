@@ -21,7 +21,7 @@ const editId = computed(() => {
 
 const {
   formData, rules, formRef, loading, activeTab, isFullscreen, isEdit,
-  toggleFullscreen, categoryTreeData, brandOptions, tagOptions,
+  toggleFullscreen, categoryTreeData, brandOptions, freightTemplateOptions, tagOptions,
   specType, attrs, canAddPic, getPicPreviewUrl, getSkuPreviewImage,
   handleAddSpec, handleRemoveSpec, addSpecValue, removeSpecValue, toggleAddPic, handleSpecValueImageChange,
   specListRef, valueListRefs,
@@ -108,6 +108,12 @@ onMounted(() => {});
                   <a-select v-model:value="formData.brand_id" placeholder="请选择品牌" allow-clear style="width:240px">
                     <a-select-option v-for="b in brandOptions" :key="b.id" :value="b.id">{{ b.name }}</a-select-option>
                   </a-select>
+                </a-form-item>
+                <a-form-item label="运费模板">
+                  <a-select v-model:value="formData.freight_template_id" placeholder="不选则视为包邮" allow-clear style="width:240px">
+                    <a-select-option v-for="t in freightTemplateOptions" :key="t.id" :value="t.id">{{ t.name }}</a-select-option>
+                  </a-select>
+                  <span class="form-tip ml8">不选则该商品包邮</span>
                 </a-form-item>
                 <a-form-item label="单位">
                   <a-input v-model:value="formData.unit" placeholder="件 / kg / 个" style="width:140px" allow-clear />

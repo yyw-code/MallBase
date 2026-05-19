@@ -9,6 +9,7 @@ use app\model\goods\GoodsCategory;
 use app\model\goods\GoodsSku;
 use app\model\goods\GoodsTag;
 use app\model\goods\GoodsTagRelation;
+use app\model\setting\FreightTemplate;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
 
@@ -157,6 +158,7 @@ class GoodsService extends BaseService
 
         // 业务校验（事务外）
         $this->validateCategoryAndBrand($data);
+        $this->validateFreightTemplate($data);
         $this->validateSkuCodes($data['skus'] ?? [], null);
 
         // 事务内只做写入
@@ -209,6 +211,7 @@ class GoodsService extends BaseService
         }
 
         $this->validateCategoryAndBrand($data);
+        $this->validateFreightTemplate($data);
         $this->validateSkuCodes($data['skus'] ?? [], $id);
 
         // 事务内只做写入
@@ -322,6 +325,7 @@ class GoodsService extends BaseService
                     'stock' => $sku['stock'] ?? 0,
                     'image' => $sku['image'] ?? '',
                     'status' => $sku['status'] ?? 1,
+                    'weight' => isset($sku['weight']) && $sku['weight'] !== '' ? (float) $sku['weight'] : null,
                 ];
             }, $skus);
             $this->model(GoodsSku::class)->saveAll($data);
@@ -664,6 +668,27 @@ class GoodsService extends BaseService
             if (!$brand) {
                 throw new BusinessException('品牌不存在');
             }
+        }
+    }
+
+    /**
+     * 校验运费模板存在且启用（空 / 0 表示包邮，跳过校验）
+     *
+     * @param array $data 商品数据
+     * @throws BusinessException 模板不存在或已停用时抛出
+     */
+    protected function validateFreightTemplate(array $data): void
+    {
+        if (empty($data['freight_template_id'])) {
+            return;
+        }
+
+        $template = $this->model(FreightTemplate::class)->find($data['freight_template_id']);
+        if (!$template) {
+            throw new BusinessException('运费模板不存在');
+        }
+        if ((int) $template->status !== 1) {
+            throw new BusinessException('运费模板已停用');
         }
     }
 }

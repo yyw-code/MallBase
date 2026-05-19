@@ -19,6 +19,7 @@ export namespace GoodsApi {
     spec_type: 1 | 2;
     category_id: number;
     brand_id?: number;
+    freight_template_id?: number;
     name: string;
     subtitle?: string;
     main_image?: string;
@@ -97,6 +98,7 @@ export namespace GoodsApi {
     category_id: number;
     name: string;
     brand_id?: number;
+    freight_template_id?: number;
     subtitle?: string;
     main_image?: string;
     main_video?: string;
@@ -137,6 +139,7 @@ export namespace GoodsApi {
     category_id?: number;
     name?: string;
     brand_id?: number;
+    freight_template_id?: number;
     subtitle?: string;
     main_image?: string;
     main_video?: string;
