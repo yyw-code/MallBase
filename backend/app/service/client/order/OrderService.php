@@ -10,6 +10,9 @@ use app\model\order\Cart;
 use app\model\order\Order;
 use app\model\order\OrderItem;
 use app\model\order\OrderLog;
+use app\model\setting\FreightTemplate;
+use app\service\FreightCalculatorService;
+use app\service\dto\RegionPathDto;
 use app\service\order\OrderSnGenerator;
 use app\service\order\OrderStatusMachine;
 use app\service\order\StockService;
@@ -81,7 +84,7 @@ class OrderService extends BaseService
         try {
             $address = $this->assertOwnedAddress($userId, $addressId);
             $items   = $this->loadSelectedCartItems($userId, $cartIds);
-            $amounts = $this->calcAmounts($items);
+            $amounts = $this->calcAmounts($items, $this->regionPathOf($address));
 
             $result = $this->persistOrder(
                 userId: $userId,
@@ -132,7 +135,7 @@ class OrderService extends BaseService
         try {
             $address = $this->assertOwnedAddress($userId, $addressId);
             $resolved = $this->loadDirectBuyItems($items);
-            $amounts  = $this->calcAmounts($resolved);
+            $amounts  = $this->calcAmounts($resolved, $this->regionPathOf($address));
 
             $result = $this->persistOrder(
                 userId: $userId,
@@ -149,6 +152,68 @@ class OrderService extends BaseService
             $idem->release(self::IDEM_SCOPE_CREATE, $idemKey);
             throw $e;
         }
+    }
+
+    /**
+     * 订单试算
+     *
+     * 与下单同源的校验装配链路，但不进事务、不占幂等、不扣库存：
+     * 仅做地址校验 + 商品装配 + 金额计算，供确认页展示权威金额（含运费）。
+     *
+     * @param array<int>                                  $cartIds  source=cart 时的购物车行 ID
+     * @param array<int, array{sku_id:int, quantity:int}> $items    source=sku 时的直购项
+     * @return array{
+     *   items: array<int, array<string, mixed>>,
+     *   total_amount: string, freight_amount: string, discount_amount: string, pay_amount: string,
+     *   address: array<string, mixed>
+     * }
+     */
+    public function preview(int $userId, string $source, array $cartIds, array $items, int $addressId): array
+    {
+        $this->assertUserId($userId);
+
+        $address    = $this->assertOwnedAddress($userId, $addressId);
+        $regionPath = $this->regionPathOf($address);
+
+        if ($source === 'cart') {
+            $resolved = $this->loadSelectedCartItems($userId, array_map('intval', $cartIds));
+        } else {
+            if ($items === []) {
+                throw new BusinessException('请选择要购买的商品');
+            }
+            $resolved = $this->loadDirectBuyItems($items);
+        }
+
+        $amounts = $this->calcAmounts($resolved, $regionPath);
+
+        $previewItems = array_map(static fn(array $i): array => [
+            'sku_id'               => $i['sku_id'],
+            'goods_id'             => $i['goods_id'],
+            'goods_name'           => $i['goods_name'],
+            'goods_image'          => $i['goods_image'],
+            'goods_image_full_url' => buildUploadUrl((string) $i['goods_image']),
+            'sku_spec'             => $i['sku_spec'],
+            'unit_price'           => $i['unit_price'],
+            'quantity'             => $i['quantity'],
+            'subtotal'             => bcmul($i['unit_price'], (string) $i['quantity'], 2),
+        ], $resolved);
+
+        return [
+            'items'           => $previewItems,
+            'total_amount'    => $amounts['total_amount'],
+            'freight_amount'  => $amounts['freight_amount'],
+            'discount_amount' => $amounts['discount_amount'],
+            'pay_amount'      => $amounts['pay_amount'],
+            'address'         => [
+                'id'       => $addressId,
+                'name'     => $address['name'],
+                'phone'    => $address['phone'],
+                'province' => $address['province'],
+                'city'     => $address['city'],
+                'district' => $address['district'],
+                'address'  => $address['address'],
+            ],
+        ];
     }
 
     /**
@@ -452,9 +517,12 @@ class OrderService extends BaseService
     }
 
     /**
-     * 校验地址归属并返回落库所需字段
+     * 校验地址归属并返回落库 / 运费计算所需字段
      *
-     * @return array{name:string, phone:string, province:string, city:string, district:string, address:string}
+     * @return array{
+     *   name:string, phone:string, province:string, city:string, district:string, address:string,
+     *   province_id:int, city_id:int, district_id:int, street_id:int
+     * }
      */
     private function assertOwnedAddress(int $userId, int $addressId): array
     {
@@ -469,20 +537,39 @@ class OrderService extends BaseService
         }
 
         return [
-            'name'     => (string) $address->name,
-            'phone'    => (string) $address->phone,
-            'province' => (string) ($address->province ?? ''),
-            'city'     => (string) ($address->city ?? ''),
-            'district' => (string) ($address->district ?? ''),
-            'address'  => (string) ($address->address ?? ''),
+            'name'        => (string) $address->receiver_name,
+            'phone'       => (string) $address->receiver_mobile,
+            'province'    => (string) $address->province_name,
+            'city'        => (string) $address->city_name,
+            'district'    => (string) $address->district_name,
+            'address'     => (string) $address->address_detail,
+            'province_id' => (int) $address->province_id,
+            'city_id'     => (int) $address->city_id,
+            'district_id' => (int) $address->district_id,
+            'street_id'   => (int) $address->street_id,
         ];
+    }
+
+    /**
+     * 由地址数组构造运费计算用的四级区域路径
+     *
+     * @param array{province_id:int, city_id:int, district_id:int, street_id:int} $address
+     */
+    private function regionPathOf(array $address): RegionPathDto
+    {
+        return new RegionPathDto(
+            provinceId: (int) $address['province_id'],
+            cityId: (int) $address['city_id'],
+            districtId: (int) $address['district_id'],
+            streetId: (int) $address['street_id'],
+        );
     }
 
     /**
      * 加载选中的购物车行并聚合为下单项
      *
      * @param array<int, int> $cartIds
-     * @return array<int, array{sku_id:int, goods_id:int, goods_name:string, goods_image:string, sku_spec:string, unit_price:string, quantity:int, cart_id:int}>
+     * @return array<int, array{sku_id:int, goods_id:int, goods_name:string, goods_image:string, sku_spec:string, unit_price:string, quantity:int, cart_id:int, freight_template_id:int, weight:float}>
      */
     private function loadSelectedCartItems(int $userId, array $cartIds): array
     {
@@ -524,14 +611,16 @@ class OrderService extends BaseService
             $this->assertSaleable($sku, $goods);
 
             $items[] = [
-                'cart_id'     => (int) $row['id'],
-                'sku_id'      => $skuId,
-                'goods_id'    => $goodsId,
-                'goods_name'  => (string) ($goods['name'] ?? ''),
-                'goods_image' => (string) ($goods['main_image'] ?? ''),
-                'sku_spec'    => (string) ($sku['spec_values'] ?? ''),
-                'unit_price'  => (string) $sku['price'],
-                'quantity'    => $qty,
+                'cart_id'             => (int) $row['id'],
+                'sku_id'              => $skuId,
+                'goods_id'            => $goodsId,
+                'goods_name'          => (string) ($goods['name'] ?? ''),
+                'goods_image'         => (string) ($goods['main_image'] ?? ''),
+                'sku_spec'            => (string) ($sku['spec_values'] ?? ''),
+                'unit_price'          => (string) $sku['price'],
+                'quantity'            => $qty,
+                'freight_template_id' => (int) ($goods['freight_template_id'] ?? 0),
+                'weight'              => (float) ($sku['weight'] ?? 0),
             ];
         }
         return $items;
@@ -541,7 +630,7 @@ class OrderService extends BaseService
      * 立即购买：解析传入的 SKU/数量为下单项
      *
      * @param array<int, array{sku_id:int, quantity:int}> $items
-     * @return array<int, array{sku_id:int, goods_id:int, goods_name:string, goods_image:string, sku_spec:string, unit_price:string, quantity:int}>
+     * @return array<int, array{sku_id:int, goods_id:int, goods_name:string, goods_image:string, sku_spec:string, unit_price:string, quantity:int, freight_template_id:int, weight:float}>
      */
     private function loadDirectBuyItems(array $items): array
     {
@@ -574,13 +663,15 @@ class OrderService extends BaseService
             $this->assertSaleable($sku, $goods);
 
             $resolved[] = [
-                'sku_id'      => $skuId,
-                'goods_id'    => $goodsId,
-                'goods_name'  => (string) ($goods['name'] ?? ''),
-                'goods_image' => (string) ($goods['main_image'] ?? ''),
-                'sku_spec'    => (string) ($sku['spec_values'] ?? ''),
-                'unit_price'  => (string) $sku['price'],
-                'quantity'    => (int) $it['quantity'],
+                'sku_id'              => $skuId,
+                'goods_id'            => $goodsId,
+                'goods_name'          => (string) ($goods['name'] ?? ''),
+                'goods_image'         => (string) ($goods['main_image'] ?? ''),
+                'sku_spec'            => (string) ($sku['spec_values'] ?? ''),
+                'unit_price'          => (string) $sku['price'],
+                'quantity'            => (int) $it['quantity'],
+                'freight_template_id' => (int) ($goods['freight_template_id'] ?? 0),
+                'weight'              => (float) ($sku['weight'] ?? 0),
             ];
         }
         return $resolved;
@@ -589,19 +680,20 @@ class OrderService extends BaseService
     /**
      * 计算订单金额
      *
-     * MVP 不接入优惠/运费计算，保留字段以便后续迭代不改 Schema
+     * 运费按 freight_template_id 分组、各组接 FreightCalculatorService 计算后求和；
+     * 优惠暂未接入，保留字段以便后续迭代不改 Schema。
      *
-     * @param array<int, array{unit_price:string, quantity:int}> $items
+     * @param array<int, array{unit_price:string, quantity:int, freight_template_id?:int, weight?:float}> $items
      * @return array{total_amount:string, freight_amount:string, discount_amount:string, pay_amount:string}
      */
-    private function calcAmounts(array $items): array
+    private function calcAmounts(array $items, RegionPathDto $regionPath): array
     {
         $total = '0.00';
         foreach ($items as $item) {
             $sub = bcmul($item['unit_price'], (string) $item['quantity'], 2);
             $total = bcadd($total, $sub, 2);
         }
-        $freight  = '0.00';
+        $freight  = $this->calcFreight($items, $regionPath);
         $discount = '0.00';
         $pay      = bcsub(bcadd($total, $freight, 2), $discount, 2);
 
@@ -611,6 +703,89 @@ class OrderService extends BaseService
             'discount_amount' => $discount,
             'pay_amount'      => $pay,
         ];
+    }
+
+    /**
+     * 计算订单运费
+     *
+     * 规则：
+     *  - items 按 freight_template_id 分组，每组按模板 charge_type 累计件数/重量后独立计算，求和
+     *  - freight_template_id 为空/0、模板不存在或已停用 → 该组归为包邮（运费 0）
+     *  - 按重计费时 totalCount 单位为千克：SKU weight 字段单位为克，故 ÷1000
+     *
+     * @param array<int, array{quantity:int, freight_template_id?:int, weight?:float}> $items
+     */
+    private function calcFreight(array $items, RegionPathDto $regionPath): string
+    {
+        if ($items === []) {
+            return '0.00';
+        }
+
+        // 按运费模板分组
+        $groups = [];
+        foreach ($items as $item) {
+            $templateId = (int) ($item['freight_template_id'] ?? 0);
+            $groups[$templateId][] = $item;
+        }
+
+        // 批量查启用中的模板，停用/不存在者后续降级为包邮
+        $templateIds = array_values(array_filter(
+            array_keys($groups),
+            static fn(int $id): bool => $id > 0,
+        ));
+        $chargeTypeMap = [];
+        if ($templateIds !== []) {
+            $rows = $this->model(FreightTemplate::class)
+                ->whereIn('id', $templateIds)
+                ->where('status', 1)
+                ->column('charge_type', 'id');
+            $chargeTypeMap = is_array($rows) ? $rows : [];
+        }
+
+        if ($chargeTypeMap === []) {
+            return '0.00'; // 无启用中的运费模板，全部包邮
+        }
+
+        $calculator = app()->make(FreightCalculatorService::class);
+        $freight = '0.00';
+        foreach ($groups as $templateId => $groupItems) {
+            if ($templateId <= 0 || !isset($chargeTypeMap[$templateId])) {
+                continue; // 包邮 / 模板失效降级包邮
+            }
+            $totalCount = $this->sumChargeCount($groupItems, (string) $chargeTypeMap[$templateId]);
+            if ($totalCount <= 0) {
+                continue; // 0 件 / 0 重量不计运费
+            }
+            try {
+                $result = $calculator->calculate($templateId, $regionPath, $totalCount);
+            } catch (BusinessException) {
+                // 并发停用等竞态：该组降级包邮，不阻断下单 / 试算
+                continue;
+            }
+            $freight = bcadd($freight, sprintf('%.2f', $result->fee), 2);
+        }
+
+        return $freight;
+    }
+
+    /**
+     * 按模板计费方式累计 totalCount：piece 按件数，weight 按千克
+     *
+     * @param array<int, array{quantity:int, weight?:float}> $items
+     */
+    private function sumChargeCount(array $items, string $chargeType): float
+    {
+        $total = 0.0;
+        foreach ($items as $item) {
+            $quantity = (int) $item['quantity'];
+            if ($chargeType === 'weight') {
+                $weightGram = (float) ($item['weight'] ?? 0);
+                $total += $weightGram * $quantity / 1000.0;
+            } else {
+                $total += $quantity;
+            }
+        }
+        return $total;
     }
 
     /**
@@ -693,7 +868,7 @@ class OrderService extends BaseService
         }
         $rows = $this->model(GoodsSku::class)
             ->whereIn('id', $skuIds)
-            ->column('id, goods_id, spec_values, price, stock, status', 'id');
+            ->column('id, goods_id, spec_values, price, stock, status, weight', 'id');
         return is_array($rows) ? $rows : [];
     }
 
@@ -709,7 +884,7 @@ class OrderService extends BaseService
         $rows = $this->model(Goods::class)
             ->whereIn('id', $goodsIds)
             ->whereNull('delete_time')
-            ->column('id, name, main_image, status, is_on_sale', 'id');
+            ->column('id, name, main_image, status, is_on_sale, freight_template_id', 'id');
         return is_array($rows) ? $rows : [];
     }
 

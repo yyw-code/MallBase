@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Unit\Service\Order;
 
 use app\service\client\order\OrderService;
+use app\service\dto\RegionPathDto;
 use mall_base\exception\BusinessException;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
@@ -13,7 +14,9 @@ use ReflectionClass;
  * 买家订单服务纯逻辑单元测试
  *
  * 覆盖（全部在 DB 访问之前生效的分支）：
- *  - calcAmounts      金额计算（bcmath 2 位精度）
+ *  - calcAmounts      金额计算（bcmath 2 位精度，含运费汇总）
+ *  - calcFreight      无 DB 分支：空 items / 全包邮组 → 运费 0
+ *  - sumChargeCount   按件 / 按重（克→千克换算）计费数量累计
  *  - buildIdempotencyKey  幂等 key 装配（scope + 清洗 + 64 位截断 + 随机兜底）
  *  - assertUserId     登录校验
  *  - assertSaleable   SKU / Goods 可售校验
@@ -22,6 +25,9 @@ use ReflectionClass;
  *
  * 下单事务 / 幂等抢占 / 真实库存扣减路径依赖 MySQL + Redis，
  * 留到 OrderService 集成测试里通过真实数据库覆盖（见 CartServiceTest 同款分层）。
+ * calcFreight 命中运费模板的真实计算（单模板、多模板分组、停用降级）依赖
+ * FreightTemplate 表，归 Feature 层经 /client/api/order/preview 覆盖；
+ * 运费算法本身已由 FreightCalculatorServiceTest 完整覆盖。
  */
 final class OrderServiceTest extends TestCase
 {
@@ -36,7 +42,7 @@ final class OrderServiceTest extends TestCase
 
     public function testCalcAmountsWithEmptyItemsReturnsZeroes(): void
     {
-        $result = $this->invokePrivate('calcAmounts', [[]]);
+        $result = $this->invokePrivate('calcAmounts', [[], $this->beijingPath()]);
         $this->assertSame(
             [
                 'total_amount'    => '0.00',
@@ -53,7 +59,7 @@ final class OrderServiceTest extends TestCase
         $items = [
             ['unit_price' => '12.50', 'quantity' => 2],
         ];
-        $result = $this->invokePrivate('calcAmounts', [$items]);
+        $result = $this->invokePrivate('calcAmounts', [$items, $this->beijingPath()]);
 
         $this->assertSame('25.00', $result['total_amount']);
         $this->assertSame('0.00', $result['freight_amount']);
@@ -68,7 +74,7 @@ final class OrderServiceTest extends TestCase
             ['unit_price' => '100.00','quantity' => 1],   // 100.00
             ['unit_price' => '0.50',  'quantity' => 10],  // 5.00
         ];
-        $result = $this->invokePrivate('calcAmounts', [$items]);
+        $result = $this->invokePrivate('calcAmounts', [$items, $this->beijingPath()]);
 
         // 29.97 + 100.00 + 5.00 = 134.97
         $this->assertSame('134.97', $result['total_amount']);
@@ -82,7 +88,7 @@ final class OrderServiceTest extends TestCase
             ['unit_price' => '0.10', 'quantity' => 1],
             ['unit_price' => '0.20', 'quantity' => 1],
         ];
-        $result = $this->invokePrivate('calcAmounts', [$items]);
+        $result = $this->invokePrivate('calcAmounts', [$items, $this->beijingPath()]);
 
         $this->assertSame('0.30', $result['total_amount']);
         $this->assertSame('0.30', $result['pay_amount']);
@@ -94,9 +100,80 @@ final class OrderServiceTest extends TestCase
         $items = [
             ['unit_price' => '33.333', 'quantity' => 3],
         ];
-        $result = $this->invokePrivate('calcAmounts', [$items]);
+        $result = $this->invokePrivate('calcAmounts', [$items, $this->beijingPath()]);
 
         $this->assertSame('99.99', $result['total_amount']);
+    }
+
+    public function testCalcAmountsWithFreightTemplateZeroStillFreeShipping(): void
+    {
+        // 商品未绑定运费模板（freight_template_id=0）→ 包邮，运费 0
+        $items = [
+            ['unit_price' => '50.00', 'quantity' => 1, 'freight_template_id' => 0, 'weight' => 0.0],
+        ];
+        $result = $this->invokePrivate('calcAmounts', [$items, $this->beijingPath()]);
+
+        $this->assertSame('50.00', $result['total_amount']);
+        $this->assertSame('0.00', $result['freight_amount']);
+        $this->assertSame('50.00', $result['pay_amount']);
+    }
+
+    // ------------------------- calcFreight -------------------------
+
+    public function testCalcFreightWithEmptyItemsReturnsZero(): void
+    {
+        $result = $this->invokePrivate('calcFreight', [[], $this->beijingPath()]);
+        $this->assertSame('0.00', $result);
+    }
+
+    public function testCalcFreightAllItemsWithoutTemplateReturnsZero(): void
+    {
+        // 全部 freight_template_id=0 → 不触发 DB 查询，直接包邮
+        $items = [
+            ['quantity' => 2, 'freight_template_id' => 0, 'weight' => 500.0],
+            ['quantity' => 1, 'freight_template_id' => 0, 'weight' => 0.0],
+        ];
+        $result = $this->invokePrivate('calcFreight', [$items, $this->beijingPath()]);
+        $this->assertSame('0.00', $result);
+    }
+
+    // ------------------------- sumChargeCount -------------------------
+
+    public function testSumChargeCountByPieceAccumulatesQuantity(): void
+    {
+        // 按件：忽略 weight，累计 quantity = 2 + 3 = 5
+        $items = [
+            ['quantity' => 2, 'weight' => 999.0],
+            ['quantity' => 3, 'weight' => 10.0],
+        ];
+        $result = $this->invokePrivate('sumChargeCount', [$items, 'piece']);
+        $this->assertSame(5.0, $result);
+    }
+
+    public function testSumChargeCountByWeightConvertsGramToKilogram(): void
+    {
+        // 按重：(500×2 + 250×1) 克 / 1000 = 1.25 千克
+        $items = [
+            ['quantity' => 2, 'weight' => 500.0],
+            ['quantity' => 1, 'weight' => 250.0],
+        ];
+        $result = $this->invokePrivate('sumChargeCount', [$items, 'weight']);
+        $this->assertSame(1.25, $result);
+    }
+
+    public function testSumChargeCountByWeightTreatsMissingWeightAsZero(): void
+    {
+        $items = [
+            ['quantity' => 3], // 无 weight 字段
+        ];
+        $result = $this->invokePrivate('sumChargeCount', [$items, 'weight']);
+        $this->assertSame(0.0, $result);
+    }
+
+    public function testSumChargeCountWithEmptyItemsReturnsZero(): void
+    {
+        $this->assertSame(0.0, $this->invokePrivate('sumChargeCount', [[], 'piece']));
+        $this->assertSame(0.0, $this->invokePrivate('sumChargeCount', [[], 'weight']));
     }
 
     // ------------------------- buildIdempotencyKey -------------------------
@@ -266,6 +343,16 @@ final class OrderServiceTest extends TestCase
     }
 
     // ------------------------- helpers -------------------------
+
+    private function beijingPath(): RegionPathDto
+    {
+        return new RegionPathDto(
+            provinceId: 1001,
+            cityId: 2001,
+            districtId: 3001,
+            streetId: 4001,
+        );
+    }
 
     /**
      * @return array<string, mixed>

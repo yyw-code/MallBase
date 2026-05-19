@@ -74,6 +74,43 @@ class OrderController extends BaseController
     }
 
     /**
+     * 订单试算
+     *
+     * 与 create 同源入参（不含 buyer_remark / idempotency_key），
+     * 返回含运费的服务端权威金额，供确认页展示。不进事务、不扣库存。
+     *
+     * body:
+     *  - source: cart | sku
+     *  - cart_ids: int[]（source=cart 必填）
+     *  - items: [{sku_id, quantity}]（source=sku 必填）
+     *  - address_id: int（必填，运费依赖收货区域）
+     */
+    public function preview()
+    {
+        $userId = (int) ($this->request->user_id ?? 0);
+        $data = $this->request->param(['source', 'cart_ids', 'items', 'address_id']);
+        $this->validate($data, OrderValidate::class . '.preview');
+
+        $items = array_map(
+            static fn($row): array => [
+                'sku_id'   => (int) ($row['sku_id'] ?? 0),
+                'quantity' => (int) ($row['quantity'] ?? 0),
+            ],
+            (array) ($data['items'] ?? []),
+        );
+
+        $result = $this->service()->preview(
+            userId: $userId,
+            source: (string) $data['source'],
+            cartIds: array_map('intval', (array) ($data['cart_ids'] ?? [])),
+            items: $items,
+            addressId: (int) $data['address_id'],
+        );
+
+        return $this->success($result, '试算成功');
+    }
+
+    /**
      * 支付入口
      *
      * - pay_method=9 (MOCK)：保留旧 Mock 路径，e2e 测试与本地开发用

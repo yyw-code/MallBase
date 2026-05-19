@@ -48,8 +48,9 @@ class OrderValidate extends Validate
     ];
 
     protected $scene = [
-        'create' => ['source', 'cart_ids', 'items', 'address_id', 'buyer_remark', 'idempotency_key'],
-        'pay'    => ['pay_method', 'scene'],
-        'cancel' => ['reason'],
+        'create'  => ['source', 'cart_ids', 'items', 'address_id', 'buyer_remark', 'idempotency_key'],
+        'preview' => ['source', 'cart_ids', 'items', 'address_id'],
+        'pay'     => ['pay_method', 'scene'],
+        'cancel'  => ['reason'],
     ];
 }
