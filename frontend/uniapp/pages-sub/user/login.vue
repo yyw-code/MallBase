@@ -166,7 +166,7 @@
           </view>
         </view>
 
-        <view class="primary-btn" :class="{ 'primary-btn--loading': loading }" @tap="handlePasswordLogin">
+        <view class="primary-btn" :class="{ 'primary-btn--loading': loading }" @tap="handleLogin">
           <text class="primary-btn-text">{{ loading ? '登录中...' : '登录' }}</text>
         </view>
 
@@ -404,6 +404,14 @@ async function handleSmsLogin() {
     await onLoginSuccess(await loginBySms(phone.value, smsCode.value))
   } catch (_) { /* handled */ }
   finally { loading.value = false }
+}
+
+function handleLogin() {
+  if (loginMode.value === 'sms') {
+    handleSmsLogin()
+  } else {
+    handlePasswordLogin()
+  }
 }
 
 async function handlePasswordLogin() {

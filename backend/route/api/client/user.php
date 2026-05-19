@@ -10,9 +10,10 @@ Route::group('user/auth', function () {
     Route::post('register/username', 'registerByUsername');
 
     // 登录(三种入口并存)
-    Route::post('login', 'login');                          // 手机号 + 密码
+
     Route::post('login/username', 'loginByUsername');       // 用户名 + 密码
     Route::post('login/sms', 'loginBySms');                 // 手机号 + SMS
+    Route::post('login', 'login');                          // 手机号 + 密码
 
     // 短信验证码下发(scene 由参数指定)
     Route::post('sms/send', 'sendSmsCode');

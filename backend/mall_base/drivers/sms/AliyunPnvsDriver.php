@@ -123,11 +123,18 @@ class AliyunPnvsDriver extends BaseSmsDriver
             $resp = $this->client->checkSmsVerifyCode($req);
             $body = $resp->body;
 
+            // code=OK 仅代表接口调用成功,验证码是否正确取决于 model.verifyResult
             if (($body->code ?? '') !== 'OK') {
                 $this->setError($this->formatError(
                     (string) ($body->code ?? 'UNKNOWN'),
                     (string) ($body->message ?? '验证码校验失败')
                 ));
+                return false;
+            }
+
+            $verifyResult = $body->model->verifyResult ?? '';
+            if ($verifyResult !== 'PASS') {
+                $this->setError('验证码错误或已过期');
                 return false;
             }
 
