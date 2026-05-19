@@ -56,7 +56,9 @@
     <view class="card delivery-card">
       <text class="delivery-card__label">配送方式</text>
       <view class="delivery-card__right">
-        <text class="delivery-card__value">快递配送（免运费）</text>
+        <text class="delivery-card__value">
+          {{ !previewResult || displayFreight > 0 ? '快递配送' : '快递配送（免运费）' }}
+        </text>
       </view>
     </view>
 
@@ -77,16 +79,18 @@
     <view class="card summary-card">
       <view class="summary-row">
         <text class="summary-row__label">商品金额</text>
-        <mb-price :value="goodsTotal" size="sm" color="var(--color-text)" />
+        <mb-price :value="displayGoodsTotal" size="sm" color="var(--color-text)" />
       </view>
       <view class="summary-row">
         <text class="summary-row__label">运费</text>
-        <text class="summary-row__free">免运费</text>
+        <text v-if="!previewResult" class="summary-row__free">待计算</text>
+        <text v-else-if="displayFreight === 0" class="summary-row__free">免运费</text>
+        <mb-price v-else :value="displayFreight" size="sm" color="var(--color-text)" />
       </view>
       <view class="summary-divider" />
       <view class="summary-row summary-row--total">
         <text class="summary-row__label">合计</text>
-        <mb-price :value="goodsTotal" size="md" color="var(--color-text-title)" />
+        <mb-price :value="displayPayTotal" size="md" color="var(--color-text-title)" />
       </view>
     </view>
 
@@ -95,7 +99,7 @@
       <view class="submit-bar__inner">
         <view class="submit-bar__price">
           <text class="submit-bar__sup">TOTAL AMOUNT</text>
-          <mb-price :value="goodsTotal" size="lg" color="var(--color-primary, #0d50d5)" />
+          <mb-price :value="displayPayTotal" size="lg" color="var(--color-primary, #0d50d5)" />
         </view>
         <view
           class="submit-bar__btn"
@@ -113,11 +117,11 @@
 </template>
 
 <script setup>
-import { ref, computed, onUnmounted } from 'vue'
+import { ref, computed, watch, onUnmounted } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
 import { useCartStore } from '@/store/cart'
 import { getAddressList } from '@/api/user/address'
-import { createOrder } from '@/api/order/order'
+import { createOrder, previewOrder } from '@/api/order/order'
 import { triggerPay } from '@/utils/payment'
 
 const cartStore = useCartStore()
@@ -130,6 +134,8 @@ const remark = ref('')
 const submitting = ref(false)
 const idempotencyKey = ref('')
 const orderItems = ref([])
+// 后端订单试算结果（含权威运费），为 null 时回退本地兜底
+const previewResult = ref(null)
 
 /**
  * 生成幂等 key，防止重复提交
@@ -225,6 +231,47 @@ const goodsTotal = computed(() => {
     0,
   )
 })
+
+// 金额一律以后端试算结果为准，未返回前用本地求和兜底首屏渲染
+const displayGoodsTotal = computed(() =>
+  previewResult.value ? Number(previewResult.value.total_amount) : goodsTotal.value,
+)
+const displayFreight = computed(() =>
+  previewResult.value ? Number(previewResult.value.freight_amount) : 0,
+)
+const displayPayTotal = computed(() =>
+  previewResult.value ? Number(previewResult.value.pay_amount) : goodsTotal.value,
+)
+
+/**
+ * 调用后端订单试算，获取含运费的权威金额
+ */
+async function fetchPreview() {
+  if (!address.value || !isAddressValid.value || orderItems.value.length === 0) {
+    previewResult.value = null
+    return
+  }
+  const payload =
+    source.value === 'sku'
+      ? {
+          source: 'sku',
+          address_id: address.value.id,
+          items: [{ sku_id: Number(skuId.value), quantity: Number(quantity.value) || 1 }],
+        }
+      : {
+          source: 'cart',
+          address_id: address.value.id,
+          cart_ids: orderItems.value.map((item) => item.id),
+        }
+  try {
+    previewResult.value = await previewOrder(payload)
+  } catch {
+    previewResult.value = null
+  }
+}
+
+// 收货地址变化（默认地址加载完成 / 用户重新选择）后重新试算
+watch(address, fetchPreview)
 
 function maskPhone(phone) {
   if (!phone || phone.length < 7) return phone || ''
