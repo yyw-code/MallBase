@@ -49,18 +49,22 @@ class PrepayService extends BaseService
     }
 
     /**
-     * 发起预下单
+     * 发起预下单（按订单 ID 入参）
+     *
+     * 设计说明：
+     *  - 路径参数使用订单 ID（数值、稳定主键、便于安全约束）
+     *  - out_trade_no 仍由 order.sn 派生，保证日志、微信后台可读性
      *
      * @return array{out_trade_no:string, scene:int, prepay_id:string, mweb_url:string, payload:array<string,mixed>}
      */
-    public function prepay(int $userId, string $sn, string $sceneCode): array
+    public function prepayById(int $userId, int $orderId, string $sceneCode): array
     {
         $scene = PayScene::fromCode($sceneCode);
         if ($scene === null) {
             throw new BusinessException('支付场景不合法');
         }
 
-        $order = $this->loadPayableOrder($userId, $sn);
+        $order = $this->loadPayableOrderById($userId, $orderId);
         $openid = $this->resolveOpenid($userId, $scene);
 
         // 防重：查同 scene + 未过期的 PREPAY
@@ -102,10 +106,10 @@ class PrepayService extends BaseService
         ];
     }
 
-    private function loadPayableOrder(int $userId, string $sn): Order
+    private function loadPayableOrderById(int $userId, int $orderId): Order
     {
         /** @var Order|null $order */
-        $order = Order::where('sn', $sn)
+        $order = Order::where('id', $orderId)
             ->where('user_id', $userId)
             ->whereNull('delete_time')
             ->find();

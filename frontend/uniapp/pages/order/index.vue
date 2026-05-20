@@ -292,7 +292,7 @@ async function handleAction(key, order) {
     })
   } else if (key === 'pay') {
     try {
-      await payOrder(order.sn)
+      await payOrder(order.id)
       uni.navigateTo({
         url: `/pages-sub/order/pay-result?sn=${order.sn}&order_id=${order.id}&status=success`,
       })

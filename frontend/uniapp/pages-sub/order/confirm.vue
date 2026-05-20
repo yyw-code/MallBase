@@ -330,7 +330,7 @@ async function handleSubmit() {
     const orderId = order.order_id
 
     // 调用支付（按运行平台分流 mini/offi/h5，h5 会发生页面跳转）
-    const payResult = await triggerPay(sn)
+    const payResult = await triggerPay(orderId)
     const status = payResult.status === 'success'
       ? 'success'
       : payResult.status === 'pending'

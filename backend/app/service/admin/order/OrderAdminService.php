@@ -7,6 +7,7 @@ namespace app\service\admin\order;
 use app\model\order\Order;
 use app\model\order\OrderItem;
 use app\model\order\OrderLog;
+use app\model\order\PaymentLog;
 use app\model\order\RefundOrder;
 use app\service\order\OrderStatusMachine;
 use app\service\order\StockService;
@@ -66,6 +67,87 @@ class OrderAdminService extends BaseService
                 operatorId: $adminId,
                 remark: sprintf('发货：%s %s', $company, $sn),
             );
+        });
+    }
+
+    /**
+     * 订单改价（仅 PENDING_PAY）
+     *
+     * 业务规则：
+     *  - 运费 ≥ 0；优惠允许负数（视为加价）
+     *  - 应付金额由后端权威重算：pay_amount = total + freight - discount，且必须 > 0
+     *  - 事务内同步将旧 PREPAY 流水改为 SUPERSEDED，避免 PrepayService::findReusablePrepay
+     *    用过期金额的 prepay_id 拉起支付
+     *  - 仅写入 OrderLog 做审计，不触发状态机（同状态自环）
+     *
+     * @param int         $orderId
+     * @param string      $freight  非负金额字符串
+     * @param string      $discount 任意金额字符串（负数=加价）
+     * @param int         $adminId
+     * @param string|null $reason
+     */
+    public function adjustPrice(
+        int $orderId,
+        string $freight,
+        string $discount,
+        int $adminId,
+        ?string $reason = null
+    ): void {
+        $order = $this->findOrder($orderId);
+        if ((int) $order->status !== OrderStatus::PENDING_PAY) {
+            throw new BusinessException('仅待支付订单允许改价');
+        }
+        if (bccomp($freight, '0', 2) < 0) {
+            throw new BusinessException('运费不能为负');
+        }
+
+        $newPay = bcsub(bcadd((string) $order->total_amount, $freight, 2), $discount, 2);
+        if (bccomp($newPay, '0', 2) !== 1) {
+            throw new BusinessException('改价后应付金额必须大于 0');
+        }
+
+        // 事务外快照旧值，事务内只做写入
+        $oldPay      = (string) $order->pay_amount;
+        $oldFreight  = (string) $order->freight_amount;
+        $oldDiscount = (string) $order->discount_amount;
+        $ip          = request()->ip();
+        $remarkPart  = $reason !== null && $reason !== ''
+            ? '; 原因:' . mb_substr($reason, 0, 200)
+            : '';
+        $remark = sprintf(
+            '改价: 应付 %s→%s,运费 %s→%s,优惠 %s→%s%s',
+            $oldPay,
+            $newPay,
+            $oldFreight,
+            $freight,
+            $oldDiscount,
+            $discount,
+            $remarkPart
+        );
+
+        $this->transaction(function () use ($order, $freight, $discount, $newPay, $adminId, $remark, $ip): void {
+            // 1) 写订单金额
+            $order->freight_amount  = $freight;
+            $order->discount_amount = $discount;
+            $order->pay_amount      = $newPay;
+            $order->save();
+
+            // 2) 顶替旧 prepay 流水，避免复用过期金额
+            $this->model(PaymentLog::class)
+                ->where('order_id', (int) $order->id)
+                ->where('event_type', PaymentLog::EVENT_PREPAY)
+                ->update(['event_type' => PaymentLog::EVENT_SUPERSEDED]);
+
+            // 3) 审计日志（同状态自环，仅记录改价动作）
+            OrderLog::create([
+                'order_id'      => (int) $order->id,
+                'from_status'   => OrderStatus::PENDING_PAY,
+                'to_status'     => OrderStatus::PENDING_PAY,
+                'operator_type' => OperatorType::ADMIN,
+                'operator_id'   => $adminId,
+                'remark'        => mb_substr($remark, 0, 255),
+                'ip'            => $ip !== '' ? $ip : null,
+            ]);
         });
     }
 
@@ -259,7 +341,7 @@ class OrderAdminService extends BaseService
 
     // ---------------- 内部 ----------------
 
-    private function findOrder(int $orderId): Order
+    protected function findOrder(int $orderId): Order
     {
         /** @var Order|null $order */
         $order = $this->model()->where('id', $orderId)->whereNull('delete_time')->find();

@@ -100,6 +100,16 @@ export namespace OrderApi {
     reason?: string;
   }
 
+  /** 改价参数 */
+  export interface AdjustPriceParams {
+    /** 运费（≥0），数字或字符串均可，后端 bcmath 重算 */
+    freight_amount: number | string;
+    /** 优惠（允许负数=加价） */
+    discount_amount: number | string;
+    /** 调整原因（可选，≤255） */
+    reason?: string;
+  }
+
   /** 枚举选项项 */
   export interface EnumOption {
     value: number;
@@ -142,6 +152,16 @@ export async function shipOrderApi(id: number, data: OrderApi.ShipParams) {
  */
 export async function closeOrderApi(id: number, data?: OrderApi.CloseParams) {
   return requestClient.post(`/order/close/${id}`, data ?? {});
+}
+
+/**
+ * 订单改价（仅 PENDING_PAY；后端权威重算 pay_amount，并顶替旧 PREPAY 流水）
+ */
+export async function adjustOrderPriceApi(
+  id: number,
+  data: OrderApi.AdjustPriceParams,
+) {
+  return requestClient.post<void>(`/order/adjustPrice/${id}`, data);
 }
 
 /**

@@ -1,7 +1,7 @@
 /**
  * 微信支付触发器
  *
- * 调用方式：在已创建订单的页面调用 triggerPay(sn)，内部按运行平台自动分流：
+ * 调用方式：在已创建订单的页面调用 triggerPay(orderId)，内部按运行平台自动分流：
  *  - mp-weixin   → JSAPI（scene=mini），调 uni.requestPayment
  *  - h5-wechat   → JSAPI（scene=offi），调 WeixinJSBridge.invoke('getBrandWCPayRequest')
  *  - h5          → MWEB（scene=h5），拿到 mweb_url 后 window.location.href 跳转
@@ -92,13 +92,13 @@ function redirectMweb(mwebUrl) {
 /**
  * 发起支付（统一入口）
  *
- * @param {string} sn 订单号
+ * @param {number|string} orderId 订单 ID（mb_order.id）
  * @returns {Promise<{status: 'success'|'pending'|'fail', message?: string}>}
  *   - success：JSAPI 已调起且 SDK 回调成功（订单是否真转 PAID 仍以服务端为准，需要轮询）
  *   - pending：MWEB 已跳转，无法在前端判断结果
  *   - fail：调起失败 / 用户取消
  */
-export async function triggerPay(sn) {
+export async function triggerPay(orderId) {
   const scene = detectScene()
   if (!scene) {
     return { status: 'fail', message: '当前环境不支持微信支付' }
@@ -106,7 +106,7 @@ export async function triggerPay(sn) {
 
   let prepay
   try {
-    prepay = await payOrder(sn, { scene, pay_method: PAY_METHOD_WECHAT })
+    prepay = await payOrder(orderId, { scene, pay_method: PAY_METHOD_WECHAT })
   } catch (e) {
     return { status: 'fail', message: e?.message || '获取支付参数失败' }
   }

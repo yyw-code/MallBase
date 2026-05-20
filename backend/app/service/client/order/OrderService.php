@@ -219,18 +219,27 @@ class OrderService extends BaseService
     /**
      * Mock 支付（MVP 不接真实渠道）
      *
-     * 真实渠道接入时，将本方法包装在 PaymentAdapter 后面，OrderService 内部流程不变
+     * 真实渠道接入时，将本方法包装在 PaymentAdapter 后面，OrderService 内部流程不变。
+     *
+     * 安全边界：
+     *  - 通过 order.id + user_id 复合条件加载，保证只有订单归属人能触发支付
+     *  - trade_no 仍以 sn 为可读前缀，便于日志/对账定位
      */
-    public function pay(string $sn, int $payMethod, ?string $tradeNo = null): array
+    public function pay(int $orderId, int $userId, int $payMethod, ?string $tradeNo = null): array
     {
+        $this->assertUserId($userId);
         if (!PayMethod::isValid($payMethod)) {
             throw new BusinessException('支付方式不合法');
         }
 
         /** @var Order|null $order */
-        $order = $this->model()->where('sn', $sn)->whereNull('delete_time')->find();
+        $order = $this->model()
+            ->where('id', $orderId)
+            ->where('user_id', $userId)
+            ->whereNull('delete_time')
+            ->find();
         if ($order === null) {
-            throw new BusinessException('订单不存在');
+            throw new BusinessException('订单不存在或不属于当前用户');
         }
         if ((int) $order->status !== OrderStatus::PENDING_PAY) {
             throw new BusinessException('订单已支付或已关闭');

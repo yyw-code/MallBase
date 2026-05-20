@@ -167,4 +167,48 @@ test.describe('Order admin page', () => {
     const shipBtn = row.getByRole('button', { name: /发\s*货/ });
     await expect(shipBtn).toBeVisible({ timeout: 8000 });
   });
+
+  test('改价：无待支付订单优雅跳过，有订单则校验接口与按钮', async ({
+    page,
+  }) => {
+    await page.goto('/auth/login?e2e=1');
+    const loginResult = await authLogin(page);
+    await expect(page).not.toHaveURL(/\/auth\/login/);
+
+    const token = loginResult?.accessToken;
+    test.skip(!token, '登录未返回 access token，跳过');
+    const headers = { Authorization: `Bearer ${token}` };
+
+    const pendingRes = await page.request.get(
+      `${backendBaseUrl}/admin/api/order/list?status=0&limit=1`,
+      { headers },
+    );
+    expect(pendingRes.ok()).toBeTruthy();
+    const pendingJson = (await pendingRes.json()) as ApiResponse<OrderListResponse>;
+    test.skip(pendingJson.code !== 200, 'order/list 未返回 200');
+    const pending = pendingJson.data?.list?.[0];
+    test.skip(!pending, '当前环境无待支付订单，跳过改价断言');
+
+    // 后端直接校验：缺失必填字段应报错
+    const emptyRes = await page.request.post(
+      `${backendBaseUrl}/admin/api/order/adjustPrice/${pending!.id}`,
+      { data: { discount_amount: '', freight_amount: '' }, headers },
+    );
+    const emptyJson = (await emptyRes.json()) as ApiResponse<unknown>;
+    expect(emptyJson.code).not.toBe(200);
+
+    // 页面侧：改价按钮仅对 status=0 渲染
+    await page.goto('/order');
+    await expect(
+      page.locator('input[placeholder="订单号（支持模糊）"]'),
+    ).toBeVisible({ timeout: 8000 });
+    await page
+      .locator('input[placeholder="订单号（支持模糊）"]')
+      .fill(pending!.sn);
+    await page.getByRole('button', { name: /搜\s*索/ }).click();
+
+    const row = page.getByRole('row', { name: new RegExp(pending!.sn) });
+    const adjustBtn = row.getByRole('button', { name: /改\s*价/ });
+    await expect(adjustBtn).toBeVisible({ timeout: 8000 });
+  });
 });

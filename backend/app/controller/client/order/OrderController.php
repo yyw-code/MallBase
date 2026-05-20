@@ -117,17 +117,27 @@ class OrderController extends BaseController
      * - pay_method=1 (WECHAT)：调 PrepayService 发起预下单，返回前端调起参数；
      *   订单真正转 PAID 由微信回调走 NotifyService → OrderService::confirmPaid
      *
-     * @param string $sn 订单号
+     * @param int|string $id 订单 ID（路径参数）
      */
-    public function pay($sn)
+    public function pay($id)
     {
+        $orderId = (int) $id;
+        if ($orderId <= 0) {
+            throw new BusinessException('订单ID无效');
+        }
+
         $data = $this->request->param(['pay_method', 'scene']);
         $this->validate($data, OrderValidate::class . '.pay');
+
+        $userId = (int) ($this->request->user_id ?? 0);
+        if ($userId <= 0) {
+            throw new BusinessException('未登录');
+        }
 
         $payMethod = (int) $data['pay_method'];
 
         if ($payMethod === PayMethod::MOCK) {
-            $result = $this->service()->pay((string) $sn, $payMethod);
+            $result = $this->service()->pay($orderId, $userId, $payMethod);
             return $this->success($result, '支付成功');
         }
 
@@ -136,13 +146,9 @@ class OrderController extends BaseController
             if ($scene === '') {
                 throw new BusinessException('请指定支付场景');
             }
-            $userId = (int) ($this->request->user_id ?? 0);
-            if ($userId <= 0) {
-                throw new BusinessException('未登录');
-            }
             /** @var PrepayService $prepayService */
             $prepayService = app()->make(PrepayService::class);
-            $result = $prepayService->prepay($userId, (string) $sn, $scene);
+            $result = $prepayService->prepayById($userId, $orderId, $scene);
             return $this->success($result, '支付参数已生成');
         }
 

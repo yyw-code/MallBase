@@ -18,6 +18,14 @@ use mall_base\exception\BusinessException;
  *  - AppID 按 scene 切换（mini 走小程序 AppID，offi 走公众号 AppID，h5 无 AppID）
  *  - 任一凭据缺失直接抛 BusinessException，禁止用空字符串调远端
  *
+ * 凭据约束（EasyWeChat 6.x V3 + 平台公钥模式）：
+ *  - `certificate`：必须传**商户 API 证书** apiclient_cert.pem（X.509 格式），
+ *    EasyWeChat 在 V3 请求签名头里会 openssl_x509_parse 该证书取序列号，
+ *    传平台公钥（PUBLIC KEY）会触发 "Read the $certificate failed" 报错。
+ *  - `platform_certs`：必须是**关联数组**，key=public_key_id，value=公钥文件路径；
+ *    传 list 数组会让 Merchant::normalizePlatformCerts() 在构造期对每个证书
+ *    eagerly 调用 getSerialNo() → 同样触发 x509 parse 失败。
+ *
  * @see \app\service\client\WechatAppFactory  小程序/公众号 Factory 的姊妹范式
  */
 class WechatPayFactory
@@ -32,33 +40,42 @@ class WechatPayFactory
      */
     public function build(): PayApplication
     {
-        $mchId       = trim((string) getSystemSetting('pay_wechat_mchid', ''));
-        $apiV3Key    = trim((string) getSystemSetting('pay_wechat_api_v3_key', ''));
-        $serialNo    = trim((string) getSystemSetting('pay_wechat_cert_serial_no', ''));
-        $privateKey  = trim((string) getSystemSetting('pay_wechat_private_key', ''));
-        $platformKey = trim((string) getSystemSetting('pay_wechat_platform_public_key', ''));
-        $platformId  = trim((string) getSystemSetting('pay_wechat_platform_public_key_id', ''));
+        $mchId        = trim((string) getSystemSetting('pay_wechat_mchid', ''));
+        $apiV3Key     = trim((string) getSystemSetting('pay_wechat_api_v3_key', ''));
+        $serialNo     = trim((string) getSystemSetting('pay_wechat_cert_serial_no', ''));
+        $privateKey   = trim((string) getSystemSetting('pay_wechat_private_key', ''));
+        $merchantCert = trim((string) getSystemSetting('pay_wechat_merchant_cert', ''));
+        $platformKey  = trim((string) getSystemSetting('pay_wechat_platform_public_key', ''));
+        $platformId   = trim((string) getSystemSetting('pay_wechat_platform_public_key_id', ''));
 
         $this->assertNotEmpty($mchId, '商户号 MCHID');
         $this->assertNotEmpty($apiV3Key, 'APIv3 密钥');
         $this->assertNotEmpty($serialNo, '商户证书序列号');
         $this->assertNotEmpty($privateKey, '商户 API 私钥');
+        if ($merchantCert === '') {
+            throw new BusinessException(
+                '商户 API 证书 未配置，请在后台「设置 → 支付配置」上传 apiclient_cert.pem'
+            );
+        }
         $this->assertNotEmpty($platformKey, 'V3 平台公钥');
         $this->assertNotEmpty($platformId, '平台公钥 ID');
 
-        $privateKeyPath  = $this->resolveCertPath($privateKey);
-        $platformKeyPath = $this->resolveCertPath($platformKey);
+        $privateKeyPath   = $this->resolveCertPath($privateKey);
+        $merchantCertPath = $this->resolveCertPath($merchantCert);
+        $platformKeyPath  = $this->resolveCertPath($platformKey);
 
+        // platform_certs 必须是关联数组：key=public_key_id, value=公钥路径。
+        // 传 list 形式会触发 Merchant::normalizePlatformCerts() 在构造期
+        // 调用 getSerialNo() → openssl_x509_parse 平台公钥失败。
         return new PayApplication([
-            'mch_id'           => $mchId,
-            'secret_key'       => $apiV3Key,
-            'certificate_serial_no' => $serialNo,
-            'private_key'      => $privateKeyPath,
-            'certificate'      => $platformKeyPath,
-            'platform_certs'   => [$platformKeyPath],
-            'public_key_id'    => $platformId,
+            'mch_id'         => $mchId,
+            'secret_key'     => $apiV3Key,
+            'private_key'    => $privateKeyPath,
+            'certificate'    => $merchantCertPath,
+            'platform_certs' => [$platformId => $platformKeyPath],
+            'public_key_id'  => $platformId,
             // 显式给空字符串避免 Merchant 构造缺键告警
-            'v2_secret_key'    => '',
+            'v2_secret_key'  => '',
         ]);
     }
 
@@ -88,6 +105,7 @@ class WechatPayFactory
             'APIv3 密钥'          => 'pay_wechat_api_v3_key',
             '商户证书序列号'      => 'pay_wechat_cert_serial_no',
             '商户 API 私钥'       => 'pay_wechat_private_key',
+            '商户 API 证书'       => 'pay_wechat_merchant_cert',
             'V3 平台公钥'         => 'pay_wechat_platform_public_key',
             '平台公钥 ID'         => 'pay_wechat_platform_public_key_id',
         ];

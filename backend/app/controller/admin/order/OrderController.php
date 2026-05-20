@@ -6,6 +6,7 @@ namespace app\controller\admin\order;
 use app\service\admin\order\OrderAdminService;
 use app\common\enum\OrderStatus;
 use app\common\enum\PayMethod;
+use app\validate\admin\order\OrderAdjustValidate;
 use mall_base\base\BaseController;
 use mall_base\exception\BusinessException;
 
@@ -84,6 +85,33 @@ class OrderController extends BaseController
             reason: $reason !== '' ? $reason : null,
         );
         return $this->success(null, '关闭成功');
+    }
+
+    /**
+     * 订单改价（仅 PENDING_PAY）
+     *
+     * 校验后由 Service 在事务内：
+     *  - 重算 pay_amount = total + freight - discount
+     *  - 将该订单旧 PREPAY 流水标记为 SUPERSEDED，避免复用过期金额的 prepay_id
+     *  - 写入 OrderLog（同状态 → 同状态，仅作审计）
+     */
+    public function adjustPrice($id)
+    {
+        $adminId = (int) ($this->request->admin_id ?? 0);
+        if ($adminId <= 0) {
+            throw new BusinessException('管理员身份无效');
+        }
+        $data = $this->request->param(['freight_amount', 'discount_amount', 'reason']);
+        $this->validate($data, OrderAdjustValidate::class . '.adjust');
+
+        $this->service()->adjustPrice(
+            orderId:  (int) $id,
+            freight:  (string) ($data['freight_amount'] ?? '0'),
+            discount: (string) ($data['discount_amount'] ?? '0'),
+            adminId:  $adminId,
+            reason:   isset($data['reason']) && $data['reason'] !== '' ? (string) $data['reason'] : null,
+        );
+        return $this->success(null, '改价成功');
     }
 
     /**

@@ -14,6 +14,7 @@ import {
 } from '#/api/order';
 import { useTableCrud } from '#/composables/useTableCrud';
 
+import AdjustPriceModal from './adjust-price-modal.vue';
 import DetailDrawer from './detail-drawer.vue';
 import ShipModal from './ship-modal.vue';
 
@@ -126,6 +127,23 @@ const openShip = (record: OrderApi.OrderRecord) => {
 };
 
 const onShipSuccess = async () => {
+  await loadData(buildQuery());
+};
+
+/* ---------------- 改价弹窗 ---------------- */
+const adjustModalOpen = ref(false);
+const adjustTargetOrder = ref<null | OrderApi.OrderRecord>(null);
+
+const openAdjustPrice = (record: OrderApi.OrderRecord) => {
+  if (record.status !== 0) {
+    message.warning('仅待支付订单可改价');
+    return;
+  }
+  adjustTargetOrder.value = record;
+  adjustModalOpen.value = true;
+};
+
+const onAdjustSuccess = async () => {
   await loadData(buildQuery());
 };
 
@@ -297,6 +315,15 @@ onMounted(() => {
               发货
             </a-button>
             <a-button
+              v-if="record.status === 0"
+              type="link"
+              size="small"
+              v-access:code="'SystemOrderAdjustPrice'"
+              @click="openAdjustPrice(record)"
+            >
+              改价
+            </a-button>
+            <a-button
               v-if="[0, 10].includes(record.status)"
               type="link"
               danger
@@ -323,6 +350,13 @@ onMounted(() => {
       v-model:open="shipModalOpen"
       :order="shipTargetOrder"
       @success="onShipSuccess"
+    />
+
+    <AdjustPriceModal
+      v-if="hasAccessByCodes(['SystemOrderAdjustPrice'])"
+      v-model:open="adjustModalOpen"
+      :order="adjustTargetOrder"
+      @success="onAdjustSuccess"
     />
   </div>
 </template>

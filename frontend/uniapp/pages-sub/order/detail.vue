@@ -368,7 +368,7 @@ async function handleAction(key) {
     })
   } else if (key === 'pay') {
     try {
-      await payOrder(order.value.sn)
+      await payOrder(order.value.id)
       uni.redirectTo({
         url: `/pages-sub/order/pay-result?sn=${order.value.sn}&order_id=${order.value.id}&status=success`,
       })
