@@ -89,16 +89,28 @@ function redirectMweb(mwebUrl) {
   // #endif
 }
 
+const PAY_METHOD_MOCK = 9
+
 /**
  * 发起支付（统一入口）
  *
  * @param {number|string} orderId 订单 ID（mb_order.id）
+ * @param {number} [payMethod] 支付方式 code（1=微信，9=Mock）。默认微信。
  * @returns {Promise<{status: 'success'|'pending'|'fail', message?: string}>}
- *   - success：JSAPI 已调起且 SDK 回调成功（订单是否真转 PAID 仍以服务端为准，需要轮询）
+ *   - success：Mock 直接成功 / JSAPI 已调起且 SDK 回调成功
  *   - pending：MWEB 已跳转，无法在前端判断结果
- *   - fail：调起失败 / 用户取消
+ *   - fail：调起失败 / 用户取消 / 当前环境不支持
  */
-export async function triggerPay(orderId) {
+export async function triggerPay(orderId, payMethod = PAY_METHOD_WECHAT) {
+  if (payMethod === PAY_METHOD_MOCK) {
+    try {
+      await payOrder(orderId, { pay_method: PAY_METHOD_MOCK })
+      return { status: 'success' }
+    } catch (e) {
+      return { status: 'fail', message: e?.message || 'Mock 支付失败' }
+    }
+  }
+
   const scene = detectScene()
   if (!scene) {
     return { status: 'fail', message: '当前环境不支持微信支付' }
@@ -106,7 +118,7 @@ export async function triggerPay(orderId) {
 
   let prepay
   try {
-    prepay = await payOrder(orderId, { scene, pay_method: PAY_METHOD_WECHAT })
+    prepay = await payOrder(orderId, { scene, pay_method: payMethod })
   } catch (e) {
     return { status: 'fail', message: e?.message || '获取支付参数失败' }
   }

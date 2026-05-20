@@ -188,7 +188,8 @@ INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`
 -- 设置项：1041 PaymentBasic 支付基础（总开关）
 INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`, `rules`, `placeholder`, `remark`, `sort`) VALUES
 (1041, '微信支付状态', 'payment_wechat_enabled', '0', 'switch', NULL, NULL, NULL, NULL, 10),
-(1041, '支付宝状态', 'payment_alipay_enabled', '0', 'switch', NULL, NULL, NULL, NULL, 20);
+(1041, '支付宝状态', 'payment_alipay_enabled', '0', 'switch', NULL, NULL, NULL, NULL, 20),
+(1041, 'Mock 支付（仅测试）', 'payment_mock_enabled', '0', 'switch', NULL, NULL, NULL, '仅测试用：启用后 pay_method=9 的请求会跳过真实支付，直接把订单标记为已支付。生产环境严禁开启。', 30);
 
 -- 设置项：1042 PaymentWechat 微信支付V3
 -- 证书/密钥统一走 secure_upload：文件落到 backend/storage/cert/，不进 public/uploads/

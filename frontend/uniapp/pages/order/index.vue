@@ -108,15 +108,56 @@
       actionText="去逛逛"
       @action="goShopping"
     />
+
+    <!-- 支付方式选择 -->
+    <mb-pay-method-sheet
+      :visible="sheetVisible"
+      :methods="payMethods"
+      :loading="payLoading"
+      :amount="pendingPayOrder ? (pendingPayOrder.pay_amount || pendingPayOrder.total_amount) : ''"
+      @select="onPayMethodSelect"
+      @close="closeSheet"
+    />
   </view>
 </template>
 
 <script setup>
 import { ref, computed } from 'vue'
 import { onShow, onReachBottom } from '@dcloudio/uni-app'
-import { getOrderList, payOrder, cancelOrder, confirmReceive } from '@/api/order/order'
+import { getOrderList, cancelOrder, confirmReceive } from '@/api/order/order'
+import { usePayFlow } from '@/utils/usePayFlow'
 import config from '@/config/index'
 import { isLoggedIn } from '@/utils/auth'
+
+const {
+  sheetVisible,
+  methods: payMethods,
+  loading: payLoading,
+  startPay,
+  invokePay,
+  closeSheet,
+} = usePayFlow()
+
+const pendingPayOrder = ref(null)
+
+function redirectToPayResult(order, payResult) {
+  if (!order) return
+  const status = payResult.status === 'success'
+    ? 'success'
+    : payResult.status === 'pending'
+      ? 'pending'
+      : 'fail'
+  uni.navigateTo({
+    url: `/pages-sub/order/pay-result?sn=${order.sn}&order_id=${order.id}&status=${status}`,
+  })
+}
+
+async function onPayMethodSelect(code) {
+  const order = pendingPayOrder.value
+  if (!order) return
+  const payResult = await invokePay(code)
+  if (payResult) redirectToPayResult(order, payResult)
+}
 
 const STATUS_MAP = {
   0:  { label: '待付款', theme: 'primary' },
@@ -291,16 +332,9 @@ async function handleAction(key, order) {
       },
     })
   } else if (key === 'pay') {
-    try {
-      await payOrder(order.id)
-      uni.navigateTo({
-        url: `/pages-sub/order/pay-result?sn=${order.sn}&order_id=${order.id}&status=success`,
-      })
-    } catch {
-      uni.navigateTo({
-        url: `/pages-sub/order/pay-result?sn=${order.sn}&order_id=${order.id}&status=fail`,
-      })
-    }
+    pendingPayOrder.value = order
+    const payResult = await startPay(order.id)
+    if (payResult) redirectToPayResult(order, payResult)
   } else if (key === 'confirm') {
     uni.showModal({
       title: '提示',

@@ -6,4 +6,5 @@ use think\facade\Route;
 // 路径：/client/api/setting/basic
 Route::group('setting', function () {
     Route::get('basic', 'basic');
+    Route::get('payMethods', 'payMethods');
 })->prefix('client.ConfigController/');

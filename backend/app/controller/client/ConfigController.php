@@ -35,4 +35,17 @@ class ConfigController extends BaseController
         return $this->success($data, '获取成功')
             ->header(['Cache-Control' => 'public, max-age=60']);
     }
+
+    /**
+     * 获取启用的支付方式列表
+     * GET /client/api/setting/payMethods
+     *
+     * 仅返回后台开关 payment_*_enabled = 1 的方式，前端据此渲染支付方式 sheet。
+     * 不缓存：后台改开关需立即生效（最坏一次 next request 命中）。
+     */
+    public function payMethods()
+    {
+        $data = $this->service()->getPayMethods();
+        return $this->success($data, '获取成功');
+    }
 }

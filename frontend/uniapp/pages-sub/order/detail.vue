@@ -178,14 +178,51 @@
         </view>
       </view>
     </view>
+
+    <!-- 支付方式选择 -->
+    <mb-pay-method-sheet
+      :visible="sheetVisible"
+      :methods="payMethods"
+      :loading="payLoading"
+      :amount="order ? (order.pay_amount || order.total_amount) : ''"
+      @select="onPayMethodSelect"
+      @close="closeSheet"
+    />
   </view>
 </template>
 
 <script setup>
 import { ref, computed } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
-import { getOrderDetail, payOrder, cancelOrder, confirmReceive } from '@/api/order/order'
+import { getOrderDetail, cancelOrder, confirmReceive } from '@/api/order/order'
+import { usePayFlow } from '@/utils/usePayFlow'
 import config from '@/config/index'
+
+const {
+  sheetVisible,
+  methods: payMethods,
+  loading: payLoading,
+  startPay,
+  invokePay,
+  closeSheet,
+} = usePayFlow()
+
+function redirectToPayResult(payResult) {
+  if (!order.value) return
+  const status = payResult.status === 'success'
+    ? 'success'
+    : payResult.status === 'pending'
+      ? 'pending'
+      : 'fail'
+  uni.redirectTo({
+    url: `/pages-sub/order/pay-result?sn=${order.value.sn}&order_id=${order.value.id}&status=${status}`,
+  })
+}
+
+async function onPayMethodSelect(code) {
+  const payResult = await invokePay(code)
+  if (payResult) redirectToPayResult(payResult)
+}
 
 const STATUS_MAP = {
   0: { label: '待付款' },
@@ -367,16 +404,8 @@ async function handleAction(key) {
       },
     })
   } else if (key === 'pay') {
-    try {
-      await payOrder(order.value.id)
-      uni.redirectTo({
-        url: `/pages-sub/order/pay-result?sn=${order.value.sn}&order_id=${order.value.id}&status=success`,
-      })
-    } catch {
-      uni.redirectTo({
-        url: `/pages-sub/order/pay-result?sn=${order.value.sn}&order_id=${order.value.id}&status=fail`,
-      })
-    }
+    const payResult = await startPay(order.value.id)
+    if (payResult) redirectToPayResult(payResult)
   } else if (key === 'confirm') {
     uni.showModal({
       title: '提示',

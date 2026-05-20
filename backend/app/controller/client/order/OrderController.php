@@ -136,6 +136,17 @@ class OrderController extends BaseController
 
         $payMethod = (int) $data['pay_method'];
 
+        $enabledMap = [
+            PayMethod::WECHAT => ['payment_wechat_enabled', '微信支付未启用'],
+            PayMethod::MOCK   => ['payment_mock_enabled',   'Mock 支付未启用'],
+        ];
+        if (isset($enabledMap[$payMethod])) {
+            [$settingCode, $disabledMessage] = $enabledMap[$payMethod];
+            if ((string) getSystemSetting($settingCode, '0') !== '1') {
+                throw new BusinessException($disabledMessage);
+            }
+        }
+
         if ($payMethod === PayMethod::MOCK) {
             $result = $this->service()->pay($orderId, $userId, $payMethod);
             return $this->success($result, '支付成功');

@@ -113,6 +113,16 @@
 
     <!-- 底部占位 -->
     <view class="bottom-spacer" />
+
+    <!-- 支付方式选择 -->
+    <mb-pay-method-sheet
+      :visible="sheetVisible"
+      :methods="payMethods"
+      :loading="payLoading"
+      :amount="displayPayTotal"
+      @select="onPayMethodSelect"
+      @close="onPayMethodClose"
+    />
   </view>
 </template>
 
@@ -122,7 +132,44 @@ import { onLoad, onShow } from '@dcloudio/uni-app'
 import { useCartStore } from '@/store/cart'
 import { getAddressList } from '@/api/user/address'
 import { createOrder, previewOrder } from '@/api/order/order'
-import { triggerPay } from '@/utils/payment'
+import { usePayFlow } from '@/utils/usePayFlow'
+
+const {
+  sheetVisible,
+  methods: payMethods,
+  loading: payLoading,
+  startPay,
+  invokePay,
+  closeSheet,
+} = usePayFlow()
+
+const pendingPayContext = ref(null)
+
+function redirectToPayResult(sn, orderId, payResult) {
+  const status = payResult.status === 'success'
+    ? 'success'
+    : payResult.status === 'pending'
+      ? 'pending'
+      : 'fail'
+  uni.redirectTo({
+    url: `/pages-sub/order/pay-result?sn=${sn}&order_id=${orderId}&status=${status}`,
+  })
+}
+
+async function onPayMethodSelect(code) {
+  const ctx = pendingPayContext.value
+  if (!ctx) return
+  const payResult = await invokePay(code)
+  if (payResult) redirectToPayResult(ctx.sn, ctx.orderId, payResult)
+}
+
+function onPayMethodClose() {
+  closeSheet()
+  const ctx = pendingPayContext.value
+  if (ctx) {
+    redirectToPayResult(ctx.sn, ctx.orderId, { status: 'fail' })
+  }
+}
 
 const cartStore = useCartStore()
 
@@ -329,16 +376,11 @@ async function handleSubmit() {
     const sn = order.sn
     const orderId = order.order_id
 
-    // 调用支付（按运行平台分流 mini/offi/h5，h5 会发生页面跳转）
-    const payResult = await triggerPay(orderId)
-    const status = payResult.status === 'success'
-      ? 'success'
-      : payResult.status === 'pending'
-        ? 'pending'
-        : 'fail'
-    uni.redirectTo({
-      url: `/pages-sub/order/pay-result?sn=${sn}&order_id=${orderId}&status=${status}`,
-    })
+    // 暂存订单上下文，sheet 关闭/选完支付方式后跳转 pay-result
+    pendingPayContext.value = { sn, orderId }
+
+    const payResult = await startPay(orderId)
+    if (payResult) redirectToPayResult(sn, orderId, payResult)
   } catch {
     // 创建订单失败，刷新幂等 key 以允许重试
     idempotencyKey.value = generateKey()

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace app\service\client;
 
+use app\common\enum\PayMethod;
 use app\service\SystemSettingService;
 use mall_base\base\BaseModel;
 use mall_base\base\BaseService;
@@ -100,5 +101,33 @@ class ConfigService extends BaseService
         }
 
         return $merged;
+    }
+
+    /**
+     * 已启用的客户端支付方式
+     *
+     * 仅依据 mb_setting 中的 payment_*_enabled 开关返回，前端据此渲染支付方式 sheet。
+     * 后端最终准入由 OrderController::pay 同步校验同一组开关，避免 sheet 被绕过。
+     *
+     * @return array<int, array{code:int, name:string, icon:string}>
+     */
+    public function getPayMethods(): array
+    {
+        $list = [];
+        if ((string) getSystemSetting('payment_wechat_enabled', '0') === '1') {
+            $list[] = [
+                'code' => PayMethod::WECHAT,
+                'name' => '微信支付',
+                'icon' => 'wechat',
+            ];
+        }
+        if ((string) getSystemSetting('payment_mock_enabled', '0') === '1') {
+            $list[] = [
+                'code' => PayMethod::MOCK,
+                'name' => 'Mock 支付（仅测试）',
+                'icon' => 'mock',
+            ];
+        }
+        return $list;
     }
 }
