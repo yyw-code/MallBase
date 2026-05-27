@@ -372,6 +372,34 @@ function getItemSpec(item) {
   return item?.sku_spec_text || item?.sku_spec || item?.spec_text || item?.spec || ''
 }
 
+function getOrderItemId(item) {
+  return item?.id || item?.order_item_id || ''
+}
+
+function getRefundItemLabel(item) {
+  const name = item?.goods_name || item?.name || '商品'
+  const spec = getItemSpec(item)
+  return spec ? `${name} ${spec}` : name
+}
+
+function navigateToRefund(item) {
+  const orderItemId = getOrderItemId(item)
+  if (!orderItemId) {
+    uni.showToast({ title: '请选择要申请售后的商品', icon: 'none' })
+    return
+  }
+  const query = [
+    `order_id=${order.value.id}`,
+    `order_item_id=${orderItemId}`,
+    item?.goods_name ? `goods_name=${encodeURIComponent(item.goods_name)}` : '',
+    getOrderItemImage(item) ? `goods_image=${encodeURIComponent(getOrderItemImage(item))}` : '',
+    getItemSpec(item) ? `sku_spec_text=${encodeURIComponent(getItemSpec(item))}` : '',
+    item?.unit_price ? `price=${encodeURIComponent(item.unit_price)}` : '',
+    item?.quantity ? `quantity=${encodeURIComponent(item.quantity)}` : '',
+  ].filter(Boolean).join('&')
+  uni.navigateTo({ url: `/pages-sub/refund/apply?${query}` })
+}
+
 function maskPhone(phone) {
   if (!phone || phone.length < 7) return phone || ''
   return phone.slice(0, 3) + '****' + phone.slice(-4)
@@ -430,16 +458,21 @@ async function handleAction(key) {
       url: `/pages-sub/review/post?order_id=${order.value.id}`,
     })
   } else if (key === 'refund') {
-    const firstItem = orderItems.value[0] || null
-    const query = [
-      `order_id=${order.value.id}`,
-      firstItem?.goods_name ? `goods_name=${encodeURIComponent(firstItem.goods_name)}` : '',
-      getOrderItemImage(firstItem) ? `goods_image=${encodeURIComponent(getOrderItemImage(firstItem))}` : '',
-      getItemSpec(firstItem) ? `sku_spec_text=${encodeURIComponent(getItemSpec(firstItem))}` : '',
-      firstItem?.unit_price ? `price=${encodeURIComponent(firstItem.unit_price)}` : '',
-      firstItem?.quantity ? `quantity=${encodeURIComponent(firstItem.quantity)}` : '',
-    ].filter(Boolean).join('&')
-    uni.navigateTo({ url: `/pages-sub/refund/apply?${query}` })
+    const items = orderItems.value
+    if (items.length === 0) {
+      uni.showToast({ title: '请选择要申请售后的商品', icon: 'none' })
+      return
+    }
+    if (items.length === 1) {
+      navigateToRefund(items[0])
+      return
+    }
+    uni.showActionSheet({
+      itemList: items.map(getRefundItemLabel),
+      success(res) {
+        navigateToRefund(items[res.tapIndex])
+      },
+    })
   }
 }
 

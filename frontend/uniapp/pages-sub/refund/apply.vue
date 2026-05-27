@@ -4,6 +4,7 @@ import { onLoad } from '@dcloudio/uni-app'
 import { applyRefund, getRefundReasonOptions } from '@/api/order/refund'
 
 const orderId = ref('')
+const orderItemId = ref('')
 const goodsName = ref('')
 const goodsImage = ref('')
 const skuSpecText = ref('')
@@ -21,6 +22,7 @@ const MAX_DESC_LENGTH = 200
 
 onLoad((query) => {
   orderId.value = query?.order_id || ''
+  orderItemId.value = query?.order_item_id || ''
   goodsName.value = decodeURIComponent(query?.goods_name || '')
   goodsImage.value = decodeURIComponent(query?.goods_image || '')
   skuSpecText.value = decodeURIComponent(query?.sku_spec_text || '')
@@ -43,6 +45,15 @@ const refundAmount = computed(() => {
   return total.toFixed(2)
 })
 
+const selectedReasonLabel = computed(() => {
+  const option = reasonOptions.value.find((item) => {
+    if (typeof item === 'string') return item === selectedReason.value
+    return item?.value === selectedReason.value
+  })
+  if (!option) return ''
+  return typeof option === 'string' ? option : option.label || option.name || option.value || ''
+})
+
 function formatPrice(val) {
   const num = Number(val)
   if (Number.isNaN(num)) return '0.00'
@@ -55,12 +66,13 @@ function onPickReason() {
     return
   }
   const names = reasonOptions.value.map((item) =>
-    typeof item === 'string' ? item : item.name || item.label || String(item),
+    typeof item === 'string' ? item : item.label || item.name || String(item.value || item),
   )
   uni.showActionSheet({
     itemList: names,
     success(res) {
-      selectedReason.value = names[res.tapIndex]
+      const option = reasonOptions.value[res.tapIndex]
+      selectedReason.value = typeof option === 'string' ? option : option?.value || ''
     },
   })
 }
@@ -93,6 +105,10 @@ function onPreviewImage(idx) {
 }
 
 async function onSubmit() {
+  if (!orderItemId.value) {
+    uni.showToast({ title: '请选择要申请售后的商品', icon: 'none' })
+    return
+  }
   if (!selectedReason.value) {
     uni.showToast({ title: '请选择退款原因', icon: 'none' })
     return
@@ -102,10 +118,11 @@ async function onSubmit() {
 
   try {
     await applyRefund({
-      order_id: orderId.value,
+      order_item_id: orderItemId.value,
+      quantity: quantity.value,
+      type: 0,
       reason: selectedReason.value,
-      description: description.value,
-      images: images.value,
+      remark: description.value,
     })
     uni.showToast({ title: '退款申请已提交', icon: 'success' })
     setTimeout(() => {
@@ -153,7 +170,7 @@ async function onSubmit() {
           <text
             class="form-item__value"
             :class="{ 'form-item__value--placeholder': !selectedReason }"
-          >{{ selectedReason || '请选择退款原因' }}</text>
+          >{{ selectedReasonLabel || '请选择退款原因' }}</text>
           <text class="form-item__arrow">&#x203A;</text>
         </view>
       </view>

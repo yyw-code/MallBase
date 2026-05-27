@@ -794,7 +794,7 @@ MallBase 是一个开源通用电商基座系统，包含：
 
 | 方法 | 路径 | 请求参数 | 用途 |
 |------|------|---------|------|
-| POST | `/client/api/refund/apply` | `{ order_id, reason, description?, images? }` | 申请退款 |
+| POST | `/client/api/refund/apply` | `{ order_item_id, quantity, type, reason, remark? }` | 申请退款 |
 | POST | `/client/api/refund/cancel/:id` | — | 取消退款申请 |
 | GET | `/client/api/refund/list` | `?page=&limit=` | 退款列表 |
 | GET | `/client/api/refund/detail/:id` | — | 退款详情 |

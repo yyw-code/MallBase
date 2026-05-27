@@ -70,4 +70,16 @@ final class RefundOrderAdminServiceTest extends TestCase
 
         $this->service->reject(refundId: 1, adminId: 1, adminRemark: '   ');
     }
+
+    public function testUserPhoneQueriesUseUserMobileColumn(): void
+    {
+        $source = (string) file_get_contents(
+            dirname(__DIR__, 4) . '/app/service/admin/order/RefundOrderAdminService.php',
+        );
+
+        $this->assertStringContainsString("->where('mobile', 'like'", $source);
+        $this->assertStringContainsString('mobile as phone', $source);
+        $this->assertStringNotContainsString("->where('phone', 'like'", $source);
+        $this->assertStringNotContainsString("field('id, nickname, phone", $source);
+    }
 }

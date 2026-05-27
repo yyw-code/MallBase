@@ -184,7 +184,7 @@ class RefundOrderAdminService extends BaseService
         // 按买家手机筛选需要 join user 表
         if (!empty($filter['user_phone'])) {
             $userIds = $this->model(User::class)
-                ->where('phone', 'like', '%' . trim((string) $filter['user_phone']) . '%')
+                ->where('mobile', 'like', '%' . trim((string) $filter['user_phone']) . '%')
                 ->column('id');
             $query->whereIn('user_id', $userIds ?: [0]);
         }
@@ -236,7 +236,7 @@ class RefundOrderAdminService extends BaseService
         // 买家信息
         $userModel = $this->model(User::class)
             ->where('id', (int) $refund->user_id)
-            ->field('id, nickname, phone, avatar')
+            ->field('id, nickname, mobile as phone, avatar')
             ->find();
         $user = $userModel?->toArray();
         if ($user !== null && !empty($user['avatar'])) {
@@ -335,7 +335,7 @@ class RefundOrderAdminService extends BaseService
         if ($userIds !== []) {
             $rows = $this->model(User::class)
                 ->whereIn('id', $userIds)
-                ->field('id, nickname, phone')
+                ->field('id, nickname, mobile as phone')
                 ->select()
                 ->toArray();
             foreach ($rows as $row) {
