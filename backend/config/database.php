@@ -52,8 +52,8 @@ return [
             'fields_strict'   => true,
             // 是否需要断线重连
             'break_reconnect' => true,
-            // 监听SQL
-            'trigger_sql'     => env('APP_DEBUG', true),
+            // SQL 监听会把每条 SQL 写入日志，默认关闭；需要临时排查时显式设置 DB_TRIGGER_SQL=true。
+            'trigger_sql'     => env('DB_TRIGGER_SQL', false),
             // 开启字段缓存
             'fields_cache'    => false,
         ],

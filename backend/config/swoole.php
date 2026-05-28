@@ -54,7 +54,7 @@ return [
     ],
     //队列
     'queue'      => [
-        'enable'  => false,
+        'enable'  => env('SWOOLE_QUEUE_ENABLE', false),
         'workers' => [],
     ],
     'hot_update' => [

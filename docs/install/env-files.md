@@ -42,7 +42,7 @@ docker compose 的变量插值**只认项目根目录的 `.env`**，无法改路
 覆盖 ThinkPHP 所有运行时配置：
 
 - 应用：`APP_DEBUG` / `DEFAULT_LANG` / `CRON_ENABLE`
-- 队列：`QUEUE_CONNECTION` / `QUEUE_REDIS_*`
+- 队列：`QUEUE_CONNECTION` / `QUEUE_REDIS_*` / `SWOOLE_QUEUE_ENABLE`
 - 数据库：`DB_TYPE` / `DB_HOST` / `DB_PORT`（固定 3306，容器内端口）/ `DB_NAME` / `DB_USER` / `DB_PASS` / `DB_CHARSET` / `DB_PREFIX`
 - Redis：`REDIS_HOST` / `REDIS_PORT`（固定 6379，容器内端口）/ `REDIS_PASSWORD` / `REDIS_TIMEOUT` / `REDIS_PERSISTENT` / `REDIS_CACHE_DB`
 - 缓存：`CACHE_*`
@@ -54,6 +54,7 @@ docker compose 的变量插值**只认项目根目录的 `.env`**，无法改路
 
 - 单机部署：可设置 `CRON_ENABLE=true`，`QUEUE_CONNECTION=sync` 或 `redis`；若使用 `redis`，同时启动 `php think queue:work --queue=default --tries=3`
 - K8s / 多副本部署：Web Deployment 设置 `CRON_ENABLE=false`；Scheduler Deployment 副本数固定 `1` 且设置 `CRON_ENABLE=true`；Queue Worker Deployment 运行 `php think queue:work --queue=default --tries=3`，可按压力水平扩容
+- `SWOOLE_QUEUE_ENABLE` 只控制 Swoole 内置队列 Worker 是否启用，默认关闭；常规 `think-queue` Redis 队列仍建议使用独立 `php think queue:work` 进程。
 
 **⚠️ 容易混淆的点**：
 
