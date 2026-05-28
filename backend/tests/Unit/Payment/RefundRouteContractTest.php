@@ -17,4 +17,15 @@ final class RefundRouteContractTest extends TestCase
         $this->assertStringContainsString('审核同意售后申请并发起微信退款', $source);
         $this->assertStringNotContainsString('Mock 退款 + 回滚库存', $source);
     }
+
+    public function testWechatRefundNotifyRouteIsIndependentFromPayNotify(): void
+    {
+        $source = (string) file_get_contents(
+            dirname(__DIR__, 3) . '/route/notify.php',
+        );
+
+        $this->assertStringContainsString("Route::post('wechat/pay'", $source);
+        $this->assertStringContainsString("Route::post('wechat/refund'", $source);
+        $this->assertStringContainsString('wechatRefund', $source);
+    }
 }

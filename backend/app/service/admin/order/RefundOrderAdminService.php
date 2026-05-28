@@ -164,6 +164,71 @@ class RefundOrderAdminService extends BaseService
     }
 
     /**
+     * 微信退款成功后收口售后单（退款回调 / 主动查单共用）
+     */
+    public function completeWechatRefund(string $refundSn, int $amountCents, ?string $successTime = null): void
+    {
+        $refundSn = trim($refundSn);
+        if ($refundSn === '') {
+            throw new BusinessException('退款单号缺失');
+        }
+        if ($amountCents <= 0) {
+            throw new BusinessException('退款金额必须大于 0');
+        }
+
+        /** @var RefundOrder|null $refund */
+        $refund = $this->model()
+            ->where('sn', $refundSn)
+            ->whereNull('delete_time')
+            ->find();
+        if ($refund === null) {
+            throw new BusinessException('售后单不存在');
+        }
+
+        if ((int) $refund->status === RefundOrderStatus::COMPLETED) {
+            return;
+        }
+        if ((int) $refund->status !== RefundOrderStatus::REFUNDING) {
+            throw new BusinessException('售后单当前状态不允许确认退款成功');
+        }
+
+        $expectedCents = $this->decimalToCents((string) $refund->refund_amount);
+        if ($expectedCents !== $amountCents) {
+            throw new BusinessException('微信退款金额与售后单金额不一致');
+        }
+
+        $orderItemId = (int) ($refund->order_item_id ?? 0);
+        $quantity = (int) ($refund->quantity ?? 0);
+
+        /** @var RefundOrderStatusMachine $machine */
+        $machine = app()->make(RefundOrderStatusMachine::class);
+
+        $this->transaction(function () use ($refund, $machine, $orderItemId, $quantity, $successTime): void {
+            $machine->transit(
+                refund: $refund,
+                toStatus: RefundOrderStatus::COMPLETED,
+                operatorType: OperatorType::SYSTEM,
+                operatorId: null,
+                remark: null,
+            );
+
+            if ($successTime !== null && trim($successTime) !== '') {
+                $refund->refunded_at = date('Y-m-d H:i:s', strtotime($successTime));
+                $refund->save();
+            }
+
+            $affected = $this->model(OrderItem::class)
+                ->where('id', $orderItemId)
+                ->whereRaw('refunded_quantity + ? <= quantity', [$quantity])
+                ->inc('refunded_quantity', $quantity)
+                ->update();
+            if ($affected !== 1) {
+                throw new BusinessException('退款数量超出限制或已被其他申请占用');
+            }
+        });
+    }
+
+    /**
      * 后台售后列表（分页 + 筛选）
      *
      * 条件同源：clone + count

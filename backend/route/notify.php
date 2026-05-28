@@ -18,4 +18,6 @@ use think\facade\Route;
 Route::group('api/notify', function () {
     // 微信支付（覆盖小程序 / 公众号 / H5 三渠道，统一回调）
     Route::post('wechat/pay', 'client.order.PayNotifyController/wechat');
+    // 微信退款（独立回调，避免与支付回调混用）
+    Route::post('wechat/refund', 'client.order.PayNotifyController/wechatRefund');
 });

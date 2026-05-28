@@ -42,6 +42,27 @@ class PayNotifyController
     }
 
     /**
+     * 微信退款回调入口
+     */
+    public function wechatRefund()
+    {
+        try {
+            $request = request();
+            $headers = $this->collectHeaders($request);
+            $rawBody = (string) $request->getContent();
+
+            /** @var NotifyService $service */
+            $service = app()->make(NotifyService::class);
+            $result = $service->handleRefund($headers, $rawBody);
+
+            return $this->respond((int) $result['status'], (array) $result['body']);
+        } catch (Throwable $e) {
+            Logger::instance()->critical('微信退款回调主控异常', ['error' => $e->getMessage()]);
+            return $this->respond(500, ['code' => 'FAIL', 'message' => '服务异常']);
+        }
+    }
+
+    /**
      * 收集所有请求头（含微信四个签名头）
      *
      * @return array<string, string>

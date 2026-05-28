@@ -76,6 +76,25 @@ class WechatPayClient
     }
 
     /**
+     * 按商户退款单号查询微信退款结果
+     *
+     * @return array<string, mixed>
+     */
+    public function queryRefundByOutRefundNo(PayApplication $app, string $outRefundNo): array
+    {
+        try {
+            $response = $app->getClient()->get(
+                '/v3/refund/domestic/refunds/' . rawurlencode($outRefundNo)
+            );
+            $body = (string) $response->getContent(false);
+            $decoded = json_decode($body, true);
+            return is_array($decoded) ? $decoded : [];
+        } catch (Throwable $e) {
+            throw new BusinessException('微信退款查询失败：' . $e->getMessage());
+        }
+    }
+
+    /**
      * 生成 JSAPI 五元组（小程序 / 公众号 调起支付参数）
      *
      * @return array{appId:string, timeStamp:string, nonceStr:string, package:string, signType:string, paySign:string}

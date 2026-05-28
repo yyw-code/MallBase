@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace app\service\order;
 
 use app\model\order\RefundOrder;
+use app\common\enum\OperatorType;
 use app\common\enum\RefundOrderStatus;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
@@ -92,7 +93,8 @@ class RefundOrderStatusMachine extends BaseService
             ));
         }
 
-        $isAdminReview = in_array($toStatus, self::ADMIN_REVIEW_STATUSES, true);
+        $isAdminReview = $operatorType === OperatorType::ADMIN
+            && in_array($toStatus, self::ADMIN_REVIEW_STATUSES, true);
         if ($isAdminReview && $operatorId === null) {
             throw new BusinessException('管理员审核流转必须传入操作者ID');
         }

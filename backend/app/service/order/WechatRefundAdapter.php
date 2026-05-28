@@ -8,6 +8,7 @@ use app\service\client\payment\WechatPayClient;
 use app\service\client\payment\WechatPayFactory;
 use app\service\order\dto\RefundPaymentContext;
 use mall_base\exception\BusinessException;
+use think\facade\Request;
 
 /**
  * 微信支付 V3 退款适配器
@@ -44,6 +45,7 @@ class WechatRefundAdapter implements PaymentAdapter
             'transaction_id' => $context->transactionId,
             'out_refund_no'  => $context->outRefundNo,
             'reason'         => mb_substr($context->reason, 0, 80),
+            'notify_url'     => $this->buildNotifyUrl(),
             'amount'         => [
                 'refund'   => $context->refundAmountCents,
                 'total'    => $context->totalAmountCents,
@@ -58,5 +60,15 @@ class WechatRefundAdapter implements PaymentAdapter
         }
 
         throw new BusinessException(sprintf('微信退款状态异常：%s', $status !== '' ? $status : 'UNKNOWN'));
+    }
+
+    private function buildNotifyUrl(): string
+    {
+        $base = trim((string) getSystemSetting('site_url', ''));
+        if ($base === '') {
+            $base = (Request::scheme() ?: 'https') . '://' . (Request::host(true) ?: 'localhost');
+        }
+
+        return rtrim($base, '/') . '/api/notify/wechat/refund';
     }
 }

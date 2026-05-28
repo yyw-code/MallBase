@@ -7,6 +7,7 @@ use app\command\ImportRegions;
 use app\command\InstallAuto;
 use app\command\OrderExpireCommand;
 use app\command\OrderRecoverPaid;
+use app\command\OrderRecoverRefund;
 use app\command\SyncPermissions;
 use app\command\SyncSettingPermissions;
 use app\command\UpgradeAdminSchema;
@@ -23,6 +24,7 @@ return [
         'settings:sync-permissions' => SyncSettingPermissions::class,
         'order:expire' => OrderExpireCommand::class,
         'order:recover-paid' => OrderRecoverPaid::class,
+        'order:recover-refund' => OrderRecoverRefund::class,
         'install:auto' => InstallAuto::class,
         'upgrade:admin-schema' => UpgradeAdminSchema::class,
         'upgrade:client-search-schema' => UpgradeClientSearchSchema::class,

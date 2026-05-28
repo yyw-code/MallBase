@@ -30,6 +30,7 @@ final class WechatRefundAdapterTest extends TestCase
 
         $this->assertStringContainsString('/v3/refund/domestic/refunds', $source);
         $this->assertStringContainsString("public function refund", $source);
+        $this->assertStringContainsString('queryRefundByOutRefundNo', $source);
     }
 
     public function testRefundAdapterBuildsWechatPayloadWithStableOutRefundNo(): void
@@ -38,6 +39,7 @@ final class WechatRefundAdapterTest extends TestCase
 
         $this->assertStringContainsString("'transaction_id' => \$context->transactionId", $source);
         $this->assertStringContainsString("'out_refund_no'  => \$context->outRefundNo", $source);
+        $this->assertStringContainsString("'notify_url'     => \$this->buildNotifyUrl()", $source);
         $this->assertStringContainsString("'refund'   => \$context->refundAmountCents", $source);
         $this->assertStringContainsString("'total'    => \$context->totalAmountCents", $source);
         $this->assertStringContainsString("'currency' => 'CNY'", $source);
@@ -60,5 +62,13 @@ final class WechatRefundAdapterTest extends TestCase
         $this->assertStringContainsString("['SUCCESS', 'PROCESSING']", $source);
         $this->assertStringContainsString('return $status', $source);
         $this->assertStringContainsString('微信退款状态异常', $source);
+    }
+
+    public function testRefundAdapterBuildsIndependentNotifyUrl(): void
+    {
+        $source = self::sourceOf(WechatRefundAdapter::class);
+
+        $this->assertStringContainsString('/api/notify/wechat/refund', $source);
+        $this->assertStringNotContainsString('/api/notify/wechat/pay', $source);
     }
 }

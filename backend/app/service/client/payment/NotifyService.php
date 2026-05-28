@@ -7,6 +7,7 @@ namespace app\service\client\payment;
 use app\common\enum\PayMethod;
 use app\model\order\Order;
 use app\model\order\PaymentLog;
+use app\service\admin\order\RefundOrderAdminService;
 use app\service\client\order\OrderService;
 use EasyWeChat\Pay\Application as PayApplication;
 use mall_base\base\BaseService;
@@ -196,6 +197,89 @@ class NotifyService extends BaseService
                 'out_trade_no'   => $outTradeNo,
                 'transaction_id' => $transactionId,
                 'error'          => $e->getMessage(),
+            ]);
+            return $this->respond(500, 'FAIL', '处理异常');
+        }
+
+        return $this->respond(200, 'SUCCESS', '成功');
+    }
+
+    /**
+     * 处理微信退款回调
+     *
+     * @param array<string, string|array<string>> $headers
+     * @return array{status:int, body:array{code:string, message:string}}
+     */
+    public function handleRefund(array $headers, string $rawBody): array
+    {
+        $psrRequest = new PsrServerRequest(
+            'POST',
+            '/api/notify/wechat/refund',
+            $headers,
+            $rawBody
+        );
+
+        try {
+            $app = $this->factory->build();
+        } catch (BusinessException $e) {
+            $this->fireAlert(self::EVENT_VERIFY_FAILED, ['reason' => 'config_missing', 'message' => $e->getMessage()]);
+            return $this->respond(500, 'FAIL', '支付配置缺失');
+        }
+
+        try {
+            $app->getValidator()->validate($psrRequest);
+        } catch (Throwable $e) {
+            Logger::instance()->critical('微信退款回调验签失败', ['reason' => $e->getMessage()]);
+            $this->fireAlert(self::EVENT_VERIFY_FAILED, ['reason' => $e->getMessage()]);
+            return $this->respond(401, 'FAIL', '签名错误');
+        }
+
+        try {
+            $message = $app->getServer()->getRequestMessage($psrRequest);
+        } catch (Throwable $e) {
+            Logger::instance()->critical('微信退款回调解密失败', ['error' => $e->getMessage()]);
+            return $this->respond(500, 'FAIL', '报文解密失败');
+        }
+
+        $attributes = $message->getOriginalAttributes() ?: [];
+        $outRefundNo = (string) ($attributes['out_refund_no'] ?? '');
+        $refundStatus = (string) ($attributes['refund_status'] ?? $attributes['status'] ?? '');
+        $refundAmount = (int) ($attributes['amount']['refund'] ?? $attributes['amount']['payer_refund'] ?? 0);
+        $successTime = (string) ($attributes['success_time'] ?? '');
+
+        $nonce = $this->headerValue($psrRequest, 'Wechatpay-Nonce');
+        if ($nonce !== '' && !$this->markNonce($nonce)) {
+            Logger::instance()->critical('微信退款回调被识别为重放攻击', [
+                'nonce'         => $nonce,
+                'out_refund_no' => $outRefundNo,
+            ]);
+            $this->fireAlert(self::EVENT_REPLAY_ATTACK, [
+                'nonce'         => $nonce,
+                'out_refund_no' => $outRefundNo,
+            ]);
+            return $this->respond(401, 'FAIL', '重放攻击');
+        }
+
+        if ($outRefundNo === '') {
+            return $this->respond(500, 'FAIL', 'out_refund_no 缺失');
+        }
+
+        if ($refundStatus !== 'SUCCESS') {
+            Logger::instance()->error('微信退款回调状态非成功', [
+                'out_refund_no' => $outRefundNo,
+                'status'        => $refundStatus,
+            ]);
+            return $this->respond(200, 'SUCCESS', '成功');
+        }
+
+        try {
+            /** @var RefundOrderAdminService $refundService */
+            $refundService = app()->make(RefundOrderAdminService::class);
+            $refundService->completeWechatRefund($outRefundNo, $refundAmount, $successTime);
+        } catch (Throwable $e) {
+            Logger::instance()->critical('微信退款回调落库失败', [
+                'out_refund_no' => $outRefundNo,
+                'error'         => $e->getMessage(),
             ]);
             return $this->respond(500, 'FAIL', '处理异常');
         }
