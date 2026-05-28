@@ -97,7 +97,7 @@ const handleSubmit = async () => {
       </div>
 
       <a-alert
-        message="同意后将完成退款处理，并将售后单标记为已完成"
+        message="同意后将向微信发起退款；如微信返回处理中，售后单将进入退款中"
         type="warning"
         show-icon
         class="mb-3"

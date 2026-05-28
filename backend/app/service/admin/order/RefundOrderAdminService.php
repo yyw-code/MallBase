@@ -9,11 +9,13 @@ use app\model\order\Order;
 use app\model\order\OrderItem;
 use app\model\order\RefundOrder;
 use app\model\user\User;
-use app\service\order\MockPaymentAdapter;
 use app\service\order\PaymentAdapter;
 use app\service\order\RefundOrderStatusMachine;
+use app\service\order\WechatRefundAdapter;
+use app\service\order\dto\RefundPaymentContext;
 use app\common\enum\OperatorType;
 use app\common\enum\OrderStatus;
+use app\common\enum\PayMethod;
 use app\common\enum\RefundOrderStatus;
 use app\common\enum\RefundReason;
 use mall_base\base\BaseService;
@@ -24,7 +26,7 @@ use mall_base\exception\BusinessException;
  *
  * 原则：
  *  - 审核流转统一走 {@see RefundOrderStatusMachine}
- *  - approve 事务内三件事：状态流转 → OrderItem.refunded_quantity 乐观锁累加 → 退款渠道处理
+ *  - approve 先发起微信退款，SUCCESS 后完成状态流转与退款数量累加，PROCESSING 进入退款中
  *  - reject 只改状态+审核字段，不动库存、不动计数
  *  - 列表条件同源，返回 compact('total','list')
  *
@@ -35,14 +37,15 @@ class RefundOrderAdminService extends BaseService
     protected string $modelClass = RefundOrder::class;
 
     /**
-     * 审核同意（PENDING → COMPLETED，完成退款处理）
+     * 审核同意（PENDING → REFUNDING / COMPLETED，发起退款处理）
      *
-     * 事务内原子完成：
-     *  1) RefundOrderStatusMachine::transit → COMPLETED（含 reviewed_at/refunded_at/reviewed_by）
-     *  2) OrderItem.refunded_quantity 乐观锁累加
-     *  3) PaymentAdapter::refund — MVP 返回 true
+     * 执行顺序：
+     *  1) 前置校验订单、订单项与可退款数量
+     *  2) PaymentAdapter::refund 发起微信退款（外部调用不进入 DB 事务）
+     *  3) SUCCESS：事务内 RefundOrderStatusMachine::transit → COMPLETED，并累加退款数量
+     *  4) PROCESSING：事务内 RefundOrderStatusMachine::transit → REFUNDING，等待后续查询/回调确认
      *
-     * 注意：MVP 仅开放“仅退款”，买家不退回实物，审核同意不回滚库存。
+     * 注意：当前仅开放“仅退款”，买家不退回实物，审核同意不回滚库存。
      * 后续若启用“退货退款”，应在退货入库节点单独处理库存回滚。
      */
     public function approve(int $refundId, int $adminId, string $adminRemark = ''): void
@@ -65,29 +68,61 @@ class RefundOrderAdminService extends BaseService
             throw new BusinessException('关联订单商品不存在');
         }
 
-        // 获取主订单 trade_no 用于退款渠道调用
+        $remain = (int) ($orderItemModel->quantity ?? 0) - (int) ($orderItemModel->refunded_quantity ?? 0);
+        if ($quantity <= 0 || $quantity > $remain) {
+            throw new BusinessException('退款数量超出限制或已被其他申请占用');
+        }
+
+        // 获取主订单微信交易号用于退款渠道调用
         $orderModel = $this->model(Order::class)->where('id', (int) $refund->order_id)->find();
-        $tradeNo = $orderModel !== null ? (string) ($orderModel->trade_no ?? '') : '';
+        if ($orderModel === null) {
+            throw new BusinessException('关联订单不存在');
+        }
+        if ((int) ($orderModel->pay_method ?? 0) !== PayMethod::WECHAT) {
+            throw new BusinessException('仅微信支付订单支持自动退款');
+        }
+        $transactionId = trim((string) ($orderModel->trade_no ?? ''));
+        if ($transactionId === '' || str_starts_with($transactionId, 'MOCK-')) {
+            throw new BusinessException('微信支付交易号缺失，无法发起退款');
+        }
+
+        $context = new RefundPaymentContext(
+            transactionId: $transactionId,
+            outRefundNo: (string) $refund->sn,
+            refundAmountCents: $this->decimalToCents((string) $refund->refund_amount),
+            totalAmountCents: $this->decimalToCents((string) $orderModel->pay_amount),
+            reason: RefundReason::textOf((string) ($refund->reason ?? '')),
+        );
 
         /** @var RefundOrderStatusMachine $machine */
         $machine = app()->make(RefundOrderStatusMachine::class);
         /** @var PaymentAdapter $payment */
-        $payment = new MockPaymentAdapter();
+        $payment = app()->make(WechatRefundAdapter::class);
+
+        $refundStatus = $payment->refund($context);
 
         $this->transaction(function () use (
             $refund, $adminId, $adminRemark, $machine,
-            $payment, $quantity, $orderItemId, $tradeNo
+            $quantity, $orderItemId, $refundStatus
         ): void {
+            $toStatus = $refundStatus === 'SUCCESS'
+                ? RefundOrderStatus::COMPLETED
+                : RefundOrderStatus::REFUNDING;
+
             // 1. 状态流转（内部原子写 reviewed_at/refunded_at/reviewed_by/admin_remark）
             $machine->transit(
                 refund: $refund,
-                toStatus: RefundOrderStatus::COMPLETED,
+                toStatus: $toStatus,
                 operatorType: OperatorType::ADMIN,
                 operatorId: $adminId,
                 remark: $adminRemark !== '' ? $adminRemark : '管理员同意退款',
             );
 
-            // 2. 乐观锁累加 OrderItem.refunded_quantity
+            if ($toStatus !== RefundOrderStatus::COMPLETED) {
+                return;
+            }
+
+            // 2. 微信退款成功后乐观锁累加 OrderItem.refunded_quantity
             $affected = $this->model(OrderItem::class)
                 ->where('id', $orderItemId)
                 ->whereRaw('refunded_quantity + ? <= quantity', [$quantity])
@@ -97,8 +132,6 @@ class RefundOrderAdminService extends BaseService
                 throw new BusinessException('退款数量超出限制或已被其他申请占用');
             }
 
-            // 3. 退款渠道处理（MVP 适配器直接返回成功）
-            $payment->refund($tradeNo, (string) $refund->refund_amount);
         });
     }
 
@@ -265,6 +298,17 @@ class RefundOrderAdminService extends BaseService
             throw new BusinessException('售后单不存在');
         }
         return $refund;
+    }
+
+    private function decimalToCents(string $amount): int
+    {
+        $amount = trim($amount);
+        if ($amount === '' || !preg_match('/^\d+(\.\d{1,2})?$/', $amount)) {
+            throw new BusinessException('金额格式不合法');
+        }
+
+        [$yuan, $cent] = array_pad(explode('.', $amount, 2), 2, '0');
+        return ((int) $yuan * 100) + (int) str_pad(substr($cent, 0, 2), 2, '0');
     }
 
     /**

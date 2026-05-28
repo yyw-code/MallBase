@@ -37,7 +37,9 @@ final class PaymentClassesAutoloadTest extends TestCase
         $payment = [
             \app\common\enum\PayScene::class,
             \app\model\order\PaymentLog::class,
+            \app\service\order\PaymentAdapter::class,
             \app\service\order\PrepayAdapter::class,
+            \app\service\order\dto\RefundPaymentContext::class,
             \app\service\client\payment\dto\PrepayContext::class,
             \app\service\client\payment\dto\PrepayResult::class,
             \app\service\client\payment\WechatPayFactory::class,
@@ -46,6 +48,7 @@ final class PaymentClassesAutoloadTest extends TestCase
             \app\service\client\payment\NotifyService::class,
             \app\service\client\payment\adapter\WechatJsapiAdapter::class,
             \app\service\client\payment\adapter\WechatH5Adapter::class,
+            \app\service\order\WechatRefundAdapter::class,
             \app\listener\payment\PaymentAlertListener::class,
             \app\controller\client\order\PayNotifyController::class,
         ];

@@ -9,7 +9,7 @@ namespace app\common\enum;
  * 设计原则：
  *  - 独立于订单主状态，主订单列表通过聚合 refund_order 得到 after_sale_tag_text
  *  - 终态为 COMPLETED / REJECTED / CLOSED
- *  - MVP 仅建模，主体逻辑后续实现
+ *  - 微信退款 PROCESSING 进入 REFUNDING，SUCCESS 进入 COMPLETED
  */
 class RefundOrderStatus
 {
@@ -131,25 +131,31 @@ class RefundOrderStatus
     }
 
     /**
-     * 售后状态流转白名单（MVP）
+     * 售后状态流转白名单
      *
      * PENDING(0)
-     *   ├─ 管理员同意退款处理     → COMPLETED(10)
+     *   ├─ 微信退款处理中        → REFUNDING(2)
+     *   ├─ 微信退款成功          → COMPLETED(10)
      *   ├─ 管理员驳回           → REJECTED(20)
      *   └─ 买家主动取消          → CLOSED(90)
+     * REFUNDING(2)
+     *   └─ 微信退款成功          → COMPLETED(10)
      *
      * COMPLETED / REJECTED / CLOSED 为终态，任何方向都不可再流转。
      *
-     * APPROVED(1) / REFUNDING(2) 保留常量，MVP 暂不启用，
-     * 后续退货物流、分步退款流程接入时再补白名单。
+     * APPROVED(1) 保留常量，当前审核路径暂不启用。
      *
      * @var array<int, array<int, int>>
      */
     private const TRANSITIONS = [
         self::PENDING => [
+            self::REFUNDING,
             self::COMPLETED,
             self::REJECTED,
             self::CLOSED,
+        ],
+        self::REFUNDING => [
+            self::COMPLETED,
         ],
     ];
 

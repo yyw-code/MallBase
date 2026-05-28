@@ -28,7 +28,7 @@ Route::group('order', function () {
 Route::group('order/refund', function () {
     Route::get('list', 'list')->name('SystemRefundOrderList')->option(['_alias' => '售后列表', '_desc' => '获取售后订单列表', '_auth' => true]);
     Route::get('detail/:id', 'detail')->name('SystemRefundOrderDetail')->option(['_alias' => '售后详情', '_desc' => '获取售后订单详情', '_auth' => true]);
-    Route::post('approve/:id', 'approve')->name('SystemRefundOrderApprove')->option(['_alias' => '同意售后', '_desc' => '审核同意售后申请（Mock 退款 + 回滚库存）', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
+    Route::post('approve/:id', 'approve')->name('SystemRefundOrderApprove')->option(['_alias' => '同意售后', '_desc' => '审核同意售后申请并发起微信退款', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::post('reject/:id', 'reject')->name('SystemRefundOrderReject')->option(['_alias' => '驳回售后', '_desc' => '审核驳回售后申请', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::get('statusOptions', 'statusOptions')->name('SystemRefundOrderStatusOptions')->option(['_alias' => '售后枚举', '_desc' => '获取售后状态/类型/原因下拉项', '_auth' => true]);
     Route::get('reasonOptions', 'reasonOptions')->name('SystemRefundOrderReasonOptions')->option(['_alias' => '售后原因枚举', '_desc' => '获取售后原因下拉项', '_auth' => true]);

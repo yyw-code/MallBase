@@ -65,6 +65,17 @@ class WechatPayClient
     }
 
     /**
+     * 微信退款（V3）
+     *
+     * @param array<string, mixed> $payload
+     * @return array<string, mixed>
+     */
+    public function refund(PayApplication $app, array $payload): array
+    {
+        return $this->postJson($app, '/v3/refund/domestic/refunds', $payload, 'refund_id');
+    }
+
+    /**
      * 生成 JSAPI 五元组（小程序 / 公众号 调起支付参数）
      *
      * @return array{appId:string, timeStamp:string, nonceStr:string, package:string, signType:string, paySign:string}
@@ -98,7 +109,7 @@ class WechatPayClient
             $body = (string) $response->getContent(false);
             $decoded = json_decode($body, true);
         } catch (Throwable $e) {
-            throw new BusinessException('微信支付下单异常：' . $e->getMessage());
+            throw new BusinessException('微信支付请求异常：' . $e->getMessage());
         }
 
         if (!is_array($decoded)) {
@@ -107,8 +118,8 @@ class WechatPayClient
 
         if ($statusCode >= 400 || !isset($decoded[$expectedKey])) {
             $code = (string) ($decoded['code'] ?? 'UNKNOWN');
-            $message = (string) ($decoded['message'] ?? '微信支付下单失败');
-            throw new BusinessException(sprintf('微信支付下单失败 [%s] %s', $code, $message));
+            $message = (string) ($decoded['message'] ?? '微信支付请求失败');
+            throw new BusinessException(sprintf('微信支付请求失败 [%s] %s', $code, $message));
         }
 
         return $decoded;

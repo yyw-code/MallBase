@@ -93,4 +93,15 @@ final class RefundOrderAdminServiceTest extends TestCase
         $this->assertStringNotContainsString('StockService::class', $source);
         $this->assertStringNotContainsString('->restore(', $source);
     }
+
+    public function testApproveUsesWechatRefundAdapterInsteadOfMock(): void
+    {
+        $source = (string) file_get_contents(
+            dirname(__DIR__, 4) . '/app/service/admin/order/RefundOrderAdminService.php',
+        );
+
+        $this->assertStringContainsString('WechatRefundAdapter::class', $source);
+        $this->assertStringContainsString('new RefundPaymentContext', $source);
+        $this->assertStringNotContainsString('new MockPaymentAdapter', $source);
+    }
 }

@@ -35,11 +35,13 @@ class RefundOrderStatusMachine extends BaseService
      * 状态 → 时间戳列名映射
      *
      * 新增终态时务必同步此表，避免时间戳缺失导致列表筛选失效。
-     *  - COMPLETED：审核通过并退款完成，同时记录 reviewed_at + refunded_at
+     *  - REFUNDING：审核通过并发起退款，同时记录 reviewed_at
+     *  - COMPLETED：退款完成，同时记录 reviewed_at + refunded_at
      *  - REJECTED ：审核驳回，仅记录 reviewed_at
      *  - CLOSED   ：买家主动取消，记录 canceled_at
      */
     private const STATUS_TIMESTAMP = [
+        RefundOrderStatus::REFUNDING => null,
         RefundOrderStatus::COMPLETED => 'refunded_at',
         RefundOrderStatus::REJECTED  => null,
         RefundOrderStatus::CLOSED    => 'canceled_at',
@@ -49,6 +51,7 @@ class RefundOrderStatusMachine extends BaseService
      * 管理员操作路径目标状态集合（需要写 reviewed_by / reviewed_at / admin_remark）
      */
     private const ADMIN_REVIEW_STATUSES = [
+        RefundOrderStatus::REFUNDING,
         RefundOrderStatus::COMPLETED,
         RefundOrderStatus::REJECTED,
     ];

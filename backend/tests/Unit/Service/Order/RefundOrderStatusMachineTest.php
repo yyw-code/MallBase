@@ -14,7 +14,9 @@ use PHPUnit\Framework\TestCase;
  * 本类只锁死状态白名单，防止后续回归时意外放行新流转。
  *
  * MVP 允许的流转：
- *   PENDING(0)     → COMPLETED(10)  ｜管理员同意退款处理
+ *   PENDING(0)     → REFUNDING(2)   ｜微信退款处理中
+ *   PENDING(0)     → COMPLETED(10)  ｜微信退款成功
+ *   REFUNDING(2)   → COMPLETED(10)  ｜退款结果确认成功
  *   PENDING(0)     → REJECTED(20)   ｜管理员驳回
  *   PENDING(0)     → CLOSED(90)     ｜买家取消
  *
@@ -27,8 +29,10 @@ final class RefundOrderStatusMachineTest extends TestCase
      */
     public static function transitionMatrix(): iterable
     {
-        // 允许的三条流转
+        // 允许的流转
+        yield 'PENDING → REFUNDING (refund processing)' => [RefundOrderStatus::PENDING, RefundOrderStatus::REFUNDING, true];
         yield 'PENDING → COMPLETED (approve)' => [RefundOrderStatus::PENDING, RefundOrderStatus::COMPLETED, true];
+        yield 'REFUNDING → COMPLETED (refund success)' => [RefundOrderStatus::REFUNDING, RefundOrderStatus::COMPLETED, true];
         yield 'PENDING → REJECTED (reject)'   => [RefundOrderStatus::PENDING, RefundOrderStatus::REJECTED, true];
         yield 'PENDING → CLOSED (cancel)'     => [RefundOrderStatus::PENDING, RefundOrderStatus::CLOSED, true];
 
@@ -44,9 +48,8 @@ final class RefundOrderStatusMachineTest extends TestCase
         yield 'CLOSED → PENDING'              => [RefundOrderStatus::CLOSED, RefundOrderStatus::PENDING, false];
         yield 'CLOSED → COMPLETED'            => [RefundOrderStatus::CLOSED, RefundOrderStatus::COMPLETED, false];
 
-        // 非法流转：PENDING → 保留态（MVP 不启用 APPROVED/REFUNDING）
+        // 非法流转：PENDING → 保留态（MVP 不启用 APPROVED）
         yield 'PENDING → APPROVED (reserved)'  => [RefundOrderStatus::PENDING, RefundOrderStatus::APPROVED, false];
-        yield 'PENDING → REFUNDING (reserved)' => [RefundOrderStatus::PENDING, RefundOrderStatus::REFUNDING, false];
 
         // 非法流转：保留态回 PENDING
         yield 'APPROVED → PENDING'   => [RefundOrderStatus::APPROVED, RefundOrderStatus::PENDING, false];

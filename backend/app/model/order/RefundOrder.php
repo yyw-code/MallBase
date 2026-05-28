@@ -7,13 +7,9 @@ use app\common\enum\RefundOrderStatus;
 use mall_base\base\BaseModel;
 
 /**
- * 售后订单模型（预留骨架）
+ * 售后订单模型
  *
- * 当前版本仅建模，用于：
- *  1. OrderService 列表接口聚合售后标签文案
- *  2. 后台售后菜单占位，权限码 SystemRefundOrder* 预注册
- *
- * 主体审核/退款流程在后续迭代实现
+ * 用于售后申请、后台审核与主订单列表售后标签聚合。
  */
 class RefundOrder extends BaseModel
 {
