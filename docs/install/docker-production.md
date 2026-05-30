@@ -29,6 +29,8 @@ openssl rand -hex 32
 
 重点修改：
 
+- `MALLBASE_COMPOSE_PROJECT_NAME`
+- `MALLBASE_CONTAINER_PREFIX`
 - `APP_DEBUG=false`
 - `DB_HOST`
 - `DB_PORT`
@@ -39,6 +41,15 @@ openssl rand -hex 32
 - `REDIS_PORT`
 - `JWT_SECRET`
 - `SITE_URL`
+
+同一台服务器部署主站和演示站时，给演示站使用独立的 Compose 名称、容器名前缀和后端宿主机端口。例如：
+
+```env
+MALLBASE_COMPOSE_PROJECT_NAME=mallbase-demo
+MALLBASE_CONTAINER_PREFIX=mallbase-demo
+SWOOLE_HTTP_PORT=18080
+SITE_URL=https://demo.example.com
+```
 
 ### 2. 构建后台前端静态资源
 

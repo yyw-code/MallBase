@@ -75,7 +75,7 @@ pnpm dev:antd
 ```bash
 # 在项目根目录执行
 docker ps
-# 应看到 mallbase-dev 容器在运行，8080 端口已暴露
+# 应看到 ${MALLBASE_CONTAINER_PREFIX:-mallbase}-dev 容器在运行，8080 端口已暴露
 ```
 
 如果后端是原生运行：
@@ -119,7 +119,8 @@ docker compose -f docker-compose.frontend-build.yml up frontend-build
 **预期看到：**
 ```bash
 # 在项目根目录执行
-docker logs mallbase-frontend-build
+PREFIX=${MALLBASE_CONTAINER_PREFIX:-mallbase}
+docker logs ${PREFIX}-frontend-build
 # 末尾应看到 [frontend-build] done
 ```
 ```bash

@@ -42,8 +42,9 @@ docker compose restart
 先看日志：
 
 ```bash
-docker logs mallbase-ensure-env
-docker logs mallbase-dev
+PREFIX=${MALLBASE_CONTAINER_PREFIX:-mallbase}
+docker logs ${PREFIX}-ensure-env
+docker logs ${PREFIX}-dev
 ```
 
 常见原因：
@@ -55,7 +56,8 @@ docker logs mallbase-dev
 修复后重跑：
 
 ```bash
-docker exec mallbase-dev php think install:auto
+PREFIX=${MALLBASE_CONTAINER_PREFIX:-mallbase}
+docker exec ${PREFIX}-dev php think install:auto
 ```
 
 ### `frontend-build` 看起来像卡住
@@ -67,7 +69,8 @@ docker exec mallbase-dev php think install:auto
 处理：
 
 ```bash
-docker logs mallbase-frontend-build
+PREFIX=${MALLBASE_CONTAINER_PREFIX:-mallbase}
+docker logs ${PREFIX}-frontend-build
 ```
 
 脚本每 15 秒会输出一次“进行中，请稍候”，有日志就说明没卡死。
@@ -179,7 +182,8 @@ pnpm run build --filter=@vben/web-antd
 处理：
 
 ```bash
-docker exec -it mallbase-mysql sh -c 'mysql -u root -p"${MYSQL_ROOT_PASSWORD}" "${MYSQL_DATABASE}" -e "UPDATE mb_admin SET password_changed_at=NULL WHERE id=1"'
+PREFIX=${MALLBASE_CONTAINER_PREFIX:-mallbase}
+docker exec -it ${PREFIX}-mysql sh -c 'mysql -u root -p"${MYSQL_ROOT_PASSWORD}" "${MYSQL_DATABASE}" -e "UPDATE mb_admin SET password_changed_at=NULL WHERE id=1"'
 ```
 
 ### 登录后菜单是空的
@@ -191,7 +195,8 @@ docker exec -it mallbase-mysql sh -c 'mysql -u root -p"${MYSQL_ROOT_PASSWORD}" "
 处理：
 
 ```bash
-docker exec -it mallbase-dev php think sync:permissions
+PREFIX=${MALLBASE_CONTAINER_PREFIX:-mallbase}
+docker exec -it ${PREFIX}-dev php think sync:permissions
 ```
 
 ## 端口、CORS、缓存与重启

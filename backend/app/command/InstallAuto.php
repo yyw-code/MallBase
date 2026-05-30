@@ -26,7 +26,8 @@ use think\console\Output;
  * 使用示例：
  * ```bash
  * # 已启动 backend 容器后手动执行
- * docker exec mallbase-dev php think install:auto
+ * PREFIX=${MALLBASE_CONTAINER_PREFIX:-mallbase}
+ * docker exec ${PREFIX}-dev php think install:auto
  * ```
  */
 class InstallAuto extends Command

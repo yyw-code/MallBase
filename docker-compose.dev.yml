@@ -16,11 +16,13 @@
 #         若不加 --no-deps，会把 ensure-env / mysql / redis 一并拉起
 # ==========================================
 
+name: ${MALLBASE_COMPOSE_PROJECT_NAME:-mallbase}
+
 services:
   # 一次性 preflight 容器：确保 MySQL / Redis 宿主机数据目录存在且容器可写。
   prepare-data-dirs:
     image: alpine:3.19
-    container_name: mallbase-prepare-data-dirs
+    container_name: ${MALLBASE_CONTAINER_PREFIX:-mallbase}-prepare-data-dirs
     volumes:
       - .:/workdir
       - ./deploy/docker/prepare-data-dirs.sh:/prepare-data-dirs.sh:ro
@@ -30,7 +32,7 @@ services:
   # 一次性 init 容器：确保根 .env 存在，并据此派生 backend/.env
   ensure-env:
     image: alpine:3.19
-    container_name: mallbase-ensure-env
+    container_name: ${MALLBASE_CONTAINER_PREFIX:-mallbase}-ensure-env
     volumes:
       - .:/workdir
       - ./deploy/docker/ensure-env.sh:/ensure-env.sh:ro
@@ -46,7 +48,7 @@ services:
   check-db-auth:
     image: mysql:8.0
     pull_policy: always
-    container_name: mallbase-check-db-auth
+    container_name: ${MALLBASE_CONTAINER_PREFIX:-mallbase}-check-db-auth
     volumes:
       - .:/workdir:ro
       - ./deploy/docker/check-db-auth.sh:/check-db-auth.sh:ro
@@ -67,7 +69,7 @@ services:
       dockerfile: deploy/docker/Dockerfile
     image: mallbase-backend:dev
     pull_policy: never
-    container_name: mallbase-install-auto
+    container_name: ${MALLBASE_CONTAINER_PREFIX:-mallbase}-install-auto
     environment:
       TZ: Asia/Shanghai
     volumes:
@@ -90,7 +92,7 @@ services:
       dockerfile: deploy/docker/Dockerfile
     image: mallbase-backend:dev
     pull_policy: never
-    container_name: mallbase-dev
+    container_name: ${MALLBASE_CONTAINER_PREFIX:-mallbase}-dev
     restart: unless-stopped
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -114,7 +116,7 @@ services:
   mysql:
     image: mysql:8.0
     pull_policy: always
-    container_name: mallbase-mysql
+    container_name: ${MALLBASE_CONTAINER_PREFIX:-mallbase}-mysql
     restart: unless-stopped
     environment:
       TZ: Asia/Shanghai
@@ -144,7 +146,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: mallbase-redis
+    container_name: ${MALLBASE_CONTAINER_PREFIX:-mallbase}-redis
     restart: unless-stopped
     ports:
       - "${REDIS_PORT:-6379}:6379"
@@ -166,7 +168,7 @@ services:
     profiles: ["tools"]
     image: mysql:8.0
     pull_policy: always
-    container_name: mallbase-rotate-db-password
+    container_name: ${MALLBASE_CONTAINER_PREFIX:-mallbase}-rotate-db-password
     volumes:
       - .:/workdir
       - ./deploy/docker/rotate-db-password.sh:/rotate-db-password.sh:ro

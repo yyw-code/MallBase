@@ -32,6 +32,14 @@ ROOT_DIR=$(CDPATH= cd -- "$SCRIPT_DIR/../.." && pwd)
 COMPOSE_FILE="$ROOT_DIR/docker-compose.dev.yml"
 FRONTEND_COMPOSE_FILE="$ROOT_DIR/docker-compose.frontend-build.yml"
 
+if [ -f "$ROOT_DIR/.env" ]; then
+    set -a
+    . "$ROOT_DIR/.env"
+    set +a
+fi
+
+CONTAINER_PREFIX="${MALLBASE_CONTAINER_PREFIX:-mallbase}"
+
 ALL_IMAGES=0
 
 for arg in "$@"; do
@@ -48,6 +56,7 @@ for arg in "$@"; do
 done
 
 echo ">>> [cleanup-dev] 项目目录：$ROOT_DIR"
+echo ">>> [cleanup-dev] 容器名前缀：$CONTAINER_PREFIX"
 echo ">>> [cleanup-dev] 将执行项目级彻底清理"
 if [ "$ALL_IMAGES" -eq 1 ]; then
     echo ">>> [cleanup-dev] 已启用 --all-images：会额外删除共享基础镜像"
@@ -63,14 +72,14 @@ docker compose -f "$FRONTEND_COMPOSE_FILE" down -v --remove-orphans || true
 
 echo ">>> [cleanup-dev] 兜底删除可能残留的容器"
 for name in \
-    mallbase-dev \
-    mallbase-install-auto \
-    mallbase-check-db-auth \
-    mallbase-frontend-build \
-    mallbase-ensure-env \
-    mallbase-mysql \
-    mallbase-redis \
-    mallbase-rotate-db-password
+    "$CONTAINER_PREFIX-dev" \
+    "$CONTAINER_PREFIX-install-auto" \
+    "$CONTAINER_PREFIX-check-db-auth" \
+    "$CONTAINER_PREFIX-frontend-build" \
+    "$CONTAINER_PREFIX-ensure-env" \
+    "$CONTAINER_PREFIX-mysql" \
+    "$CONTAINER_PREFIX-redis" \
+    "$CONTAINER_PREFIX-rotate-db-password"
 do
     docker rm -f "$name" >/dev/null 2>&1 || true
 done

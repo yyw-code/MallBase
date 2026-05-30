@@ -5,10 +5,12 @@
 #   docker compose -f docker-compose.uniapp-build.yml up uniapp-build
 # ==========================================
 
+name: ${MALLBASE_COMPOSE_PROJECT_NAME:-mallbase}
+
 services:
   uniapp-build:
     image: node:20-alpine
-    container_name: mallbase-uniapp-build
+    container_name: ${MALLBASE_CONTAINER_PREFIX:-mallbase}-uniapp-build
     working_dir: /app
     volumes:
       - ./frontend/uniapp:/app

@@ -29,7 +29,7 @@ sh deploy/docker/cleanup-dev.sh --all-images
 ## 默认清理内容
 
 1. `docker-compose.dev.yml`、`docker-compose.frontend-build.yml` 创建的容器 / 网络 / 卷（含匿名卷），以及 orphan 容器
-2. 兜底删除可能残留的容器（`mallbase-dev`、`mallbase-mysql`、`mallbase-redis`、`mallbase-frontend-build`、`mallbase-ensure-env` 等）
+2. 兜底删除可能残留的容器（默认前缀为 `mallbase`；设置 `MALLBASE_CONTAINER_PREFIX` 后按对应前缀清理）
 3. 本项目构建镜像 `mallbase-backend:dev`
 4. 宿主机 bind mount 生成的文件：
    - `data/`（MySQL / Redis 数据目录）

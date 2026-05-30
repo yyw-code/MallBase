@@ -6,12 +6,14 @@
 # 需要：外部 MySQL 8.0+ / Redis 6.0+
 # ==========================================
 
+name: ${MALLBASE_COMPOSE_PROJECT_NAME:-mallbase}
+
 services:
   backend:
     build:
       context: .
       dockerfile: deploy/docker/Dockerfile
-    container_name: mallbase
+    container_name: ${MALLBASE_CONTAINER_PREFIX:-mallbase}
     restart: unless-stopped
     extra_hosts:
       - "host.docker.internal:host-gateway"

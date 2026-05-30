@@ -20,7 +20,8 @@ docker compose -f docker-compose.frontend-build.yml up frontend-build
 查看打包日志：
 
 ```bash
-docker logs mallbase-frontend-build
+PREFIX=${MALLBASE_CONTAINER_PREFIX:-mallbase}
+docker logs ${PREFIX}-frontend-build
 ```
 
 ## 方式二：本地打包（适用方式一 / 方式四）

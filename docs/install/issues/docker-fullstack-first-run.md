@@ -11,9 +11,9 @@
 
 在完全清理后首次执行 `docker compose -f docker-compose.dev.yml up -d`，曾经出现过以下问题：
 
-- `mallbase-mysql` 第一次启动不健康，第二次又恢复正常
-- `mallbase-check-db-auth` 首次执行报业务库账号认证失败
-- `mallbase-install-auto` 因依赖失败没有真正开始执行
+- `<prefix>-mysql` 第一次启动不健康，第二次又恢复正常
+- `<prefix>-check-db-auth` 首次执行报业务库账号认证失败
+- `<prefix>-install-auto` 因依赖失败没有真正开始执行
 - `deploy/install/install.lock` 没有生成
 ## 根因分析
 
@@ -103,12 +103,12 @@ docker compose -f docker-compose.frontend-build.yml up frontend-build
 
 本次已验证首次启动可以直接跑通：
 
-- `mallbase-ensure-env`：`Exited (0)`
-- `mallbase-mysql`：`healthy`
-- `mallbase-check-db-auth`：`Exited (0)`
-- `mallbase-install-auto`：`Exited (0)`
-- `mallbase-dev`：`Up`
-- `mallbase-frontend-build`：`Exited (0)`
+- `<prefix>-ensure-env`：`Exited (0)`
+- `<prefix>-mysql`：`healthy`
+- `<prefix>-check-db-auth`：`Exited (0)`
+- `<prefix>-install-auto`：`Exited (0)`
+- `<prefix>-dev`：`Up`
+- `<prefix>-frontend-build`：`Exited (0)`
 - `deploy/install/install.lock` 成功生成
 - `backend/public/admin` 成功生成后台静态资源
 - `http://127.0.0.1:8080` 返回 `HTTP/1.1 200 OK`

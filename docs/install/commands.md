@@ -177,8 +177,9 @@ docker compose up -d --build
 适用：方式二、方式三、方式四
 
 ```bash
-docker logs mallbase-dev
-docker logs mallbase
+PREFIX=${MALLBASE_CONTAINER_PREFIX:-mallbase}
+docker logs ${PREFIX}-dev
+docker logs ${PREFIX}
 ```
 
 ### 查看 `frontend-build` 日志
@@ -186,7 +187,8 @@ docker logs mallbase
 适用：方式三
 
 ```bash
-docker logs mallbase-frontend-build
+PREFIX=${MALLBASE_CONTAINER_PREFIX:-mallbase}
+docker logs ${PREFIX}-frontend-build
 ```
 
 ### 手动执行 `install:auto`（可选 CLI 安装）
@@ -194,7 +196,8 @@ docker logs mallbase-frontend-build
 适用：方式三；仅用于无人值守或手动 CLI 安装，不是默认流程
 
 ```bash
-docker exec mallbase-dev php think install:auto
+PREFIX=${MALLBASE_CONTAINER_PREFIX:-mallbase}
+docker exec ${PREFIX}-dev php think install:auto
 ```
 
 ## 容器内依赖安装
@@ -212,7 +215,8 @@ docker compose -f docker-compose.dev.yml run --rm --no-deps backend composer ins
 适用：方式二、方式三
 
 ```bash
-docker exec mallbase-dev composer install
+PREFIX=${MALLBASE_CONTAINER_PREFIX:-mallbase}
+docker exec ${PREFIX}-dev composer install
 ```
 
 ### 初始化 Playwright 浏览器
@@ -306,8 +310,9 @@ redis-cli -h 127.0.0.1 -p 6379
 cd backend
 php think region:import
 
-docker exec mallbase-dev php think region:import
-docker exec mallbase php think region:import
+PREFIX=${MALLBASE_CONTAINER_PREFIX:-mallbase}
+docker exec ${PREFIX}-dev php think region:import
+docker exec ${PREFIX} php think region:import
 ```
 
 ### 升级旧环境的 `password_changed_at` 列

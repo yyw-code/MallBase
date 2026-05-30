@@ -116,7 +116,8 @@ curl -I http://127.0.0.1:8080/
 如果容器已经正常起来，再补充检查：
 
 ```bash
-docker exec mallbase-dev php -v
+PREFIX=${MALLBASE_CONTAINER_PREFIX:-mallbase}
+docker exec ${PREFIX}-dev php -v
 ```
 
 浏览器访问：

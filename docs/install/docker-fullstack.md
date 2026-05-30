@@ -29,6 +29,8 @@ cp deploy/docker/.example.env .env
 
 再编辑以下字段：
 
+- `MALLBASE_COMPOSE_PROJECT_NAME`
+- `MALLBASE_CONTAINER_PREFIX`
 - `SWOOLE_HTTP_PORT`
 - `MYSQL_PORT`
 - `REDIS_PORT`
@@ -39,6 +41,17 @@ cp deploy/docker/.example.env .env
 - `SITE_URL`
 
 `.env` 与 `backend/.env` 的主从关系见 [env-files.md](./env-files.md)。
+
+同一台服务器部署多套实例时，建议每套使用不同的 Compose 名称、容器名前缀和宿主机端口。例如演示站：
+
+```env
+MALLBASE_COMPOSE_PROJECT_NAME=mallbase-demo
+MALLBASE_CONTAINER_PREFIX=mallbase-demo
+SWOOLE_HTTP_PORT=18080
+MYSQL_PORT=13306
+REDIS_PORT=16379
+SITE_URL=https://demo.example.com
+```
 
 ### 3. 启动开发运行时服务
 
@@ -63,16 +76,17 @@ docker compose -f docker-compose.frontend-build.yml up frontend-build
 ### 5. 查看关键状态
 
 ```bash
+PREFIX=${MALLBASE_CONTAINER_PREFIX:-mallbase}
 docker ps
-docker logs mallbase-check-db-auth
-docker logs mallbase-frontend-build
+docker logs ${PREFIX}-check-db-auth
+docker logs ${PREFIX}-frontend-build
 ls backend/public/admin/index.html
 ```
 
 期望结果：
 
-- 常驻容器：`mallbase-dev`、`mallbase-mysql`、`mallbase-redis`
-- 一次性容器：`mallbase-ensure-env`、`mallbase-check-db-auth`、`mallbase-frontend-build` 最终 `Exited (0)`
+- 常驻容器：`<prefix>-dev`、`<prefix>-mysql`、`<prefix>-redis`
+- 一次性容器：`<prefix>-ensure-env`、`<prefix>-check-db-auth`、`<prefix>-frontend-build` 最终 `Exited (0)`
 - `backend/public/admin/index.html` 存在
 
 ### 6. 打开安装向导并确认安装
