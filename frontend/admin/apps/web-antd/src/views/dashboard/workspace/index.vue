@@ -6,9 +6,10 @@ import type {
   WorkbenchTrendItem,
 } from '@vben/common-ui';
 
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
+import { useAccess } from '@vben/access';
 import {
   AnalysisChartCard,
   WorkbenchHeader,
@@ -21,9 +22,18 @@ import { preferences } from '@vben/preferences';
 import { useUserStore } from '@vben/stores';
 import { openWindow } from '@vben/utils';
 
+import { message, Modal } from 'ant-design-vue';
+
+import { resetDemoDataApi } from '#/api/demo/reset';
+
 import AnalyticsVisitsSource from '../analytics/analytics-visits-source.vue';
 
 const userStore = useUserStore();
+const { hasAccessByCodes } = useAccess();
+const resetting = ref(false);
+const canResetDemo = computed(() =>
+  hasAccessByCodes(['SystemDemoResetExecute']),
+);
 
 // 这是一个示例数据，实际项目中需要根据实际情况进行调整
 // url 也可以是内部路由，在 navTo 方法中识别处理，进行内部跳转
@@ -231,10 +241,46 @@ function navTo(nav: WorkbenchProjectItem | WorkbenchQuickNavItem) {
     console.warn(`Unknown URL for navigation item: ${nav.title} -> ${nav.url}`);
   }
 }
+
+function handleResetDemoData() {
+  Modal.confirm({
+    title: '恢复演示数据',
+    content:
+      '该操作会将演示站数据恢复到安装演示状态，当前演示数据会被重置。确认继续？',
+    okText: '确认恢复',
+    okType: 'danger',
+    cancelText: '取消',
+    async onOk() {
+      resetting.value = true;
+      try {
+        await resetDemoDataApi();
+        message.success('演示数据已恢复，请重新登录查看最新数据');
+      } finally {
+        resetting.value = false;
+      }
+    },
+  });
+}
 </script>
 
 <template>
   <div class="p-5">
+    <a-card v-if="canResetDemo" class="mb-5" :bordered="false">
+      <div
+        class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+      >
+        <div>
+          <div class="text-base font-medium">演示站维护</div>
+          <div class="text-sm text-gray-500">
+            将商品、用户、配置和权限恢复到安装演示状态。
+          </div>
+        </div>
+        <a-button danger :loading="resetting" @click="handleResetDemoData">
+          一键恢复演示数据
+        </a-button>
+      </div>
+    </a-card>
+
     <WorkbenchHeader
       :avatar="userStore.userInfo?.avatar || preferences.app.defaultAvatar"
     >
