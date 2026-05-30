@@ -14,7 +14,7 @@ use mall_base\exception\BusinessException;
 use PDO;
 use think\facade\Cache;
 use think\facade\Console;
-use think\facade\Db;
+use think\facade\Config;
 
 /**
  * 演示站数据恢复服务
@@ -65,11 +65,26 @@ class DemoResetService extends BaseService
 
     private function pdo(): PDO
     {
-        /** @var PDO $pdo */
-        $pdo = Db::connect()->getPdo();
-        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        $config = Config::get('database.connections.mysql', []);
+        $database = trim((string) ($config['database'] ?? ''));
+        if ($database === '') {
+            throw new \RuntimeException('数据库名为空，请先完成安装或检查 backend/.env');
+        }
 
-        return $pdo;
+        $charset = (string) ($config['charset'] ?? 'utf8mb4');
+        $dsn = sprintf(
+            'mysql:host=%s;port=%s;dbname=%s;charset=%s',
+            (string) ($config['hostname'] ?? '127.0.0.1'),
+            (string) ($config['hostport'] ?? '3306'),
+            $database,
+            $charset
+        );
+
+        return new PDO($dsn, (string) ($config['username'] ?? 'root'), (string) ($config['password'] ?? ''), [
+            PDO::ATTR_TIMEOUT            => 5,
+            PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+            PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES {$charset}",
+        ]);
     }
 
     private function importSqlDir(PDO $pdo, string $dir, bool $required = true): void
