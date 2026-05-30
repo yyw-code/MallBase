@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import type { VbenFormSchema } from '@vben/common-ui';
+import type { BasicOption, Recordable } from '@vben/types';
 
 import { computed, ref } from 'vue';
 
@@ -25,15 +26,41 @@ const loginTitle = computed(
 const loginSubtitle = computed(
   () => loginPageMetaState.loginSubtitle || $t('authentication.loginSubtitle'),
 );
+const demoAccountOptions: BasicOption[] = [
+  {
+    label: '演示管理员 admin / admin123',
+    value: 'admin',
+  },
+];
 
 const formSchema = computed((): VbenFormSchema[] => {
   const schema: VbenFormSchema[] = [
+    {
+      component: 'VbenSelect',
+      componentProps: {
+        options: demoAccountOptions,
+        placeholder: $t('authentication.selectAccount'),
+      },
+      fieldName: 'selectAccount',
+      label: $t('authentication.selectAccount'),
+      rules: z.string().optional(),
+    },
     {
       component: 'VbenInput',
       componentProps: {
         placeholder: $t('authentication.usernameTip'),
       },
-      defaultValue: 'admin',
+      dependencies: {
+        trigger(values, form) {
+          if (values.selectAccount === 'admin') {
+            form.setValues({
+              password: 'admin123',
+              username: 'admin',
+            });
+          }
+        },
+        triggerFields: ['selectAccount'],
+      },
       fieldName: 'username',
       label: $t('authentication.username'),
       rules: z.string().min(1, { message: $t('authentication.usernameTip') }),
@@ -43,7 +70,6 @@ const formSchema = computed((): VbenFormSchema[] => {
       componentProps: {
         placeholder: $t('authentication.password'),
       },
-      defaultValue: 'admin123',
       fieldName: 'password',
       label: $t('authentication.password'),
       rules: z.string().min(1, { message: $t('authentication.passwordTip') }),
@@ -52,6 +78,12 @@ const formSchema = computed((): VbenFormSchema[] => {
 
   return schema;
 });
+
+function handleLogin(values: Recordable<any>) {
+  const loginValues = { ...values };
+  delete loginValues.selectAccount;
+  authStore.authLogin(loginValues);
+}
 
 async function waitDemoResetDone() {
   for (let i = 0; i < 60; i++) {
@@ -108,7 +140,7 @@ function handleResetDemoData() {
       :show-register="false"
       :sub-title="loginSubtitle"
       :title="loginTitle"
-      @submit="authStore.authLogin"
+      @submit="handleLogin"
     />
     <div class="mx-auto mt-4 flex max-w-[360px] justify-center">
       <a-button
