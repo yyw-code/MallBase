@@ -50,6 +50,7 @@
 
 - `docs-linking`
 - `open-source-wording`
+- `preview-branch-boundary`
 
 ## 3. 执行约束（硬规则）
 
@@ -60,6 +61,7 @@
 5. 后台路由遵循 `System*` 命名、`/:id` 路径参数与权限字段规范
 6. 前端优先复用 Upload/IconPicker，路由后端驱动，API 参数与后端一致
 7. 开源仓库中的提交、文档、注释、备注、提示文案禁止使用带标签化、轻视性、冒犯性或不适合公开传播的词汇
+8. `preview` 是公开演示站部署分支，演示站专用能力禁止反向合并回 `main`
 
 ## 4. 维护策略
 
