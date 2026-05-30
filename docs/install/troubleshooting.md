@@ -92,6 +92,29 @@ docker compose -f docker-compose.dev.yml up -d --no-deps backend
 
 如果你直接执行 `up -d --no-deps backend`，当前开发镜像入口脚本也会自动补一次 `composer install`。首次启动时间较长属于正常现象。
 
+### `data/mysql` 或 `data/redis` 权限异常
+
+适用场景：
+
+- Docker 启动 MySQL / Redis 时提示宿主机挂载目录不可写
+- `prepare-data-dirs` 日志提示 `data/mysql` 或 `data/redis` 不可读写
+- 手动复制、迁移或恢复过 `data/` 目录，导致目录属主不是容器内运行用户
+
+处理：
+
+```bash
+# 在项目根目录执行
+mkdir -p data/mysql data/redis
+sudo chown -R 999:999 data/mysql data/redis
+sudo chmod -R u+rwX,g+rwX data/mysql data/redis
+```
+
+说明：
+
+- `999:999` 是 MySQL / Redis 容器常见的运行用户 UID/GID，本项目的 `prepare-data-dirs` 也按这个用户修复目录权限。
+- 这条命令只修复目录权限，不会解决“`.env` 密码和旧 `data/mysql` 真实密码不一致”的问题；那种情况请看下方 `Access denied for user`。
+- 如果不需要保留现有数据，应走全量清理流程，而不是只修权限。
+
 ## MySQL / Redis 连接
 
 ### `Connection refused` 连不上 MySQL
