@@ -112,7 +112,7 @@ class OrderAdminService extends BaseService
         $oldPay      = (string) $order->pay_amount;
         $oldFreight  = (string) $order->freight_amount;
         $oldDiscount = (string) $order->discount_amount;
-        $ip          = request()->ip();
+        $ip          = $this->requestIp();
         $remarkPart  = $reason !== null && $reason !== ''
             ? '; 原因:' . mb_substr($reason, 0, 200)
             : '';
@@ -126,8 +126,7 @@ class OrderAdminService extends BaseService
             $discount,
             $remarkPart
         );
-        /** @var WechatPrepayCloseService $prepayClose */
-        $prepayClose = app()->make(WechatPrepayCloseService::class);
+        $prepayClose = $this->prepayCloseService();
         $prepayLogs = $prepayClose->activePrepayLogs((int) $order->id);
         $prepayClose->closeLogs($prepayLogs);
         $prepayLogIds = $prepayClose->idsOf($prepayLogs);
@@ -151,7 +150,7 @@ class OrderAdminService extends BaseService
             }
 
             // 3) 审计日志（同状态自环，仅记录改价动作）
-            OrderLog::create([
+            $this->model(OrderLog::class)->save([
                 'order_id'      => (int) $order->id,
                 'from_status'   => OrderStatus::PENDING_PAY,
                 'to_status'     => OrderStatus::PENDING_PAY,
@@ -161,6 +160,21 @@ class OrderAdminService extends BaseService
                 'ip'            => $ip !== '' ? $ip : null,
             ]);
         });
+    }
+
+    protected function prepayCloseService(): WechatPrepayCloseService
+    {
+        /** @var WechatPrepayCloseService $service */
+        $service = app()->make(WechatPrepayCloseService::class);
+        return $service;
+    }
+
+    protected function requestIp(): string
+    {
+        if (!function_exists('request')) {
+            return '';
+        }
+        return (string) request()->ip();
     }
 
     /**

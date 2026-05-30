@@ -14,11 +14,14 @@ interface EnumOption {
 }
 
 interface OrderRecord {
+  discount_amount: string;
+  freight_amount: string;
   id: number;
+  pay_amount: string;
   sn: string;
   status: number;
   status_text?: string;
-  pay_amount: string;
+  total_amount: string;
   user_id: number;
 }
 
@@ -81,7 +84,8 @@ test.describe('Order admin page', () => {
       { headers },
     );
     expect(shippedRes.ok()).toBeTruthy();
-    const shippedJson = (await shippedRes.json()) as ApiResponse<OrderListResponse>;
+    const shippedJson =
+      (await shippedRes.json()) as ApiResponse<OrderListResponse>;
     test.skip(shippedJson.code !== 200, 'order/list 未返回 200');
     const shipped = shippedJson.data?.list?.[0];
     test.skip(!shipped, '当前环境无已发货订单，跳过详情抽屉断言');
@@ -168,7 +172,7 @@ test.describe('Order admin page', () => {
     await expect(shipBtn).toBeVisible({ timeout: 8000 });
   });
 
-  test('改价：无待支付订单优雅跳过，有订单则校验接口与按钮', async ({
+  test('改价：无待支付订单优雅跳过，有订单则校验接口、按钮与弹窗提交', async ({
     page,
   }) => {
     await page.goto('/auth/login?e2e=1');
@@ -184,7 +188,8 @@ test.describe('Order admin page', () => {
       { headers },
     );
     expect(pendingRes.ok()).toBeTruthy();
-    const pendingJson = (await pendingRes.json()) as ApiResponse<OrderListResponse>;
+    const pendingJson =
+      (await pendingRes.json()) as ApiResponse<OrderListResponse>;
     test.skip(pendingJson.code !== 200, 'order/list 未返回 200');
     const pending = pendingJson.data?.list?.[0];
     test.skip(!pending, '当前环境无待支付订单，跳过改价断言');
@@ -197,7 +202,34 @@ test.describe('Order admin page', () => {
     const emptyJson = (await emptyRes.json()) as ApiResponse<unknown>;
     expect(emptyJson.code).not.toBe(200);
 
-    // 页面侧：改价按钮仅对 status=0 渲染
+    // 后端直接校验：合法改价按 total + freight - discount 重算应付金额
+    const currentFreight = Number(pending!.freight_amount ?? 0);
+    const currentDiscount = Number(pending!.discount_amount ?? 0);
+    const expectedPay =
+      Number(pending!.total_amount ?? 0) + currentFreight - currentDiscount;
+    const validRes = await page.request.post(
+      `${backendBaseUrl}/admin/api/order/adjustPrice/${pending!.id}`,
+      {
+        data: {
+          discount_amount: currentDiscount.toFixed(2),
+          freight_amount: currentFreight.toFixed(2),
+          reason: 'E2E 改价回归',
+        },
+        headers,
+      },
+    );
+    const validJson = (await validRes.json()) as ApiResponse<unknown>;
+    expect(validJson.code).toBe(200);
+
+    const detailRes = await page.request.get(
+      `${backendBaseUrl}/admin/api/order/detail/${pending!.id}`,
+      { headers },
+    );
+    const detailJson = (await detailRes.json()) as ApiResponse<OrderRecord>;
+    expect(detailJson.code).toBe(200);
+    expect(Number(detailJson.data.pay_amount)).toBeCloseTo(expectedPay, 2);
+
+    // 页面侧：改价按钮仅对 status=0 渲染，并可打开弹窗提交
     await page.goto('/order');
     await expect(
       page.locator('input[placeholder="订单号（支持模糊）"]'),
@@ -210,5 +242,61 @@ test.describe('Order admin page', () => {
     const row = page.getByRole('row', { name: new RegExp(pending!.sn) });
     const adjustBtn = row.getByRole('button', { name: /改\s*价/ });
     await expect(adjustBtn).toBeVisible({ timeout: 8000 });
+    await adjustBtn.click();
+
+    const modal = page.locator('.ant-modal').filter({ hasText: '订单改价' });
+    await expect(modal).toBeVisible({ timeout: 8000 });
+    await expect(modal.getByText(`订单号：${pending!.sn}`)).toBeVisible();
+    await expect(
+      modal.getByText(`当前应付：¥${detailJson.data.pay_amount}`),
+    ).toBeVisible();
+    await expect(
+      modal.getByText(`¥${Number(detailJson.data.total_amount).toFixed(2)}`),
+    ).toBeVisible();
+
+    const amountInputs = modal.locator('.ant-input-number-input');
+    expect(Number(await amountInputs.nth(0).inputValue())).toBeCloseTo(
+      currentFreight,
+      2,
+    );
+    expect(Number(await amountInputs.nth(1).inputValue())).toBeCloseTo(
+      currentDiscount,
+      2,
+    );
+    await modal.locator('textarea').fill('E2E 页面改价回归');
+
+    const adjustResponse = page.waitForResponse(
+      (response) =>
+        response
+          .url()
+          .includes(`/admin/api/order/adjustPrice/${pending!.id}`) &&
+        response.request().method() === 'POST',
+    );
+    await modal.getByRole('button', { name: /确认改价/ }).click();
+    const response = await adjustResponse;
+    const adjustResult = (await response.json()) as ApiResponse<unknown>;
+    expect(adjustResult.code).toBe(200);
+    await expect(modal).toBeHidden({ timeout: 8000 });
+
+    const nonPendingRes = await page.request.get(
+      `${backendBaseUrl}/admin/api/order/list?status=10&limit=1`,
+      { headers },
+    );
+    const nonPendingJson =
+      (await nonPendingRes.json()) as ApiResponse<OrderListResponse>;
+    const nonPending = nonPendingJson.data?.list?.[0];
+    if (nonPending) {
+      await page
+        .locator('input[placeholder="订单号（支持模糊）"]')
+        .fill(nonPending.sn);
+      await page.getByRole('button', { name: /搜\s*索/ }).click();
+
+      const nonPendingRow = page.getByRole('row', {
+        name: new RegExp(nonPending.sn),
+      });
+      await expect(
+        nonPendingRow.getByRole('button', { name: /改\s*价/ }),
+      ).toHaveCount(0);
+    }
   });
 });

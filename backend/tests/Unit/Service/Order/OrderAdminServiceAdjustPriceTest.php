@@ -5,10 +5,24 @@ declare(strict_types=1);
 namespace Tests\Unit\Service\Order;
 
 use app\common\enum\OrderStatus;
+use app\model\order\OrderLog;
 use app\model\order\Order;
+use app\model\order\PaymentLog;
 use app\service\admin\order\OrderAdminService;
+use app\service\order\WechatPrepayCloseService;
 use mall_base\exception\BusinessException;
 use PHPUnit\Framework\TestCase;
+
+final class AdjustableOrderStub extends Order
+{
+    public int $saveCalls = 0;
+
+    public function save(array|object $data = [], $where = [], bool $refresh = false): bool
+    {
+        $this->saveCalls++;
+        return true;
+    }
+}
 
 /**
  * 后台改价前置守卫单元测试
@@ -121,6 +135,100 @@ final class OrderAdminServiceAdjustPriceTest extends TestCase
         );
     }
 
+    public function testAdjustPriceUpdatesAmountsAndWritesAuditLog(): void
+    {
+        $order = $this->makeOrder(OrderStatus::PENDING_PAY, '100.00');
+        $paymentLogModel = new class {
+            /** @var array<int, array<string, mixed>> */
+            public array $updates = [];
+
+            public function where(string $field, mixed $operator = null, mixed $value = null): self
+            {
+                return $this;
+            }
+
+            /**
+             * @param array<int, int> $ids
+             */
+            public function whereIn(string $field, array $ids): self
+            {
+                return $this;
+            }
+
+            /**
+             * @param array<string, mixed> $data
+             */
+            public function update(array $data): int
+            {
+                $this->updates[] = $data;
+                return 1;
+            }
+        };
+        $orderLogModel = new class {
+            /** @var array<string, mixed> */
+            public array $saved = [];
+
+            /**
+             * @param array<string, mixed> $data
+             */
+            public function save(array|object $data = [], $where = [], bool $refresh = false): bool
+            {
+                $this->saved = (array) $data;
+                return true;
+            }
+        };
+        $prepayClose = new class extends WechatPrepayCloseService {
+            public bool $closed = false;
+
+            public function __construct()
+            {
+            }
+
+            public function activePrepayLogs(int $orderId, ?int $excludeScene = null): array
+            {
+                return [];
+            }
+
+            public function closeLogs(array $logs): void
+            {
+                $this->closed = true;
+            }
+
+            public function idsOf(array $logs): array
+            {
+                return [];
+            }
+        };
+        $service = $this->makeServiceReturning(
+            $order,
+            [
+                PaymentLog::class => $paymentLogModel,
+                OrderLog::class   => $orderLogModel,
+            ],
+            $prepayClose
+        );
+
+        $service->adjustPrice(
+            orderId: 1,
+            freight: '8.00',
+            discount: '3.50',
+            adminId: 9,
+            reason: '客服协商',
+        );
+
+        $this->assertSame('8.00', (string) $order->freight_amount);
+        $this->assertSame('3.50', (string) $order->discount_amount);
+        $this->assertSame('104.50', (string) $order->pay_amount);
+        $this->assertSame([['event_type' => PaymentLog::EVENT_SUPERSEDED]], $paymentLogModel->updates);
+        $this->assertTrue($prepayClose->closed);
+        $this->assertSame(1, $orderLogModel->saved['order_id']);
+        $this->assertSame(OrderStatus::PENDING_PAY, $orderLogModel->saved['from_status']);
+        $this->assertSame(OrderStatus::PENDING_PAY, $orderLogModel->saved['to_status']);
+        $this->assertSame(9, $orderLogModel->saved['operator_id']);
+        $this->assertStringContainsString('应付 100.00→104.50', $orderLogModel->saved['remark']);
+        $this->assertStringContainsString('原因:客服协商', $orderLogModel->saved['remark']);
+    }
+
     // ----------------- 测试基础设施 -----------------
 
     /**
@@ -132,7 +240,7 @@ final class OrderAdminServiceAdjustPriceTest extends TestCase
      */
     private function makeOrder(int $status, string $total): Order
     {
-        $ref = new \ReflectionClass(Order::class);
+        $ref = new \ReflectionClass(AdjustableOrderStub::class);
         /** @var Order $order */
         $order = $ref->newInstanceWithoutConstructor();
 
@@ -184,10 +292,18 @@ final class OrderAdminServiceAdjustPriceTest extends TestCase
      * 注意：父类的 findOrder 是 protected，这里直接重写返回预制 Order；
      * 真正被测试的 adjustPrice() 仍是父类原方法。
      */
-    private function makeServiceReturning(Order $order): OrderAdminService
+    private function makeServiceReturning(
+        Order $order,
+        array $models = [],
+        ?WechatPrepayCloseService $prepayClose = null
+    ): OrderAdminService
     {
-        return new class ($order) extends OrderAdminService {
-            public function __construct(private Order $stub)
+        return new class ($order, $models, $prepayClose) extends OrderAdminService {
+            public function __construct(
+                private Order $stub,
+                private array $models,
+                private ?WechatPrepayCloseService $prepayClose
+            )
             {
                 // 不调用父构造：BaseService 默认不依赖容器；保持空体更安全
             }
@@ -195,6 +311,32 @@ final class OrderAdminServiceAdjustPriceTest extends TestCase
             protected function findOrder(int $orderId): Order
             {
                 return $this->stub;
+            }
+
+            protected function model(?string $modelClass = null)
+            {
+                if ($modelClass !== null && isset($this->models[$modelClass])) {
+                    return $this->models[$modelClass];
+                }
+                return parent::model($modelClass);
+            }
+
+            protected function transaction(callable $callback)
+            {
+                return $callback();
+            }
+
+            protected function prepayCloseService(): WechatPrepayCloseService
+            {
+                if ($this->prepayClose !== null) {
+                    return $this->prepayClose;
+                }
+                return parent::prepayCloseService();
+            }
+
+            protected function requestIp(): string
+            {
+                return '127.0.0.1';
             }
         };
     }

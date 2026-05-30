@@ -87,6 +87,7 @@ class PermissionService extends BaseService
 
         if ($adminId == Admin::SUPER_ADMIN_ID) {
             $codes = $this->model()->whereIn('type', [PermissionModel::TYPE_BUTTON, PermissionModel::TYPE_API])->where('status', 1)->column('code');
+            $codes = array_merge($codes, $this->routeAccessCodes());
         } else {
             // 获取管理员的角色ID
             $roleIds = $this->model(AdminRole::class)
@@ -109,6 +110,66 @@ class PermissionService extends BaseService
 
 
         return ['access_codes' => array_values(array_unique($codes))];
+    }
+
+    /**
+     * 从当前路由表补充按钮/API 权限码。
+     *
+     * 作用：新路由代码已存在但尚未执行 sync:permissions 时，超级管理员前端仍应能获得
+     * 对应按钮权限码；普通角色仍以数据库 role_permission 为准，不走此兜底。
+     *
+     * @return array<int, string>
+     */
+    protected function routeAccessCodes(): array
+    {
+        if (!function_exists('app')) {
+            return [];
+        }
+
+        try {
+            $routeList = app()->route->getRuleList();
+        } catch (\Throwable) {
+            return [];
+        }
+
+        $codes = [];
+        foreach ($routeList as $route) {
+            $name = (string) ($route['name'] ?? '');
+            if ($name === '') {
+                continue;
+            }
+
+            $option = $route['option'] ?? [];
+            if (($option['_auth'] ?? true) === false) {
+                continue;
+            }
+
+            $type = $this->normalizeRoutePermissionType($option['_type'] ?? null, (string) ($route['rule'] ?? ''));
+            if (in_array($type, [PermissionModel::TYPE_BUTTON, PermissionModel::TYPE_API], true)) {
+                $codes[] = $name;
+            }
+        }
+
+        return array_values(array_unique($codes));
+    }
+
+    protected function normalizeRoutePermissionType(mixed $type, string $rule): int
+    {
+        if ($type === null) {
+            return $rule !== '' && $rule !== '/'
+                ? PermissionModel::TYPE_API
+                : PermissionModel::TYPE_MENU;
+        }
+
+        if (is_numeric($type)) {
+            return (int) $type;
+        }
+
+        return [
+            'menu' => PermissionModel::TYPE_MENU,
+            'button' => PermissionModel::TYPE_BUTTON,
+            'api' => PermissionModel::TYPE_API,
+        ][strtolower((string) $type)] ?? PermissionModel::TYPE_API;
     }
 
     /**
