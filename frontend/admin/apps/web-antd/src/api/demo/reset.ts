@@ -7,6 +7,7 @@ export namespace DemoResetApi {
     admin_username: string;
     duration: number;
     regions: number;
+    site_url: string;
     static: {
       copied: number;
       errors: string[];
@@ -20,6 +21,7 @@ export namespace DemoResetApi {
     job_id: null | string;
     message: string;
     result: null | ResetResult;
+    site_url?: string;
     started_at: null | string;
     status: ResetStatus;
   }

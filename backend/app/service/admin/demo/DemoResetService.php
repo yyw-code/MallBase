@@ -34,16 +34,20 @@ class DemoResetService extends BaseService
      *
      * @return array<string, mixed>
      */
-    public function reset(): array
+    public function reset(?string $siteUrl = null): array
     {
         $startedAt = time();
         $pdo = $this->pdo();
+        $siteUrl = $this->normalizeSiteUrl($siteUrl);
 
         try {
             $this->importSqlDir($pdo, $this->installDataPath('schema'));
             $this->resetDemoAdmin($pdo);
             $this->importSqlDir($pdo, $this->installDataPath('demo'), required: false);
             $staticResult = $this->copyDemoStatics();
+            if ($siteUrl !== '') {
+                $this->seedSiteUrl($pdo, $siteUrl);
+            }
 
             Console::call('sync:permissions');
             app()->make(SettingService::class)->rebuildAllPermissions();
@@ -57,6 +61,7 @@ class DemoResetService extends BaseService
                 'admin_username' => self::ADMIN_USERNAME,
                 'duration' => time() - $startedAt,
                 'regions' => $regions,
+                'site_url' => $siteUrl,
                 'static' => $staticResult,
             ];
         } catch (\Throwable $e) {
@@ -69,7 +74,7 @@ class DemoResetService extends BaseService
      *
      * @return array<string, mixed>
      */
-    public function startQueuedReset(): array
+    public function startQueuedReset(?string $siteUrl = null): array
     {
         $status = $this->readJobStatus();
         if (($status['status'] ?? '') === 'running' && !$this->isRunningStatusExpired($status)) {
@@ -77,12 +82,14 @@ class DemoResetService extends BaseService
         }
 
         $jobId = date('YmdHis') . '-' . bin2hex(random_bytes(4));
+        $siteUrl = $this->normalizeSiteUrl($siteUrl);
         $this->writeJobStatus([
             'job_id' => $jobId,
             'status' => 'running',
             'message' => '演示数据恢复任务已开始',
             'started_at' => date('Y-m-d H:i:s'),
             'finished_at' => null,
+            'site_url' => $siteUrl,
             'result' => null,
         ]);
 
@@ -95,6 +102,7 @@ class DemoResetService extends BaseService
                 'message' => '启动恢复任务失败：' . $e->getMessage(),
                 'started_at' => date('Y-m-d H:i:s'),
                 'finished_at' => date('Y-m-d H:i:s'),
+                'site_url' => $siteUrl,
                 'result' => null,
             ]);
             throw $e;
@@ -127,13 +135,14 @@ class DemoResetService extends BaseService
         }
 
         try {
-            $result = $this->reset();
+            $result = $this->reset((string) ($status['site_url'] ?? ''));
             $this->writeJobStatus([
                 'job_id' => $jobId,
                 'status' => 'success',
                 'message' => '演示数据已恢复，可使用 admin / admin123 登录',
                 'started_at' => $status['started_at'] ?? null,
                 'finished_at' => date('Y-m-d H:i:s'),
+                'site_url' => $result['site_url'] ?? '',
                 'result' => $result,
             ]);
         } catch (\Throwable $e) {
@@ -143,6 +152,7 @@ class DemoResetService extends BaseService
                 'message' => '恢复演示数据失败：' . $e->getMessage(),
                 'started_at' => $status['started_at'] ?? null,
                 'finished_at' => date('Y-m-d H:i:s'),
+                'site_url' => $status['site_url'] ?? '',
                 'result' => null,
             ]);
             throw $e;
@@ -221,6 +231,28 @@ class DemoResetService extends BaseService
             ':password_changed_at' => $now,
             ':update_time' => $now,
         ]);
+    }
+
+    private function seedSiteUrl(PDO $pdo, string $siteUrl): void
+    {
+        $stmt = $pdo->prepare(
+            "UPDATE `mb_setting`
+             SET `value` = :site_url,
+                 `update_time` = :update_time
+             WHERE `code` = 'site_url'"
+        );
+        $stmt->execute([
+            ':site_url' => $siteUrl,
+            ':update_time' => date('Y-m-d H:i:s'),
+        ]);
+
+        if ($stmt->rowCount() === 0) {
+            $exists = (int) $pdo->query("SELECT COUNT(*) FROM `mb_setting` WHERE `code` = 'site_url'")
+                ->fetchColumn();
+            if ($exists === 0) {
+                throw new \RuntimeException('mb_setting 未包含 site_url seed 数据');
+            }
+        }
     }
 
     /**
@@ -399,6 +431,21 @@ class DemoResetService extends BaseService
         }
 
         return time() - $startedAt > self::JOB_RUNNING_TTL;
+    }
+
+    private function normalizeSiteUrl(?string $siteUrl): string
+    {
+        $siteUrl = rtrim(trim((string) $siteUrl), '/');
+        if ($siteUrl === '') {
+            return '';
+        }
+
+        $scheme = (string) parse_url($siteUrl, PHP_URL_SCHEME);
+        if (!in_array(strtolower($scheme), ['http', 'https'], true)) {
+            return '';
+        }
+
+        return $siteUrl;
     }
 
     private function jobStatusPath(): string
