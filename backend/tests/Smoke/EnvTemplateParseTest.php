@@ -48,6 +48,9 @@ final class EnvTemplateParseTest extends TestCase
         foreach ($required as $key) {
             $this->assertArrayHasKey($key, $parsed, "deploy/docker/.example.env missing required key: {$key}");
         }
+
+        $this->assertArrayNotHasKey('CRON_ENABLE', $parsed, 'Cron should be configured by install wizard, not root .env');
+        $this->assertArrayNotHasKey('SWOOLE_QUEUE_ENABLE', $parsed, 'Queue worker should be configured by install wizard, not root .env');
     }
 
     public function testEnsureEnvDerivesBackendEnvAndSyncsSwooleWorkerNum(): void
@@ -77,6 +80,10 @@ final class EnvTemplateParseTest extends TestCase
             $this->assertNotFalse($backendParsed, 'derived backend/.env should remain parse_ini_file-compatible');
             $this->assertSame('1', $rootParsed['SWOOLE_WORKER_NUM'] ?? null);
             $this->assertSame('1', $backendParsed['SWOOLE_WORKER_NUM'] ?? null);
+            $this->assertArrayNotHasKey('CRON_ENABLE', $rootParsed);
+            $this->assertArrayNotHasKey('SWOOLE_QUEUE_ENABLE', $rootParsed);
+            $this->assertSame('false', $backendParsed['CRON_ENABLE'] ?? null);
+            $this->assertSame('false', $backendParsed['SWOOLE_QUEUE_ENABLE'] ?? null);
         } finally {
             $this->removeDirectory($root);
         }

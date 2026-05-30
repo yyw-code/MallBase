@@ -46,6 +46,9 @@ input:focus{border-color:var(--primary);box-shadow:0 0 0 4px rgba(15,118,110,.12
 .msg.error{display:block;background:#fef2f2;color:var(--danger);border:1px solid #fecaca}
 .checkbox-group{display:flex;align-items:center;gap:8px;margin-top:12px;font-size:14px}
 .checkbox-group input{width:16px;height:16px}
+.advanced-panel{margin-top:18px;padding:18px;border:1px solid var(--border);border-radius:16px;background:#fbfdff}
+.advanced-title{font-size:14px;font-weight:800;color:var(--text);margin-bottom:4px}
+.advanced-desc{font-size:12px;line-height:1.7;color:var(--text-secondary);margin-bottom:10px}
 .done-wrapper{text-align:center;padding:6px 0 0}
 .done-title{font-size:52px;font-weight:800;margin-top:24px;color:var(--text);letter-spacing:.01em}
 .done-text{color:var(--text-secondary);margin-top:16px;font-size:15px;line-height:1.9;max-width:640px;margin-left:auto;margin-right:auto}
@@ -351,6 +354,18 @@ body.complete-mode .container{max-width:1220px}
         <input type="checkbox" id="import_demo">
         <label for="import_demo">导入演示数据</label>
       </div>
+      <div class="advanced-panel">
+        <div class="advanced-title">高级选项</div>
+        <div class="advanced-desc">定时任务和队列 Worker 会在安装完成并重启 Swoole 后生效，默认关闭可避免安装前写入 Redis。</div>
+        <div class="checkbox-group">
+          <input type="checkbox" id="cron_enable">
+          <label for="cron_enable">启用定时任务</label>
+        </div>
+        <div class="checkbox-group">
+          <input type="checkbox" id="swoole_queue_enable">
+          <label for="swoole_queue_enable">启用 Swoole 内置队列 Worker</label>
+        </div>
+      </div>
       <div class="msg" id="adminMsg"></div>
       <div class="actions">
         <button class="btn btn-outline" onclick="goStep(3)">上一步</button>
@@ -464,6 +479,7 @@ let installCompleted = false;
 let watchersAttached = false;
 let installMeta = null;
 let installStatus = null;
+let lastInstallOptions = { cron_enable: false, swoole_queue_enable: false };
 const installStepOrder = [
   { step: 'db_test', title: '校验数据库连接' },
   { step: 'redis_test', title: '校验 Redis 连接' },
@@ -770,6 +786,8 @@ async function loadFormDefaults() {
     document.getElementById('admin_pass').value = data.admin_pass || '';
     document.getElementById('admin_pass2').value = data.admin_pass || '';
     document.getElementById('import_demo').checked = String(data.import_demo || '0') === '1';
+    document.getElementById('cron_enable').checked = String(data.cron_enable || '0') === '1';
+    document.getElementById('swoole_queue_enable').checked = String(data.swoole_queue_enable || '0') === '1';
     document.getElementById('site_url').value = data.site_url || window.location.origin;
   } catch (e) {
     document.getElementById('site_url').value = window.location.origin;
@@ -906,6 +924,8 @@ function buildInstallPayload() {
     admin_user: document.getElementById('admin_user').value.trim(),
     admin_pass: document.getElementById('admin_pass').value,
     import_demo: document.getElementById('import_demo').checked ? 1 : 0,
+    cron_enable: document.getElementById('cron_enable').checked ? 1 : 0,
+    swoole_queue_enable: document.getElementById('swoole_queue_enable').checked ? 1 : 0,
     site_url: siteUrl,
   };
 }
@@ -991,6 +1011,7 @@ function updateProgressStep(event) {
 }
 
 function finishInstallSuccess(message) {
+  const maintenanceEnabled = lastInstallOptions.cron_enable || lastInstallOptions.swoole_queue_enable;
   installCompleted = true;
   document.body.classList.add('complete-mode');
   document.getElementById('installStateTitle').textContent = '5. 安装完成';
@@ -1001,7 +1022,13 @@ function finishInstallSuccess(message) {
   document.getElementById('installSuccessLayout').hidden = false;
   renderInstallMeta();
   pullInstallStatusData().catch(() => {});
-  showMsg('installMsg', '安装已完成。点击入口按钮时会先检测运行态和构建产物；检测通过即可进入。', true);
+  showMsg(
+    'installMsg',
+    maintenanceEnabled
+      ? '安装已完成，定时任务或队列配置已写入；请重启 Swoole 后让它们生效。入口按钮会先检测运行态和构建产物。'
+      : '安装已完成。点击入口按钮时会先检测运行态和构建产物；检测通过即可进入。',
+    true
+  );
 }
 
 function finishInstallFailure(message) {
@@ -1100,6 +1127,10 @@ async function doInstall() {
   btn.innerHTML = '<span class="spinner"></span> 安装中...';
 
   const body = buildInstallPayload();
+  lastInstallOptions = {
+    cron_enable: body.cron_enable === 1,
+    swoole_queue_enable: body.swoole_queue_enable === 1,
+  };
 
   goStep(5);
   resetInstallUI();
@@ -1184,6 +1215,8 @@ function renderInstallMeta() {
     { label: '监听端口', value: String(runtime.swoole_port ?? 8080), mono: true },
     { label: '调试模式', value: runtime.app_debug || 'false', mono: true },
     { label: '定时任务', value: runtime.cron_enable || 'false', mono: true },
+    { label: '队列 Worker', value: runtime.swoole_queue_enable || 'false', mono: true },
+    { label: '重启提示', value: runtime.needs_swoole_restart ? '配置已开启，重启 Swoole 后生效' : '无需额外启用任务进程' },
   ];
   const dbRows = [
     { label: '连接名', value: runtime.db_connection || 'mysql', mono: true },

@@ -52,9 +52,10 @@ docker compose 的变量插值**只认项目根目录的 `.env`**，无法改路
 
 订单定时任务使用 Swoole Cron 投递队列 Job：
 
-- 单机部署：可设置 `CRON_ENABLE=true`，`QUEUE_CONNECTION=sync` 或 `redis`；若使用 `redis`，推荐设置 `SWOOLE_QUEUE_ENABLE=true`，由 Swoole 内置队列 Worker 消费 `config/swoole.php` 中声明的队列
-- K8s / 多副本部署：Web Deployment 设置 `CRON_ENABLE=false`；Scheduler Deployment 副本数固定 `1` 且设置 `CRON_ENABLE=true`；Queue Worker Deployment 运行 `php think queue:work redis --queue=default --tries=3`，可按压力水平扩容
-- `SWOOLE_QUEUE_ENABLE=true` 会随 Swoole 创建内置队列 Worker；worker 列表由 `config/swoole.php` 维护，Job 默认队列由各 Job 类的 `QUEUE` 常量声明。
+- Web 安装向导的高级选项会写入 `CRON_ENABLE` / `SWOOLE_QUEUE_ENABLE`，默认关闭，避免安装前任务写入 Redis
+- 单机部署：安装时可勾选定时任务和 Swoole 内置队列 Worker；安装完成后需重启 Swoole 生效
+- K8s / 多副本部署：Web Deployment 保持 `CRON_ENABLE=false`；Scheduler Deployment 副本数固定 `1` 且设置 `CRON_ENABLE=true`；Queue Worker Deployment 运行 `php think queue:work redis --queue=default --tries=3`，可按压力水平扩容
+- 未生成 `deploy/install/install.lock` 前，即使 env 中误设为 `true`，Cron 和 Swoole 内置队列 Worker 也不会启动。
 
 **⚠️ 容易混淆的点**：
 
@@ -135,7 +136,7 @@ openssl rand -hex 32
 - `SWOOLE_HTTP_PORT`
 - `SITE_URL`
 
-`MYSQL_ROOT_PASSWORD` 只存在于根 `.env`，不会写进 `backend/.env`。
+`MYSQL_ROOT_PASSWORD` 只存在于根 `.env`，不会写进 `backend/.env`。`CRON_ENABLE` / `SWOOLE_QUEUE_ENABLE` 不再由根 `.env` 同步，统一由安装向导高级选项写入。
 
 ## 五、常见错误
 
