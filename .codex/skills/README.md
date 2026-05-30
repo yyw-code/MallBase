@@ -4,7 +4,7 @@
 
 ## 目录约定
 
-- 一级按技术栈分组：`thinkPHP` / `vbenAdmin` / `uniapp`
+- 一级按技术栈或项目治理域分组：`thinkPHP` / `vbenAdmin` / `uniapp` / 通用治理规则
 - 二级按规则命名：`<rule-name>/SKILL.md`
 - 每个 `SKILL.md` 只描述一条核心规则，避免耦合
 
@@ -15,6 +15,7 @@
 - 修改移动端（后续接入）：优先看 `uniapp/*`
 - 执行后端回归：优先看 `thinkPHP/backend-test-baseline`
 - 执行后台真实链路 E2E：优先看 `vbenAdmin/e2e-webantd-realapi`
+- 涉及演示站分支、preview 合并或反向合并：必须看 `preview-branch-boundary`
 
 ## 治理分层
 
@@ -57,6 +58,7 @@
 - `vbenAdmin/e2e-webantd-realapi`
 - `docs-linking`
 - `open-source-wording`
+- `preview-branch-boundary`
 
 ### 预留
 
