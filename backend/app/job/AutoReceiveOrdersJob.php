@@ -12,7 +12,7 @@ use Throwable;
 
 class AutoReceiveOrdersJob extends BaseJob
 {
-    private const LOCK_KEY = 'job:order:auto-receive';
+    private const LOCK_KEY = "job:order:auto-receive";
     private const LOCK_TTL = 55;
 
     private int $limit = 500;
@@ -23,7 +23,7 @@ class AutoReceiveOrdersJob extends BaseJob
     public function __construct(array $data = [])
     {
         parent::__construct();
-        $this->limit = max(1, min(2000, (int) ($data['limit'] ?? 500)));
+        $this->limit = max(1, min(2000, (int) ($data["limit"] ?? 500)));
     }
 
     /**
@@ -31,8 +31,8 @@ class AutoReceiveOrdersJob extends BaseJob
      */
     public function fire(QueueJob $job, array $data): void
     {
-        if (isset($data['limit'])) {
-            $this->limit = max(1, min(2000, (int) $data['limit']));
+        if (isset($data["limit"])) {
+            $this->limit = max(1, min(2000, (int) $data["limit"]));
         }
 
         try {
@@ -59,7 +59,11 @@ class AutoReceiveOrdersJob extends BaseJob
     {
         try {
             $handler = Cache::handler();
-            if (is_object($handler) && method_exists($handler, 'setnx') && method_exists($handler, 'expire')) {
+            if (
+                is_object($handler) &&
+                method_exists($handler, "setnx") &&
+                method_exists($handler, "expire")
+            ) {
                 $acquired = (bool) $handler->setnx(self::LOCK_KEY, 1);
                 if (!$acquired) {
                     return false;
