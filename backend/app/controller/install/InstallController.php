@@ -178,6 +178,17 @@ class InstallController extends BaseController
             return ['success' => false, 'message' => 'Redis DB 编号不能小于 0'];
         }
 
+        foreach (['cron_enable', 'swoole_queue_enable'] as $field) {
+            if (!isset($params[$field])) {
+                continue;
+            }
+
+            $value = strtolower(trim((string) $params[$field]));
+            if (!in_array($value, ['0', '1', 'true', 'false', 'on', 'off', 'yes', 'no', ''], true)) {
+                return ['success' => false, 'message' => "{$field} 参数值无效"];
+            }
+        }
+
         return ['success' => true, 'message' => 'ok'];
     }
 

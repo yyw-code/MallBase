@@ -142,10 +142,17 @@ class InstallService extends BaseService
         $backendRoot = rtrim(root_path(), DIRECTORY_SEPARATOR);
         $swooleHost = trim((string) ($envValues['SWOOLE_HTTP_HOST'] ?? '0.0.0.0'));
         $swoolePort = (int) ($envValues['SWOOLE_HTTP_PORT'] ?? 8080);
+        $cronEnable = $this->envFlagText($envValues['CRON_ENABLE'] ?? null);
+        $swooleQueueEnable = $this->envFlagText($envValues['SWOOLE_QUEUE_ENABLE'] ?? null);
 
         return [
+            'project_root' => $projectRoot,
+            'backend_root' => $backendRoot,
             'runtime'      => [
-                'cron_enable' => $this->envFlagText($envValues['CRON_ENABLE'] ?? null),
+                'app_debug' => $this->envFlagText($envValues['APP_DEBUG'] ?? null),
+                'cron_enable' => $cronEnable,
+                'swoole_queue_enable' => $swooleQueueEnable,
+                'needs_swoole_restart' => $cronEnable === 'true' || $swooleQueueEnable === 'true',
                 'swoole_host' => $swooleHost,
                 'swoole_port' => $swoolePort,
                 'db_connection' => 'mysql',
@@ -384,6 +391,8 @@ class InstallService extends BaseService
             'admin_user'     => 'admin',
             'admin_pass'     => 'admin123',
             'import_demo'    => false,
+            'cron_enable'    => false,
+            'swoole_queue_enable' => false,
             // 站点域名（用于 Upload 本地域名、邮件/分享链接等全局场景，统一存 mb_setting.site_url，不再写 env）
             // env 中可预置 SITE_URL 作为 CLI 安装（install:auto）的输入；Web 向导提交空串时会回退到当前 request 域名
             'site_url'       => $get('SITE_URL'),
@@ -486,6 +495,8 @@ class InstallService extends BaseService
         $adminUser = trim((string) ($params['admin_user'] ?? ''));
         $adminPass = (string) ($params['admin_pass'] ?? '');
         $importDemo = !empty($params['import_demo']);
+        $cronEnable = $this->boolParam($params['cron_enable'] ?? false);
+        $swooleQueueEnable = $this->boolParam($params['swoole_queue_enable'] ?? false);
         $siteUrl = trim((string) ($params['site_url'] ?? ''));
         if ($siteUrl === '') {
             $siteUrl = $this->resolveDefaultSiteUrl();
@@ -550,6 +561,8 @@ class InstallService extends BaseService
                 'REDIS_CACHE_DB'         => (string) $redisConfig['db'],
                 'REDIS_PASSWORD'         => $redisConfig['password'],
                 'CACHE_DRIVER'           => 'redis',
+                'CRON_ENABLE'            => $cronEnable ? 'true' : 'false',
+                'SWOOLE_QUEUE_ENABLE'    => $swooleQueueEnable ? 'true' : 'false',
                 'JWT_SECRET'             => $jwtSecret,
                 'INSTALL_RUNTIME_MARKER' => $runtimeMarker,
                 'SITE_URL'               => $siteUrl,
@@ -893,8 +906,27 @@ class InstallService extends BaseService
         $jwt['secret'] = $envData['JWT_SECRET'] ?? '';
         Config::set($jwt, 'jwt');
 
+        $cron = Config::get('cron', []);
+        $cron['enable'] = $this->boolParam($envData['CRON_ENABLE'] ?? false);
+        Config::set($cron, 'cron');
+
+        $swoole = Config::get('swoole', []);
+        $swoole['queue']['enable'] = $this->boolParam($envData['SWOOLE_QUEUE_ENABLE'] ?? false);
+        Config::set($swoole, 'swoole');
+
         app()->delete('think\\DbManager');
         Db::connect(null, true);
+    }
+
+    private function boolParam(mixed $value): bool
+    {
+        if (is_bool($value)) {
+            return $value;
+        }
+
+        $text = strtolower(trim((string) $value));
+
+        return in_array($text, ['1', 'true', 'on', 'yes'], true);
     }
 
     private function createDatabase(array $config): PDO

@@ -1,5 +1,14 @@
 <?php
 
+$projectRoot = dirname(rtrim(root_path(), DIRECTORY_SEPARATOR));
+$installLockPath = $projectRoot . DIRECTORY_SEPARATOR . 'deploy'
+    . DIRECTORY_SEPARATOR . 'install' . DIRECTORY_SEPARATOR . 'install.lock';
+if (!is_dir(dirname($installLockPath))) {
+    $installLockPath = root_path() . 'install' . DIRECTORY_SEPARATOR . 'install.lock';
+}
+$isInstalled = is_file($installLockPath);
+$swooleQueueEnabled = filter_var(env('SWOOLE_QUEUE_ENABLE', false), FILTER_VALIDATE_BOOLEAN);
+
 return [
     'http'       => [
         'enable'     => true,
@@ -54,7 +63,7 @@ return [
     ],
     //队列
     'queue'      => [
-        'enable'  => env('SWOOLE_QUEUE_ENABLE', false),
+        'enable'  => $isInstalled && $swooleQueueEnabled,
         'workers' => [
             'default' => [
                 'delay'      => 0,

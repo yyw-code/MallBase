@@ -25,6 +25,14 @@ class CronManager
             return;
         }
 
+        if (!$this->isInstalled()) {
+            Logger::instance('Cron', static::class)
+                ->withData(['worker_id' => $workerId])
+                ->info('Cron skipped before install');
+
+            return;
+        }
+
         // 是否启用
         if (!config('cron.enable')) {
             Logger::instance('Cron', static::class)
@@ -56,5 +64,17 @@ class CronManager
                 ])->exception($e, 'Task register failed');
             }
         }
+    }
+
+    private function isInstalled(): bool
+    {
+        $projectRoot = dirname(rtrim(root_path(), DIRECTORY_SEPARATOR));
+        $deployPath = $projectRoot . DIRECTORY_SEPARATOR . 'deploy'
+            . DIRECTORY_SEPARATOR . 'install' . DIRECTORY_SEPARATOR . 'install.lock';
+        if (is_dir(dirname($deployPath))) {
+            return is_file($deployPath);
+        }
+
+        return is_file(root_path() . 'install' . DIRECTORY_SEPARATOR . 'install.lock');
     }
 }
