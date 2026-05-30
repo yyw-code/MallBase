@@ -24,7 +24,10 @@ import { openWindow } from '@vben/utils';
 
 import { message, Modal } from 'ant-design-vue';
 
-import { resetDemoDataApi } from '#/api/demo/reset';
+import {
+  getPublicDemoResetStatusApi,
+  resetDemoDataApi,
+} from '#/api/demo/reset';
 
 import AnalyticsVisitsSource from '../analytics/analytics-visits-source.vue';
 
@@ -226,6 +229,21 @@ const trendItems: WorkbenchTrendItem[] = [
 
 const router = useRouter();
 
+async function waitDemoResetDone() {
+  for (let i = 0; i < 60; i++) {
+    const status = await getPublicDemoResetStatusApi();
+    if (status.status === 'success') {
+      return status;
+    }
+    if (status.status === 'error') {
+      throw new Error(status.message || '演示数据恢复失败');
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+
+  throw new Error('演示数据恢复仍在执行，请稍后刷新后重试');
+}
+
 // 这是一个示例方法，实际项目中需要根据实际情况进行调整
 // This is a sample method, adjust according to the actual project requirements
 function navTo(nav: WorkbenchProjectItem | WorkbenchQuickNavItem) {
@@ -254,7 +272,12 @@ function handleResetDemoData() {
       resetting.value = true;
       try {
         await resetDemoDataApi();
+        await waitDemoResetDone();
         message.success('演示数据已恢复，请重新登录查看最新数据');
+      } catch (error) {
+        message.error(
+          error instanceof Error ? error.message : '演示数据恢复失败',
+        );
       } finally {
         resetting.value = false;
       }

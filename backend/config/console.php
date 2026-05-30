@@ -3,6 +3,7 @@
 // | 控制台配置
 // +----------------------------------------------------------------------
 use app\command\Docs;
+use app\command\DemoResetRun;
 use app\command\ImportRegions;
 use app\command\InstallAuto;
 use app\command\OrderExpireCommand;
@@ -19,6 +20,7 @@ return [
     // 指令定义
     'commands' => [
         'docs' => Docs::class,
+        'demo:reset-run' => DemoResetRun::class,
         'region:import' => ImportRegions::class,
         'sync:permissions' => SyncPermissions::class,
         'settings:sync-permissions' => SyncSettingPermissions::class,

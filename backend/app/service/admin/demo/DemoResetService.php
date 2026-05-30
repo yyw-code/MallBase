@@ -27,6 +27,7 @@ class DemoResetService extends BaseService
 
     private const ADMIN_USERNAME = 'admin';
     private const ADMIN_PASSWORD = 'admin123';
+    private const JOB_RUNNING_TTL = 600;
 
     /**
      * 恢复演示站数据到安装演示状态。
@@ -60,6 +61,91 @@ class DemoResetService extends BaseService
             ];
         } catch (\Throwable $e) {
             throw new BusinessException('恢复演示数据失败：' . $e->getMessage());
+        }
+    }
+
+    /**
+     * 发起后台恢复任务，避免 HTTP 请求长时间阻塞。
+     *
+     * @return array<string, mixed>
+     */
+    public function startQueuedReset(): array
+    {
+        $status = $this->readJobStatus();
+        if (($status['status'] ?? '') === 'running' && !$this->isRunningStatusExpired($status)) {
+            return $status;
+        }
+
+        $jobId = date('YmdHis') . '-' . bin2hex(random_bytes(4));
+        $this->writeJobStatus([
+            'job_id' => $jobId,
+            'status' => 'running',
+            'message' => '演示数据恢复任务已开始',
+            'started_at' => date('Y-m-d H:i:s'),
+            'finished_at' => null,
+            'result' => null,
+        ]);
+
+        try {
+            $this->startBackgroundCommand($jobId);
+        } catch (\Throwable $e) {
+            $this->writeJobStatus([
+                'job_id' => $jobId,
+                'status' => 'error',
+                'message' => '启动恢复任务失败：' . $e->getMessage(),
+                'started_at' => date('Y-m-d H:i:s'),
+                'finished_at' => date('Y-m-d H:i:s'),
+                'result' => null,
+            ]);
+            throw $e;
+        }
+
+        return $this->readJobStatus();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function getResetStatus(): array
+    {
+        $status = $this->readJobStatus();
+        if (($status['status'] ?? '') === 'running' && $this->isRunningStatusExpired($status)) {
+            $status['status'] = 'error';
+            $status['message'] = '恢复任务长时间未完成，请稍后重试';
+            $status['finished_at'] = date('Y-m-d H:i:s');
+            $this->writeJobStatus($status);
+        }
+
+        return $status;
+    }
+
+    public function runQueuedReset(string $jobId): void
+    {
+        $status = $this->readJobStatus();
+        if (($status['job_id'] ?? '') !== $jobId) {
+            throw new \RuntimeException('恢复任务 ID 不匹配');
+        }
+
+        try {
+            $result = $this->reset();
+            $this->writeJobStatus([
+                'job_id' => $jobId,
+                'status' => 'success',
+                'message' => '演示数据已恢复，可使用 admin / admin123 登录',
+                'started_at' => $status['started_at'] ?? null,
+                'finished_at' => date('Y-m-d H:i:s'),
+                'result' => $result,
+            ]);
+        } catch (\Throwable $e) {
+            $this->writeJobStatus([
+                'job_id' => $jobId,
+                'status' => 'error',
+                'message' => '恢复演示数据失败：' . $e->getMessage(),
+                'started_at' => $status['started_at'] ?? null,
+                'finished_at' => date('Y-m-d H:i:s'),
+                'result' => null,
+            ]);
+            throw $e;
         }
     }
 
@@ -235,5 +321,95 @@ class DemoResetService extends BaseService
 
         return root_path() . 'install' . DIRECTORY_SEPARATOR . 'static'
             . DIRECTORY_SEPARATOR . $subdir;
+    }
+
+    private function startBackgroundCommand(string $jobId): void
+    {
+        if (!function_exists('exec')) {
+            throw new \RuntimeException('当前 PHP 环境禁用了 exec，无法启动后台恢复任务');
+        }
+
+        $backendRoot = rtrim(root_path(), DIRECTORY_SEPARATOR);
+        $think = $backendRoot . DIRECTORY_SEPARATOR . 'think';
+        $logFile = $this->jobLogPath();
+        $command = sprintf(
+            'cd %s && %s %s demo:reset-run --job-id=%s > %s 2>&1 &',
+            escapeshellarg($backendRoot),
+            escapeshellarg(PHP_BINARY),
+            escapeshellarg($think),
+            escapeshellarg($jobId),
+            escapeshellarg($logFile)
+        );
+
+        exec($command);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function readJobStatus(): array
+    {
+        $path = $this->jobStatusPath();
+        if (!is_file($path)) {
+            return [
+                'job_id' => null,
+                'status' => 'idle',
+                'message' => '暂无恢复任务',
+                'started_at' => null,
+                'finished_at' => null,
+                'result' => null,
+            ];
+        }
+
+        $raw = file_get_contents($path);
+        $status = $raw === false ? null : json_decode($raw, true);
+
+        return is_array($status) ? $status : [
+            'job_id' => null,
+            'status' => 'idle',
+            'message' => '暂无恢复任务',
+            'started_at' => null,
+            'finished_at' => null,
+            'result' => null,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $status
+     */
+    private function writeJobStatus(array $status): void
+    {
+        $path = $this->jobStatusPath();
+        $dir = dirname($path);
+        if (!is_dir($dir) && !mkdir($dir, 0755, true) && !is_dir($dir)) {
+            throw new \RuntimeException('无法创建恢复任务状态目录：' . $dir);
+        }
+
+        file_put_contents($path, json_encode($status, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+    }
+
+    /**
+     * @param array<string, mixed> $status
+     */
+    private function isRunningStatusExpired(array $status): bool
+    {
+        $startedAt = strtotime((string) ($status['started_at'] ?? ''));
+        if ($startedAt === false) {
+            return true;
+        }
+
+        return time() - $startedAt > self::JOB_RUNNING_TTL;
+    }
+
+    private function jobStatusPath(): string
+    {
+        return rtrim(app()->getRuntimePath(), DIRECTORY_SEPARATOR)
+            . DIRECTORY_SEPARATOR . 'demo-reset-status.json';
+    }
+
+    private function jobLogPath(): string
+    {
+        return rtrim(app()->getRuntimePath(), DIRECTORY_SEPARATOR)
+            . DIRECTORY_SEPARATOR . 'demo-reset-job.log';
     }
 }

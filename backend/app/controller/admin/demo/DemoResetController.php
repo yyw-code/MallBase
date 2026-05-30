@@ -18,8 +18,20 @@ class DemoResetController extends BaseController
 
     public function reset()
     {
-        $result = $this->service()->reset();
+        $result = $this->service()->startQueuedReset();
 
-        return $this->success($result, '演示数据已恢复');
+        return $this->success($result, '演示数据恢复任务已开始');
+    }
+
+    public function start()
+    {
+        $result = $this->service()->startQueuedReset();
+
+        return $this->success($result, '演示数据恢复任务已开始');
+    }
+
+    public function status()
+    {
+        return $this->success($this->service()->getResetStatus(), '获取成功');
     }
 }
