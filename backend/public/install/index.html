@@ -44,6 +44,7 @@ input:focus{border-color:var(--primary);box-shadow:0 0 0 4px rgba(15,118,110,.12
 .msg{padding:12px 14px;border-radius:14px;font-size:13px;margin-top:14px;display:none;line-height:1.7}
 .msg.success{display:block;background:#f0fdf4;color:var(--success);border:1px solid #bbf7d0}
 .msg.error{display:block;background:#fef2f2;color:var(--danger);border:1px solid #fecaca}
+.entry-msg{margin-top:18px;text-align:left}
 .checkbox-group{display:flex;align-items:center;gap:8px;margin-top:12px;font-size:14px}
 .checkbox-group input{width:16px;height:16px}
 .advanced-panel{margin-top:18px;padding:18px;border:1px solid var(--border);border-radius:16px;background:#fbfdff}
@@ -181,9 +182,10 @@ body.complete-mode .container{max-width:1220px}
           <div class="entry-panel-title">快速进入系统</div>
           <p class="entry-panel-subtitle">入口地址由后端按当前访问域名生成。后台默认是当前域名加 <code>/admin</code>，客户端 H5 默认使用当前域名根地址。</p>
           <div class="entry-panel-actions">
-            <button class="btn btn-primary btn-large btn-entry" onclick="enterAdmin('installedMsg')">进入后台管理</button>
-            <button class="btn btn-success btn-large btn-entry" onclick="enterClient('installedMsg')">进入客户端 H5</button>
+            <button class="btn btn-primary btn-large btn-entry" onclick="enterAdmin('installedEntryMsg')">进入后台管理</button>
+            <button class="btn btn-success btn-large btn-entry" onclick="enterClient('installedEntryMsg')">进入客户端 H5</button>
           </div>
+          <div class="msg entry-msg" id="installedEntryMsg"></div>
         </div>
         <div class="summary-strip" id="installedSummaryTiles"></div>
       </section>
@@ -397,9 +399,10 @@ body.complete-mode .container{max-width:1220px}
             <div class="entry-panel-title">安装完成后常用入口</div>
             <p class="entry-panel-subtitle">后台和客户端地址都由后端按当前域名实时返回，避免页面自己猜端口或路径。</p>
             <div class="entry-panel-actions">
-              <button class="btn btn-primary btn-large btn-entry" id="gotoAdminBtn" onclick="enterAdmin('installMsg')">立即进入后台管理</button>
-              <button class="btn btn-success btn-large btn-entry" id="gotoClientBtn" onclick="enterClient('installMsg')">进入客户端 H5</button>
+              <button class="btn btn-primary btn-large btn-entry" id="gotoAdminBtn" onclick="enterAdmin('installEntryMsg')">立即进入后台管理</button>
+              <button class="btn btn-success btn-large btn-entry" id="gotoClientBtn" onclick="enterClient('installEntryMsg')">进入客户端 H5</button>
             </div>
+            <div class="msg entry-msg" id="installEntryMsg"></div>
           </div>
           <div class="summary-strip" id="successSummaryTiles"></div>
         </section>
@@ -641,6 +644,50 @@ function resolveEntryUrl(type) {
   }
 
   return entries.client_url || (baseUrl || '/');
+}
+
+function buildEntryProbeUrl(url) {
+  const probeUrl = new URL(url, window.location.origin);
+  if (!probeUrl.pathname.includes('.') && !probeUrl.pathname.endsWith('/')) {
+    probeUrl.pathname += '/';
+  }
+  probeUrl.searchParams.set('_mb_entry_check', String(Date.now()));
+  return probeUrl.toString();
+}
+
+async function probeEntryUrl(target, url) {
+  const label = target === 'admin' ? '后台管理' : '客户端 H5';
+  const probeUrl = buildEntryProbeUrl(url);
+  const response = await fetch(probeUrl, {
+    cache: 'no-store',
+    headers: { Accept: 'text/html,*/*;q=0.8' },
+    redirect: 'follow',
+  });
+  const finalUrl = new URL(response.url || probeUrl, window.location.origin);
+  const contentType = response.headers.get('content-type') || '';
+
+  if (!response.ok) {
+    return {
+      ready: false,
+      message: `${label}入口暂时不可访问（HTTP ${response.status}），请确认前端构建产物已上传并检查 Nginx/Swoole 运行状态。`,
+    };
+  }
+
+  if (finalUrl.pathname.startsWith('/install')) {
+    return {
+      ready: false,
+      message: `${label}入口返回了安装页，请确认站点路由已切到已安装状态，必要时重启 Swoole。`,
+    };
+  }
+
+  if (contentType && !contentType.includes('html') && !contentType.includes('text/plain')) {
+    return {
+      ready: false,
+      message: `${label}入口返回类型异常（${contentType}），请检查静态站点或反向代理配置。`,
+    };
+  }
+
+  return { ready: true, message: `${label}入口检测通过` };
 }
 
 function syncEntryActions() {
@@ -1252,30 +1299,29 @@ function renderInstallMeta() {
 }
 
 async function enterAdmin(messageId = 'installMsg') {
-  try {
-    const result = await api('/adminReady?target=admin');
-    if (result.code === 200 && result.data && result.data.ready) {
-      window.location.href = resolveEntryUrl('admin_url');
-      return;
-    }
-
-    showMsg(messageId, (result.data && result.data.message) || '入口检测失败，请按提示检查运行态或构建产物。', false);
-  } catch (e) {
-    showMsg(messageId, e.message || '后台入口检测失败，请按提示检查运行态或构建产物。', false);
-  }
+  return enterEntry('admin', messageId);
 }
 
 async function enterClient(messageId = 'installMsg') {
+  return enterEntry('client', messageId);
+}
+
+async function enterEntry(target, messageId = 'installMsg') {
+  hideMsg(messageId);
+  showMsg(messageId, '正在检测入口可访问性…', true);
+
   try {
-    const result = await api('/adminReady?target=client');
-    if (result.code === 200 && result.data && result.data.ready) {
-      window.location.href = resolveEntryUrl('client_url');
+    await pullInstallStatusData();
+    const latestUrl = resolveEntryUrl(target === 'admin' ? 'admin_url' : 'client_url');
+    const result = await probeEntryUrl(target, latestUrl);
+    if (result.ready) {
+      window.location.href = latestUrl;
       return;
     }
 
-    showMsg(messageId, (result.data && result.data.message) || '入口检测失败，请按提示检查运行态或构建产物。', false);
+    showMsg(messageId, result.message, false);
   } catch (e) {
-    showMsg(messageId, e.message || '客户端入口检测失败，请按提示检查运行态或构建产物。', false);
+    showMsg(messageId, e.message || '入口检测失败，请确认站点运行状态后重试。', false);
   }
 }
 
