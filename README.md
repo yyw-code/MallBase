@@ -108,8 +108,8 @@ mall-base/
 
 ## 在线演示
 
-- 测试站Admin：[https://mallbase.gosowong.cn/admin](https://mallbase.gosowong.cn/admin)
-- 测试站Uniapp：[https://mallbase.gosowong.cn](https://mallbase.gosowong.cn)
+- 演示站 Admin：[https://preview.gosowong.cn/admin](https://preview.gosowong.cn/admin)
+- 演示站 H5：[https://preview.gosowong.cn/client/#/](https://preview.gosowong.cn/client/#/)
 
 ## 快速开始
 
