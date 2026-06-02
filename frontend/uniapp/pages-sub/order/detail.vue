@@ -60,6 +60,23 @@
         </view>
       </view>
 
+      <!-- After-sale preview -->
+      <view v-if="order.after_sale" class="after-sale-card" @tap="goRefundDetail">
+        <view class="after-sale-card__left">
+          <view class="after-sale-card__icon">
+            <view class="after-sale-card__icon-dot" />
+          </view>
+          <view class="after-sale-card__content">
+            <view class="after-sale-card__title-row">
+              <text class="after-sale-card__title">售后{{ order.after_sale.status_text || order.after_sale_tag_text }}</text>
+              <text class="after-sale-card__type">{{ order.after_sale.type_text || '售后' }}</text>
+            </view>
+            <text class="after-sale-card__desc">{{ getAfterSaleDesc(order.after_sale) }}</text>
+          </view>
+        </view>
+        <text class="after-sale-card__arrow">查看详情</text>
+      </view>
+
       <!-- Address card -->
       <view class="card address-card">
         <view class="address-card__icon">
@@ -266,11 +283,15 @@ async function fetchDetail(id) {
 
 const statusText = computed(() => {
   if (!order.value) return ''
+  if (isRefundCompletedOrder(order.value)) return '退款完成'
   return STATUS_MAP[order.value.status]?.label || '未知'
 })
 
 const statusDesc = computed(() => {
   if (!order.value) return ''
+  if (isRefundCompletedOrder(order.value)) {
+    return '售后退款已完成，订单已结束'
+  }
   if (order.value.status === 0) {
     const text = countdownText.value
     return text ? `请在 ${text} 内完成支付` : '订单已超时，正在更新状态'
@@ -337,8 +358,13 @@ const actions = computed(() => {
       list.push({ key: 'refund', label: '申请售后', primary: false })
     }
   } else if (order.value.status === 20) {
+    if (canApplyRefund(order.value)) {
+      list.push({ key: 'refund', label: '申请售后', primary: false })
+    }
     list.push({ key: 'logistics', label: '查看物流', primary: false })
-    list.push({ key: 'confirm', label: '确认收货', primary: true })
+    if (!hasActiveAfterSale(order.value)) {
+      list.push({ key: 'confirm', label: '确认收货', primary: true })
+    }
   } else if (order.value.status === 30 || order.value.status === 40) {
     if (canApplyRefund(order.value)) {
       list.push({ key: 'refund', label: '申请售后', primary: false })
@@ -396,6 +422,19 @@ function getRefundItemLabel(item) {
   return spec ? `${name} ${spec}` : name
 }
 
+function getRefundableQuantity(item) {
+  const explicit = Number(item?.refundable_quantity)
+  if (Number.isFinite(explicit)) return Math.max(0, explicit)
+  return Math.max(0, Number(item?.quantity || 0) - Number(item?.refunded_quantity || 0))
+}
+
+function getRefundableAmount(item) {
+  const amount = item?.refundable_amount
+  return amount !== undefined && amount !== null && amount !== ''
+    ? String(amount)
+    : ''
+}
+
 function getExpireAtTs(source) {
   const expireAt = source?.expire_at || ''
   if (!expireAt) return 0
@@ -425,20 +464,54 @@ function canApplyRefund(source) {
   return source?.can_refund !== false
 }
 
-function navigateToRefund(item) {
+function hasActiveAfterSale(source) {
+  return source?.can_refund === false && !!source?.after_sale_tag_text
+}
+
+function isRefundCompletedOrder(source) {
+  return Number(source?.status) === 90 && Number(source?.after_sale?.status) === 10
+}
+
+function getAfterSaleDesc(refund) {
+  if (!refund) return ''
+  const parts = []
+  if (refund.refund_amount) parts.push(`退款 ¥${refund.refund_amount}`)
+  if (refund.receive_status_text) parts.push(refund.receive_status_text)
+  if (Number(refund.receive_status) === 0 && refund.intercept_status_text) {
+    parts.push(`物流拦截：${refund.intercept_status_text}`)
+  }
+  return parts.join('，') || '查看售后处理进度'
+}
+
+function goRefundDetail() {
+  const id = order.value?.after_sale?.id
+  if (!id) return
+  uni.navigateTo({ url: `/pages-sub/refund/detail?id=${id}` })
+}
+
+function navigateToRefund(item, receiveStatus = 'not_received', type = 0) {
   const orderItemId = getOrderItemId(item)
   if (!orderItemId) {
     uni.showToast({ title: '请选择要申请售后的商品', icon: 'none' })
     return
   }
+  const refundableQuantity = getRefundableQuantity(item)
+  if (refundableQuantity <= 0) {
+    uni.showToast({ title: '该商品暂无可退数量', icon: 'none' })
+    return
+  }
+  const refundableAmount = getRefundableAmount(item)
   const query = [
     `order_id=${order.value.id}`,
     `order_item_id=${orderItemId}`,
+    `receive_status=${receiveStatus}`,
+    `type=${type}`,
     item?.goods_name ? `goods_name=${encodeURIComponent(item.goods_name)}` : '',
     getOrderItemImage(item) ? `goods_image=${encodeURIComponent(getOrderItemImage(item))}` : '',
     getItemSpec(item) ? `sku_spec_text=${encodeURIComponent(getItemSpec(item))}` : '',
     item?.unit_price ? `price=${encodeURIComponent(item.unit_price)}` : '',
-    item?.quantity ? `quantity=${encodeURIComponent(item.quantity)}` : '',
+    `quantity=${encodeURIComponent(refundableQuantity)}`,
+    refundableAmount ? `refundable_amount=${encodeURIComponent(refundableAmount)}` : '',
   ].filter(Boolean).join('&')
   uni.navigateTo({ url: `/pages-sub/refund/apply?${query}` })
 }
@@ -483,6 +556,10 @@ async function handleAction(key) {
     const payResult = await startPay(order.value.id)
     if (payResult) redirectToPayResult(payResult)
   } else if (key === 'confirm') {
+    if (hasActiveAfterSale(order.value)) {
+      uni.showToast({ title: '售后处理中，暂不能确认收货', icon: 'none' })
+      return
+    }
     uni.showModal({
       title: '提示',
       content: '确认已收到商品？',
@@ -507,7 +584,10 @@ async function handleAction(key) {
     })
   } else if (key === 'refund') {
     if (!canApplyRefund(order.value)) {
-      uni.showToast({ title: '订单已超过售后申请期限', icon: 'none' })
+      uni.showToast({
+        title: hasActiveAfterSale(order.value) ? '已有进行中的售后申请' : '订单已超过售后申请期限',
+        icon: 'none',
+      })
       return
     }
     const items = orderItems.value
@@ -515,17 +595,42 @@ async function handleAction(key) {
       uni.showToast({ title: '请选择要申请售后的商品', icon: 'none' })
       return
     }
+    const chooseItem = (item) => {
+      if (Number(order.value.status) === 20) {
+        chooseReceiveStatus(item)
+        return
+      }
+      navigateToRefund(item, Number(order.value.status) >= 30 ? 'received' : 'not_received', 0)
+    }
     if (items.length === 1) {
-      navigateToRefund(items[0])
+      chooseItem(items[0])
       return
     }
     uni.showActionSheet({
       itemList: items.map(getRefundItemLabel),
       success(res) {
-        navigateToRefund(items[res.tapIndex])
+        chooseItem(items[res.tapIndex])
       },
     })
   }
+}
+
+function chooseReceiveStatus(item) {
+  uni.showActionSheet({
+    itemList: ['未收到货', '已收到货'],
+    success(res) {
+      if (res.tapIndex === 0) {
+        navigateToRefund(item, 'not_received', 0)
+        return
+      }
+      uni.showActionSheet({
+        itemList: ['仅退款', '退货退款'],
+        success(typeRes) {
+          navigateToRefund(item, 'received', typeRes.tapIndex === 1 ? 1 : 0)
+        },
+      })
+    },
+  })
 }
 
 function startCountdownTimer() {
@@ -717,6 +822,89 @@ onUnmounted(() => {
   font-size: $mb-font-sm;
   color: $mb-color-text-tertiary;
   margin-top: 8rpx;
+}
+
+// ---- After-sale card ----
+.after-sale-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: $mb-spacing-md;
+  padding: 18rpx $mb-spacing-lg;
+  margin-bottom: $mb-spacing-md;
+  background: $mb-color-bg;
+  border-radius: 16rpx;
+  border: 1rpx solid rgba(13, 80, 213, 0.14);
+}
+
+.after-sale-card__left {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: $mb-spacing-md;
+}
+
+.after-sale-card__icon {
+  flex-shrink: 0;
+  width: 56rpx;
+  height: 56rpx;
+  border-radius: 16rpx;
+  background: rgba(13, 80, 213, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.after-sale-card__icon-dot {
+  width: 20rpx;
+  height: 20rpx;
+  border-radius: 50%;
+  border: 6rpx solid rgba(13, 80, 213, 0.18);
+  background: $mb-color-primary;
+  box-sizing: content-box;
+}
+
+.after-sale-card__content {
+  flex: 1;
+  min-width: 0;
+}
+
+.after-sale-card__title-row {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+}
+
+.after-sale-card__title {
+  font-size: $mb-font-md;
+  font-weight: 700;
+  color: $mb-color-text-title;
+}
+
+.after-sale-card__type {
+  padding: 4rpx 12rpx;
+  border-radius: 999rpx;
+  background: rgba(13, 80, 213, 0.08);
+  font-size: $mb-font-xs;
+  color: $mb-color-primary;
+}
+
+.after-sale-card__desc {
+  display: block;
+  margin-top: 6rpx;
+  font-size: $mb-font-xs;
+  color: $mb-color-text-secondary;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.after-sale-card__arrow {
+  flex-shrink: 0;
+  font-size: $mb-font-sm;
+  font-weight: 600;
+  color: $mb-color-primary;
 }
 
 // ---- Address card ----

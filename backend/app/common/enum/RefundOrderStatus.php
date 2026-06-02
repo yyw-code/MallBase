@@ -37,6 +37,22 @@ class RefundOrderStatus
     /** 类型：退货退款 */
     public const TYPE_RETURN_REFUND = 1;
 
+    /** 收货状态：未收到货 */
+    public const RECEIVE_NOT_RECEIVED = 0;
+
+    /** 收货状态：已收到货 */
+    public const RECEIVE_RECEIVED = 1;
+
+    /** 物流拦截状态 */
+    public const INTERCEPT_NONE = 'none';
+    public const INTERCEPT_PENDING = 'pending';
+    public const INTERCEPTING = 'intercepting';
+    public const INTERCEPT_SUCCESS = 'success';
+    public const INTERCEPT_FAILED = 'failed';
+    public const INTERCEPT_RETURNING = 'returning';
+    public const INTERCEPT_RETURNED = 'returned';
+    public const INTERCEPT_EXCEPTION = 'exception';
+
     private const TEXTS = [
         self::PENDING   => '待审核',
         self::APPROVED  => '已同意',
@@ -49,6 +65,22 @@ class RefundOrderStatus
     private const TYPE_TEXTS = [
         self::TYPE_REFUND_ONLY   => '仅退款',
         self::TYPE_RETURN_REFUND => '退货退款',
+    ];
+
+    private const RECEIVE_TEXTS = [
+        self::RECEIVE_NOT_RECEIVED => '未收到货',
+        self::RECEIVE_RECEIVED => '已收到货',
+    ];
+
+    private const INTERCEPT_TEXTS = [
+        self::INTERCEPT_NONE => '无需拦截',
+        self::INTERCEPT_PENDING => '待拦截',
+        self::INTERCEPTING => '拦截中',
+        self::INTERCEPT_SUCCESS => '拦截成功',
+        self::INTERCEPT_FAILED => '拦截失败',
+        self::INTERCEPT_RETURNING => '退回中',
+        self::INTERCEPT_RETURNED => '已退回',
+        self::INTERCEPT_EXCEPTION => '物流异常/丢件',
     ];
 
     /**
@@ -70,6 +102,16 @@ class RefundOrderStatus
     public static function typeTextOf(int $type): string
     {
         return self::TYPE_TEXTS[$type] ?? '未知';
+    }
+
+    public static function receiveTextOf(int $receiveStatus): string
+    {
+        return self::RECEIVE_TEXTS[$receiveStatus] ?? '未知';
+    }
+
+    public static function interceptTextOf(string $status): string
+    {
+        return self::INTERCEPT_TEXTS[$status] ?? ($status !== '' ? $status : '未知');
     }
 
     public static function isValid(int $status): bool
@@ -117,6 +159,30 @@ class RefundOrderStatus
     }
 
     /**
+     * @return array<int, array{value:int, label:string}>
+     */
+    public static function receiveOptions(): array
+    {
+        $options = [];
+        foreach (self::RECEIVE_TEXTS as $value => $label) {
+            $options[] = ['value' => $value, 'label' => $label];
+        }
+        return $options;
+    }
+
+    /**
+     * @return array<int, array{value:string, label:string}>
+     */
+    public static function interceptOptions(): array
+    {
+        $options = [];
+        foreach (self::INTERCEPT_TEXTS as $value => $label) {
+            $options[] = ['value' => $value, 'label' => $label];
+        }
+        return $options;
+    }
+
+    /**
      * 终态集合（COMPLETED / REJECTED / CLOSED）
      */
     private const TERMINAL_STATUSES = [
@@ -149,10 +215,15 @@ class RefundOrderStatus
      */
     private const TRANSITIONS = [
         self::PENDING => [
+            self::APPROVED,
             self::REFUNDING,
             self::COMPLETED,
             self::REJECTED,
             self::CLOSED,
+        ],
+        self::APPROVED => [
+            self::REFUNDING,
+            self::COMPLETED,
         ],
         self::REFUNDING => [
             self::COMPLETED,

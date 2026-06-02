@@ -13,9 +13,12 @@ use PHPUnit\Framework\TestCase;
  * transit() 的事务/落库路径依赖真实 MySQL，由后续集成测试覆盖。
  * 本类只锁死状态白名单，防止后续回归时意外放行新流转。
  *
- * MVP 允许的流转：
+ * 允许的流转：
  *   PENDING(0)     → REFUNDING(2)   ｜微信退款处理中
  *   PENDING(0)     → COMPLETED(10)  ｜微信退款成功
+ *   PENDING(0)     → APPROVED(1)    ｜同意退货退款，待买家回寄
+ *   APPROVED(1)    → REFUNDING(2)   ｜确认退货收货，微信退款处理中
+ *   APPROVED(1)    → COMPLETED(10)  ｜确认退货收货，微信退款成功
  *   REFUNDING(2)   → COMPLETED(10)  ｜退款结果确认成功
  *   PENDING(0)     → REJECTED(20)   ｜管理员驳回
  *   PENDING(0)     → CLOSED(90)     ｜买家取消
@@ -32,6 +35,9 @@ final class RefundOrderStatusMachineTest extends TestCase
         // 允许的流转
         yield 'PENDING → REFUNDING (refund processing)' => [RefundOrderStatus::PENDING, RefundOrderStatus::REFUNDING, true];
         yield 'PENDING → COMPLETED (approve)' => [RefundOrderStatus::PENDING, RefundOrderStatus::COMPLETED, true];
+        yield 'PENDING → APPROVED (return approved)' => [RefundOrderStatus::PENDING, RefundOrderStatus::APPROVED, true];
+        yield 'APPROVED → REFUNDING (return refund processing)' => [RefundOrderStatus::APPROVED, RefundOrderStatus::REFUNDING, true];
+        yield 'APPROVED → COMPLETED (return refund success)' => [RefundOrderStatus::APPROVED, RefundOrderStatus::COMPLETED, true];
         yield 'REFUNDING → COMPLETED (refund success)' => [RefundOrderStatus::REFUNDING, RefundOrderStatus::COMPLETED, true];
         yield 'PENDING → REJECTED (reject)'   => [RefundOrderStatus::PENDING, RefundOrderStatus::REJECTED, true];
         yield 'PENDING → CLOSED (cancel)'     => [RefundOrderStatus::PENDING, RefundOrderStatus::CLOSED, true];
@@ -48,10 +54,7 @@ final class RefundOrderStatusMachineTest extends TestCase
         yield 'CLOSED → PENDING'              => [RefundOrderStatus::CLOSED, RefundOrderStatus::PENDING, false];
         yield 'CLOSED → COMPLETED'            => [RefundOrderStatus::CLOSED, RefundOrderStatus::COMPLETED, false];
 
-        // 非法流转：PENDING → 保留态（MVP 不启用 APPROVED）
-        yield 'PENDING → APPROVED (reserved)'  => [RefundOrderStatus::PENDING, RefundOrderStatus::APPROVED, false];
-
-        // 非法流转：保留态回 PENDING
+        // 非法流转：已同意回 PENDING
         yield 'APPROVED → PENDING'   => [RefundOrderStatus::APPROVED, RefundOrderStatus::PENDING, false];
         yield 'REFUNDING → PENDING'  => [RefundOrderStatus::REFUNDING, RefundOrderStatus::PENDING, false];
     }

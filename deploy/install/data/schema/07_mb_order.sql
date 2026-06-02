@@ -127,7 +127,7 @@ CREATE TABLE `mb_order_log` (
 
 -- -----------------------------
 -- 五、售后订单表（退款/退货）
--- type 0=仅退款 1=退货退款（MVP 仅启用 0）
+-- type 0=仅退款 1=退货退款
 -- status 0=待审核 1=已同意（保留） 2=退款中（保留） 10=已完成 20=已拒绝 90=关闭
 -- 审计字段（admin_remark / reviewed_by / reviewed_at / refunded_at / canceled_at）
 --   由 RefundOrderStatusMachine 在状态流转时原子写入，不引入独立日志表
@@ -140,11 +140,22 @@ CREATE TABLE `mb_refund_order` (
   `order_item_id` int(11) unsigned DEFAULT NULL COMMENT '原订单项ID（整单售后可为空）',
   `user_id` int(11) unsigned NOT NULL COMMENT '申请用户ID',
   `type` tinyint(1) NOT NULL DEFAULT 0 COMMENT '类型（0仅退款 1退货退款）',
+  `receive_status` tinyint(1) unsigned NOT NULL DEFAULT 0 COMMENT '收货状态（0未收到货 1已收到货）',
   `status` tinyint(1) NOT NULL DEFAULT 0 COMMENT '售后状态（0待审核 1已同意 2退款中 10已完成 20已拒绝 90关闭）',
   `quantity` int(11) unsigned NOT NULL DEFAULT 1 COMMENT '申请数量',
   `refund_amount` decimal(10,2) NOT NULL DEFAULT 0.00 COMMENT '申请退款金额',
   `reason` varchar(255) DEFAULT NULL COMMENT '售后原因（枚举字符串：MISTAKEN_ORDER 等）',
+  `remark` varchar(255) DEFAULT NULL COMMENT '买家售后说明',
   `admin_remark` varchar(255) NOT NULL DEFAULT '' COMMENT '审核意见/驳回原因（由后台审核时写入）',
+  `return_receiver_name` varchar(50) DEFAULT NULL COMMENT '退货收货人姓名快照',
+  `return_receiver_phone` varchar(30) DEFAULT NULL COMMENT '退货收货人电话快照',
+  `return_receiver_address` varchar(255) DEFAULT NULL COMMENT '退货收货地址快照',
+  `return_company` varchar(50) DEFAULT NULL COMMENT '买家退货物流公司',
+  `return_tracking_no` varchar(64) DEFAULT NULL COMMENT '买家退货物流单号',
+  `return_shipped_at` datetime DEFAULT NULL COMMENT '买家填写退货物流时间',
+  `return_received_at` datetime DEFAULT NULL COMMENT '商家确认收到退货时间',
+  `intercept_status` varchar(24) NOT NULL DEFAULT 'none' COMMENT '物流拦截状态（none/pending/intercepting/success/failed/returning/returned/exception）',
+  `intercept_note` varchar(255) DEFAULT NULL COMMENT '物流拦截备注',
   `reviewed_by` int(11) unsigned DEFAULT NULL COMMENT '审核管理员ID',
   `reviewed_at` datetime DEFAULT NULL COMMENT '审核时间（approve/reject 两路径均写）',
   `refunded_at` datetime DEFAULT NULL COMMENT '退款完成时间（COMPLETED 态时写入）',

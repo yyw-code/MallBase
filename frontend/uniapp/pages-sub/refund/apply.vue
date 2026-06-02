@@ -2,6 +2,7 @@
 import { ref, computed } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { applyRefund, getRefundReasonOptions } from '@/api/order/refund'
+import { getOrderDetail } from '@/api/order/order'
 
 const orderId = ref('')
 const orderItemId = ref('')
@@ -10,6 +11,9 @@ const goodsImage = ref('')
 const skuSpecText = ref('')
 const price = ref(0)
 const quantity = ref(1)
+const refundableAmount = ref('')
+const receiveStatus = ref('not_received')
+const refundType = ref(0)
 
 const reasonOptions = ref([])
 const selectedReason = ref('')
@@ -28,7 +32,11 @@ onLoad((query) => {
   skuSpecText.value = decodeURIComponent(query?.sku_spec_text || '')
   price.value = Number(query?.price) || 0
   quantity.value = Number(query?.quantity) || 1
+  refundableAmount.value = normalizeAmount(query?.refundable_amount || '')
+  receiveStatus.value = query?.receive_status || 'not_received'
+  refundType.value = Number(query?.type) === 1 ? 1 : 0
   fetchReasonOptions()
+  fetchRefundableInfo()
 })
 
 async function fetchReasonOptions() {
@@ -40,7 +48,44 @@ async function fetchReasonOptions() {
   }
 }
 
+async function fetchRefundableInfo() {
+  if (!orderId.value || !orderItemId.value) return
+  try {
+    const detail = await getOrderDetail(orderId.value)
+    const items = Array.isArray(detail?.items)
+      ? detail.items
+      : Array.isArray(detail?.order_items)
+        ? detail.order_items
+        : []
+    const item = items.find((row) => String(row?.id || row?.order_item_id || '') === String(orderItemId.value))
+    if (!item) return
+
+    goodsName.value = item.goods_name || item.name || goodsName.value
+    goodsImage.value = normalizeImageUrl(
+      item.goods_image_full_url
+        || item.goods_image_url
+        || item.goods_image
+        || goodsImage.value,
+    )
+    skuSpecText.value = item.sku_spec_text || item.sku_spec || item.spec_text || skuSpecText.value
+    price.value = Number(item.unit_price) || price.value
+
+    const serverQuantity = Number(item.refundable_quantity)
+    if (Number.isFinite(serverQuantity) && serverQuantity > 0) {
+      quantity.value = serverQuantity
+    }
+
+    const serverAmount = normalizeAmount(item.refundable_amount || '')
+    if (serverAmount) {
+      refundableAmount.value = serverAmount
+    }
+  } catch {
+    // 旧入口兜底：继续使用 query 参数展示，不阻断用户填写。
+  }
+}
+
 const refundAmount = computed(() => {
+  if (refundableAmount.value) return refundableAmount.value
   const total = price.value * quantity.value
   return total.toFixed(2)
 })
@@ -58,6 +103,21 @@ function formatPrice(val) {
   const num = Number(val)
   if (Number.isNaN(num)) return '0.00'
   return num.toFixed(2)
+}
+
+function normalizeAmount(val) {
+  const decoded = decodeURIComponent(String(val || ''))
+  if (!/^\d+(\.\d{1,2})?$/.test(decoded)) return ''
+  return Number(decoded).toFixed(2)
+}
+
+function normalizeImageUrl(url) {
+  const value = String(url || '')
+  if (!value) return ''
+  if (/^(https?:)?\/\//.test(value) || value.startsWith('data:') || value.startsWith('blob:')) {
+    return value.startsWith('//') ? `https:${value}` : value
+  }
+  return value
 }
 
 function onPickReason() {
@@ -120,7 +180,8 @@ async function onSubmit() {
     await applyRefund({
       order_item_id: orderItemId.value,
       quantity: quantity.value,
-      type: 0,
+      type: refundType.value,
+      receive_status: receiveStatus.value === 'received' ? 1 : 0,
       reason: selectedReason.value,
       remark: description.value,
     })
@@ -138,7 +199,7 @@ async function onSubmit() {
 
 <template>
   <view class="page">
-    <mb-navbar title="申请退款" />
+    <mb-navbar :title="refundType === 1 ? '申请退货退款' : '申请退款'" />
 
     <!-- Product info card -->
     <view class="product-card">
@@ -163,6 +224,18 @@ async function onSubmit() {
 
     <!-- Form fields -->
     <view class="form-section">
+      <view class="form-item">
+        <text class="form-item__label">收货状态</text>
+        <text class="form-item__value">
+          {{ receiveStatus === 'received' ? '已收到货' : '未收到货' }}
+        </text>
+      </view>
+      <view class="form-item">
+        <text class="form-item__label">售后类型</text>
+        <text class="form-item__value">
+          {{ refundType === 1 ? '退货退款' : '仅退款' }}
+        </text>
+      </view>
       <!-- Reason picker -->
       <view class="form-item" @tap="onPickReason">
         <text class="form-item__label">退款原因</text>

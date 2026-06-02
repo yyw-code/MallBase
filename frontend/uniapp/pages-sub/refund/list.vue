@@ -2,13 +2,15 @@
 import { ref } from 'vue'
 import { onLoad, onPullDownRefresh, onReachBottom } from '@dcloudio/uni-app'
 import { getRefundList } from '@/api/order/refund'
+import config from '@/config/index'
 
 const STATUS_CONFIG = {
-  0: { label: '待审核', color: '#e08a00', bg: 'rgba(224, 138, 0, 0.08)' },
-  1: { label: '已同意', color: '#25a350', bg: 'rgba(37, 163, 80, 0.08)' },
-  2: { label: '已拒绝', color: '#ba1a1a', bg: 'rgba(186, 26, 26, 0.08)' },
-  3: { label: '已退款', color: '#737686', bg: 'rgba(115, 118, 134, 0.08)' },
-  4: { label: '已取消', color: '#737686', bg: 'rgba(115, 118, 134, 0.08)' },
+  0: { label: '待审核', color: '#0d50d5', bg: 'rgba(13, 80, 213, 0.08)' },
+  1: { label: '待退货', color: '#8a5a00', bg: 'rgba(224, 138, 0, 0.10)' },
+  2: { label: '退款中', color: '#0d50d5', bg: 'rgba(13, 80, 213, 0.08)' },
+  10: { label: '已完成', color: '#168a43', bg: 'rgba(22, 138, 67, 0.08)' },
+  20: { label: '已拒绝', color: '#ba1a1a', bg: 'rgba(186, 26, 26, 0.08)' },
+  90: { label: '已关闭', color: '#737686', bg: 'rgba(115, 118, 134, 0.08)' },
 }
 
 const list = ref([])
@@ -36,7 +38,6 @@ async function fetchList(reset = false) {
   if (!reset && noMore.value) return
 
   loading.value = true
-
   if (reset) {
     page.value = 1
     noMore.value = false
@@ -48,12 +49,7 @@ async function fetchList(reset = false) {
       ? data.list
       : (Array.isArray(data) ? data : [])
 
-    if (reset) {
-      list.value = items
-    } else {
-      list.value = [...list.value, ...items]
-    }
-
+    list.value = reset ? items : [...list.value, ...items]
     if (items.length < limit) {
       noMore.value = true
     } else {
@@ -67,14 +63,90 @@ async function fetchList(reset = false) {
   }
 }
 
+function normalizeImageUrl(url) {
+  if (!url) return ''
+  const value = String(url)
+  if (/^(https?:)?\/\//.test(value) || value.startsWith('data:') || value.startsWith('blob:')) {
+    return value.startsWith('//') ? `https:${value}` : value
+  }
+  if (value.startsWith('/') && config.baseUrl) {
+    return `${config.baseUrl}${value}`
+  }
+  return value
+}
+
 function getStatusConfig(status) {
-  return STATUS_CONFIG[status] || { label: '未知', color: '#737686', bg: 'rgba(115, 118, 134, 0.08)' }
+  return STATUS_CONFIG[Number(status)] || { label: '未知', color: '#737686', bg: 'rgba(115, 118, 134, 0.08)' }
 }
 
 function formatPrice(val) {
   const num = Number(val)
   if (Number.isNaN(num)) return '0.00'
   return num.toFixed(2)
+}
+
+function getOrderItem(item) {
+  return item?.order_item || {}
+}
+
+function getOrderSn(item) {
+  return item?.order?.sn || item?.order_sn || '-'
+}
+
+function getGoodsName(item) {
+  const goods = getOrderItem(item)
+  return goods.goods_name || item.goods_name || '商品信息'
+}
+
+function getGoodsImage(item) {
+  const goods = getOrderItem(item)
+  return normalizeImageUrl(
+    goods.goods_image_full_url
+      || goods.goods_image
+      || item.goods_image_full_url
+      || item.goods_image
+      || '',
+  )
+}
+
+function getGoodsSpec(item) {
+  const goods = getOrderItem(item)
+  return goods.sku_spec_text || goods.sku_spec || item.sku_spec_text || item.sku_spec || ''
+}
+
+function getQuantity(item) {
+  return Number(item.quantity || getOrderItem(item).quantity || 1)
+}
+
+function getTypeText(item) {
+  return item.type_text || (Number(item.type) === 1 ? '退货退款' : '仅退款')
+}
+
+function getReceiveText(item) {
+  return item.receive_status_text || (Number(item.receive_status) === 1 ? '已收到货' : '未收到货')
+}
+
+function getProcessText(item) {
+  if (Number(item.type) === 1) {
+    if (item.return_tracking_no) {
+      return `${item.return_company || '退货物流'} ${item.return_tracking_no}`
+    }
+    if (Number(item.status) === 1) {
+      return '商家已同意，请填写退货物流'
+    }
+    return item.return_receiver_address ? '待商家确认退货信息' : ''
+  }
+
+  if (Number(item.receive_status) === 0 && item.intercept_status_text) {
+    if (item.intercept_status === 'exception') {
+      return '物流异常/丢件，商家核实处理中'
+    }
+    if (['success', 'returned'].includes(item.intercept_status || '')) {
+      return `商家已确认${item.intercept_status_text}`
+    }
+    return `物流拦截：${item.intercept_status_text}`
+  }
+  return ''
 }
 
 function goDetail(id) {
@@ -84,9 +156,8 @@ function goDetail(id) {
 
 <template>
   <view class="page">
-    <mb-navbar title="退款列表" />
+    <mb-navbar title="售后订单" />
 
-    <!-- Refund list -->
     <view v-if="list.length > 0" class="list">
       <view
         v-for="item in list"
@@ -94,51 +165,70 @@ function goDetail(id) {
         class="refund-card"
         @tap="goDetail(item.id)"
       >
-        <!-- Card header -->
         <view class="refund-card__header">
-          <text class="refund-card__sn">{{ item.refund_sn || item.sn || '-' }}</text>
+          <view class="refund-card__header-main">
+            <text class="refund-card__label">售后单</text>
+            <text class="refund-card__sn">{{ item.sn || '-' }}</text>
+          </view>
           <view
             class="status-badge"
-            :style="{
-              color: getStatusConfig(item.status).color,
-              background: getStatusConfig(item.status).bg,
-            }"
+            :style="{ color: getStatusConfig(item.status).color, background: getStatusConfig(item.status).bg }"
           >
             <text class="status-badge__text" :style="{ color: getStatusConfig(item.status).color }">
-              {{ getStatusConfig(item.status).label }}
+              {{ item.status_text || getStatusConfig(item.status).label }}
             </text>
           </view>
         </view>
 
-        <!-- Product info -->
+        <view class="refund-card__order-row">
+          <text class="refund-card__order-no">订单号 {{ getOrderSn(item) }}</text>
+          <text class="refund-card__order-status">{{ item.order?.status_text || '' }}</text>
+        </view>
+
         <view class="refund-card__product">
           <image
-            v-if="item.goods_image"
+            v-if="getGoodsImage(item)"
             class="refund-card__image"
-            :src="item.goods_image"
+            :src="getGoodsImage(item)"
             mode="aspectFill"
             lazy-load
           />
           <view v-else class="refund-card__image refund-card__image--placeholder">
-            <text class="refund-card__placeholder-icon">&#x1F4E6;</text>
+            <view class="refund-card__placeholder-box" />
           </view>
           <view class="refund-card__info">
-            <text class="refund-card__name">{{ item.goods_name || '商品' }}</text>
-            <text v-if="item.sku_spec_text || item.sku_spec" class="refund-card__spec">
-              {{ item.sku_spec_text || item.sku_spec }}
-            </text>
+            <text class="refund-card__name">{{ getGoodsName(item) }}</text>
+            <text v-if="getGoodsSpec(item)" class="refund-card__spec">{{ getGoodsSpec(item) }}</text>
+            <view class="refund-card__meta">
+              <text>{{ getTypeText(item) }}</text>
+              <text>{{ getReceiveText(item) }}</text>
+              <text>x{{ getQuantity(item) }}</text>
+            </view>
           </view>
         </view>
 
-        <!-- Refund amount -->
+        <view class="refund-card__summary">
+          <view class="refund-card__summary-item">
+            <text class="refund-card__summary-label">退款金额</text>
+            <text class="refund-card__amount">¥{{ formatPrice(item.refund_amount || item.amount) }}</text>
+          </view>
+          <view v-if="item.reason_text || item.reason" class="refund-card__summary-item">
+            <text class="refund-card__summary-label">申请原因</text>
+            <text class="refund-card__summary-value">{{ item.reason_text || item.reason }}</text>
+          </view>
+          <view v-if="getProcessText(item)" class="refund-card__summary-item refund-card__summary-item--full">
+            <text class="refund-card__summary-label">处理进度</text>
+            <text class="refund-card__summary-value">{{ getProcessText(item) }}</text>
+          </view>
+        </view>
+
         <view class="refund-card__footer">
-          <text class="refund-card__amount-label">退款金额</text>
-          <text class="refund-card__amount">{{ '¥' }}{{ formatPrice(item.refund_amount || item.amount) }}</text>
+          <text class="refund-card__time">{{ item.create_time || '' }}</text>
+          <text class="refund-card__link">查看详情</text>
         </view>
       </view>
     </view>
 
-    <!-- Loading / No More -->
     <view v-if="list.length > 0" class="load-state">
       <text v-if="loading" class="load-state__text">加载中...</text>
       <view v-else-if="noMore" class="load-state__divider">
@@ -148,11 +238,10 @@ function goDetail(id) {
       </view>
     </view>
 
-    <!-- Empty state -->
     <mb-empty-state
       v-if="initialized && !loading && list.length === 0"
-      icon="&#x1F4CB;"
-      text="暂无退款记录"
+      icon=""
+      text="暂无售后订单"
     />
   </view>
 </template>
@@ -160,24 +249,21 @@ function goDetail(id) {
 <style lang="scss" scoped>
 .page {
   min-height: 100vh;
-  background: $mb-color-bg-secondary;
+  background: #faf8ff;
   padding: $mb-spacing-sm $mb-spacing-page $mb-spacing-xl;
 }
 
-// ---- List ----
 .list {
   display: flex;
   flex-direction: column;
-  gap: $mb-spacing-md;
+  gap: 18rpx;
 }
 
-// ---- Refund card ----
 .refund-card {
   background: $mb-color-bg;
-  border-radius: $mb-radius-lg;
-  padding: $mb-spacing-lg;
-  border: 1rpx solid $mb-color-border;
-  transition: opacity 0.15s;
+  border-radius: 16rpx;
+  padding: 18rpx;
+  border: 1rpx solid rgba(25, 27, 35, 0.06);
 
   &:active {
     opacity: 0.85;
@@ -188,43 +274,86 @@ function goDetail(id) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: $mb-spacing-md;
+  gap: $mb-spacing-sm;
+}
+
+.refund-card__header-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+}
+
+.refund-card__label {
+  flex-shrink: 0;
+  font-size: $mb-font-xs;
+  color: $mb-color-text-tertiary;
 }
 
 .refund-card__sn {
-  font-size: $mb-font-sm;
-  color: $mb-color-text-tertiary;
+  min-width: 0;
+  font-size: $mb-font-xs;
+  color: $mb-color-text-secondary;
   overflow: hidden;
-  white-space: nowrap;
   text-overflow: ellipsis;
-  flex: 1;
-  margin-right: $mb-spacing-sm;
+  white-space: nowrap;
 }
 
 .status-badge {
   flex-shrink: 0;
-  padding: 8rpx 20rpx;
-  border-radius: $mb-radius-sm;
+  padding: 8rpx 18rpx;
+  border-radius: 999rpx;
 }
 
 .status-badge__text {
-  font-size: 22rpx;
-  font-weight: 500;
+  font-size: $mb-font-xs;
+  font-weight: 700;
 }
 
-// ---- Product in card ----
+.refund-card__order-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: $mb-spacing-sm;
+  margin-top: 14rpx;
+  padding: 12rpx 14rpx;
+  border-radius: 12rpx;
+  background: rgba(25, 27, 35, 0.03);
+}
+
+.refund-card__order-no,
+.refund-card__order-status {
+  font-size: $mb-font-xs;
+  color: $mb-color-text-secondary;
+}
+
+.refund-card__order-no {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.refund-card__order-status {
+  flex-shrink: 0;
+  color: $mb-color-primary;
+  font-weight: 600;
+}
+
 .refund-card__product {
   display: flex;
-  gap: $mb-spacing-md;
-  padding: $mb-spacing-sm 0;
+  gap: 18rpx;
+  padding: 18rpx 0;
 }
 
 .refund-card__image {
   flex-shrink: 0;
-  width: 120rpx;
-  height: 120rpx;
-  border-radius: $mb-radius-md;
-  background: $mb-color-bg-secondary;
+  width: 136rpx;
+  height: 136rpx;
+  border-radius: 10rpx;
+  background: #f3f5f9;
 }
 
 .refund-card__image--placeholder {
@@ -233,23 +362,27 @@ function goDetail(id) {
   justify-content: center;
 }
 
-.refund-card__placeholder-icon {
-  font-size: 40rpx;
+.refund-card__placeholder-box {
+  width: 54rpx;
+  height: 38rpx;
+  border-radius: 8rpx;
+  background: linear-gradient(135deg, rgba(13, 80, 213, 0.14), rgba(25, 27, 35, 0.06));
 }
 
 .refund-card__info {
   flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   justify-content: center;
-  min-width: 0;
+  gap: 10rpx;
 }
 
 .refund-card__name {
-  font-size: $mb-font-md;
-  font-weight: 500;
+  font-size: 27rpx;
+  font-weight: 600;
   color: $mb-color-text-title;
-  line-height: 1.4;
+  line-height: 1.38;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -257,33 +390,92 @@ function goDetail(id) {
 }
 
 .refund-card__spec {
-  font-size: $mb-font-sm;
+  font-size: $mb-font-xs;
   color: $mb-color-text-tertiary;
-  margin-top: 8rpx;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-// ---- Footer ----
+.refund-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8rpx;
+
+  text {
+    padding: 5rpx 12rpx;
+    border-radius: 999rpx;
+    background: rgba(25, 27, 35, 0.04);
+    font-size: $mb-font-xs;
+    color: $mb-color-text-secondary;
+  }
+}
+
+.refund-card__summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+  padding: 14rpx 0;
+  border-top: 1rpx solid rgba(25, 27, 35, 0.06);
+  border-bottom: 1rpx solid rgba(25, 27, 35, 0.06);
+}
+
+.refund-card__summary-item {
+  flex: 1;
+  min-width: 240rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+}
+
+.refund-card__summary-item--full {
+  flex-basis: 100%;
+}
+
+.refund-card__summary-label {
+  font-size: $mb-font-xs;
+  color: $mb-color-text-tertiary;
+}
+
+.refund-card__summary-value {
+  font-size: $mb-font-sm;
+  color: $mb-color-text-title;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.refund-card__amount {
+  font-size: 34rpx;
+  font-weight: 800;
+  color: $mb-color-primary;
+}
+
 .refund-card__footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-top: $mb-spacing-md;
-  padding-top: $mb-spacing-md;
-  border-top: 1rpx solid $mb-color-divider;
+  gap: $mb-spacing-sm;
+  margin-top: 14rpx;
 }
 
-.refund-card__amount-label {
+.refund-card__time {
+  min-width: 0;
+  flex: 1;
+  font-size: $mb-font-xs;
+  color: $mb-color-text-tertiary;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.refund-card__link {
+  flex-shrink: 0;
   font-size: $mb-font-sm;
-  color: $mb-color-text-secondary;
-}
-
-.refund-card__amount {
-  font-size: $mb-font-lg;
-  font-weight: 700;
+  font-weight: 600;
   color: $mb-color-primary;
 }
 
-// ---- Load state ----
 .load-state {
   padding: $mb-spacing-xl 0 $mb-spacing-sm;
   display: flex;

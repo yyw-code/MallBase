@@ -28,20 +28,22 @@ class RefundOrderController extends BaseController
      * body:
      *  - order_item_id: int   要退款的订单项 ID
      *  - quantity: int        申请数量（≤ 剩余可退）
-     *  - type: int            0 仅退款 / 1 退货退款（MVP 仅开放 0）
+     *  - type: int            0 仅退款 / 1 退货退款
+     *  - receive_status: int  0 未收到货 / 1 已收到货
      *  - reason: string       RefundReason 枚举值
      *  - remark: string       可选 ≤ 255
      */
     public function apply()
     {
         $userId = (int) ($this->request->user_id ?? 0);
-        $data = $this->request->param(['order_item_id', 'quantity', 'type', 'reason', 'remark']);
+        $data = $this->request->param(['order_item_id', 'quantity', 'type', 'receive_status', 'reason', 'remark']);
         $this->validate($data, RefundValidate::class . '.apply');
 
         $payload = [
             'order_item_id' => (int) ($data['order_item_id'] ?? 0),
             'quantity'      => (int) ($data['quantity'] ?? 0),
             'type'          => isset($data['type']) ? (int) $data['type'] : RefundOrderStatus::TYPE_REFUND_ONLY,
+            'receive_status'=> isset($data['receive_status']) ? (int) $data['receive_status'] : RefundOrderStatus::RECEIVE_NOT_RECEIVED,
             'reason'        => (string) ($data['reason'] ?? ''),
             'remark'        => isset($data['remark']) && $data['remark'] !== '' ? (string) $data['remark'] : null,
         ];
@@ -58,6 +60,25 @@ class RefundOrderController extends BaseController
         $userId = (int) ($this->request->user_id ?? 0);
         $this->service()->cancel($userId, (int) $id);
         return $this->success(null, '已撤销');
+    }
+
+    /**
+     * 买家提交退货物流（仅退货退款且商家同意后）
+     */
+    public function submitReturn($id)
+    {
+        $userId = (int) ($this->request->user_id ?? 0);
+        $data = $this->request->param(['return_company', 'return_tracking_no']);
+        $this->validate($data, RefundValidate::class . '.return');
+
+        $this->service()->submitReturnShipment(
+            userId: $userId,
+            refundId: (int) $id,
+            company: (string) ($data['return_company'] ?? ''),
+            trackingNo: (string) ($data['return_tracking_no'] ?? ''),
+        );
+
+        return $this->success(null, '退货物流已提交');
     }
 
     /**

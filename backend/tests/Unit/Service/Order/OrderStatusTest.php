@@ -79,8 +79,8 @@ final class OrderStatusTest extends TestCase
      * 白名单（与 OrderStatus::TRANSITIONS 同步）：
      *  - PENDING_PAY → PAID / CLOSED
      *  - PAID        → SHIPPED / CLOSED
-     *  - SHIPPED     → RECEIVED
-     *  - RECEIVED    → COMPLETED
+     *  - SHIPPED     → RECEIVED / CLOSED（售后全量退款关闭）
+     *  - RECEIVED    → COMPLETED / CLOSED（售后全量退款关闭）
      */
     public function testCanTransitAllowedEdges(): void
     {
@@ -89,7 +89,9 @@ final class OrderStatusTest extends TestCase
         $this->assertTrue(OrderStatus::canTransit(OrderStatus::PAID, OrderStatus::SHIPPED));
         $this->assertTrue(OrderStatus::canTransit(OrderStatus::PAID, OrderStatus::CLOSED));
         $this->assertTrue(OrderStatus::canTransit(OrderStatus::SHIPPED, OrderStatus::RECEIVED));
+        $this->assertTrue(OrderStatus::canTransit(OrderStatus::SHIPPED, OrderStatus::CLOSED));
         $this->assertTrue(OrderStatus::canTransit(OrderStatus::RECEIVED, OrderStatus::COMPLETED));
+        $this->assertTrue(OrderStatus::canTransit(OrderStatus::RECEIVED, OrderStatus::CLOSED));
     }
 
     /**
@@ -104,8 +106,6 @@ final class OrderStatusTest extends TestCase
         // PAID 不允许直接完成
         $this->assertFalse(OrderStatus::canTransit(OrderStatus::PAID, OrderStatus::RECEIVED));
         $this->assertFalse(OrderStatus::canTransit(OrderStatus::PAID, OrderStatus::COMPLETED));
-        // SHIPPED 不允许直接关闭（只能继续收货）
-        $this->assertFalse(OrderStatus::canTransit(OrderStatus::SHIPPED, OrderStatus::CLOSED));
         $this->assertFalse(OrderStatus::canTransit(OrderStatus::SHIPPED, OrderStatus::COMPLETED));
     }
 

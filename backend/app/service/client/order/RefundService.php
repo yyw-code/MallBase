@@ -24,7 +24,7 @@ use mall_base\exception\BusinessException;
  *  - 「先校验再事务」：订单项归属、订单状态、数量上限、重复申请全部放事务外
  *  - 事务内只做：生成 sn → 落库 RefundOrder
  *  - 状态流转统一走 {@see RefundOrderStatusMachine}，禁止直接 $refund->status = X
- *  - MVP 仅开放仅退款（TYPE_REFUND_ONLY），退货退款申请入口直接拦截
+ *  - 售后类型与收货状态强绑定，退货退款必须先由商家审核，再由买家回填退货物流
  *
  * @extends BaseService<RefundOrder>
  */
@@ -68,6 +68,7 @@ class RefundService extends BaseService
         $orderItemId = (int) ($payload['order_item_id'] ?? 0);
         $quantity    = (int) ($payload['quantity'] ?? 0);
         $type        = (int) ($payload['type'] ?? RefundOrderStatus::TYPE_REFUND_ONLY);
+        $receiveStatus = (int) ($payload['receive_status'] ?? RefundOrderStatus::RECEIVE_NOT_RECEIVED);
         $reason      = (string) ($payload['reason'] ?? '');
         $remark      = isset($payload['remark']) && $payload['remark'] !== ''
             ? mb_substr((string) $payload['remark'], 0, 255)
@@ -79,9 +80,11 @@ class RefundService extends BaseService
         if ($quantity <= 0) {
             throw new BusinessException('申请数量必须大于 0');
         }
-        if ($type !== RefundOrderStatus::TYPE_REFUND_ONLY) {
-            // MVP 硬拦截：退货退款入口暂不开放，避免前端误操作产生脏数据
-            throw new BusinessException('退货退款功能开发中，敬请期待');
+        if (!in_array($type, [RefundOrderStatus::TYPE_REFUND_ONLY, RefundOrderStatus::TYPE_RETURN_REFUND], true)) {
+            throw new BusinessException('售后类型不合法');
+        }
+        if (!in_array($receiveStatus, [RefundOrderStatus::RECEIVE_NOT_RECEIVED, RefundOrderStatus::RECEIVE_RECEIVED], true)) {
+            throw new BusinessException('收货状态不合法');
         }
         if (!RefundReason::isValid($reason)) {
             throw new BusinessException('售后原因不合法');
@@ -89,17 +92,18 @@ class RefundService extends BaseService
 
         [$order, $item] = $this->assertOwnedOrderItem($userId, $orderItemId);
         $this->assertOrderRefundable($order);
+        $this->assertRefundScenario($order, $type, $receiveStatus);
         $this->assertQuantityLimit($item, $quantity);
         $this->assertNoActiveRefund($orderItemId);
 
-        $refundAmount = $this->calcRefundAmount($item, $quantity);
+        $refundAmount = $this->calcRefundAmount($order, $item, $quantity);
 
         /** @var RefundSnGenerator $snGen */
         $snGen = app()->make(RefundSnGenerator::class);
 
         /** @var RefundOrder $refund */
         $refund = $this->transaction(function () use (
-            $userId, $order, $item, $orderItemId, $quantity, $type, $reason, $remark, $refundAmount, $snGen
+            $userId, $order, $item, $orderItemId, $quantity, $type, $receiveStatus, $reason, $remark, $refundAmount, $snGen
         ) {
             /** @var RefundOrder $refund */
             $refund = $this->model()->create([
@@ -108,11 +112,13 @@ class RefundService extends BaseService
                 'order_item_id' => $orderItemId,
                 'user_id'       => $userId,
                 'type'          => $type,
+                'receive_status'=> $receiveStatus,
                 'status'        => RefundOrderStatus::PENDING,
                 'quantity'      => $quantity,
                 'refund_amount' => $refundAmount,
                 'reason'        => $reason,
-                'admin_remark'  => $remark ?? '',
+                'remark'        => $remark,
+                'intercept_status' => $this->defaultInterceptStatus((int) $order['status'], $type, $receiveStatus),
             ]);
             return $refund;
         });
@@ -144,6 +150,32 @@ class RefundService extends BaseService
             operatorId: $userId,
             remark: '买家撤销申请',
         );
+    }
+
+    public function submitReturnShipment(int $userId, int $refundId, string $company, string $trackingNo): void
+    {
+        $this->assertUserId($userId);
+        $company = trim($company);
+        $trackingNo = trim($trackingNo);
+        if ($company === '' || $trackingNo === '') {
+            throw new BusinessException('请填写退货物流公司和物流单号');
+        }
+
+        $refund = $this->findOwnedRefund($userId, $refundId);
+        if ((int) $refund->type !== RefundOrderStatus::TYPE_RETURN_REFUND) {
+            throw new BusinessException('仅退货退款需要填写退货物流');
+        }
+        if ((int) $refund->status !== RefundOrderStatus::APPROVED) {
+            throw new BusinessException('商家同意退货后才能填写退货物流');
+        }
+        if ((string) ($refund->return_tracking_no ?? '') !== '') {
+            throw new BusinessException('退货物流已提交');
+        }
+
+        $refund->return_company = mb_substr($company, 0, 50);
+        $refund->return_tracking_no = mb_substr($trackingNo, 0, 64);
+        $refund->return_shipped_at = date('Y-m-d H:i:s');
+        $refund->save();
     }
 
     /**
@@ -283,6 +315,44 @@ class RefundService extends BaseService
         }
     }
 
+    /**
+     * 严谨售后场景：
+     * - 待发货：仅退款，未收到货
+     * - 待收货：未收到货可仅退款；已收到货可仅退款或退货退款
+     * - 已收货/已完成：视为已收到货，可仅退款或退货退款
+     */
+    private function assertRefundScenario(array $order, int $type, int $receiveStatus): void
+    {
+        $status = (int) ($order['status'] ?? 0);
+
+        if ($type === RefundOrderStatus::TYPE_RETURN_REFUND && $receiveStatus !== RefundOrderStatus::RECEIVE_RECEIVED) {
+            throw new BusinessException('退货退款仅适用于已收到货的订单');
+        }
+
+        if ($status === OrderStatus::PAID) {
+            if ($type !== RefundOrderStatus::TYPE_REFUND_ONLY || $receiveStatus !== RefundOrderStatus::RECEIVE_NOT_RECEIVED) {
+                throw new BusinessException('待发货订单仅支持未收到货仅退款');
+            }
+            return;
+        }
+
+        if (in_array($status, [OrderStatus::RECEIVED, OrderStatus::COMPLETED], true)
+            && $receiveStatus !== RefundOrderStatus::RECEIVE_RECEIVED) {
+            throw new BusinessException('已收货订单请选择已收到货');
+        }
+    }
+
+    private function defaultInterceptStatus(int $orderStatus, int $type, int $receiveStatus): string
+    {
+        if ($orderStatus === OrderStatus::SHIPPED
+            && $type === RefundOrderStatus::TYPE_REFUND_ONLY
+            && $receiveStatus === RefundOrderStatus::RECEIVE_NOT_RECEIVED) {
+            return RefundOrderStatus::INTERCEPT_PENDING;
+        }
+
+        return RefundOrderStatus::INTERCEPT_NONE;
+    }
+
     private function afterSaleDays(): int
     {
         if (!function_exists('app')) {
@@ -353,10 +423,85 @@ class RefundService extends BaseService
      *
      * @param array<string, mixed> $item
      */
-    private function calcRefundAmount(array $item, int $quantity): string
+    private function calcRefundAmount(array $order, array $item, int $quantity): string
     {
-        $unitPrice = (string) ($item['unit_price'] ?? '0.00');
-        return bcmul($unitPrice, (string) $quantity, 2);
+        $orderGoodsTotalCents = $this->decimalToCents((string) ($order['total_amount'] ?? '0.00'));
+        if ($orderGoodsTotalCents <= 0) {
+            throw new BusinessException('订单商品金额不合法');
+        }
+
+        $discountCents = $this->decimalToCents((string) ($order['discount_amount'] ?? '0.00'));
+        $payCents = $this->decimalToCents((string) ($order['pay_amount'] ?? '0.00'));
+        $goodsPaidCents = max(0, $orderGoodsTotalCents - $discountCents);
+        $goodsPaidCents = min($goodsPaidCents, $payCents);
+        if ($goodsPaidCents <= 0) {
+            throw new BusinessException('订单可退金额不足');
+        }
+
+        $unitPriceCents = $this->decimalToCents((string) ($item['unit_price'] ?? '0.00'));
+        $requestSubtotalCents = $unitPriceCents * $quantity;
+        if ($requestSubtotalCents <= 0) {
+            throw new BusinessException('退款金额不合法');
+        }
+
+        $baseRefundCents = intdiv($goodsPaidCents * $requestSubtotalCents, $orderGoodsTotalCents);
+        if ($baseRefundCents <= 0) {
+            $baseRefundCents = min($requestSubtotalCents, $goodsPaidCents);
+        }
+
+        $remainingCents = $this->remainingRefundableCents((int) ($order['id'] ?? 0), $goodsPaidCents);
+        $refundCents = min($baseRefundCents, $remainingCents);
+        if ($refundCents <= 0) {
+            throw new BusinessException('订单可退金额不足');
+        }
+
+        return $this->centsToDecimal($refundCents);
+    }
+
+    private function remainingRefundableCents(int $orderId, int $goodsPaidCents): int
+    {
+        if ($orderId <= 0) {
+            return $goodsPaidCents;
+        }
+
+        $rows = $this->model()
+            ->where('order_id', $orderId)
+            ->whereIn('status', $this->refundOccupiedStatuses())
+            ->whereNull('delete_time')
+            ->field('refund_amount')
+            ->select()
+            ->toArray();
+
+        $occupiedCents = 0;
+        foreach ($rows as $row) {
+            $occupiedCents += $this->decimalToCents((string) ($row['refund_amount'] ?? '0.00'));
+        }
+
+        return max(0, $goodsPaidCents - $occupiedCents);
+    }
+
+    /**
+     * @return array<int, int>
+     */
+    private function refundOccupiedStatuses(): array
+    {
+        return array_merge(RefundOrderStatus::activeStatuses(), [RefundOrderStatus::COMPLETED]);
+    }
+
+    private function decimalToCents(string $amount): int
+    {
+        $amount = trim($amount);
+        if ($amount === '' || !preg_match('/^\d+(\.\d{1,2})?$/', $amount)) {
+            throw new BusinessException('金额格式不合法');
+        }
+
+        [$yuan, $cent] = array_pad(explode('.', $amount, 2), 2, '0');
+        return ((int) $yuan * 100) + (int) str_pad(substr($cent, 0, 2), 2, '0');
+    }
+
+    private function centsToDecimal(int $amountCents): string
+    {
+        return sprintf('%d.%02d', intdiv($amountCents, 100), $amountCents % 100);
     }
 
     /**

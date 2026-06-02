@@ -56,6 +56,8 @@ export namespace RefundApi {
     user_id: number;
     type: number;
     type_text?: string;
+    receive_status?: number;
+    receive_status_text?: string;
     status: number;
     status_text?: string;
     quantity: number;
@@ -68,6 +70,16 @@ export namespace RefundApi {
     reviewed_at?: null | string;
     refunded_at?: null | string;
     canceled_at?: null | string;
+    return_receiver_name?: null | string;
+    return_receiver_phone?: null | string;
+    return_receiver_address?: null | string;
+    return_company?: null | string;
+    return_tracking_no?: null | string;
+    return_shipped_at?: null | string;
+    return_received_at?: null | string;
+    intercept_status?: string;
+    intercept_status_text?: string;
+    intercept_note?: null | string;
     create_time: string;
     update_time?: string;
     order?: {
@@ -117,6 +129,8 @@ export namespace RefundApi {
   export interface StatusOptionsResponse {
     status: EnumOption[];
     type: EnumOption[];
+    receive_status: EnumOption[];
+    intercept_status: EnumOption[];
     reason: EnumOption[];
   }
 }
@@ -160,6 +174,20 @@ export async function rejectRefundApi(
   return requestClient.post(`/order/refund/reject/${id}`, data);
 }
 
+export async function updateRefundInterceptApi(
+  id: number,
+  data: { intercept_note?: string; intercept_status: string },
+) {
+  return requestClient.post(`/order/refund/intercept/${id}`, data);
+}
+
+export async function confirmRefundReturnApi(
+  id: number,
+  data?: RefundApi.ReviewParams,
+) {
+  return requestClient.post(`/order/refund/confirmReturn/${id}`, data ?? {});
+}
+
 /**
  * 售后枚举选项（状态 + 类型 + 原因）
  */
@@ -175,5 +203,14 @@ export async function getRefundStatusOptionsApi() {
 export async function getRefundReasonOptionsApi() {
   return requestClient.get<RefundApi.EnumOption[]>(
     '/order/refund/reasonOptions',
+  );
+}
+
+/**
+ * 后台常用售后驳回原因
+ */
+export async function getRefundRejectReasonOptionsApi() {
+  return requestClient.get<RefundApi.EnumOption[]>(
+    '/order/refund/rejectReasonOptions',
   );
 }

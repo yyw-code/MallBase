@@ -97,15 +97,15 @@ final class RefundServiceTest extends TestCase
     }
 
     /**
-     * MVP 硬拦截：退货退款（type=1）在 apply 入口直接拒绝
+     * type 不在售后类型枚举内 → 拒绝
      */
-    public function testApplyRejectsReturnRefundType(): void
+    public function testApplyRejectsInvalidType(): void
     {
         $this->expectException(BusinessException::class);
-        $this->expectExceptionMessage('退货退款功能开发中，敬请期待');
+        $this->expectExceptionMessage('售后类型不合法');
 
         $payload = $this->validApplyPayload();
-        $payload['type'] = RefundOrderStatus::TYPE_RETURN_REFUND;
+        $payload['type'] = 99;
         $this->service->apply(1, $payload);
     }
 
@@ -164,39 +164,45 @@ final class RefundServiceTest extends TestCase
 
     public function testCalcRefundAmountSingleItem(): void
     {
+        $order = $this->validRefundOrder('25.00', '0.00', '25.00');
         $item = ['unit_price' => '12.50'];
-        $result = $this->invokePrivate('calcRefundAmount', [$item, 2]);
+        $result = $this->invokePrivate('calcRefundAmount', [$order, $item, 2]);
         $this->assertSame('25.00', $result);
+    }
+
+    public function testCalcRefundAmountUsesPaidAmountAfterAdminDiscount(): void
+    {
+        $order = $this->validRefundOrder('899.00', '898.00', '1.00');
+        $item = ['unit_price' => '899.00'];
+        $result = $this->invokePrivate('calcRefundAmount', [$order, $item, 1]);
+        $this->assertSame('1.00', $result);
+    }
+
+    public function testCalcRefundAmountAllocatesPaidAmountByItemSubtotal(): void
+    {
+        $order = $this->validRefundOrder('100.00', '20.00', '80.00');
+        $item = ['unit_price' => '30.00'];
+        $result = $this->invokePrivate('calcRefundAmount', [$order, $item, 1]);
+        $this->assertSame('24.00', $result);
     }
 
     public function testCalcRefundAmountBcmathPrecision(): void
     {
         // 0.10 × 3 = 0.30（float 下可能出现 0.30000000000000004）
+        $order = $this->validRefundOrder('0.30', '0.00', '0.30');
         $item = ['unit_price' => '0.10'];
-        $result = $this->invokePrivate('calcRefundAmount', [$item, 3]);
+        $result = $this->invokePrivate('calcRefundAmount', [$order, $item, 3]);
         $this->assertSame('0.30', $result);
     }
 
-    public function testCalcRefundAmountHighValueItem(): void
+    public function testCalcRefundAmountRejectsZeroPaidAmount(): void
     {
-        $item = ['unit_price' => '9999.99'];
-        $result = $this->invokePrivate('calcRefundAmount', [$item, 100]);
-        $this->assertSame('999999.00', $result);
-    }
+        $this->expectException(BusinessException::class);
+        $this->expectExceptionMessage('订单可退金额不足');
 
-    public function testCalcRefundAmountSingleUnit(): void
-    {
-        $item = ['unit_price' => '88.00'];
-        $result = $this->invokePrivate('calcRefundAmount', [$item, 1]);
-        $this->assertSame('88.00', $result);
-    }
-
-    public function testCalcRefundAmountTruncatesBeyondTwoDecimals(): void
-    {
-        // 33.333 × 3 = 99.999 → bcmath scale=2 截断为 99.99
-        $item = ['unit_price' => '33.333'];
-        $result = $this->invokePrivate('calcRefundAmount', [$item, 3]);
-        $this->assertSame('99.99', $result);
+        $order = $this->validRefundOrder('100.00', '100.00', '0.00');
+        $item = ['unit_price' => '100.00'];
+        $this->invokePrivate('calcRefundAmount', [$order, $item, 1]);
     }
 
     // ====================== assertQuantityLimit ======================
@@ -359,6 +365,65 @@ final class RefundServiceTest extends TestCase
         $this->assertSame($expected, $value);
     }
 
+    // ====================== assertRefundScenario ======================
+
+    public function testRefundScenarioRejectsReturnRefundWhenNotReceived(): void
+    {
+        $this->expectException(BusinessException::class);
+        $this->expectExceptionMessage('退货退款仅适用于已收到货的订单');
+
+        $this->invokePrivate('assertRefundScenario', [
+            ['status' => OrderStatus::SHIPPED],
+            RefundOrderStatus::TYPE_RETURN_REFUND,
+            RefundOrderStatus::RECEIVE_NOT_RECEIVED,
+        ]);
+    }
+
+    public function testRefundScenarioRejectsPaidOrderReturnRefund(): void
+    {
+        $this->expectException(BusinessException::class);
+        $this->expectExceptionMessage('待发货订单仅支持未收到货仅退款');
+
+        $this->invokePrivate('assertRefundScenario', [
+            ['status' => OrderStatus::PAID],
+            RefundOrderStatus::TYPE_RETURN_REFUND,
+            RefundOrderStatus::RECEIVE_RECEIVED,
+        ]);
+    }
+
+    public function testRefundScenarioRejectsReceivedOrderMarkedNotReceived(): void
+    {
+        $this->expectException(BusinessException::class);
+        $this->expectExceptionMessage('已收货订单请选择已收到货');
+
+        $this->invokePrivate('assertRefundScenario', [
+            ['status' => OrderStatus::RECEIVED],
+            RefundOrderStatus::TYPE_REFUND_ONLY,
+            RefundOrderStatus::RECEIVE_NOT_RECEIVED,
+        ]);
+    }
+
+    public function testRefundScenarioAllowsShippedNotReceivedRefundOnly(): void
+    {
+        $this->invokePrivate('assertRefundScenario', [
+            ['status' => OrderStatus::SHIPPED],
+            RefundOrderStatus::TYPE_REFUND_ONLY,
+            RefundOrderStatus::RECEIVE_NOT_RECEIVED,
+        ]);
+        $this->assertTrue(true);
+    }
+
+    public function testDefaultInterceptStatusForShippedNotReceivedRefundOnly(): void
+    {
+        $result = $this->invokePrivate('defaultInterceptStatus', [
+            OrderStatus::SHIPPED,
+            RefundOrderStatus::TYPE_REFUND_ONLY,
+            RefundOrderStatus::RECEIVE_NOT_RECEIVED,
+        ]);
+
+        $this->assertSame(RefundOrderStatus::INTERCEPT_PENDING, $result);
+    }
+
     // ====================== helpers ======================
 
     /**
@@ -374,6 +439,19 @@ final class RefundServiceTest extends TestCase
             'type'          => RefundOrderStatus::TYPE_REFUND_ONLY,
             'reason'        => RefundReason::QUALITY_ISSUE,
             'remark'        => '测试备注',
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function validRefundOrder(string $total, string $discount, string $pay): array
+    {
+        return [
+            'id' => 0,
+            'total_amount' => $total,
+            'discount_amount' => $discount,
+            'pay_amount' => $pay,
         ];
     }
 

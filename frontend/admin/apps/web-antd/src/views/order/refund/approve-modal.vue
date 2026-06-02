@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import type { RefundApi } from '#/api/order/refund';
 
-import { ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 
 import { message } from 'ant-design-vue';
 
@@ -20,6 +20,24 @@ const emit = defineEmits<{
 
 const submitting = ref(false);
 const adminRemark = ref('');
+
+const approveTip = computed(() => {
+  const refund = props.refund;
+  if (!refund) {
+    return '';
+  }
+  if (refund.type === 1) {
+    return '同意后将进入待买家退货，不会立即退款；买家提交退货物流后，后台确认收到退货再发起退款。';
+  }
+  if (
+    refund.order?.status === 20 &&
+    refund.receive_status === 0 &&
+    refund.intercept_status === 'pending'
+  ) {
+    return '已发货未收到货的仅退款，需要先在后台确认物流拦截成功、已退回或物流异常，再同意退款。';
+  }
+  return '同意后将向微信发起退款；如微信返回处理中，售后单将进入退款中。';
+});
 
 watch(
   () => props.open,
@@ -97,7 +115,7 @@ const handleSubmit = async () => {
       </div>
 
       <a-alert
-        message="同意后将向微信发起退款；如微信返回处理中，售后单将进入退款中"
+        :message="approveTip"
         type="warning"
         show-icon
         class="mb-3"
