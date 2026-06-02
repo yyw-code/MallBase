@@ -25,6 +25,10 @@ export const overridesPreferences = defineOverridesPreferences({
   copyright: {
     settingShow: false,
   },
+  // MallBase 后台默认使用浅色主题；用户仍可在右上角主题切换中改为深色。
+  theme: {
+    mode: 'light',
+  },
   // 设置抽屉部件开关：关闭语言切换 / 时区部件
   widget: {
     languageToggle: false,
