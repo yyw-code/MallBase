@@ -11,16 +11,21 @@ final class DemoAssetReferenceTest extends TestCase
     public function testDemoSqlReferencesExistingStaticDemoImages(): void
     {
         $root = dirname(__DIR__, 4);
-        $sqlPath = $root . '/deploy/install/data/demo/02_demo_goods.sql';
-        $sql = file_get_contents($sqlPath);
-
-        $this->assertIsString($sql);
-        preg_match_all("#/static/demo/[^'\"\\\\\]]+#", $sql, $matches);
-
         $missing = [];
-        foreach (array_unique($matches[0] ?? []) as $path) {
-            if (!is_file($root . '/backend/public' . $path)) {
-                $missing[] = $path;
+
+        foreach (['schema', 'demo'] as $dirName) {
+            $files = glob($root . '/deploy/install/data/' . $dirName . '/*.sql') ?: [];
+            foreach ($files as $file) {
+                $sql = file_get_contents($file);
+                $this->assertIsString($sql);
+
+                preg_match_all("#/static/demo/[^'\"\\\\\]]+#", $sql, $matches);
+                foreach (array_unique($matches[0] ?? []) as $path) {
+                    $relativePath = str_replace('/static/demo/', '', $path);
+                    if (!is_file($root . '/deploy/install/static/demo/' . $relativePath)) {
+                        $missing[] = str_replace($root . '/', '', $file) . ' -> ' . $path;
+                    }
+                }
             }
         }
 

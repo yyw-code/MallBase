@@ -78,6 +78,9 @@ const statusLabel = (status: null | number | undefined) => {
           <a-descriptions-item label="类型">
             {{ detail.type_text || typeMap[detail.type] || '—' }}
           </a-descriptions-item>
+          <a-descriptions-item label="收货状态">
+            {{ detail.receive_status_text || '—' }}
+          </a-descriptions-item>
           <a-descriptions-item label="退款金额">
             <strong class="text-red-500">¥{{ detail.refund_amount }}</strong>
           </a-descriptions-item>
@@ -101,6 +104,57 @@ const statusLabel = (status: null | number | undefined) => {
           </a-descriptions-item>
           <a-descriptions-item label="取消时间">
             {{ detail.canceled_at || '—' }}
+          </a-descriptions-item>
+        </a-descriptions>
+
+        <!-- 物流拦截信息 -->
+        <a-descriptions
+          v-if="detail.type === 0 && detail.receive_status === 0"
+          :column="2"
+          size="small"
+          bordered
+          class="mb-4"
+          title="物流拦截"
+          :label-style="{ width: '110px' }"
+        >
+          <a-descriptions-item label="拦截状态">
+            {{ detail.intercept_status_text || '—' }}
+          </a-descriptions-item>
+          <a-descriptions-item label="拦截备注">
+            {{ detail.intercept_note || '—' }}
+          </a-descriptions-item>
+        </a-descriptions>
+
+        <!-- 退货信息 -->
+        <a-descriptions
+          v-if="detail.type === 1"
+          :column="2"
+          size="small"
+          bordered
+          class="mb-4"
+          title="退货信息"
+          :label-style="{ width: '110px' }"
+        >
+          <a-descriptions-item label="退货收件人">
+            {{ detail.return_receiver_name || '—' }}
+            <span v-if="detail.return_receiver_phone">
+              · {{ detail.return_receiver_phone }}
+            </span>
+          </a-descriptions-item>
+          <a-descriptions-item label="退货地址">
+            {{ detail.return_receiver_address || '—' }}
+          </a-descriptions-item>
+          <a-descriptions-item label="物流公司">
+            {{ detail.return_company || '—' }}
+          </a-descriptions-item>
+          <a-descriptions-item label="物流单号">
+            {{ detail.return_tracking_no || '—' }}
+          </a-descriptions-item>
+          <a-descriptions-item label="买家寄出时间">
+            {{ detail.return_shipped_at || '—' }}
+          </a-descriptions-item>
+          <a-descriptions-item label="商家收货时间">
+            {{ detail.return_received_at || '—' }}
           </a-descriptions-item>
         </a-descriptions>
 

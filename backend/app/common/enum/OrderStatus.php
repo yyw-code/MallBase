@@ -50,8 +50,8 @@ class OrderStatus
     private const TRANSITIONS = [
         self::PENDING_PAY => [self::PAID, self::CLOSED],
         self::PAID        => [self::SHIPPED, self::CLOSED],
-        self::SHIPPED     => [self::RECEIVED],
-        self::RECEIVED    => [self::COMPLETED],
+        self::SHIPPED     => [self::RECEIVED, self::CLOSED],
+        self::RECEIVED    => [self::COMPLETED, self::CLOSED],
     ];
 
     /**

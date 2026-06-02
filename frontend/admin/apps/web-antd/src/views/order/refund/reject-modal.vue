@@ -5,7 +5,10 @@ import { ref, watch } from 'vue';
 
 import { message } from 'ant-design-vue';
 
-import { rejectRefundApi } from '#/api/order/refund';
+import {
+  getRefundRejectReasonOptionsApi,
+  rejectRefundApi,
+} from '#/api/order/refund';
 
 interface Props {
   open: boolean;
@@ -20,20 +23,34 @@ const emit = defineEmits<{
 
 const submitting = ref(false);
 const adminRemark = ref('');
-const formRef = ref();
 
-const commonReasons = [
+const defaultCommonReasons = [
   '商品已签收，不符合退款条件',
   '买家申请理由不成立',
   '已超过售后期限',
   '需提供相关凭证后重新申请',
 ];
+const commonReasons = ref<string[]>(defaultCommonReasons);
+
+const loadCommonReasons = async () => {
+  try {
+    const options = await getRefundRejectReasonOptionsApi();
+    const labels = (options || [])
+      .map((item) => String(item.label || item.value || '').trim())
+      .filter(Boolean);
+    commonReasons.value = labels.length > 0 ? labels : defaultCommonReasons;
+  } catch (error: any) {
+    console.error('加载售后驳回原因失败：', error?.message || error);
+    commonReasons.value = defaultCommonReasons;
+  }
+};
 
 watch(
   () => props.open,
   (val) => {
     if (val) {
       adminRemark.value = '';
+      loadCommonReasons();
     }
   },
 );
@@ -106,7 +123,7 @@ const handleSubmit = async () => {
         </a-tag>
       </div>
 
-      <a-form ref="formRef" layout="vertical">
+      <a-form layout="vertical">
         <a-form-item label="驳回原因" required>
           <a-textarea
             v-model:value="adminRemark"

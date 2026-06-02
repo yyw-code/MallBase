@@ -14,7 +14,7 @@ export const previewOrder = (data) => post('/client/api/order/preview', data)
  * @param {number|string} id 订单 ID（mb_order.id）
  * @param {{ pay_method: number, scene?: 'mini'|'offi'|'h5' }} body
  *   - pay_method=1 + scene：走真实微信支付，返回 { out_trade_no, prepay_id, mweb_url, payload }
- *   - pay_method=9：Mock 支付入口（需后台「Mock 支付」开关启用，e2e/本地测试用）
+ *   - pay_method=3：走余额支付，成功后订单同步转为已支付
  *   故意不设默认值——避免误用导致订单直接转 PAID 绕过真实支付。
  */
 export const payOrder = (id, body) => post(`/client/api/order/pay/${id}`, body)

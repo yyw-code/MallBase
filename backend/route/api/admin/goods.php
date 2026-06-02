@@ -13,7 +13,7 @@ Route::group('goods/category', function () {
     Route::post('create', 'create')->name('SystemGoodsCategoryCreate')->option(['_alias' => '创建分类', '_desc' => '创建商品分类', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::put('update/:id', 'update')->name('SystemGoodsCategoryUpdate')->option(['_alias' => '更新分类', '_desc' => '更新商品分类', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::delete('delete/:id', 'delete')->name('SystemGoodsCategoryDelete')->option(['_alias' => '删除分类', '_desc' => '删除商品分类', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
-    Route::put('updateStatus/:id', 'updateStatus')->name('SystemGoodsCategoryUpdateStatus')->option(['_alias' => '分类状态', '_desc' => '更新分类状态', '_auth' => true]);
+    Route::put('updateStatus/:id', 'updateStatus')->name('SystemGoodsCategoryUpdateStatus')->option(['_alias' => '分类状态', '_desc' => '更新分类状态', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
 })->prefix('admin.goods.GoodsCategoryController/')
     ->middleware([JwtAuth::class, CheckPermission::class])
     ->option([
@@ -34,7 +34,7 @@ Route::group('goods/brand', function () {
     Route::post('create', 'create')->name('SystemGoodsBrandCreate')->option(['_alias' => '创建品牌', '_desc' => '创建品牌', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::put('update/:id', 'update')->name('SystemGoodsBrandUpdate')->option(['_alias' => '更新品牌', '_desc' => '更新品牌', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::delete('delete/:id', 'delete')->name('SystemGoodsBrandDelete')->option(['_alias' => '删除品牌', '_desc' => '删除品牌', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
-    Route::put('updateStatus/:id', 'updateStatus')->name('SystemGoodsBrandUpdateStatus')->option(['_alias' => '品牌状态', '_desc' => '更新品牌状态', '_auth' => true]);
+    Route::put('updateStatus/:id', 'updateStatus')->name('SystemGoodsBrandUpdateStatus')->option(['_alias' => '品牌状态', '_desc' => '更新品牌状态', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
 })->prefix('admin.goods.GoodsBrandController/')
     ->middleware([JwtAuth::class, CheckPermission::class])
     ->option([
@@ -55,7 +55,7 @@ Route::group('goods/spec', function () {
     Route::post('create', 'create')->name('SystemGoodsSpecCreate')->option(['_alias' => '创建规格', '_desc' => '创建规格', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::put('update/:id', 'update')->name('SystemGoodsSpecUpdate')->option(['_alias' => '更新规格', '_desc' => '更新规格', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::delete('delete/:id', 'delete')->name('SystemGoodsSpecDelete')->option(['_alias' => '删除规格', '_desc' => '删除规格', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
-    Route::put('updateStatus/:id', 'updateStatus')->name('SystemGoodsSpecUpdateStatus')->option(['_alias' => '规格状态', '_desc' => '更新规格状态', '_auth' => true]);
+    Route::put('updateStatus/:id', 'updateStatus')->name('SystemGoodsSpecUpdateStatus')->option(['_alias' => '规格状态', '_desc' => '更新规格状态', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::post('createSpecValue', 'createSpecValue')->name('SystemGoodsSpecValueCreate')->option(['_alias' => '添加规格值', '_desc' => '添加规格值', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::post('batchCreateSpecValues', 'batchCreateSpecValues')->name('SystemGoodsSpecValueBatchCreate')->option(['_alias' => '批量添加规格值', '_desc' => '批量添加规格值', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::delete('deleteSpecValue/:id', 'deleteSpecValue')->name('SystemGoodsSpecValueDelete')->option(['_alias' => '删除规格值', '_desc' => '删除规格值', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
@@ -79,7 +79,7 @@ Route::group('goods/spec-template', function () {
     Route::post('create', 'create')->name('SystemGoodsSpecTemplateCreate')->option(['_alias' => '创建模板', '_desc' => '创建规格模板', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::put('update/:id', 'update')->name('SystemGoodsSpecTemplateUpdate')->option(['_alias' => '更新模板', '_desc' => '更新规格模板', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::delete('delete/:id', 'delete')->name('SystemGoodsSpecTemplateDelete')->option(['_alias' => '删除模板', '_desc' => '删除规格模板', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
-    Route::put('updateStatus/:id', 'updateStatus')->name('SystemGoodsSpecTemplateUpdateStatus')->option(['_alias' => '模板状态', '_desc' => '更新规格模板状态', '_auth' => true]);
+    Route::put('updateStatus/:id', 'updateStatus')->name('SystemGoodsSpecTemplateUpdateStatus')->option(['_alias' => '模板状态', '_desc' => '更新规格模板状态', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
 })->prefix('admin.goods.GoodsSpecTemplateController/')
     ->middleware([JwtAuth::class, CheckPermission::class])
     ->option([
@@ -99,8 +99,8 @@ Route::group('goods/list', function () {
     Route::post('create', 'create')->name('SystemGoodsCreate')->option(['_alias' => '创建商品', '_desc' => '创建商品', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::put('update/:id', 'update')->name('SystemGoodsUpdate')->option(['_alias' => '更新商品', '_desc' => '更新商品', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::delete('delete/:id', 'delete')->name('SystemGoodsDelete')->option(['_alias' => '删除商品', '_desc' => '删除商品', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
-    Route::put('updateStatus/:id', 'updateStatus')->name('SystemGoodsUpdateStatus')->option(['_alias' => '商品状态', '_desc' => '更新商品状态', '_auth' => true]);
-    Route::put('updateOnSale/:id', 'updateOnSale')->name('SystemGoodsUpdateOnSale')->option(['_alias' => '上下架', '_desc' => '商品上下架', '_auth' => true]);
+    Route::put('updateStatus/:id', 'updateStatus')->name('SystemGoodsUpdateStatus')->option(['_alias' => '商品状态', '_desc' => '更新商品状态', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
+    Route::put('updateOnSale/:id', 'updateOnSale')->name('SystemGoodsUpdateOnSale')->option(['_alias' => '上下架', '_desc' => '商品上下架', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
 })->prefix('admin.goods.GoodsController/')
     ->middleware([JwtAuth::class, CheckPermission::class])
     ->option([
@@ -121,7 +121,7 @@ Route::group('goods/tag', function () {
     Route::post('create', 'create')->name('SystemGoodsTagCreate')->option(['_alias' => '创建标签', '_desc' => '创建商品标签', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::put('update/:id', 'update')->name('SystemGoodsTagUpdate')->option(['_alias' => '更新标签', '_desc' => '更新商品标签', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::delete('delete/:id', 'delete')->name('SystemGoodsTagDelete')->option(['_alias' => '删除标签', '_desc' => '删除商品标签', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
-    Route::put('updateStatus/:id', 'updateStatus')->name('SystemGoodsTagUpdateStatus')->option(['_alias' => '标签状态', '_desc' => '更新标签状态', '_auth' => true]);
+    Route::put('updateStatus/:id', 'updateStatus')->name('SystemGoodsTagUpdateStatus')->option(['_alias' => '标签状态', '_desc' => '更新标签状态', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
 })->prefix('admin.goods.GoodsTagController/')
     ->middleware([JwtAuth::class, CheckPermission::class])
     ->option([
@@ -139,7 +139,7 @@ Route::group('goods/comment', function () {
     Route::get('list', 'list')->name('SystemGoodsCommentList')->option(['_alias' => '评论列表', '_desc' => '获取商品评论列表', '_auth' => true]);
     Route::get('info/:id', 'info')->name('SystemGoodsCommentInfo')->option(['_alias' => '评论详情', '_desc' => '获取评论详情', '_auth' => true]);
     Route::post(':id/reply', 'reply')->name('SystemGoodsCommentReply')->option(['_alias' => '回复评论', '_desc' => '商家回复评论', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
-    Route::put('updateStatus/:id', 'updateStatus')->name('SystemGoodsCommentUpdateStatus')->option(['_alias' => '评论状态', '_desc' => '更新评论状态', '_auth' => true]);
+    Route::put('updateStatus/:id', 'updateStatus')->name('SystemGoodsCommentUpdateStatus')->option(['_alias' => '评论状态', '_desc' => '更新评论状态', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::delete('delete/:id', 'delete')->name('SystemGoodsCommentDelete')->option(['_alias' => '删除评论', '_desc' => '删除评论', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
 })->prefix('admin.goods.GoodsCommentController/')
     ->middleware([JwtAuth::class, CheckPermission::class])

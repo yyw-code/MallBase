@@ -11,7 +11,7 @@ Route::group('setting/freight-template', function () {
     Route::post('create', 'create')->name('SystemFreightTemplateCreate')->option(['_alias' => '新增模板', '_desc' => '新增运费模板', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::put('update/:id', 'update')->name('SystemFreightTemplateUpdate')->option(['_alias' => '编辑模板', '_desc' => '编辑运费模板', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::delete('delete/:id', 'delete')->name('SystemFreightTemplateDelete')->option(['_alias' => '删除模板', '_desc' => '删除运费模板', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
-    Route::put('updateStatus/:id', 'updateStatus')->name('SystemFreightTemplateUpdateStatus')->option(['_alias' => '模板状态', '_desc' => '更新运费模板状态', '_auth' => true]);
+    Route::put('updateStatus/:id', 'updateStatus')->name('SystemFreightTemplateUpdateStatus')->option(['_alias' => '模板状态', '_desc' => '更新运费模板状态', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::put('refreshInvalid', 'refreshInvalid')->name('SystemFreightTemplateRefreshInvalid')->option(['_alias' => '更新失效数据', '_desc' => '按编码重匹配失效运费规则', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
 })->prefix('admin.setting.FreightTemplateController/')
     ->middleware([JwtAuth::class, CheckPermission::class])

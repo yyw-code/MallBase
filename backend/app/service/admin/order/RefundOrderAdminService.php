@@ -9,7 +9,10 @@ use app\model\order\Order;
 use app\model\order\OrderItem;
 use app\model\order\RefundOrder;
 use app\model\user\User;
+use app\model\user\UserWallet;
+use app\model\user\UserWalletLog;
 use app\service\order\PaymentAdapter;
+use app\service\order\OrderStatusMachine;
 use app\service\order\RefundOrderStatusMachine;
 use app\service\order\WechatRefundAdapter;
 use app\service\order\dto\RefundPaymentContext;
@@ -45,8 +48,8 @@ class RefundOrderAdminService extends BaseService
      *  3) SUCCESS：事务内 RefundOrderStatusMachine::transit → COMPLETED，并累加退款数量
      *  4) PROCESSING：事务内 RefundOrderStatusMachine::transit → REFUNDING，等待后续查询/回调确认
      *
-     * 注意：当前仅开放“仅退款”，买家不退回实物，审核同意不回滚库存。
-     * 后续若启用“退货退款”，应在退货入库节点单独处理库存回滚。
+     * 注意：仅退款审核同意后直接发起退款；退货退款审核同意后先进入待退货，
+     * 买家回填退货物流、商家确认收货后再发起退款。
      */
     public function approve(int $refundId, int $adminId, string $adminRemark = ''): void
     {
@@ -73,65 +76,114 @@ class RefundOrderAdminService extends BaseService
             throw new BusinessException('退款数量超出限制或已被其他申请占用');
         }
 
-        // 获取主订单微信交易号用于退款渠道调用
         $orderModel = $this->model(Order::class)->where('id', (int) $refund->order_id)->find();
         if ($orderModel === null) {
             throw new BusinessException('关联订单不存在');
         }
-        if ((int) ($orderModel->pay_method ?? 0) !== PayMethod::WECHAT) {
-            throw new BusinessException('仅微信支付订单支持自动退款');
-        }
-        $transactionId = trim((string) ($orderModel->trade_no ?? ''));
-        if ($transactionId === '' || str_starts_with($transactionId, 'MOCK-')) {
-            throw new BusinessException('微信支付交易号缺失，无法发起退款');
+
+        if ((int) $refund->type === RefundOrderStatus::TYPE_RETURN_REFUND) {
+            $this->approveReturnRefund($refund, $adminId, $adminRemark);
+            return;
         }
 
-        $context = new RefundPaymentContext(
-            transactionId: $transactionId,
-            outRefundNo: (string) $refund->sn,
-            refundAmountCents: $this->decimalToCents((string) $refund->refund_amount),
-            totalAmountCents: $this->decimalToCents((string) $orderModel->pay_amount),
-            reason: RefundReason::textOf((string) ($refund->reason ?? '')),
+        $this->assertCanApproveRefundOnly($refund, $orderModel);
+        $this->executeRefund(
+            $refund,
+            $orderModel,
+            $adminId,
+            $adminRemark,
+            '管理员同意退款',
+            [RefundOrderStatus::PENDING],
+            '当前售后单状态不允许审核',
         );
+    }
+
+    /**
+     * 更新已发货未收到货仅退款的物流拦截状态。
+     */
+    public function updateIntercept(int $refundId, string $status, string $note = ''): void
+    {
+        $status = trim($status);
+        $valid = array_column(RefundOrderStatus::interceptOptions(), 'value');
+        if (!in_array($status, $valid, true)) {
+            throw new BusinessException('物流拦截状态不合法');
+        }
+
+        $refund = $this->findRefund($refundId);
+        if ((int) $refund->type !== RefundOrderStatus::TYPE_REFUND_ONLY
+            || (int) $refund->receive_status !== RefundOrderStatus::RECEIVE_NOT_RECEIVED) {
+            throw new BusinessException('当前售后单不需要物流拦截');
+        }
+        if ((int) $refund->status !== RefundOrderStatus::PENDING) {
+            throw new BusinessException('仅待审核售后单可更新拦截状态');
+        }
+
+        $refund->intercept_status = $status;
+        $refund->intercept_note = $note !== '' ? mb_substr(trim($note), 0, 255) : null;
+        $refund->save();
+    }
+
+    /**
+     * 商家确认收到退货，随后发起退款。
+     */
+    public function confirmReturn(int $refundId, int $adminId, string $adminRemark = ''): void
+    {
+        if ($adminId <= 0) {
+            throw new BusinessException('管理员身份无效');
+        }
+
+        $refund = $this->findRefund($refundId);
+        if ((int) $refund->type !== RefundOrderStatus::TYPE_RETURN_REFUND) {
+            throw new BusinessException('仅退货退款需要确认收货');
+        }
+        if ((int) $refund->status !== RefundOrderStatus::APPROVED) {
+            throw new BusinessException('当前售后单状态不允许确认收货');
+        }
+        if (trim((string) ($refund->return_tracking_no ?? '')) === '') {
+            throw new BusinessException('买家尚未填写退货物流单号');
+        }
+
+        $orderModel = $this->model(Order::class)->where('id', (int) $refund->order_id)->find();
+        if ($orderModel === null) {
+            throw new BusinessException('关联订单不存在');
+        }
+        $this->executeRefund(
+            $refund,
+            $orderModel,
+            $adminId,
+            $adminRemark,
+            '商家确认退货收货并退款',
+            [RefundOrderStatus::APPROVED],
+            '当前售后单状态不允许确认收货',
+        );
+    }
+
+    private function approveReturnRefund(RefundOrder $refund, int $adminId, string $adminRemark): void
+    {
+        if ((int) $refund->receive_status !== RefundOrderStatus::RECEIVE_RECEIVED) {
+            throw new BusinessException('退货退款必须是已收到货场景');
+        }
+
+        $receiver = app()->make(\app\service\order\OrderSettingService::class)->returnReceiver();
+        if (($receiver['name'] ?? '') === '' || ($receiver['phone'] ?? '') === '' || ($receiver['address'] ?? '') === '') {
+            throw new BusinessException('请先在售后设置中配置退货收货信息');
+        }
 
         /** @var RefundOrderStatusMachine $machine */
         $machine = app()->make(RefundOrderStatusMachine::class);
-        /** @var PaymentAdapter $payment */
-        $payment = app()->make(WechatRefundAdapter::class);
+        $this->transaction(function () use ($refund, $adminId, $adminRemark, $receiver, $machine): void {
+            $refund->return_receiver_name = $receiver['name'];
+            $refund->return_receiver_phone = $receiver['phone'];
+            $refund->return_receiver_address = $receiver['address'];
+            $refund->save();
 
-        $refundStatus = $payment->refund($context);
-
-        $this->transaction(function () use (
-            $refund, $adminId, $adminRemark, $machine,
-            $quantity, $orderItemId, $refundStatus
-        ): void {
-            $toStatus = $refundStatus === 'SUCCESS'
-                ? RefundOrderStatus::COMPLETED
-                : RefundOrderStatus::REFUNDING;
-
-            // 1. 状态流转（内部原子写 reviewed_at/refunded_at/reviewed_by/admin_remark）
             $machine->transit(
                 refund: $refund,
-                toStatus: $toStatus,
+                toStatus: RefundOrderStatus::APPROVED,
                 operatorType: OperatorType::ADMIN,
                 operatorId: $adminId,
-                remark: $adminRemark !== '' ? $adminRemark : '管理员同意退款',
+                remark: $adminRemark !== '' ? $adminRemark : '商家同意退货，请买家寄回商品',
             );
-
-            if ($toStatus !== RefundOrderStatus::COMPLETED) {
-                return;
-            }
-
-            // 2. 微信退款成功后乐观锁累加 OrderItem.refunded_quantity
-            $affected = $this->model(OrderItem::class)
-                ->where('id', $orderItemId)
-                ->whereRaw('refunded_quantity + ? <= quantity', [$quantity])
-                ->inc('refunded_quantity', $quantity)
-                ->update();
-            if ($affected === 0) {
-                throw new BusinessException('退款数量超出限制或已被其他申请占用');
-            }
-
         });
     }
 
@@ -225,6 +277,12 @@ class RefundOrderAdminService extends BaseService
             if ($affected !== 1) {
                 throw new BusinessException('退款数量超出限制或已被其他申请占用');
             }
+
+            $this->closeOrderIfFullyRefunded(
+                orderId: (int) $refund->order_id,
+                operatorType: OperatorType::SYSTEM,
+                operatorId: null,
+            );
         });
     }
 
@@ -363,6 +421,293 @@ class RefundOrderAdminService extends BaseService
             throw new BusinessException('售后单不存在');
         }
         return $refund;
+    }
+
+    private function assertCanApproveRefundOnly(RefundOrder $refund, Order $order): void
+    {
+        if ((int) $refund->type !== RefundOrderStatus::TYPE_REFUND_ONLY) {
+            throw new BusinessException('当前售后类型不支持直接退款');
+        }
+
+        if ((int) $order->status === OrderStatus::SHIPPED
+            && (int) $refund->receive_status === RefundOrderStatus::RECEIVE_NOT_RECEIVED) {
+            $allowed = [
+                RefundOrderStatus::INTERCEPT_SUCCESS,
+                RefundOrderStatus::INTERCEPT_RETURNED,
+                RefundOrderStatus::INTERCEPT_EXCEPTION,
+            ];
+            if (!in_array((string) $refund->intercept_status, $allowed, true)) {
+                throw new BusinessException('已发货未收到货的仅退款申请，需要先完成物流拦截、确认退回或标记物流异常后才能退款');
+            }
+        }
+    }
+
+    private function executeRefund(
+        RefundOrder $refund,
+        Order $orderModel,
+        int $adminId,
+        string $adminRemark,
+        string $defaultRemark,
+        array $expectedStatuses,
+        string $statusErrorMessage
+    ): void {
+        $payMethod = (int) ($orderModel->pay_method ?? 0);
+        if ($payMethod === PayMethod::BALANCE) {
+            $this->executeBalanceRefund(
+                $refund,
+                $orderModel,
+                $adminId,
+                $adminRemark,
+                $defaultRemark,
+                $expectedStatuses,
+                $statusErrorMessage,
+            );
+            return;
+        }
+
+        if ($payMethod !== PayMethod::WECHAT) {
+            throw new BusinessException('当前支付方式暂不支持自动退款');
+        }
+        $transactionId = trim((string) ($orderModel->trade_no ?? ''));
+        if ($transactionId === '' || str_starts_with($transactionId, 'MOCK-')) {
+            throw new BusinessException('微信支付交易号缺失，无法发起退款');
+        }
+
+        $orderItemId = (int) ($refund->order_item_id ?? 0);
+        $quantity = (int) ($refund->quantity ?? 0);
+
+        $context = new RefundPaymentContext(
+            transactionId: $transactionId,
+            outRefundNo: (string) $refund->sn,
+            refundAmountCents: $this->decimalToCents((string) $refund->refund_amount),
+            totalAmountCents: $this->decimalToCents((string) $orderModel->pay_amount),
+            reason: RefundReason::textOf((string) ($refund->reason ?? '')),
+        );
+
+        /** @var RefundOrderStatusMachine $machine */
+        $machine = app()->make(RefundOrderStatusMachine::class);
+        /** @var PaymentAdapter $payment */
+        $payment = app()->make(WechatRefundAdapter::class);
+        $refundStatus = $payment->refund($context);
+
+        $this->transaction(function () use (
+            $refund,
+            $adminId,
+            $adminRemark,
+            $defaultRemark,
+            $machine,
+            $quantity,
+            $orderItemId,
+            $refundStatus
+        ): void {
+            $toStatus = $refundStatus === 'SUCCESS'
+                ? RefundOrderStatus::COMPLETED
+                : RefundOrderStatus::REFUNDING;
+
+            if ((int) $refund->type === RefundOrderStatus::TYPE_RETURN_REFUND
+                && trim((string) ($refund->return_received_at ?? '')) === '') {
+                $refund->return_received_at = date('Y-m-d H:i:s');
+                $refund->save();
+            }
+
+            $machine->transit(
+                refund: $refund,
+                toStatus: $toStatus,
+                operatorType: OperatorType::ADMIN,
+                operatorId: $adminId,
+                remark: $adminRemark !== '' ? $adminRemark : $defaultRemark,
+            );
+
+            if ($toStatus !== RefundOrderStatus::COMPLETED) {
+                return;
+            }
+
+            $affected = $this->model(OrderItem::class)
+                ->where('id', $orderItemId)
+                ->whereRaw('refunded_quantity + ? <= quantity', [$quantity])
+                ->inc('refunded_quantity', $quantity)
+                ->update();
+            if ($affected === 0) {
+                throw new BusinessException('退款数量超出限制或已被其他申请占用');
+            }
+
+            $this->closeOrderIfFullyRefunded(
+                orderId: (int) $refund->order_id,
+                operatorType: OperatorType::ADMIN,
+                operatorId: $adminId,
+            );
+        });
+    }
+
+    private function executeBalanceRefund(
+        RefundOrder $refund,
+        Order $orderModel,
+        int $adminId,
+        string $adminRemark,
+        string $defaultRemark,
+        array $expectedStatuses,
+        string $statusErrorMessage
+    ): void {
+        $amountCents = $this->decimalToCents((string) $refund->refund_amount);
+        if ($amountCents <= 0) {
+            throw new BusinessException('退款金额必须大于 0');
+        }
+
+        $refundId = (int) $refund->id;
+        $orderId = (int) $orderModel->id;
+        $orderItemId = (int) ($refund->order_item_id ?? 0);
+        $quantity = (int) ($refund->quantity ?? 0);
+
+        /** @var RefundOrderStatusMachine $machine */
+        $machine = app()->make(RefundOrderStatusMachine::class);
+
+        $this->transaction(function () use (
+            $refundId,
+            $orderId,
+            $orderItemId,
+            $quantity,
+            $amountCents,
+            $adminId,
+            $adminRemark,
+            $defaultRemark,
+            $expectedStatuses,
+            $statusErrorMessage,
+            $machine
+        ): void {
+            /** @var RefundOrder|null $lockedRefund */
+            $lockedRefund = $this->model()
+                ->where('id', $refundId)
+                ->whereNull('delete_time')
+                ->lock(true)
+                ->find();
+            if ($lockedRefund === null) {
+                throw new BusinessException('售后单不存在');
+            }
+            if (!in_array((int) $lockedRefund->status, $expectedStatuses, true)) {
+                throw new BusinessException($statusErrorMessage);
+            }
+
+            /** @var Order|null $lockedOrder */
+            $lockedOrder = $this->model(Order::class)
+                ->where('id', $orderId)
+                ->whereNull('delete_time')
+                ->lock(true)
+                ->find();
+            if ($lockedOrder === null) {
+                throw new BusinessException('关联订单不存在');
+            }
+            if ((int) $lockedOrder->pay_method !== PayMethod::BALANCE) {
+                throw new BusinessException('订单不是余额支付，无法退回余额');
+            }
+
+            $userId = (int) $lockedRefund->user_id;
+            /** @var UserWallet|null $wallet */
+            $wallet = $this->model(UserWallet::class)
+                ->where('user_id', $userId)
+                ->lock(true)
+                ->find();
+            if ($wallet === null) {
+                /** @var UserWallet $wallet */
+                $wallet = UserWallet::create([
+                    'user_id' => $userId,
+                    'balance_cents' => 0,
+                    'frozen_cents' => 0,
+                    'total_recharge_cents' => 0,
+                    'total_consume_cents' => 0,
+                ]);
+            }
+
+            $before = (int) $wallet->balance_cents;
+            $after = $before + $amountCents;
+            if ($after > 4_294_967_295) {
+                throw new BusinessException('用户余额超出系统限制');
+            }
+
+            $wallet->balance_cents = $after;
+            $wallet->save();
+
+            UserWalletLog::create([
+                'user_id' => $userId,
+                'wallet_id' => (int) $wallet->id,
+                'biz_type' => UserWalletLog::BIZ_REFUND,
+                'biz_id' => (string) $lockedRefund->sn,
+                'direction' => UserWalletLog::DIRECTION_INCOME,
+                'change_cents' => $amountCents,
+                'before_cents' => $before,
+                'after_cents' => $after,
+                'operator_type' => OperatorType::ADMIN,
+                'operator_id' => $adminId,
+                'remark' => '售后退款退回余额',
+            ]);
+
+            $machine->transit(
+                refund: $lockedRefund,
+                toStatus: RefundOrderStatus::COMPLETED,
+                operatorType: OperatorType::ADMIN,
+                operatorId: $adminId,
+                remark: $adminRemark !== '' ? $adminRemark : $defaultRemark,
+            );
+
+            $affected = $this->model(OrderItem::class)
+                ->where('id', $orderItemId)
+                ->whereRaw('refunded_quantity + ? <= quantity', [$quantity])
+                ->inc('refunded_quantity', $quantity)
+                ->update();
+            if ($affected === 0) {
+                throw new BusinessException('退款数量超出限制或已被其他申请占用');
+            }
+
+            $this->closeOrderIfFullyRefunded(
+                orderId: (int) $lockedRefund->order_id,
+                operatorType: OperatorType::ADMIN,
+                operatorId: $adminId,
+            );
+        });
+    }
+
+    private function closeOrderIfFullyRefunded(int $orderId, int $operatorType, ?int $operatorId): void
+    {
+        if ($orderId <= 0) {
+            return;
+        }
+
+        /** @var Order|null $order */
+        $order = $this->model(Order::class)
+            ->where('id', $orderId)
+            ->whereNull('delete_time')
+            ->lock(true)
+            ->find();
+        if ($order === null) {
+            return;
+        }
+
+        $status = (int) ($order->status ?? 0);
+        if (!in_array($status, [OrderStatus::PAID, OrderStatus::SHIPPED, OrderStatus::RECEIVED], true)) {
+            return;
+        }
+
+        $items = $this->model(OrderItem::class)
+            ->where('order_id', $orderId)
+            ->field('quantity, refunded_quantity')
+            ->select()
+            ->toArray();
+        if ($items === []) {
+            return;
+        }
+
+        foreach ($items as $item) {
+            if ((int) ($item['refunded_quantity'] ?? 0) < (int) ($item['quantity'] ?? 0)) {
+                return;
+            }
+        }
+
+        app()->make(OrderStatusMachine::class)->transit(
+            order: $order,
+            toStatus: OrderStatus::CLOSED,
+            operatorType: $operatorType,
+            operatorId: $operatorId,
+            remark: '售后全量退款关闭订单',
+        );
     }
 
     private function decimalToCents(string $amount): int

@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import type { ClientUserApi, UserGroupApi, UserTagApi } from '#/api/user';
 
-import { h, onMounted, ref } from 'vue';
+import { h, onMounted, reactive, ref } from 'vue';
 
 import { useAccess } from '@vben/access';
 
@@ -9,6 +9,8 @@ import { message, Modal, Switch, Tag } from 'ant-design-vue';
 
 import {
   deleteClientUserApi,
+  adjustClientUserWalletApi,
+  getClientUserWalletLogsApi,
   getClientUserInfoApi,
   getClientUserListApi,
   getUserGroupListApi,
@@ -98,6 +100,111 @@ const onModalSuccess = () => {
   loadData(searchParams.value);
 };
 
+/* ---------------- 余额记录 / 调整 ---------------- */
+const walletDrawerVisible = ref(false);
+const walletLogLoading = ref(false);
+const walletLogs = ref<ClientUserApi.WalletLogItem[]>([]);
+const walletUser = ref<ClientUserApi.UserItem | null>(null);
+const walletLogPagination = reactive({
+  current: 1,
+  pageSize: 10,
+  total: 0,
+  showSizeChanger: true,
+});
+
+const walletAdjustVisible = ref(false);
+const walletAdjustSubmitting = ref(false);
+const walletAdjustMaxAmount = 999_999.99;
+const walletAdjustForm = ref({
+  user_id: 0,
+  direction: 'income' as 'income' | 'expense',
+  amount: '',
+  remark: '',
+});
+
+const walletLogColumns = [
+  { title: '时间', dataIndex: 'create_time', width: 170 },
+  {
+    title: '方向',
+    dataIndex: 'direction',
+    width: 90,
+    customRender: ({ record }: { record: ClientUserApi.WalletLogItem }) =>
+      record.direction === 'income' ? '收入' : '支出',
+  },
+  {
+    title: '金额',
+    dataIndex: 'change_amount',
+    width: 120,
+    customRender: ({ record }: { record: ClientUserApi.WalletLogItem }) =>
+      `${record.direction === 'income' ? '+' : '-'}¥${record.change_amount}`,
+  },
+  { title: '变动前', dataIndex: 'before_amount', width: 120 },
+  { title: '变动后', dataIndex: 'after_amount', width: 120 },
+  {
+    title: '业务类型',
+    dataIndex: 'biz_type_text',
+    width: 130,
+    customRender: ({ record }: { record: ClientUserApi.WalletLogItem }) =>
+      record.biz_type_text || record.biz_type || '-',
+  },
+  { title: '业务单号', dataIndex: 'biz_id', width: 180, ellipsis: true },
+  { title: '备注', dataIndex: 'remark', width: 220, ellipsis: true },
+  { title: '操作人', dataIndex: 'operator_id', width: 100 },
+];
+
+const loadWalletLogs = async (record = walletUser.value) => {
+  if (!record) return;
+  walletLogLoading.value = true;
+  try {
+    const result = await getClientUserWalletLogsApi({
+      user_id: record.id,
+      page: walletLogPagination.current,
+      limit: walletLogPagination.pageSize,
+    });
+    walletLogs.value = result.list;
+    walletLogPagination.total = result.total;
+  } finally {
+    walletLogLoading.value = false;
+  }
+};
+
+const handleWalletLogs = async (record: ClientUserApi.UserItem) => {
+  walletUser.value = record;
+  walletLogPagination.current = 1;
+  walletDrawerVisible.value = true;
+  await loadWalletLogs(record);
+};
+
+const handleWalletAdjust = (record: ClientUserApi.UserItem) => {
+  walletUser.value = record;
+  walletAdjustForm.value = {
+    user_id: record.id,
+    direction: 'income',
+    amount: '',
+    remark: '',
+  };
+  walletAdjustVisible.value = true;
+};
+
+const submitWalletAdjust = async () => {
+  if (!walletAdjustForm.value.amount || !walletAdjustForm.value.remark) {
+    message.warning('请填写金额和调整原因');
+    return;
+  }
+  walletAdjustSubmitting.value = true;
+  try {
+    await adjustClientUserWalletApi(walletAdjustForm.value);
+    message.success('余额调整成功');
+    walletAdjustVisible.value = false;
+    await loadData(searchParams.value);
+    if (walletDrawerVisible.value) {
+      await loadWalletLogs();
+    }
+  } finally {
+    walletAdjustSubmitting.value = false;
+  }
+};
+
 /* ---------------- 重置密码 ---------------- */
 const handleResetPassword = (record: ClientUserApi.UserItem) => {
   Modal.confirm({
@@ -114,10 +221,10 @@ const handleResetPassword = (record: ClientUserApi.UserItem) => {
 /* ---------------- 状态切换 ---------------- */
 const handleStatusChange = async (
   record: ClientUserApi.UserItem,
-  checked: boolean,
+  checked: boolean | string | number,
 ) => {
   try {
-    await updateClientUserStatusApi(record.id, { status: checked ? 1 : 0 });
+    await updateClientUserStatusApi(record.id, { status: checked === true ? 1 : 0 });
     message.success('状态更新成功');
     await loadData(searchParams.value);
   } catch {
@@ -143,13 +250,21 @@ const columns = [
   },
   { title: '昵称', dataIndex: 'nickname', width: 120, ellipsis: true },
   { title: '手机号', dataIndex: 'mobile', width: 130 },
+  {
+    title: '余额',
+    dataIndex: 'wallet',
+    width: 120,
+    customRender: ({ record }: { record: ClientUserApi.UserItem }) => `¥${record.wallet?.balance || '0.00'}`,
+  },
   { title: '邮箱', dataIndex: 'email', width: 180, ellipsis: true },
   {
     title: '注册方式',
     dataIndex: 'register_type',
     width: 90,
     customRender: ({ record }: { record: ClientUserApi.UserItem }) => {
-      const config = REGISTER_TYPE_MAP[record.register_type || 'mobile'];
+      const config =
+        REGISTER_TYPE_MAP[record.register_type || 'mobile'] ||
+        REGISTER_TYPE_MAP.mobile!;
       return h(
         'span',
         {
@@ -164,7 +279,7 @@ const columns = [
     dataIndex: 'gender',
     width: 70,
     customRender: ({ record }: { record: ClientUserApi.UserItem }) => {
-      const config = GENDER_MAP[record.gender || 0];
+      const config = GENDER_MAP[record.gender || 0] || GENDER_MAP[0]!;
       return h(
         'span',
         {
@@ -186,7 +301,8 @@ const columns = [
         checked: record.status === 1,
         checkedChildren: '启用',
         unCheckedChildren: '禁用',
-        onChange: (checked: boolean) => handleStatusChange(record, checked),
+        onChange: (checked: boolean | string | number) =>
+          handleStatusChange(record, checked),
       });
     },
   },
@@ -225,7 +341,7 @@ const columns = [
     ellipsis: true,
   },
   { title: '注册时间', dataIndex: 'create_time', width: 160 },
-  { title: '操作', key: 'action', width: 200 },
+  { title: '操作', key: 'action', width: 300 },
 ];
 
 /* ---------------- 初始化 ---------------- */
@@ -327,10 +443,10 @@ onMounted(async () => {
       :data-source="tableData"
       :loading="loading"
       :pagination="pagination"
-      :scroll="{ x: 1700 }"
+      :scroll="{ x: 1900 }"
       row-key="id"
       @change="
-        (newPagination) => {
+        (newPagination: any) => {
           pagination.current = newPagination.current;
           pagination.pageSize = newPagination.pageSize;
           loadData(searchParams);
@@ -346,6 +462,22 @@ onMounted(async () => {
             <a-button
               type="link"
               size="small"
+              @click="handleWalletLogs(record)"
+              v-access:code="'SystemUserWalletLog'"
+            >
+              余额记录
+            </a-button>
+            <a-button
+              type="link"
+              size="small"
+              @click="handleWalletAdjust(record)"
+              v-access:code="'SystemUserWalletAdjust'"
+            >
+              调整余额
+            </a-button>
+            <a-button
+              type="link"
+              size="small"
               @click="handleResetPassword(record)"
               v-access:code="'SystemUserResetPassword'"
             >
@@ -355,7 +487,7 @@ onMounted(async () => {
               type="link"
               danger
               size="small"
-              @click="handleDelete(record, 'nickname', 'mobile', 'email')"
+              @click="handleDelete(record, 'nickname')"
               v-access:code="'SystemUserDelete'"
             >
               删除
@@ -371,5 +503,74 @@ onMounted(async () => {
       :edit-data="editingItem"
       @success="onModalSuccess"
     />
+
+    <a-drawer
+      v-model:open="walletDrawerVisible"
+      :title="`余额记录 - ${walletUser?.nickname || walletUser?.mobile || walletUser?.id || ''}`"
+      width="880"
+    >
+      <a-table
+        :columns="walletLogColumns"
+        :data-source="walletLogs"
+        :loading="walletLogLoading"
+        :pagination="walletLogPagination"
+        :scroll="{ x: 1230 }"
+        row-key="id"
+        size="small"
+        @change="
+          (newPagination: any) => {
+            walletLogPagination.current = newPagination.current;
+            walletLogPagination.pageSize = newPagination.pageSize;
+            loadWalletLogs();
+          }
+        "
+      />
+    </a-drawer>
+
+    <a-modal
+      v-model:open="walletAdjustVisible"
+      title="调整余额"
+      :confirm-loading="walletAdjustSubmitting"
+      @ok="submitWalletAdjust"
+    >
+      <a-form
+        :model="walletAdjustForm"
+        :label-col="{ style: { width: '100px' } }"
+        class="pt-4"
+      >
+        <a-form-item label="用户">
+          <span>{{ walletUser?.nickname || walletUser?.mobile || walletUser?.id }}</span>
+        </a-form-item>
+        <a-form-item label="调整方向" required>
+          <a-radio-group v-model:value="walletAdjustForm.direction">
+            <a-radio value="income">增加余额</a-radio>
+            <a-radio value="expense">扣减余额</a-radio>
+          </a-radio-group>
+        </a-form-item>
+        <a-form-item label="金额" required>
+          <a-input-number
+            v-model:value="walletAdjustForm.amount"
+            :max="walletAdjustMaxAmount"
+            :min="0.01"
+            :precision="2"
+            class="w-full"
+            placeholder="单次最多 999999.99"
+            string-mode
+          />
+          <div class="mt-1 text-xs text-gray-400">
+            单次调整最多 999999.99 元，增加后余额也不能超过该上限
+          </div>
+        </a-form-item>
+        <a-form-item label="调整原因" required>
+          <a-textarea
+            v-model:value="walletAdjustForm.remark"
+            :maxlength="255"
+            :rows="3"
+            placeholder="请填写余额调整原因，便于后续审计"
+            show-count
+          />
+        </a-form-item>
+      </a-form>
+    </a-modal>
   </div>
 </template>

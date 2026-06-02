@@ -30,6 +30,7 @@ final class OrderSettingQueueContractTest extends TestCase
             'refund_return_receiver_phone',
             'refund_return_receiver_address',
             'refund_reason_options',
+            'refund_reject_reason_options',
         ] as $needle) {
             $this->assertStringContainsString($needle, $source);
         }
@@ -40,6 +41,7 @@ final class OrderSettingQueueContractTest extends TestCase
             'autoReceiveDays',
             'afterSaleDays',
             'refundReasonOptions',
+            'refundRejectReasonOptions',
             'returnReceiver',
         ] as $method) {
             $this->assertTrue($ref->hasMethod($method), "缺少配置读取方法 {$method}");
@@ -85,6 +87,8 @@ final class OrderSettingQueueContractTest extends TestCase
             'NO_LONGER_WANTED',
             'OTHER',
             "'refund_reason_options'",
+            "'refund_reject_reason_options'",
+            '常用驳回原因',
             "'option_list'",
         ] as $needle) {
             $this->assertStringContainsString($needle, $schema);

@@ -5,11 +5,13 @@ import { computed, onMounted, ref } from 'vue';
 
 import { useAccess } from '@vben/access';
 
-import { message } from 'ant-design-vue';
+import { message, Modal } from 'ant-design-vue';
 
 import {
+  confirmRefundReturnApi,
   getRefundListApi,
   getRefundStatusOptionsApi,
+  updateRefundInterceptApi,
 } from '#/api/order/refund';
 import { useTableCrud } from '#/composables/useTableCrud';
 
@@ -88,6 +90,15 @@ const submitSearch = () => {
   loadData(buildQuery());
 };
 
+const handleTableChange = (newPagination: {
+  current?: number;
+  pageSize?: number;
+}) => {
+  pagination.current = newPagination.current ?? pagination.current;
+  pagination.pageSize = newPagination.pageSize ?? pagination.pageSize;
+  loadData(buildQuery());
+};
+
 /* ---------------- 枚举选项 ---------------- */
 const statusOptions = ref<RefundApi.EnumOption[]>([]);
 const typeOptions = ref<RefundApi.EnumOption[]>([]);
@@ -143,8 +154,66 @@ const openReject = (record: RefundApi.RefundRecord) => {
   rejectModalOpen.value = true;
 };
 
+const canApprove = (record: RefundApi.RefundRecord) => {
+  if (record.status !== 0) {
+    return false;
+  }
+  if (
+    record.type === 0 &&
+    record.receive_status === 0 &&
+    record.order?.status === 20
+  ) {
+    return ['exception', 'returned', 'success'].includes(
+      record.intercept_status || '',
+    );
+  }
+  return true;
+};
+
+const isUnreceivedRefundOnly = (record: RefundApi.RefundRecord) =>
+  record.status === 0 && record.type === 0 && record.receive_status === 0;
+
+const isFinalInterceptStatus = (status?: string) =>
+  ['exception', 'returned', 'success'].includes(status || '');
+
+const canUpdateIntercept = (record: RefundApi.RefundRecord) =>
+  isUnreceivedRefundOnly(record) &&
+  !isFinalInterceptStatus(record.intercept_status);
+
+const canMarkIntercept = (record: RefundApi.RefundRecord, status: string) =>
+  canUpdateIntercept(record) && record.intercept_status !== status;
+
 const onReviewSuccess = async () => {
   await loadData(buildQuery());
+};
+
+const updateIntercept = async (
+  record: RefundApi.RefundRecord,
+  status: string,
+  note: string,
+) => {
+  await updateRefundInterceptApi(record.id, {
+    intercept_status: status,
+    intercept_note: note,
+  });
+  message.success('物流拦截状态已更新');
+  await loadData(buildQuery());
+};
+
+const confirmReturn = (record: RefundApi.RefundRecord) => {
+  Modal.confirm({
+    title: '确认收到退货？',
+    content: '确认后将发起退款，请确认退回商品已验收无误。',
+    okText: '确认收货并退款',
+    cancelText: '取消',
+    async onOk() {
+      await confirmRefundReturnApi(record.id, {
+        admin_remark: '确认收到买家退货',
+      });
+      message.success('已确认收货并发起退款');
+      await loadData(buildQuery());
+    },
+  });
 };
 
 /* ---------------- 表格列 ---------------- */
@@ -189,6 +258,20 @@ const columns = [
       record.type_text || typeMap.value[record.type] || '—',
   },
   {
+    title: '收货状态',
+    dataIndex: 'receive_status',
+    width: 100,
+    customRender: ({ record }: { record: RefundApi.RefundRecord }) =>
+      record.receive_status_text || '—',
+  },
+  {
+    title: '拦截状态',
+    dataIndex: 'intercept_status',
+    width: 120,
+    customRender: ({ record }: { record: RefundApi.RefundRecord }) =>
+      record.intercept_status_text || '—',
+  },
+  {
     title: '状态',
     dataIndex: 'status',
     width: 100,
@@ -196,7 +279,7 @@ const columns = [
       record.status_text || statusMap.value[record.status] || '—',
   },
   { title: '申请时间', dataIndex: 'create_time', width: 170 },
-  { title: '操作', key: 'action', fixed: 'right', width: 200 },
+  { title: '操作', key: 'action', fixed: 'right', width: 260 },
 ];
 
 onMounted(() => {
@@ -297,13 +380,7 @@ onMounted(() => {
       :pagination="pagination"
       :scroll="{ x: 1600 }"
       row-key="id"
-      @change="
-        (newPagination) => {
-          pagination.current = newPagination.current;
-          pagination.pageSize = newPagination.pageSize;
-          loadData(buildQuery());
-        }
-      "
+      @change="handleTableChange"
     >
       <template #bodyCell="{ column, record }">
         <template v-if="column.key === 'goods'">
@@ -326,7 +403,7 @@ onMounted(() => {
           </div>
         </template>
         <template v-if="column.key === 'action'">
-          <a-space>
+          <div class="refund-actions">
             <a-button
               type="link"
               size="small"
@@ -336,7 +413,7 @@ onMounted(() => {
               详情
             </a-button>
             <a-button
-              v-if="record.status === 0"
+              v-if="canApprove(record)"
               type="link"
               size="small"
               v-access:code="'SystemRefundOrderApprove'"
@@ -354,7 +431,51 @@ onMounted(() => {
             >
               驳回
             </a-button>
-          </a-space>
+            <a-button
+              v-if="canMarkIntercept(record, 'success')"
+              type="link"
+              size="small"
+              v-access:code="'SystemRefundOrderUpdateIntercept'"
+              @click="
+                updateIntercept(record, 'success', '人工确认物流拦截成功')
+              "
+            >
+              拦截成功
+            </a-button>
+            <a-button
+              v-if="canMarkIntercept(record, 'returned')"
+              type="link"
+              size="small"
+              v-access:code="'SystemRefundOrderUpdateIntercept'"
+              @click="updateIntercept(record, 'returned', '人工确认包裹已退回')"
+            >
+              已退回
+            </a-button>
+            <a-button
+              v-if="canMarkIntercept(record, 'exception')"
+              type="link"
+              size="small"
+              v-access:code="'SystemRefundOrderUpdateIntercept'"
+              @click="
+                updateIntercept(record, 'exception', '人工确认物流异常/丢件')
+              "
+            >
+              物流异常
+            </a-button>
+            <a-button
+              v-if="
+                record.status === 1 &&
+                record.type === 1 &&
+                record.return_tracking_no
+              "
+              type="link"
+              size="small"
+              v-access:code="'SystemRefundOrderConfirmReturn'"
+              @click="confirmReturn(record)"
+            >
+              确认收货
+            </a-button>
+          </div>
         </template>
       </template>
     </a-table>
@@ -381,3 +502,20 @@ onMounted(() => {
     />
   </div>
 </template>
+
+<style scoped>
+.refund-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  max-width: 240px;
+  white-space: normal;
+}
+
+.refund-actions :deep(.ant-btn) {
+  height: 24px;
+  padding: 0;
+  line-height: 22px;
+}
+</style>

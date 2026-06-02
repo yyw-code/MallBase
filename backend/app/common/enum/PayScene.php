@@ -15,6 +15,9 @@ namespace app\common\enum;
  */
 class PayScene
 {
+    /** 无外部支付场景（余额支付等站内支付使用） */
+    public const NONE = 0;
+
     /** 微信小程序（trade_type=JSAPI，openid 取 user.wx_miniapp_openid） */
     public const MINI = 1;
 

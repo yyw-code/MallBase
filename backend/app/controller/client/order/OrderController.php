@@ -5,6 +5,7 @@ namespace app\controller\client\order;
 
 use app\common\enum\PayMethod;
 use app\service\client\order\OrderService;
+use app\service\client\payment\BalancePayService;
 use app\service\client\payment\PrepayService;
 use app\validate\client\order\OrderValidate;
 use mall_base\base\BaseController;
@@ -113,7 +114,7 @@ class OrderController extends BaseController
     /**
      * 支付入口
      *
-     * - pay_method=9 (MOCK)：保留旧 Mock 路径，e2e 测试与本地开发用
+     * - pay_method=3 (BALANCE)：余额支付，同步扣减余额并转已支付
      * - pay_method=1 (WECHAT)：调 PrepayService 发起预下单，返回前端调起参数；
      *   订单真正转 PAID 由微信回调走 NotifyService → OrderService::confirmPaid
      *
@@ -137,8 +138,8 @@ class OrderController extends BaseController
         $payMethod = (int) $data['pay_method'];
 
         $enabledMap = [
-            PayMethod::WECHAT => ['payment_wechat_enabled', '微信支付未启用'],
-            PayMethod::MOCK   => ['payment_mock_enabled',   'Mock 支付未启用'],
+            PayMethod::WECHAT  => ['payment_wechat_enabled', '微信支付未启用'],
+            PayMethod::BALANCE => ['payment_balance_enabled', '余额支付未启用'],
         ];
         if (isset($enabledMap[$payMethod])) {
             [$settingCode, $disabledMessage] = $enabledMap[$payMethod];
@@ -147,8 +148,10 @@ class OrderController extends BaseController
             }
         }
 
-        if ($payMethod === PayMethod::MOCK) {
-            $result = $this->service()->pay($orderId, $userId, $payMethod);
+        if ($payMethod === PayMethod::BALANCE) {
+            /** @var BalancePayService $balancePayService */
+            $balancePayService = app()->make(BalancePayService::class);
+            $result = $balancePayService->payById($userId, $orderId);
             return $this->success($result, '支付成功');
         }
 

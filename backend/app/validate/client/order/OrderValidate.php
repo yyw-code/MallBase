@@ -11,7 +11,7 @@ use think\Validate;
  * scene 与 OrderController 方法一一对应：
  *  - createFromCart 购物车结算下单
  *  - createFromSku  立即购买
- *  - pay            Mock 支付
+ *  - pay            订单支付
  *  - cancel         买家取消
  *
  * items / cart_ids 这里只做粗校验（非空数组），
@@ -26,7 +26,7 @@ class OrderValidate extends Validate
         'address_id'      => 'require|integer|min:1',
         'buyer_remark'    => 'max:255',
         'idempotency_key' => 'max:64',
-        'pay_method'      => 'require|integer|in:1,2,9',
+        'pay_method'      => 'require|integer|in:1,2,3',
         'scene'           => 'in:mini,offi,h5',
         'reason'          => 'max:255',
     ];

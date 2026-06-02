@@ -36,6 +36,27 @@ class OrderSettingService
         ];
     }
 
+    /**
+     * @return array<int, array{value:string, label:string}>
+     */
+    public function refundRejectReasonOptions(): array
+    {
+        $value = getSystemSetting('refund_reject_reason_options', '');
+        if (is_string($value) && trim($value) !== '') {
+            $options = $this->normalizeRefundReasonOptions($value);
+            if ($options !== []) {
+                return $options;
+            }
+        }
+
+        return [
+            ['value' => '商品已签收，不符合退款条件', 'label' => '商品已签收，不符合退款条件'],
+            ['value' => '买家申请理由不成立', 'label' => '买家申请理由不成立'],
+            ['value' => '已超过售后期限', 'label' => '已超过售后期限'],
+            ['value' => '需提供相关凭证后重新申请', 'label' => '需提供相关凭证后重新申请'],
+        ];
+    }
+
     public function refundReasonText(string $value): string
     {
         foreach ($this->refundReasonOptions() as $option) {

@@ -24,13 +24,16 @@
 ## SQL 引用对应关系
 
 `deploy/install/data/demo/02_demo_goods.sql` 引用 `/static/demo/<file>`；
-`deploy/install/data/schema/03_mb_setting.sql` 引用 `/static/demo/banner-*.png`。
+`deploy/install/data/schema/03_mb_setting.sql` 引用 `/static/demo/banner-*.png`；
+`deploy/install/data/schema/12_mb_recharge.sql` 引用 `/static/demo/recharge-dragon-card.png`。
 
 | 文件 | 用途 | SQL 引用位置 |
 |---|---|---|
 | `cat-{phone,clothes,food,home,smartphone,tablet,menswear,womenswear,snacks,furniture}.png` | 分类卡 | `mb_goods_category.image` |
 | `banner-{digital,fashion,home}.png` | 首页轮播 | `mb_setting.client_home_banners` |
 | `laptop-01-*.jpg` `camera-01-*.jpg` `jeans-01-*.jpg` `watch-01-main.png` `sofa-01-*.jpg` `vanity-01-*.png` | 演示商品图 / SKU 图 | `mb_goods.main_image` / `mb_goods.images` / `mb_goods_sku.image` |
+| `avatars/avatar-{1..5}.png` | 演示评价头像 | `mb_goods_review.avatar` |
+| `recharge-dragon-card.png` | 充值套餐背景图 | `mb_recharge_package.background_image` |
 
 ## 替换素材时
 
@@ -44,4 +47,6 @@
 
 文件名直接被 SQL 引用，不要随意改名。如果一定要改名，需要同步修改：
 - `deploy/install/data/demo/02_demo_goods.sql`
+- `deploy/install/data/demo/04_demo_reviews.sql`
 - `deploy/install/data/schema/03_mb_setting.sql`
+- `deploy/install/data/schema/12_mb_recharge.sql`

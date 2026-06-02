@@ -1,9 +1,17 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
+import { getPayMethods } from '@/api/config'
+import { getWalletInfo } from '@/api/user/wallet'
 import { useUserStore } from '@/store/user'
 
 const userStore = useUserStore()
+const wallet = ref({
+  balance: '0.00',
+  total_recharge: '0.00',
+  total_consume: '0.00',
+})
+const balancePaymentEnabled = ref(false)
 
 // ---------- computed ----------
 const logged = computed(() => userStore.isLoggedIn)
@@ -16,6 +24,9 @@ const mobile = computed(() => {
   if (!raw || raw.length < 7) return raw
   return raw.slice(0, 3) + ' **** ' + raw.slice(-4)
 })
+const walletBalance = computed(() => formatAmount(wallet.value.balance))
+const walletRecharge = computed(() => formatAmount(wallet.value.total_recharge))
+const walletConsume = computed(() => formatAmount(wallet.value.total_consume))
 
 // ---------- order shortcuts ----------
 const orderShortcuts = [
@@ -26,12 +37,13 @@ const orderShortcuts = [
 ]
 
 // ---------- function cells ----------
-const menuCells = [
+const menuCells = computed(() => [
   { key: 'address', label: '地址管理', path: '/pages-sub/address/list' },
+  ...(balancePaymentEnabled.value ? [{ key: 'wallet', label: '我的余额', path: '/pages-sub/wallet/index' }] : []),
   { key: 'favorite', label: '我的收藏', path: '' },
   { key: 'theme', label: '主题设置', path: '' },
   { key: 'about', label: '关于我们', path: '' },
-]
+])
 
 function goEditProfile() {
   if (userStore.isLoggedIn) {
@@ -44,10 +56,47 @@ function goEditProfile() {
 // ---------- lifecycle ----------
 onShow(() => {
   userStore.restoreToken()
+  fetchPayMethodState()
   if (userStore.isLoggedIn) {
     userStore.fetchUserInfo()
+    if (balancePaymentEnabled.value) {
+      fetchWallet()
+    }
   }
 })
+
+async function fetchPayMethodState() {
+  try {
+    const methods = await getPayMethods()
+    balancePaymentEnabled.value = Array.isArray(methods)
+      && methods.some((item) => Number(item?.code) === 3)
+    if (userStore.isLoggedIn && balancePaymentEnabled.value) {
+      fetchWallet()
+    }
+  } catch {
+    balancePaymentEnabled.value = false
+  }
+}
+
+async function fetchWallet() {
+  try {
+    const data = await getWalletInfo()
+    wallet.value = {
+      ...wallet.value,
+      ...(data || {}),
+    }
+  } catch {
+    wallet.value = {
+      balance: '0.00',
+      total_recharge: '0.00',
+      total_consume: '0.00',
+    }
+  }
+}
+
+function formatAmount(value) {
+  return Number(value || 0).toFixed(2)
+}
 
 // ---------- navigation ----------
 function goLogin() {
@@ -75,6 +124,22 @@ function goAllOrders() {
     return
   }
   uni.switchTab({ url: '/pages/order/index' })
+}
+
+function goWallet() {
+  if (!userStore.isLoggedIn) {
+    goLogin()
+    return
+  }
+  uni.navigateTo({ url: '/pages-sub/wallet/index' })
+}
+
+function goWalletRecords() {
+  if (!userStore.isLoggedIn) {
+    goLogin()
+    return
+  }
+  uni.navigateTo({ url: '/pages-sub/wallet/records' })
 }
 
 function goCell(cell) {
@@ -151,6 +216,30 @@ function handleLogout() {
       </view>
     </view>
 
+    <!-- ========== Wallet Summary ========== -->
+    <view v-if="balancePaymentEnabled" class="wallet-card" @tap="goWallet">
+      <view class="wallet-card__main">
+        <text class="wallet-card__label">我的余额</text>
+        <view class="wallet-card__amount">
+          <text class="wallet-card__symbol">¥</text>
+          <text class="wallet-card__value">{{ logged ? walletBalance : '0.00' }}</text>
+        </view>
+        <view class="wallet-card__meta">
+          <text class="wallet-card__meta-text">累计充值 ¥{{ logged ? walletRecharge : '0.00' }}</text>
+          <text class="wallet-card__dot">•</text>
+          <text class="wallet-card__meta-text">累计消费 ¥{{ logged ? walletConsume : '0.00' }}</text>
+        </view>
+      </view>
+      <view class="wallet-card__actions">
+        <view class="wallet-card__action" @tap.stop="goWalletRecords">
+          <text class="wallet-card__action-text">余额明细</text>
+        </view>
+        <view class="wallet-card__action wallet-card__action--primary" @tap.stop="goWallet">
+          <text class="wallet-card__action-text wallet-card__action-text--primary">去查看</text>
+        </view>
+      </view>
+    </view>
+
     <!-- ========== Order Shortcuts Card ========== -->
     <view class="order-card">
       <view class="order-card__title-row">
@@ -199,6 +288,11 @@ function handleLogout() {
             <view class="ci-theme__outer" />
             <view class="ci-theme__half" />
           </view>
+          <!-- wallet: coin -->
+          <view v-else-if="cell.key === 'wallet'" class="ci ci-wallet">
+            <view class="ci-wallet__body" />
+            <view class="ci-wallet__coin" />
+          </view>
           <!-- about: info circle -->
           <view v-else-if="cell.key === 'about'" class="ci ci-about">
             <view class="ci-about__circle" />
@@ -237,7 +331,7 @@ function handleLogout() {
    =========================== */
 .profile-header {
   padding: 28rpx $mb-spacing-page 36rpx;
-  background: linear-gradient(180deg, #e9edff 0%, #faf8ff 100%);
+  background: linear-gradient(180deg, #eef3ff 0%, #faf8ff 100%);
 }
 
 .profile-header__body {
@@ -327,13 +421,97 @@ function handleLogout() {
   margin-top: 12rpx;
   height: 48rpx;
   padding: 0 20rpx;
-  border-radius: 16rpx;
+  border-radius: $mb-radius-full;
   border: 1rpx solid rgba(13, 80, 213, 0.45);
   background: rgba(13, 80, 213, 0.06);
   align-self: flex-start;
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+/* ===========================
+   Wallet Card
+   =========================== */
+.wallet-card {
+  margin: -12rpx $mb-spacing-page $mb-spacing-md;
+  padding: 28rpx;
+  background: $mb-color-bg;
+  border: 1rpx solid $mb-color-divider;
+  border-radius: $mb-radius-lg;
+}
+
+.wallet-card__main {
+  min-width: 0;
+}
+
+.wallet-card__label {
+  font-size: $mb-font-sm;
+  color: $mb-color-text-secondary;
+}
+
+.wallet-card__amount {
+  display: flex;
+  align-items: baseline;
+  margin-top: 10rpx;
+}
+
+.wallet-card__symbol {
+  font-size: $mb-font-lg;
+  color: $mb-color-text-title;
+  font-weight: 700;
+}
+
+.wallet-card__value {
+  margin-left: 4rpx;
+  font-size: 52rpx;
+  line-height: 1;
+  color: $mb-color-text-title;
+  font-weight: 700;
+}
+
+.wallet-card__meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10rpx;
+  margin-top: 16rpx;
+}
+
+.wallet-card__meta-text,
+.wallet-card__dot {
+  font-size: $mb-font-xs;
+  color: $mb-color-text-tertiary;
+}
+
+.wallet-card__actions {
+  display: flex;
+  gap: $mb-spacing-sm;
+  margin-top: 24rpx;
+}
+
+.wallet-card__action {
+  flex: 1;
+  height: 64rpx;
+  border-radius: $mb-radius-md;
+  background: $mb-color-bg-surface;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.wallet-card__action--primary {
+  background: $mb-color-primary;
+}
+
+.wallet-card__action-text {
+  font-size: $mb-font-sm;
+  color: $mb-color-text-secondary;
+  font-weight: 600;
+}
+
+.wallet-card__action-text--primary {
+  color: $mb-color-text-inverse;
 }
 
 .profile-header__edit-text {
@@ -492,6 +670,10 @@ function handleLogout() {
   background: rgba(13, 80, 213, 0.07);
 }
 
+.cell__icon-wrap--wallet {
+  background: rgba(240, 173, 78, 0.1);
+}
+
 .cell__icon-wrap--favorite {
   background: rgba(186, 26, 26, 0.07);
 }
@@ -615,6 +797,32 @@ function handleLogout() {
   top: 50%;
   left: 50%;
   transform: translateY(-50%);
+}
+
+/* --- Wallet --- */
+.ci-wallet {
+  width: 28rpx;
+  height: 24rpx;
+}
+
+.ci-wallet__body {
+  position: absolute;
+  left: 1rpx;
+  top: 4rpx;
+  width: 26rpx;
+  height: 18rpx;
+  border: 3rpx solid #d97706;
+  border-radius: 6rpx;
+}
+
+.ci-wallet__coin {
+  position: absolute;
+  right: 4rpx;
+  top: 10rpx;
+  width: 6rpx;
+  height: 6rpx;
+  border-radius: $mb-radius-full;
+  background: #d97706;
 }
 
 /* --- About (info circle) --- */

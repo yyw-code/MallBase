@@ -194,7 +194,7 @@ INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`
 INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`, `rules`, `placeholder`, `remark`, `sort`) VALUES
 (1041, '微信支付状态', 'payment_wechat_enabled', '0', 'switch', NULL, NULL, NULL, NULL, 10),
 (1041, '支付宝状态', 'payment_alipay_enabled', '0', 'switch', NULL, NULL, NULL, NULL, 20),
-(1041, 'Mock 支付（仅测试）', 'payment_mock_enabled', '0', 'switch', NULL, NULL, NULL, '仅测试用：启用后 pay_method=9 的请求会跳过真实支付，直接把订单标记为已支付。生产环境严禁开启。', 30);
+(1041, '余额支付状态', 'payment_balance_enabled', '0', 'switch', NULL, NULL, NULL, '开启后客户端可选择余额支付，订单支付时会扣减用户余额。', 30);
 
 -- 设置项：1042 PaymentWechat 微信支付V3
 -- 证书/密钥统一走 secure_upload：文件落到 backend/storage/cert/，不进 public/uploads/
@@ -246,4 +246,5 @@ INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`
 (107, '退货收货人姓名', 'refund_return_receiver_name', '', 'input', NULL, NULL, NULL, NULL, 20),
 (107, '退货收货人电话', 'refund_return_receiver_phone', '', 'input', NULL, NULL, NULL, NULL, 30),
 (107, '退货收货人地址', 'refund_return_receiver_address', '', 'textarea', NULL, NULL, NULL, NULL, 40),
-(107, '售后原因选项', 'refund_reason_options', '[{"value":"MISTAKEN_ORDER","label":"订单拍错"},{"value":"QUALITY_ISSUE","label":"商品质量问题"},{"value":"NO_LONGER_WANTED","label":"不想要了"},{"value":"OTHER","label":"其他"}]', 'option_list', NULL, NULL, '请输入原因名称', '客户端售后申请页与后端校验共用；后台只维护原因名称，编码由系统自动维护', 50);
+(107, '售后原因选项', 'refund_reason_options', '[{"value":"MISTAKEN_ORDER","label":"订单拍错"},{"value":"QUALITY_ISSUE","label":"商品质量问题"},{"value":"NO_LONGER_WANTED","label":"不想要了"},{"value":"OTHER","label":"其他"}]', 'option_list', NULL, NULL, '请输入原因名称', '客户端售后申请页与后端校验共用；后台只维护原因名称，编码由系统自动维护', 50),
+(107, '常用驳回原因', 'refund_reject_reason_options', '[{"value":"商品已签收，不符合退款条件","label":"商品已签收，不符合退款条件"},{"value":"买家申请理由不成立","label":"买家申请理由不成立"},{"value":"已超过售后期限","label":"已超过售后期限"},{"value":"需提供相关凭证后重新申请","label":"需提供相关凭证后重新申请"}]', 'option_list', NULL, NULL, '请输入驳回原因', '后台驳回售后申请时快捷选择，买家可见；可继续手动补充详细说明', 60);

@@ -9,6 +9,7 @@ use app\model\user\UserGroup;
 use app\model\user\UserGroupRelation;
 use app\model\user\UserTag;
 use app\model\user\UserTagRelation;
+use app\model\user\UserWallet;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
 
@@ -38,11 +39,16 @@ class UserService extends BaseService
         $userIds = array_column($list->toArray(), 'id');
         $groupMap = $this->batchGetUserGroups($userIds);
         $tagMap = $this->batchGetUserTags($userIds);
+        $walletMap = $this->batchGetWallets($userIds);
 
         $list = $list->toArray();
         foreach ($list as &$user) {
             $user['groups'] = $groupMap[$user['id']] ?? [];
             $user['tags'] = $tagMap[$user['id']] ?? [];
+            $user['wallet'] = $walletMap[$user['id']] ?? [
+                'balance' => '0.00',
+                'frozen_amount' => '0.00',
+            ];
         }
 
         return compact('total', 'list');
@@ -172,6 +178,32 @@ class UserService extends BaseService
                 }
             }
             $result[$userId] = $userTags;
+        }
+
+        return $result;
+    }
+
+    /**
+     * @param array<int> $userIds
+     * @return array<int, array{balance:string,frozen_amount:string}>
+     */
+    protected function batchGetWallets(array $userIds): array
+    {
+        if (empty($userIds)) {
+            return [];
+        }
+
+        $rows = $this->model(UserWallet::class)
+            ->whereIn('user_id', $userIds)
+            ->select()
+            ->toArray();
+
+        $result = [];
+        foreach ($rows as $row) {
+            $result[(int) $row['user_id']] = [
+                'balance' => number_format(((int) ($row['balance_cents'] ?? 0)) / 100, 2, '.', ''),
+                'frozen_amount' => number_format(((int) ($row['frozen_cents'] ?? 0)) / 100, 2, '.', ''),
+            ];
         }
 
         return $result;

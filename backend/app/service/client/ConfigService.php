@@ -114,6 +114,13 @@ class ConfigService extends BaseService
     public function getPayMethods(): array
     {
         $list = [];
+        if ((string) getSystemSetting('payment_balance_enabled', '0') === '1') {
+            $list[] = [
+                'code' => PayMethod::BALANCE,
+                'name' => '余额支付',
+                'icon' => 'wallet',
+            ];
+        }
         if ((string) getSystemSetting('payment_wechat_enabled', '0') === '1') {
             $list[] = [
                 'code' => PayMethod::WECHAT,
@@ -121,11 +128,29 @@ class ConfigService extends BaseService
                 'icon' => 'wechat',
             ];
         }
-        if ((string) getSystemSetting('payment_mock_enabled', '0') === '1') {
+        return $list;
+    }
+
+    /**
+     * 已启用的余额充值方式
+     *
+     * @return array<int, array{code:int, name:string, icon:string}>
+     */
+    public function getRechargeMethods(): array
+    {
+        $list = [];
+        if ((string) getSystemSetting('payment_wechat_enabled', '0') === '1') {
             $list[] = [
-                'code' => PayMethod::MOCK,
-                'name' => 'Mock 支付（仅测试）',
-                'icon' => 'mock',
+                'code' => PayMethod::WECHAT,
+                'name' => '微信支付',
+                'icon' => 'wechat',
+            ];
+        }
+        if ((string) getSystemSetting('payment_alipay_enabled', '0') === '1') {
+            $list[] = [
+                'code' => PayMethod::ALIPAY,
+                'name' => '支付宝',
+                'icon' => 'alipay',
             ];
         }
         return $list;

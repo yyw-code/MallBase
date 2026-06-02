@@ -28,6 +28,10 @@ export namespace ClientUserApi {
     remark?: string;
     create_time: string;
     update_time: string;
+    wallet?: {
+      balance: string;
+      frozen_amount: string;
+    };
     groups?: UserGroupApi.GroupItem[];
     tags?: UserTagApi.TagItem[];
   }
@@ -103,6 +107,37 @@ export namespace ClientUserApi {
     old_password: string;
     password: string;
   }
+
+  export interface WalletLogItem {
+    id: number;
+    user_id: number;
+    biz_type: string;
+    biz_id: string;
+    direction: 'income' | 'expense';
+    change_amount: string;
+    before_amount: string;
+    after_amount: string;
+    operator_type: number;
+    operator_id?: number | null;
+    remark?: string;
+    biz_type_text?: string;
+    create_time: string;
+  }
+
+  export interface WalletLogParams {
+    user_id?: number;
+    type?: 'income' | 'expense';
+    biz_type?: string;
+    page?: number;
+    limit?: number;
+  }
+
+  export interface WalletAdjustParams {
+    user_id: number;
+    direction: 'income' | 'expense';
+    amount: string;
+    remark: string;
+  }
 }
 
 /**
@@ -155,6 +190,17 @@ export async function updateClientUserStatusApi(id: number, data: { status: numb
  */
 export async function resetClientUserPasswordApi(id: number, password: string) {
   return requestClient.put(`/user/resetPassword/${id}`, { password });
+}
+
+export async function getClientUserWalletLogsApi(params?: ClientUserApi.WalletLogParams) {
+  return requestClient.get<{
+    list: ClientUserApi.WalletLogItem[];
+    total: number;
+  }>('/user/wallet/logs', { params });
+}
+
+export async function adjustClientUserWalletApi(data: ClientUserApi.WalletAdjustParams) {
+  return requestClient.post<{ balance: string }>('/user/wallet/adjust', data);
 }
 
 /**

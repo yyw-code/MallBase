@@ -26,15 +26,18 @@
           v-for="m in methods"
           :key="m.code"
           class="mb-pay__row"
-          :class="{ 'mb-pay__row--active': selected === m.code }"
-          @tap.stop="onPick(m.code)"
+          :class="{
+            'mb-pay__row--active': selected === m.code,
+            'mb-pay__row--disabled': m.disabled,
+          }"
+          @tap.stop="onPick(m)"
         >
           <view class="mb-pay__icon" :class="iconClass(m.icon)">
             <text class="mb-pay__icon-text">{{ iconGlyph(m.icon) }}</text>
           </view>
           <view class="mb-pay__row-info">
             <text class="mb-pay__row-name">{{ m.name }}</text>
-            <text v-if="m.icon === 'mock'" class="mb-pay__row-tag">仅测试环境</text>
+            <text v-if="methodDesc(m)" class="mb-pay__row-desc">{{ methodDesc(m) }}</text>
           </view>
           <view class="mb-pay__radio" :class="{ 'mb-pay__radio--checked': selected === m.code }">
             <view v-if="selected === m.code" class="mb-pay__radio-dot" />
@@ -48,7 +51,7 @@
           :class="{ 'mb-pay__confirm--disabled': !selected }"
           @tap.stop="onConfirm"
         >
-          <text class="mb-pay__confirm-text">立即支付</text>
+          <text class="mb-pay__confirm-text">{{ confirmText }}</text>
         </view>
       </view>
     </view>
@@ -56,7 +59,7 @@
 </template>
 
 <script setup>
-import { ref, watch, nextTick } from 'vue'
+import { computed, ref, watch, nextTick } from 'vue'
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -69,6 +72,12 @@ const emit = defineEmits(['select', 'close'])
 
 const show = ref(false)
 const selected = ref(null)
+const selectedMethod = computed(() => props.methods.find((m) => m.code === selected.value))
+const confirmText = computed(() => {
+  if (!selected.value) return '请选择支付方式'
+  if (props.amount) return `立即支付 ¥${Number(props.amount).toFixed(2)}`
+  return '立即支付'
+})
 
 watch(
   () => props.visible,
@@ -76,8 +85,9 @@ watch(
     if (v) {
       await nextTick()
       show.value = true
-      if (props.methods.length && !selected.value) {
-        selected.value = props.methods[0].code
+      const first = firstEnabled(props.methods)
+      if (first && !selected.value) {
+        selected.value = first.code
       }
     } else {
       show.value = false
@@ -90,14 +100,15 @@ watch(
 watch(
   () => props.methods,
   (list) => {
-    if (props.visible && list.length && !list.find((m) => m.code === selected.value)) {
-      selected.value = list[0].code
+    if (props.visible && list.length && !list.find((m) => m.code === selected.value && !m.disabled)) {
+      selected.value = firstEnabled(list)?.code || null
     }
   },
 )
 
-function onPick(code) {
-  selected.value = code
+function onPick(method) {
+  if (!method || method.disabled) return
+  selected.value = method.code
 }
 
 function onClose() {
@@ -105,20 +116,35 @@ function onClose() {
 }
 
 function onConfirm() {
-  if (!selected.value) return
+  if (!selected.value || selectedMethod.value?.disabled) return
   emit('select', selected.value)
 }
 
 function iconClass(icon) {
   if (icon === 'wechat') return 'mb-pay__icon--wechat'
-  if (icon === 'mock') return 'mb-pay__icon--mock'
+  if (icon === 'alipay') return 'mb-pay__icon--alipay'
+  if (icon === 'wallet' || icon === 'balance') return 'mb-pay__icon--wallet'
   return 'mb-pay__icon--default'
 }
 
 function iconGlyph(icon) {
   if (icon === 'wechat') return '微'
-  if (icon === 'mock') return 'M'
+  if (icon === 'alipay') return '支'
+  if (icon === 'wallet' || icon === 'balance') return '¥'
   return '￥'
+}
+
+function methodDesc(method) {
+  if (method.disabled_reason) return method.disabled_reason
+  if (method.balance_amount !== undefined) return `可用余额 ¥${Number(method.balance_amount || 0).toFixed(2)}`
+  if (method.desc) return method.desc
+  if (method.icon === 'wechat') return '微信安全支付'
+  if (method.icon === 'alipay') return '支付宝支付'
+  return ''
+}
+
+function firstEnabled(list) {
+  return Array.isArray(list) ? list.find((m) => !m.disabled) : null
 }
 </script>
 
@@ -215,6 +241,10 @@ function iconGlyph(icon) {
   background: rgba(13, 80, 213, 0.04);
 }
 
+.mb-pay__row--disabled {
+  opacity: 0.52;
+}
+
 .mb-pay__icon {
   width: 64rpx;
   height: 64rpx;
@@ -229,8 +259,12 @@ function iconGlyph(icon) {
   background: #07c160;
 }
 
-.mb-pay__icon--mock {
-  background: #9aa0ad;
+.mb-pay__icon--alipay {
+  background: #1677ff;
+}
+
+.mb-pay__icon--wallet {
+  background: #f0ad4e;
 }
 
 .mb-pay__icon--default {
@@ -256,9 +290,9 @@ function iconGlyph(icon) {
   color: var(--color-text-title, #191b23);
 }
 
-.mb-pay__row-tag {
+.mb-pay__row-desc {
   font-size: 22rpx;
-  color: var(--color-warning, #d97706);
+  color: var(--color-text-tertiary, #737686);
 }
 
 .mb-pay__radio {

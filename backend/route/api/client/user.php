@@ -32,6 +32,12 @@ Route::group('user/my', function () {
     Route::post('logout', 'logout');
 })->prefix('client.user.UserController/')->middleware([JwtAuth::class]);
 
+Route::group('user/wallet', function () {
+    Route::get('', 'info');
+    Route::get('info', 'info');
+    Route::get('logs', 'logs');
+})->prefix('client.user.UserWalletController/')->middleware([JwtAuth::class]);
+
 Route::group('user/address', function () {
     Route::get('list', 'list');
     Route::get('info/:id', 'info');

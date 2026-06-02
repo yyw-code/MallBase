@@ -18,7 +18,7 @@ class RefundOrder extends BaseModel
     protected $autoWriteTimestamp = true;
     protected $deleteTime = 'delete_time';
 
-    protected array $append = ['status_text', 'type_text'];
+    protected array $append = ['status_text', 'type_text', 'receive_status_text', 'intercept_status_text'];
 
     public function getStatusTextAttr($value, $data): string
     {
@@ -28,5 +28,15 @@ class RefundOrder extends BaseModel
     public function getTypeTextAttr($value, $data): string
     {
         return RefundOrderStatus::typeTextOf((int) ($data['type'] ?? 0));
+    }
+
+    public function getReceiveStatusTextAttr($value, $data): string
+    {
+        return RefundOrderStatus::receiveTextOf((int) ($data['receive_status'] ?? 0));
+    }
+
+    public function getInterceptStatusTextAttr($value, $data): string
+    {
+        return RefundOrderStatus::interceptTextOf((string) ($data['intercept_status'] ?? ''));
     }
 }

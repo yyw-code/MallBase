@@ -48,4 +48,14 @@ class ConfigController extends BaseController
         $data = $this->service()->getPayMethods();
         return $this->success($data, '获取成功');
     }
+
+    /**
+     * 获取启用的余额充值方式列表
+     * GET /client/api/setting/rechargeMethods
+     */
+    public function rechargeMethods()
+    {
+        $data = $this->service()->getRechargeMethods();
+        return $this->success($data, '获取成功');
+    }
 }

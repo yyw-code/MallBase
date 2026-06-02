@@ -21,10 +21,10 @@ Route::group('auth/admin', function () {
     Route::post('create', 'create')->name('SystemAdminCreate')->option(['_alias' => '创建', '_desc' => '创建管理员', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::put('update/:id', 'update')->name('SystemAdminUpdate')->option(['_alias' => '更新', '_desc' => '更新管理员', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::put('adminUpdate', 'adminUpdate')->name('SystemLoginAdminUpdate')->option(['_alias' => '更新当前登录', '_desc' => '更新当前登录管理员', '_auth' => false]);
-    Route::put('changeStatus/:id', 'changeStatus')->name('SystemAdminChangeStatus')->option(['_alias' => '更新状态', '_desc' => '更新管理员状态', '_auth' => true]);
+    Route::put('changeStatus/:id', 'changeStatus')->name('SystemAdminChangeStatus')->option(['_alias' => '更新状态', '_desc' => '更新管理员状态', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::delete('delete/:id', 'delete')->name('SystemAdminDelete')->option(['_alias' => '删除', '_desc' => '删除管理员', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::post('resetPassword/:id', 'resetPassword')->name('SystemAdminResetPassword')->option(['_alias' => '重置密码', '_desc' => '重置管理员密码', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
-    Route::post('changePassword', 'changePassword')->name('SystemAdminChangePassword')->option(['_alias' => '修改密码', '_desc' => '修改管理员密码', '_auth' => true]);
+    Route::post('changePassword', 'changePassword')->name('SystemAdminChangePassword')->option(['_alias' => '修改密码', '_desc' => '修改管理员密码', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
 })->prefix('admin.auth.AdminController/')
     ->option([
         '_group_name' => '管理员管理',

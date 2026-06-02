@@ -83,13 +83,14 @@ final class RefundOrderAdminServiceTest extends TestCase
         $this->assertStringNotContainsString("field('id, nickname, phone", $source);
     }
 
-    public function testRefundOnlyApproveDoesNotRestoreStock(): void
+    public function testApproveFlowDoesNotRestoreStockAtRefundNode(): void
     {
         $source = (string) file_get_contents(
             dirname(__DIR__, 4) . '/app/service/admin/order/RefundOrderAdminService.php',
         );
 
-        $this->assertStringContainsString('买家不退回实物，审核同意不回滚库存', $source);
+        $this->assertStringContainsString('退货退款审核同意后先进入待退货', $source);
+        $this->assertStringContainsString('买家回填退货物流、商家确认收货后再发起退款', $source);
         $this->assertStringNotContainsString('StockService::class', $source);
         $this->assertStringNotContainsString('->restore(', $source);
     }
@@ -103,6 +104,82 @@ final class RefundOrderAdminServiceTest extends TestCase
         $this->assertStringContainsString('WechatRefundAdapter::class', $source);
         $this->assertStringContainsString('new RefundPaymentContext', $source);
         $this->assertStringNotContainsString('new MockPaymentAdapter', $source);
+    }
+
+    public function testApproveSupportsBalanceRefundToUserWallet(): void
+    {
+        $source = (string) file_get_contents(
+            dirname(__DIR__, 4) . '/app/service/admin/order/RefundOrderAdminService.php',
+        );
+
+        $this->assertStringContainsString('PayMethod::BALANCE', $source);
+        $this->assertStringContainsString('executeBalanceRefund', $source);
+        $this->assertStringContainsString('UserWalletLog::BIZ_REFUND', $source);
+        $this->assertStringContainsString('售后退款退回余额', $source);
+    }
+
+    public function testBalanceRefundAcceptsApprovedStatusWhenConfirmingReturn(): void
+    {
+        $source = (string) file_get_contents(
+            dirname(__DIR__, 4) . '/app/service/admin/order/RefundOrderAdminService.php',
+        );
+
+        $this->assertStringContainsString('[RefundOrderStatus::APPROVED]', $source);
+        $this->assertStringContainsString('当前售后单状态不允许确认收货', $source);
+        $this->assertStringContainsString('$expectedStatuses', $source);
+        $this->assertStringNotContainsString('(int) $lockedRefund->status !== RefundOrderStatus::PENDING', $source);
+    }
+
+    public function testFullRefundClosesMainOrder(): void
+    {
+        $source = (string) file_get_contents(
+            dirname(__DIR__, 4) . '/app/service/admin/order/RefundOrderAdminService.php',
+        );
+        $status = (string) file_get_contents(
+            dirname(__DIR__, 4) . '/app/common/enum/OrderStatus.php',
+        );
+
+        $this->assertStringContainsString('closeOrderIfFullyRefunded', $source);
+        $this->assertStringContainsString('售后全量退款关闭订单', $source);
+        $this->assertStringContainsString('OrderStatus::CLOSED', $source);
+        $this->assertStringContainsString('self::SHIPPED     => [self::RECEIVED, self::CLOSED]', $status);
+        $this->assertStringContainsString('self::RECEIVED    => [self::COMPLETED, self::CLOSED]', $status);
+    }
+
+    public function testAdminRefundListWrapsActionsAndHidesFinalInterceptActions(): void
+    {
+        $source = (string) file_get_contents(
+            dirname(__DIR__, 5) . '/frontend/admin/apps/web-antd/src/views/order/refund/index.vue',
+        );
+
+        $this->assertStringContainsString('refund-actions', $source);
+        $this->assertStringContainsString('flex-wrap: wrap', $source);
+        $this->assertStringContainsString('isFinalInterceptStatus', $source);
+        $this->assertStringContainsString("['exception', 'returned', 'success']", $source);
+        $this->assertStringContainsString("canMarkIntercept(record, 'exception')", $source);
+    }
+
+    public function testAdminRejectModalUsesConfiguredRejectReasons(): void
+    {
+        $modal = (string) file_get_contents(
+            dirname(__DIR__, 5) . '/frontend/admin/apps/web-antd/src/views/order/refund/reject-modal.vue',
+        );
+        $api = (string) file_get_contents(
+            dirname(__DIR__, 5) . '/frontend/admin/apps/web-antd/src/api/order/refund.ts',
+        );
+        $route = (string) file_get_contents(
+            dirname(__DIR__, 4) . '/route/api/admin/order.php',
+        );
+        $controller = (string) file_get_contents(
+            dirname(__DIR__, 4) . '/app/controller/admin/order/RefundOrderController.php',
+        );
+
+        $this->assertStringContainsString('getRefundRejectReasonOptionsApi', $modal);
+        $this->assertStringContainsString('defaultCommonReasons', $modal);
+        $this->assertStringContainsString('/order/refund/rejectReasonOptions', $api);
+        $this->assertStringContainsString('SystemRefundOrderRejectReasonOptions', $route);
+        $this->assertStringContainsString('rejectReasonOptions', $controller);
+        $this->assertStringContainsString('refundRejectReasonOptions', $controller);
     }
 
     public function testWechatRefundSuccessCanBeCompletedByNotifyOrRecoverCommand(): void

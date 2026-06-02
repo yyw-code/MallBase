@@ -1,7 +1,8 @@
 /**
  * 微信支付触发器
  *
- * 调用方式：在已创建订单的页面调用 triggerPay(orderId)，内部按运行平台自动分流：
+ * 调用方式：在已创建订单的页面调用 triggerPay(orderId, payMethod)，内部按支付方式和运行平台分流：
+ *  - balance    → 后端同步扣减余额并返回支付结果
  *  - mp-weixin   → JSAPI（scene=mini），调 uni.requestPayment
  *  - h5-wechat   → JSAPI（scene=offi），调 WeixinJSBridge.invoke('getBrandWCPayRequest')
  *  - h5          → MWEB（scene=h5），拿到 mweb_url 后 window.location.href 跳转
@@ -13,6 +14,8 @@ import { payOrder } from '@/api/order/order'
 import { getPlatform } from '@/utils/platform'
 
 const PAY_METHOD_WECHAT = 1
+const PAY_METHOD_ALIPAY = 2
+const PAY_METHOD_BALANCE = 3
 
 /**
  * 根据当前 platform 决定 scene
@@ -89,26 +92,32 @@ function redirectMweb(mwebUrl) {
   // #endif
 }
 
-const PAY_METHOD_MOCK = 9
-
 /**
  * 发起支付（统一入口）
  *
  * @param {number|string} orderId 订单 ID（mb_order.id）
- * @param {number} [payMethod] 支付方式 code（1=微信，9=Mock）。默认微信。
+ * @param {number} [payMethod] 支付方式 code（1=微信，3=余额）。默认微信。
  * @returns {Promise<{status: 'success'|'pending'|'fail', message?: string}>}
- *   - success：Mock 直接成功 / JSAPI 已调起且 SDK 回调成功
+ *   - success：余额支付已完成 / JSAPI 已调起且 SDK 回调成功
  *   - pending：MWEB 已跳转，无法在前端判断结果
  *   - fail：调起失败 / 用户取消 / 当前环境不支持
  */
 export async function triggerPay(orderId, payMethod = PAY_METHOD_WECHAT) {
-  if (payMethod === PAY_METHOD_MOCK) {
+  if (Number(payMethod) === PAY_METHOD_BALANCE) {
     try {
-      await payOrder(orderId, { pay_method: PAY_METHOD_MOCK })
+      await payOrder(orderId, { pay_method: PAY_METHOD_BALANCE })
       return { status: 'success' }
     } catch (e) {
-      return { status: 'fail', message: e?.message || 'Mock 支付失败' }
+      return { status: 'fail', message: e?.message || '余额支付失败' }
     }
+  }
+
+  if (Number(payMethod) === PAY_METHOD_ALIPAY) {
+    return { status: 'fail', message: '支付宝支付暂未接入' }
+  }
+
+  if (Number(payMethod) !== PAY_METHOD_WECHAT) {
+    return { status: 'fail', message: '该支付方式暂不可用' }
   }
 
   const scene = detectScene()

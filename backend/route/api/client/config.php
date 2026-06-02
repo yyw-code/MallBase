@@ -7,4 +7,5 @@ use think\facade\Route;
 Route::group('setting', function () {
     Route::get('basic', 'basic');
     Route::get('payMethods', 'payMethods');
+    Route::get('rechargeMethods', 'rechargeMethods');
 })->prefix('client.ConfigController/');

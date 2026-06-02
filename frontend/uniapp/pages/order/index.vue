@@ -36,13 +36,18 @@
           </view>
           <text v-else-if="order.sn" class="order-card__sn">订单号 {{ order.sn }}</text>
           <view v-else class="order-card__header-spacer" />
-          <text class="order-card__status-text" :class="statusTagClass(order.status)">
-            {{ statusLabel(order.status) }}
+          <text class="order-card__status-text" :class="statusTagClass(order)">
+            {{ statusLabel(order) }}
           </text>
         </view>
         <text v-if="order.status === 0 && getCountdownText(order)" class="order-card__countdown">
           剩余 {{ getCountdownText(order) }}
         </text>
+        <view v-if="order.after_sale_tag_text" class="order-card__after-sale">
+          <view class="order-card__after-sale-dot" />
+          <text class="order-card__after-sale-text">售后{{ order.after_sale_tag_text }}</text>
+          <text class="order-card__after-sale-tip">{{ afterSaleTip(order) }}</text>
+        </view>
 
         <!-- Product items -->
         <view
@@ -202,12 +207,19 @@ const currentStatuses = computed(() => {
   return t ? t.statuses : []
 })
 
-function statusLabel(status) {
-  return STATUS_MAP[status]?.label || '未知'
+function isRefundCompletedOrder(order) {
+  return Number(order?.status) === 90 && Number(order?.after_sale?.status) === 10
 }
 
-function statusTagClass(status) {
-  const theme = STATUS_MAP[status]?.theme || 'muted'
+function statusLabel(order) {
+  if (isRefundCompletedOrder(order)) return '退款完成'
+  return STATUS_MAP[order?.status]?.label || '未知'
+}
+
+function statusTagClass(order) {
+  const theme = isRefundCompletedOrder(order)
+    ? 'success'
+    : STATUS_MAP[order?.status]?.theme || 'muted'
   return `order-card__status--${theme}`
 }
 
@@ -257,20 +269,42 @@ function getRefundItemLabel(item) {
   return spec ? `${name} ${spec}` : name
 }
 
-function navigateToRefund(order, item) {
+function getRefundableQuantity(item) {
+  const explicit = Number(item?.refundable_quantity)
+  if (Number.isFinite(explicit)) return Math.max(0, explicit)
+  return Math.max(0, Number(item?.quantity || 0) - Number(item?.refunded_quantity || 0))
+}
+
+function getRefundableAmount(item) {
+  const amount = item?.refundable_amount
+  return amount !== undefined && amount !== null && amount !== ''
+    ? String(amount)
+    : ''
+}
+
+function navigateToRefund(order, item, receiveStatus = 'not_received', type = 0) {
   const orderItemId = getOrderItemId(item)
   if (!orderItemId) {
     uni.showToast({ title: '请选择要申请售后的商品', icon: 'none' })
     return
   }
+  const refundableQuantity = getRefundableQuantity(item)
+  if (refundableQuantity <= 0) {
+    uni.showToast({ title: '该商品暂无可退数量', icon: 'none' })
+    return
+  }
+  const refundableAmount = getRefundableAmount(item)
   const query = [
     `order_id=${order.id}`,
     `order_item_id=${orderItemId}`,
+    `receive_status=${receiveStatus}`,
+    `type=${type}`,
     item?.goods_name ? `goods_name=${encodeURIComponent(item.goods_name)}` : '',
     getOrderItemImage(item) ? `goods_image=${encodeURIComponent(getOrderItemImage(item))}` : '',
     getItemSpec(item) ? `sku_spec_text=${encodeURIComponent(getItemSpec(item))}` : '',
     item?.unit_price ? `price=${encodeURIComponent(item.unit_price)}` : '',
-    item?.quantity ? `quantity=${encodeURIComponent(item.quantity)}` : '',
+    `quantity=${encodeURIComponent(refundableQuantity)}`,
+    refundableAmount ? `refundable_amount=${encodeURIComponent(refundableAmount)}` : '',
   ].filter(Boolean).join('&')
   uni.navigateTo({ url: `/pages-sub/refund/apply?${query}` })
 }
@@ -314,6 +348,17 @@ function canApplyRefund(order) {
   return order?.can_refund !== false
 }
 
+function hasActiveAfterSale(order) {
+  return order?.can_refund === false && !!order?.after_sale_tag_text
+}
+
+function afterSaleTip(order) {
+  if (isRefundCompletedOrder(order)) {
+    return '退款已完成，订单因全额退款结束'
+  }
+  return '处理期间暂不可重复申请或确认收货'
+}
+
 function getActions(order) {
   const actions = []
   if (order.status === 0) {
@@ -326,8 +371,13 @@ function getActions(order) {
       actions.push({ key: 'refund', label: '申请售后', primary: false })
     }
   } else if (order.status === 20) {
+    if (canApplyRefund(order)) {
+      actions.push({ key: 'refund', label: '申请售后', primary: false })
+    }
     actions.push({ key: 'logistics', label: '查看物流', primary: false })
-    actions.push({ key: 'confirm', label: '确认收货', primary: true })
+    if (!hasActiveAfterSale(order)) {
+      actions.push({ key: 'confirm', label: '确认收货', primary: true })
+    }
   } else if (order.status === 30 || order.status === 40) {
     if (canApplyRefund(order)) {
       actions.push({ key: 'refund', label: '申请售后', primary: false })
@@ -412,6 +462,10 @@ async function handleAction(key, order) {
     const payResult = await startPay(order.id)
     if (payResult) redirectToPayResult(order, payResult)
   } else if (key === 'confirm') {
+    if (hasActiveAfterSale(order)) {
+      uni.showToast({ title: '售后处理中，暂不能确认收货', icon: 'none' })
+      return
+    }
     uni.showModal({
       title: '提示',
       content: '确认已收到商品？',
@@ -430,7 +484,10 @@ async function handleAction(key, order) {
     uni.navigateTo({ url: `/pages-sub/logistics/detail?order_id=${order.id}` })
   } else if (key === 'refund') {
     if (!canApplyRefund(order)) {
-      uni.showToast({ title: '订单已超过售后申请期限', icon: 'none' })
+      uni.showToast({
+        title: hasActiveAfterSale(order) ? '已有进行中的售后申请' : '订单已超过售后申请期限',
+        icon: 'none',
+      })
       return
     }
     const items = getOrderItems(order)
@@ -438,20 +495,45 @@ async function handleAction(key, order) {
       uni.showToast({ title: '请选择要申请售后的商品', icon: 'none' })
       return
     }
+    const chooseItem = (item) => {
+      if (Number(order.status) === 20) {
+        chooseReceiveStatus(order, item)
+        return
+      }
+      navigateToRefund(order, item, Number(order.status) >= 30 ? 'received' : 'not_received', 0)
+    }
     if (items.length === 1) {
-      navigateToRefund(order, items[0])
+      chooseItem(items[0])
       return
     }
     uni.showActionSheet({
       itemList: items.map(getRefundItemLabel),
       success(res) {
-        navigateToRefund(order, items[res.tapIndex])
+        chooseItem(items[res.tapIndex])
       },
     })
   } else if (key === 'rebuy') {
     // Re-add items to cart
     uni.showToast({ title: '已加入购物车', icon: 'none' })
   }
+}
+
+function chooseReceiveStatus(order, item) {
+  uni.showActionSheet({
+    itemList: ['未收到货', '已收到货'],
+    success(res) {
+      if (res.tapIndex === 0) {
+        navigateToRefund(order, item, 'not_received', 0)
+        return
+      }
+      uni.showActionSheet({
+        itemList: ['仅退款', '退货退款'],
+        success(typeRes) {
+          navigateToRefund(order, item, 'received', typeRes.tapIndex === 1 ? 1 : 0)
+        },
+      })
+    },
+  })
 }
 
 function goDetail(id) {
@@ -683,6 +765,42 @@ onUnmounted(() => {
   margin: -8rpx 0 14rpx;
   font-size: $mb-font-xs;
   color: $mb-color-primary;
+}
+
+.order-card__after-sale {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  padding: 14rpx 16rpx;
+  margin: -4rpx 0 14rpx;
+  border-radius: 12rpx;
+  background: rgba(13, 80, 213, 0.06);
+  border: 1rpx solid rgba(13, 80, 213, 0.12);
+}
+
+.order-card__after-sale-dot {
+  width: 10rpx;
+  height: 10rpx;
+  border-radius: 50%;
+  background: $mb-color-primary;
+  flex-shrink: 0;
+}
+
+.order-card__after-sale-text {
+  font-size: $mb-font-sm;
+  font-weight: 700;
+  color: $mb-color-primary;
+  flex-shrink: 0;
+}
+
+.order-card__after-sale-tip {
+  min-width: 0;
+  flex: 1;
+  font-size: $mb-font-xs;
+  color: $mb-color-text-secondary;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* --- Product item row -------------------------------------- */

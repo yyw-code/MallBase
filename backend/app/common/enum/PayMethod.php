@@ -5,8 +5,6 @@ namespace app\common\enum;
 
 /**
  * 支付方式枚举
- *
- * MVP 仅提供 Mock 支付，微信/支付宝值占位，真实渠道接入后在对应 Adapter 实现
  */
 class PayMethod
 {
@@ -16,13 +14,17 @@ class PayMethod
     /** 支付宝 */
     public const ALIPAY = 2;
 
-    /** Mock 测试支付（MVP 下单即视为已支付用） */
+    /** 余额支付 */
+    public const BALANCE = 3;
+
+    /** Mock 测试支付（历史数据展示用，不再作为客户端支付入口） */
     public const MOCK = 9;
 
     private const TEXTS = [
-        self::WECHAT => '微信支付',
-        self::ALIPAY => '支付宝',
-        self::MOCK   => 'Mock支付',
+        self::WECHAT  => '微信支付',
+        self::ALIPAY  => '支付宝',
+        self::BALANCE => '余额支付',
+        self::MOCK    => 'Mock支付',
     ];
 
     public static function textOf(int $method): string

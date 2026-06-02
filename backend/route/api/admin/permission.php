@@ -11,8 +11,8 @@ Route::group('auth/permission', function () {
     Route::get('info/:id', 'info')->name('SystemPermissionInfo')->option(['_alias' => '详情', '_desc' => '权限详情', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::post('create', 'create')->name('SystemPermissionCreate')->option(['_alias' => '创建', '_desc' => '创建权限', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::put('update/:id', 'update')->name('SystemPermissionUpdate')->option(['_alias' => '更新', '_desc' => '更新权限', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
-    Route::put('batchUpdate/:id', 'batchUpdate')->name('SystemPermissionBatchUpdate')->option(['_alias' => '批量更新', '_desc' => '批量更新字段', '_auth' => true]);
-    Route::delete('delete/:id', 'delete')->name('SystemPermissionDelete')->option(['_alias' => '删除', '_desc' => '删除权限', '_auth' => true]);
+    Route::put('batchUpdate/:id', 'batchUpdate')->name('SystemPermissionBatchUpdate')->option(['_alias' => '批量更新', '_desc' => '批量更新字段', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
+    Route::delete('delete/:id', 'delete')->name('SystemPermissionDelete')->option(['_alias' => '删除', '_desc' => '删除权限', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
 })->prefix('admin.auth.PermissionController/')
     ->name('SystemPermission')
     ->option([
