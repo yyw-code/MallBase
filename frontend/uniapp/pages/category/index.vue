@@ -2,8 +2,10 @@
 import { ref, computed } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { getCategoryTree } from '@/api/goods/category'
+import { useDecorateStore } from '@/store/decorate'
 
 // ---------- state ----------
+const decorateStore = useDecorateStore()
 const categoryTree = ref([])
 const activeIndex = ref(0)
 const loading = ref(true)
@@ -162,7 +164,11 @@ onLoad(() => {
 </script>
 
 <template>
-  <view class="page">
+  <view
+    class="page"
+    :class="[`theme-${decorateStore.resolvedThemeMode}`]"
+    :style="decorateStore.themeStyle"
+  >
     <mb-navbar title="分类" :back="false" />
 
     <!-- Loading skeleton -->
@@ -299,6 +305,7 @@ onLoad(() => {
         @action="fetchCategories"
       />
     </view>
+    <mb-custom-tabbar current="/pages/category/index" />
   </view>
 </template>
 

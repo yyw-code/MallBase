@@ -17,7 +17,11 @@
       <text class="mb-card__name">{{ goods.name }}</text>
       <text v-if="goods.subtitle" class="mb-card__sub">{{ goods.subtitle }}</text>
       <view class="mb-card__bottom">
-        <mb-price :value="goods.price" :size="mode === 'grid' ? 'md' : 'md'" color="var(--color-primary, #0d50d5)" />
+        <mb-price
+          :value="goods.price"
+          :size="mode === 'grid' ? 'md' : 'md'"
+          color="var(--color-price, #ff5a1f)"
+        />
         <text v-if="goods.original_price && Number(goods.original_price) > Number(goods.price)" class="mb-card__original">
           ¥{{ Number(goods.original_price).toFixed(0) }}
         </text>
@@ -60,6 +64,8 @@ function onImageError(error) {
 
 <style scoped>
 .mb-card {
+  width: 100%;
+  box-sizing: border-box;
   background: var(--color-bg, #ffffff);
   border-radius: var(--radius-lg, 20rpx);
   border: 1rpx solid var(--color-divider, #f0f2f5);
@@ -74,6 +80,7 @@ function onImageError(error) {
 .mb-card--list {
   display: flex;
   flex-direction: row;
+  align-items: stretch;
   padding: 20rpx;
   gap: 20rpx;
 }
@@ -112,6 +119,8 @@ function onImageError(error) {
   display: flex;
   flex-direction: column;
   flex: 1;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .mb-card--list .mb-card__info {
@@ -120,6 +129,7 @@ function onImageError(error) {
 }
 
 .mb-card__name {
+  max-width: 100%;
   font-size: 26rpx;
   font-weight: 600;
   color: var(--color-text, #191b23);
@@ -132,6 +142,7 @@ function onImageError(error) {
 }
 
 .mb-card__sub {
+  max-width: 100%;
   font-size: 22rpx;
   color: var(--color-text-tertiary, #737686);
   margin-top: 4rpx;
@@ -143,7 +154,9 @@ function onImageError(error) {
 .mb-card__bottom {
   display: flex;
   align-items: baseline;
+  flex-wrap: wrap;
   gap: 12rpx;
+  min-width: 0;
   margin-top: 12rpx;
 }
 

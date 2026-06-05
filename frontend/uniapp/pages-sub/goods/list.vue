@@ -184,9 +184,27 @@ const cartStore = useCartStore()
 
 // ---------- query params ----------
 const query = reactive({
+  brand_id: '',
   category_id: '',
+  ids: '',
+  is_hot: '',
+  is_new: '',
+  is_recommend: '',
   keyword: '',
+  sort_by: '',
+  tag_id: '',
+  tag_ids: '',
 })
+
+const queryValueKeys = [
+  'category_id',
+  'brand_id',
+  'ids',
+  'tag_id',
+  'tag_ids',
+  'keyword',
+]
+const queryFlagKeys = ['is_recommend', 'is_new', 'is_hot']
 
 // ---------- sort state ----------
 const sortOptions = [
@@ -214,12 +232,9 @@ const addingGoodsId = ref(null)
 
 // ---------- lifecycle ----------
 onLoad((params) => {
-  if (params?.category_id) {
-    query.category_id = params.category_id
-  }
-  if (params?.keyword) {
-    query.keyword = params.keyword
-  }
+  syncQueryFromParams(params || {})
+  applyInitialSort(query.sort_by)
+  applyInitialFilter()
   fetchGoods(true)
 })
 
@@ -251,16 +266,20 @@ async function fetchGoods(reset) {
     limit,
   }
 
-  if (query.category_id) {
-    params.category_id = query.category_id
-  }
-  if (query.keyword) {
-    params.keyword = query.keyword
-  }
+  queryValueKeys.forEach((key) => {
+    if (query[key]) {
+      params[key] = query[key]
+    }
+  })
+  queryFlagKeys.forEach((key) => {
+    if (isEnabledFlag(query[key])) {
+      params[key] = 1
+    }
+  })
   if (activeFilter.value) {
     params[activeFilter.value] = 1
   }
-  const sortBy = getSortBy()
+  const sortBy = getSortBy() || query.sort_by
   if (sortBy) {
     params.sort_by = sortBy
   }
@@ -294,6 +313,7 @@ async function fetchGoods(reset) {
 
 // ---------- sort ----------
 function onSortTap(item) {
+  query.sort_by = ''
   if (item.key === 'price') {
     if (activeSortKey.value === 'price') {
       sortOrder.value = sortOrder.value === 'asc' ? 'desc' : 'asc'
@@ -318,6 +338,48 @@ function getSortBy() {
   return ''
 }
 
+function syncQueryFromParams(params) {
+  const queryKeys = [...queryValueKeys, ...queryFlagKeys, 'sort_by']
+  queryKeys.forEach((key) => {
+    if (params?.[key] !== undefined && params[key] !== null) {
+      query[key] = String(params[key])
+    }
+  })
+}
+
+function applyInitialSort(sortBy) {
+  if (sortBy === 'sales_desc') {
+    activeSortKey.value = 'sales'
+    sortField.value = 'sales'
+    sortOrder.value = 'desc'
+    return
+  }
+  if (sortBy === 'price_asc' || sortBy === 'price_desc') {
+    activeSortKey.value = 'price'
+    sortField.value = 'price'
+    sortOrder.value = sortBy === 'price_desc' ? 'desc' : 'asc'
+    return
+  }
+  activeSortKey.value = 'default'
+  sortField.value = ''
+  sortOrder.value = ''
+}
+
+function applyInitialFilter() {
+  activeFilter.value =
+    queryFlagKeys.find((key) => isEnabledFlag(query[key])) || ''
+}
+
+function isEnabledFlag(value) {
+  return value === true || value === 1 || value === '1' || value === 'true'
+}
+
+function clearQueryFlags() {
+  queryFlagKeys.forEach((key) => {
+    query[key] = ''
+  })
+}
+
 // ---------- filters ----------
 function openFilterSheet() {
   const nextViewText = viewMode.value === 'grid' ? '切换列表展示' : '切换双列展示'
@@ -340,7 +402,11 @@ function openFilterSheet() {
         return
       }
 
+      clearQueryFlags()
       activeFilter.value = option.filter
+      if (activeFilter.value) {
+        query[activeFilter.value] = '1'
+      }
       fetchGoods(true)
     },
   })
@@ -428,8 +494,16 @@ function goSearch() {
 
 function buildCurrentQuery() {
   const params = []
-  if (query.category_id) params.push(`category_id=${encodeURIComponent(query.category_id)}`)
-  if (query.keyword) params.push(`keyword=${encodeURIComponent(query.keyword)}`)
+  const queryKeys = [...queryValueKeys, ...queryFlagKeys]
+  queryKeys.forEach((key) => {
+    if (query[key]) {
+      params.push(`${key}=${encodeURIComponent(query[key])}`)
+    }
+  })
+  const sortBy = getSortBy() || query.sort_by
+  if (sortBy) {
+    params.push(`sort_by=${encodeURIComponent(sortBy)}`)
+  }
   return params.length > 0 ? `?${params.join('&')}` : ''
 }
 </script>

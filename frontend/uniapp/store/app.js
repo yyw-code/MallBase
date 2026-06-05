@@ -39,11 +39,6 @@ export const useAppStore = defineStore('app', {
         const data = await get('/client/api/setting/basic')
         this.siteConfig = data
         updateH5DocumentMeta(data)
-        if (data.client_primary_color) {
-          this.theme.colorPrimary = data.client_primary_color
-          uni.setStorageSync('mb_theme', this.theme)
-          applyTheme(this.theme)
-        }
       } catch (e) { /* non-blocking */ }
     }
   }

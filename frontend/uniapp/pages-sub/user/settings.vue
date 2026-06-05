@@ -1,5 +1,9 @@
 <template>
-  <view class="page">
+  <view
+    class="page"
+    :class="[`theme-${decorateStore.resolvedThemeMode}`]"
+    :style="decorateStore.themeStyle"
+  >
     <mb-navbar title="设置" />
 
     <!-- User card -->
@@ -35,7 +39,7 @@
         </view>
       </view>
 
-      <view class="cell" @tap="toggleTheme">
+      <view v-if="decorateStore.allowUserThemeSelect" class="cell" @tap="toggleTheme">
         <text class="cell__label">外观设置</text>
         <view class="cell__right">
           <text class="cell__value">{{ themeLabel }}</text>
@@ -100,9 +104,11 @@ import { ref, computed } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { useUserStore } from '@/store/user'
 import { useAppStore } from '@/store/app'
+import { useDecorateStore } from '@/store/decorate'
 
 const userStore = useUserStore()
 const appStore = useAppStore()
+const decorateStore = useDecorateStore()
 
 const splashRemoteEnabled = computed(() => {
   const v = appStore.siteConfig?.client_splash_enabled
@@ -112,28 +118,30 @@ const splashRemoteEnabled = computed(() => {
 
 const logoutLoading = ref(false)
 const cacheSize = ref('0 KB')
-const themeMode = ref('system')
 const splashEnabled = ref(true)
 
-const themeOptions = ['light', 'dark', 'system']
-const themeLabelMap = {
-  light: '浅色',
-  dark: '深色',
-  system: '跟随系统',
-}
+const themeOptions = computed(() => {
+  const list = [
+    { mode: 'system', label: '跟随系统' },
+    { mode: 'light', label: '浅色' },
+    { mode: 'dark', label: '深色' },
+  ]
+  if (decorateStore.themes?.custom) {
+    list.push({ mode: 'custom', label: '自定义' })
+  }
+  return list
+})
 
 const isLoggedIn = computed(() => userStore.isLoggedIn)
 const nickname = computed(() => userStore.userInfo?.nickname || '')
 const avatar = computed(() => userStore.userInfo?.avatar_full_url || userStore.userInfo?.avatar || '')
 const uid = computed(() => userStore.userInfo?.id || '-----')
-const themeLabel = computed(() => themeLabelMap[themeMode.value])
+const themeLabel = computed(() => {
+  return themeOptions.value.find((item) => item.mode === decorateStore.themeMode)?.label || '跟随系统'
+})
 
 onShow(() => {
   calculateCacheSize()
-  const saved = uni.getStorageSync('mb_theme_mode')
-  if (saved && themeOptions.includes(saved)) {
-    themeMode.value = saved
-  }
   splashEnabled.value = uni.getStorageSync('mb_splash_enabled') !== false
 })
 
@@ -159,11 +167,19 @@ function calculateCacheSize() {
 }
 
 function toggleTheme() {
-  const idx = themeOptions.indexOf(themeMode.value)
-  const next = themeOptions[(idx + 1) % themeOptions.length]
-  themeMode.value = next
-  uni.setStorageSync('mb_theme_mode', next)
-  uni.showToast({ title: `已切换为${themeLabelMap[next]}`, icon: 'none' })
+  if (!decorateStore.allowUserThemeSelect) {
+    uni.showToast({ title: '当前不允许切换主题', icon: 'none' })
+    return
+  }
+  uni.showActionSheet({
+    itemList: themeOptions.value.map((item) => item.label),
+    success(res) {
+      const selected = themeOptions.value[res.tapIndex]
+      if (!selected) return
+      decorateStore.setThemeMode(selected.mode)
+      uni.showToast({ title: `已切换为${selected.label}`, icon: 'none' })
+    },
+  })
 }
 
 function clearCache() {

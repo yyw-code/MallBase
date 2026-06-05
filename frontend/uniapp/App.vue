@@ -1,14 +1,17 @@
 <script setup>
 import { onLaunch } from '@dcloudio/uni-app'
 import { useAppStore } from '@/store/app'
+import { useDecorateStore } from '@/store/decorate'
 import { useUserStore } from '@/store/user'
 import { setupRouterGuard } from '@/utils/router'
 
 onLaunch(() => {
   const appStore = useAppStore()
+  const decorateStore = useDecorateStore()
   const userStore = useUserStore()
   userStore.restoreToken()
   appStore.initTheme()
+  decorateStore.init()
   appStore.fetchBasicConfig()
   setupRouterGuard()
 })

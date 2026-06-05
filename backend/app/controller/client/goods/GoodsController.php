@@ -22,12 +22,13 @@ class GoodsController extends BaseController
     /**
      * 商品列表
      *
-     * 支持参数:keyword、category_id、brand_id、is_recommend/is_new/is_hot、sort_by
+     * 支持参数:keyword、category_id、brand_id、ids、tag_id/tag_ids、is_recommend/is_new/is_hot、sort_by
      */
     public function list()
     {
         $filter = $this->request->param([
             'keyword', 'category_id', 'brand_id',
+            'ids', 'tag_id', 'tag_ids',
             'is_recommend', 'is_new', 'is_hot', 'sort_by',
         ]);
 
