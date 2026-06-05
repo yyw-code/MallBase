@@ -213,7 +213,18 @@ const toFullUrl = (path: string) => {
   if (!path) return '';
   if (path.startsWith('http://') || path.startsWith('https://')) return path;
   const base = import.meta.env.VITE_GLOB_API_URL || '';
-  return `${base}${path}`;
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  if (
+    normalizedPath.startsWith('/uploads/') ||
+    normalizedPath.startsWith('/static/')
+  ) {
+    try {
+      return `${new URL(base, window.location.origin).origin}${normalizedPath}`;
+    } catch {
+      return normalizedPath;
+    }
+  }
+  return `${base.replace(/\/$/, '')}${normalizedPath}`;
 };
 
 // ==================== 上传配置 ====================
@@ -250,7 +261,8 @@ const buildFileList = (): UploadFile[] => {
   // 私有/证书模式：不把 url 写到 UploadFile 上，避免 antd 渲染成可点击链接（链接 404）
   const resolveItemUrl = (item: FileInfo): string | undefined => {
     if (props.secure) return undefined;
-    return item.full_url || item.url;
+    const url = item.full_url || item.url;
+    return url ? toFullUrl(url) : undefined;
   };
 
   if (Array.isArray(val)) {
@@ -278,7 +290,7 @@ const buildFileList = (): UploadFile[] => {
       uid: '0',
       name: extractFileName(val),
       status: 'done' as const,
-      url: props.secure ? undefined : val,
+      url: props.secure ? undefined : toFullUrl(val),
     },
   ];
 };

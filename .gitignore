@@ -26,3 +26,7 @@ deploy/upload-frontend.local.sh
 deploy/install/data/upgrade/
 
 .playwright-cli/
+.superpowers/
+
+# 内部方案草稿，不作为公开文档提交
+docs/superpowers/
