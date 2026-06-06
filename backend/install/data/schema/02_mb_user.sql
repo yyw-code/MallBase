@@ -78,13 +78,6 @@ CREATE TABLE `mb_user_group` (
   KEY `idx_status` (`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户分组表';
 
--- 插入默认分组数据
-INSERT INTO `mb_user_group` (`name`, `code`, `description`, `color`, `sort`) VALUES
-('VIP用户', 'vip', '高价值用户群体', 'gold', 1),
-('新用户', 'new', '注册7天内用户', 'blue', 2),
-('活跃用户', 'active', '7天内有登录', 'green', 3),
-('流失用户', 'churn', '30天未登录', 'red', 4);
-
 -- -----------------------------
 -- 三、用户标签表
 -- -----------------------------
@@ -100,13 +93,6 @@ CREATE TABLE `mb_user_tag` (
   PRIMARY KEY (`id`),
   KEY `idx_status` (`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户标签表';
-
--- 插入默认标签数据
-INSERT INTO `mb_user_tag` (`name`, `color`, `sort`) VALUES
-('高消费', 'red', 1),
-('价格敏感', 'orange', 2),
-('高频购买', 'green', 3),
-('潜在流失', 'volcano', 4);
 
 -- -----------------------------
 -- 四、用户-分组关联表

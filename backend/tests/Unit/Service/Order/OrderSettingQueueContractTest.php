@@ -68,7 +68,7 @@ final class OrderSettingQueueContractTest extends TestCase
 
     public function testInstallSeedContainsOrderAndRefundDefaults(): void
     {
-        $schema = file_get_contents(__DIR__ . '/../../../../../deploy/install/data/schema/03_mb_setting.sql');
+        $schema = file_get_contents(__DIR__ . '/../../../../../backend/install/data/schema/03_mb_setting.sql');
         $this->assertIsString($schema);
 
         foreach ([

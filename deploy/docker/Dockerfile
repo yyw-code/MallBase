@@ -40,6 +40,7 @@ RUN composer install --no-dev --no-scripts --no-autoloader --prefer-dist
 
 # 应用代码
 COPY backend/ .
+COPY .version /.version
 RUN composer dump-autoload --optimize --no-dev \
     && mkdir -p runtime public/uploads \
     && chmod -R 777 runtime

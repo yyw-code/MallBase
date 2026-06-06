@@ -93,6 +93,15 @@ final class SettingServicePermissionRepairPlanTest extends TestCase
         $this->assertSame(['SystemSetting', 'ClientConfig'], array_column($ordered, 'code'));
     }
 
+    public function testPermissionRebuildDoesNotFailWhenCacheClearFails(): void
+    {
+        $source = (string) file_get_contents(dirname(__DIR__, 3) . '/app/service/admin/setting/SettingService.php');
+
+        $this->assertStringContainsString('$this->clearRebuildPermissionCacheSafely();', $source);
+        $this->assertStringContainsString('private function clearRebuildPermissionCacheSafely(): void', $source);
+        $this->assertStringContainsString('Log::warning', $source);
+    }
+
     /**
      * @return array<string, int|string>
      */

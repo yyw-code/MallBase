@@ -14,7 +14,7 @@ final class DemoAssetReferenceTest extends TestCase
         $missing = [];
 
         foreach (['schema', 'demo'] as $dirName) {
-            $files = glob($root . '/deploy/install/data/' . $dirName . '/*.sql') ?: [];
+            $files = glob($root . '/backend/install/data/' . $dirName . '/*.sql') ?: [];
             foreach ($files as $file) {
                 $sql = file_get_contents($file);
                 $this->assertIsString($sql);
@@ -22,7 +22,7 @@ final class DemoAssetReferenceTest extends TestCase
                 preg_match_all("#/static/demo/[^'\"\\\\\]]+#", $sql, $matches);
                 foreach (array_unique($matches[0] ?? []) as $path) {
                     $relativePath = str_replace('/static/demo/', '', $path);
-                    if (!is_file($root . '/deploy/install/static/demo/' . $relativePath)) {
+                    if (!is_file($root . '/backend/install/static/demo/' . $relativePath)) {
                         $missing[] = str_replace($root . '/', '', $file) . ' -> ' . $path;
                     }
                 }
@@ -35,7 +35,7 @@ final class DemoAssetReferenceTest extends TestCase
     public function testDemoHomeBannersAreValidJsonArray(): void
     {
         $root = dirname(__DIR__, 4);
-        $sql = file_get_contents($root . '/deploy/install/data/demo/02_demo_goods.sql');
+        $sql = file_get_contents($root . '/backend/install/data/demo/02_demo_goods.sql');
 
         $this->assertIsString($sql);
         $matched = preg_match(

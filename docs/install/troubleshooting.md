@@ -9,13 +9,13 @@
 
 原因：
 
-- 已经安装过，`deploy/install/install.lock` 已存在
+- 已经安装过，`backend/runtime/install/install.lock` 已存在
 - 浏览器缓存了旧页面
 
 处理：
 
 ```bash
-rm -f deploy/install/install.lock
+rm -f backend/runtime/install/install.lock
 docker compose -f docker-compose.dev.yml restart backend
 docker compose restart
 ```
@@ -35,30 +35,51 @@ docker compose -f docker-compose.dev.yml restart backend
 docker compose restart
 ```
 
+### 同步系统设置菜单时报 Redis read error
+
+错误示例：
+
+```text
+系统设置菜单同步失败：read error on connection to redis:6379
+```
+
+原因：
+
+- 安装流程已经按表单校验过 Redis，但当前 Swoole 进程内的缓存连接可能仍持有旧连接。
+- 该错误通常发生在重建设置菜单权限后的缓存清理阶段；权限数据以数据库写入为准，缓存清理失败不应阻断首装。
+
+处理：
+
+- 更新到包含该修复的版本后重新构建并启动后端容器。
+- 如果本次首装数据可以丢弃，按清理文档清空本次数据库、Redis DB 和安装锁后重新安装，这是最稳妥的处理方式。
+- 如果必须保留已经导入的数据，不要直接重复点击安装；此时数据库已不再是空库，需要按实际完成步骤补执行后续安装收尾。
+
 ## Docker 启动与依赖服务
 
-### 手动执行 `install:auto` 失败
+### 本地手动执行 `install:auto` 失败
 
 先看日志：
 
 ```bash
-PREFIX=${MALLBASE_CONTAINER_PREFIX:-mallbase}
-docker logs ${PREFIX}-ensure-env
-docker logs ${PREFIX}-dev
+(cd backend && php think install:auto)
 ```
 
 常见原因：
 
-- 缺少关键 env 变量
+- 项目根 `.env` 缺少关键变量
 - MySQL 账号密码不匹配
+- 目标数据库不是空库
+- Redis DB 不是空 DB
+- `SITE_URL` 未配置
 - SQL 导入失败
 
-修复后重跑：
+修复后在项目根目录重跑：
 
 ```bash
-PREFIX=${MALLBASE_CONTAINER_PREFIX:-mallbase}
-docker exec ${PREFIX}-dev php think install:auto
+(cd backend && php think install:auto)
 ```
+
+完整步骤见 [cli-install.md](./cli-install.md)。
 
 ### `frontend-build` 看起来像卡住
 
@@ -89,6 +110,8 @@ docker logs ${PREFIX}-frontend-build
 docker compose -f docker-compose.dev.yml run --rm --no-deps backend composer install
 docker compose -f docker-compose.dev.yml up -d --no-deps backend
 ```
+
+这是开发 Compose 场景，使用普通 `composer install` 即可；不要在这里加 `--no-dev`，否则容器内会缺少本地测试和调试依赖。生产 Docker 镜像构建时已经自动安装生产依赖并优化自动加载。
 
 如果你直接执行 `up -d --no-deps backend`，当前开发镜像入口脚本也会自动补一次 `composer install`。首次启动时间较长属于正常现象。
 

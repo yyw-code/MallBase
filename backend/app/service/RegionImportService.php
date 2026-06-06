@@ -19,9 +19,10 @@ class RegionImportService extends BaseService
     /**
      * 从 JSON 文件导入地区数据
      *
+     * @param callable(array{processed:int,total:int,imported:int,updated:int,percent:int}):void|null $progress
      * @throws \RuntimeException
      */
-    public function importFromFile(string $file, bool $truncate = false): int
+    public function importFromFile(string $file, bool $truncate = false, ?callable $progress = null): int
     {
         if (!is_file($file)) {
             throw new \RuntimeException("地区数据文件不存在：{$file}");
@@ -33,13 +34,52 @@ class RegionImportService extends BaseService
             throw new \RuntimeException('地区数据文件格式错误');
         }
 
-        return $this->transaction(function () use ($data, $truncate): int {
+        $total = $this->countNodes($data);
+
+        return $this->transaction(function () use ($data, $truncate, $progress, $total): int {
             if ($truncate) {
                 $this->model()->whereRaw('1=1')->delete(true);
             }
 
             $imported = 0;
-            $this->importNodes($data, 0, [], 1, $imported);
+            $updated = 0;
+            $processed = 0;
+            $lastProgressAt = 0.0;
+            $emitProgress = function (bool $force = false) use (
+                $progress,
+                $total,
+                &$processed,
+                &$imported,
+                &$updated,
+                &$lastProgressAt
+            ): void {
+                if ($progress === null) {
+                    return;
+                }
+
+                $now = microtime(true);
+                if (
+                    !$force
+                    && $processed < $total
+                    && $processed % 500 !== 0
+                    && ($now - $lastProgressAt) < 1.0
+                ) {
+                    return;
+                }
+
+                $lastProgressAt = $now;
+                $progress([
+                    'processed' => $processed,
+                    'total'     => $total,
+                    'imported'  => $imported,
+                    'updated'   => $updated,
+                    'percent'   => $total > 0 ? (int) floor($processed * 100 / $total) : 100,
+                ]);
+            };
+
+            $emitProgress(true);
+            $this->importNodes($data, 0, [], 1, $imported, $updated, $processed, $total, $emitProgress);
+            $emitProgress(true);
 
             return $imported;
         });
@@ -49,8 +89,17 @@ class RegionImportService extends BaseService
      * @param array<int, array<string, mixed>> $nodes
      * @param array<int, string> $pathCodes
      */
-    protected function importNodes(array $nodes, int $parentId, array $pathCodes, int $level, int &$imported): void
-    {
+    protected function importNodes(
+        array $nodes,
+        int $parentId,
+        array $pathCodes,
+        int $level,
+        int &$imported,
+        int &$updated,
+        int &$processed,
+        int $total,
+        callable $progress
+    ): void {
         foreach ($nodes as $index => $node) {
             $code = (string) ($node['code'] ?? '');
             $name = (string) ($node['name'] ?? '');
@@ -73,6 +122,7 @@ class RegionImportService extends BaseService
             if ($exists !== null) {
                 $this->model()->where('id', (int) $exists->id)->update($record);
                 $id = (int) $exists->id;
+                $updated++;
             } else {
                 /** @var Region $created */
                 $created = $this->model()->create($record);
@@ -80,10 +130,47 @@ class RegionImportService extends BaseService
                 $imported++;
             }
 
+            $processed++;
+            $progress($processed >= $total);
+
             $children = $node['children'] ?? [];
             if (is_array($children) && $children !== []) {
-                $this->importNodes($children, $id, $currentPathCodes, $level + 1, $imported);
+                $this->importNodes(
+                    $children,
+                    $id,
+                    $currentPathCodes,
+                    $level + 1,
+                    $imported,
+                    $updated,
+                    $processed,
+                    $total,
+                    $progress
+                );
             }
         }
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $nodes
+     */
+    private function countNodes(array $nodes): int
+    {
+        $count = 0;
+        foreach ($nodes as $node) {
+            $code = (string) ($node['code'] ?? '');
+            $name = (string) ($node['name'] ?? '');
+            if ($code === '' || $name === '') {
+                continue;
+            }
+
+            $count++;
+
+            $children = $node['children'] ?? [];
+            if (is_array($children) && $children !== []) {
+                $count += $this->countNodes($children);
+            }
+        }
+
+        return $count;
     }
 }

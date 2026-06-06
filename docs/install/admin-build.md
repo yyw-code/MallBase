@@ -68,7 +68,7 @@ ls backend/public/admin/index.html
 
 ## 相关文档
 
-- [commands.md](./commands.md) —— 前端构建相关的零散命令、临时调试容器
+- [commands-frontend.md](./commands-frontend.md) —— 前端构建相关命令、临时调试容器
 - [docker-fullstack.md](./docker-fullstack.md) —— 方式三的完整步骤（含前端打包环节）
 - [upload-frontend.md](./upload-frontend.md) —— 把产物上传到服务器
 - [uniapp-build.md](./uniapp-build.md) —— UniApp H5 打包

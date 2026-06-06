@@ -1,61 +1,148 @@
-# Docker 开发全套清理脚本说明
+# 分级清理脚本说明
 
-本文档说明 `deploy/docker/cleanup-dev.sh` 的作用与用法。该脚本用于把「方式三：Docker 开发（全套）」产生的本地状态清理干净，回到全新仓库的状态。
+本文档说明 `deploy/docker/cleanup-dev.sh` 的作用与用法。脚本按清理范围分成四个等级，从基础安装运行态到 Docker 镜像逐级扩大，适合本地开发、重新测试首装和清理构建产物。
 
-> ⚠️ 这是破坏性操作：会删除本地 `.env`、`data/`（MySQL / Redis 数据）等文件。执行前请确认没有需要保留的数据。
-
-## 适用场景
-
-- 方式三环境装坏了、想从头再来
-- 切换数据库账号或配置后想清掉旧数据重新安装
-- 释放磁盘空间
+> 注意：`--docker`、`--images`、`--all-images` 会删除本地数据库、Redis 数据或镜像状态。生产服务器不建议直接使用本脚本清理 Docker 资源。
 
 ## 脚本位置
 
 - 脚本：[`deploy/docker/cleanup-dev.sh`](../../deploy/docker/cleanup-dev.sh)
 
-## 用法
+## 清理等级
+
+| 等级 | 命令 | 包含内容 | 适合安装方式 |
+|------|------|----------|--------------|
+| 基础清理 | `sh deploy/docker/cleanup-dev.sh` 或 `--basic` | 安装锁、`.env`、`backend/.env`、演示静态文件 | 方式一、方式二、方式三、本地构建后的方式四 |
+| 前端清理 | `sh deploy/docker/cleanup-dev.sh --frontend` | 基础清理 + Admin / UniApp 依赖、构建产物和发布产物 | 方式一、方式二、方式三、本地构建后的方式四 |
+| Docker 状态清理 | `sh deploy/docker/cleanup-dev.sh --docker` | 前端清理 + 开发容器、网络、卷、`data/`、`backend/vendor` | 方式二、方式三 |
+| 项目镜像清理 | `sh deploy/docker/cleanup-dev.sh --images` | Docker 状态清理 + `mallbase-backend:dev` | 方式二、方式三 |
+
+`--all-images` 是额外清理档，包含 `--images`，并删除 MySQL、Redis、Node、Alpine 等共享基础镜像。它可能影响本机其他项目，不确定时不要使用。
+
+一次只指定一个清理等级；如果同时传入多个等级参数，脚本会拒绝执行。
+
+## 各等级清理内容
+
+### 1. 基础清理
 
 ```bash
 sh deploy/docker/cleanup-dev.sh
 ```
 
-连共享基础镜像一起删：
+等同于：
+
+```bash
+sh deploy/docker/cleanup-dev.sh --basic
+```
+
+清理内容：
+
+- `.env`
+- `backend/.env`
+- `backend/runtime/install/install.lock`
+- `backend/public/static/demo`
+
+适用场景：
+
+- 重新走安装流程，但暂时不清数据库和 Redis
+- 清掉安装生成的运行态配置
+- 清掉安装流程移动或生成的演示静态文件
+
+### 2. 前端清理
+
+```bash
+sh deploy/docker/cleanup-dev.sh --frontend
+```
+
+包含基础清理，并额外删除：
+
+- `backend/public/admin`
+- `backend/public/client`
+- `frontend/admin/node_modules`
+- `frontend/admin/apps/web-antd/node_modules`
+- `frontend/admin/apps/web-antd/dist`
+- `frontend/uniapp/node_modules`
+- `frontend/uniapp/dist`
+
+适用场景：
+
+- 重新打包 Admin 后台前端
+- 重新打包 UniApp H5
+- 排查前端构建产物、发布产物或依赖缓存问题
+
+### 3. Docker 状态清理
+
+```bash
+sh deploy/docker/cleanup-dev.sh --docker
+```
+
+包含前端清理，并额外处理：
+
+- `docker-compose.dev.yml` 创建的开发容器、网络、卷
+- `docker-compose.frontend-build.yml` 创建的前端打包容器和卷
+- `docker-compose.uniapp-build.yml` 创建的 UniApp 打包容器和卷
+- 可能残留的开发容器
+- `data/`
+- `backend/vendor`
+
+适用场景：
+
+- 方式三环境需要完整重置
+- MySQL / Redis 本地数据需要删除后重新安装
+- Docker 开发容器、卷或依赖状态异常
+
+### 4. 项目镜像清理
+
+```bash
+sh deploy/docker/cleanup-dev.sh --images
+```
+
+包含 Docker 状态清理，并额外删除：
+
+- `mallbase-backend:dev`
+
+适用场景：
+
+- Dockerfile 或后端依赖构建状态异常
+- 希望下次重新构建本项目后端镜像
+
+### 5. 共享基础镜像清理
 
 ```bash
 sh deploy/docker/cleanup-dev.sh --all-images
 ```
 
-## 默认清理内容
-
-1. `docker-compose.dev.yml`、`docker-compose.frontend-build.yml` 创建的容器 / 网络 / 卷（含匿名卷），以及 orphan 容器
-2. 兜底删除可能残留的容器（默认前缀为 `mallbase`；设置 `MALLBASE_CONTAINER_PREFIX` 后按对应前缀清理）
-3. 本项目构建镜像 `mallbase-backend:dev`
-4. 宿主机 bind mount 生成的文件：
-   - `data/`（MySQL / Redis 数据目录）
-   - `.env`、`backend/.env`
-   - `backend/vendor`
-   - `deploy/install/install.lock`
-   - `backend/public/admin`
-   - `frontend/admin/node_modules`
-   - `frontend/admin/apps/web-antd/node_modules`
-   - `frontend/admin/apps/web-antd/dist`
-
-## `--all-images` 额外清理
-
-额外删除以下共享基础镜像：
+包含项目镜像清理，并额外删除：
 
 - `mysql:8.0`
 - `redis:7-alpine`
 - `node:20-alpine`
 - `alpine:3.19`
 
-注意：这些镜像可能被本机其他项目使用，删除后下次还要重新拉取。不确定就不要加这个参数。
+这些镜像可能被本机其他项目使用，删除后下次还要重新拉取。
+
+## 对应安装方式
+
+| 安装方式 | 推荐清理等级 | 说明 |
+|----------|--------------|------|
+| 方式一：手动安装（无 Docker） | `--basic`、`--frontend` | 不涉及 Docker 容器；数据库和 Redis 需要按实际部署单独处理 |
+| 方式二：Docker 开发（仅后端） | `--basic`、`--frontend`、`--docker`、`--images` | `--docker` 会删除后端开发容器和本地生成文件，不会清理外部 MySQL / Redis |
+| 方式三：Docker 开发（全套） | 四个等级都适用 | `--docker` 会删除本地 `data/`，相当于清空开发 MySQL / Redis 数据 |
+| 方式四：Docker 生产 | 本地构建机可用 `--basic`、`--frontend` | 生产服务器上的容器、卷和数据不要用本脚本清理，需按部署方案单独确认 |
+
+## 查看帮助
+
+```bash
+sh deploy/docker/cleanup-dev.sh --help
+```
 
 ## 不想用脚本时的等价手动命令
 
-见 [commands.md 的「删除与清理」](./commands.md#删除与清理)，里面有分步的 `docker compose down -v`、`docker rm -f`、`rm -rf` 等命令，可以按需只清一部分。
+见 [commands-cleanup.md](./commands-cleanup.md)，里面有分步的 `docker compose down -v`、`docker rm -f`、`rm -rf` 等命令，可以按需只清一部分。
 
 ## 清理后如何重新开始
 
-清理完按 [docker-fullstack.md](./docker-fullstack.md) 从头执行方式三的安装步骤即可。
+- 方式一：回到 [manual.md](./manual.md) 的安装步骤，重新生成 `backend/.env` 并启动 Swoole。
+- 方式二：回到 [docker-backend-only.md](./docker-backend-only.md) 重新启动后端容器。
+- 方式三：回到 [docker-fullstack.md](./docker-fullstack.md) 从头启动开发全套。
+- 方式四：本地重新构建前端后，按 [upload-frontend.md](./upload-frontend.md) 上传产物。

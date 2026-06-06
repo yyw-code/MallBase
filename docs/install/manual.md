@@ -134,6 +134,17 @@ cd mall-base/backend
 composer install --no-dev --optimize-autoloader
 ```
 
+这里是服务器手动部署场景，建议保留 `--no-dev --optimize-autoloader`：
+
+- `--no-dev` 不安装测试、调试、代码检查等开发依赖，减少生产环境依赖体积。
+- `--optimize-autoloader` 生成优化后的自动加载映射，适合生产运行。
+
+如果是在本地开发或需要跑后端测试，请改用：
+
+```bash
+composer install
+```
+
 ### 6. 构建前端
 
 ```bash
@@ -200,6 +211,8 @@ php think swoole
 4. 创建管理员账号
 5. 可选导入演示数据
 
+如果本地安装页无法正常提交，也可以按 [cli-install.md](./cli-install.md) 使用 `php think install:auto` 执行同一套安装主流程。
+
 ### 11. 重启 Swoole
 
 安装向导会生成 `backend/.env`，必须重启 Swoole 才能加载新配置：
@@ -226,6 +239,6 @@ ls /var/www/mallbase/admin/index.html
 
 ## 常见下一步
 
-- 查看常用命令集合：[commands.md](./commands.md)
+- 查看命令导航：[commands.md](./commands.md)
 - 查看常见错误：[troubleshooting.md](./troubleshooting.md)
 - 调整反向代理：[nginx-reverse-proxy.md](./nginx-reverse-proxy.md)

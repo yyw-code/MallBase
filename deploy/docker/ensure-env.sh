@@ -25,8 +25,8 @@ ROOT_TPL="${WORKDIR}/deploy/docker/.example.env"
 PLACEHOLDER="please-change-or-leave-for-random"
 BACKEND_HEADER_1="# 由 Docker 开发全套模式自动生成，请勿手动修改。"
 BACKEND_HEADER_2="# 唯一主配置源：项目根目录 /.env"
-ROOT_TO_BACKEND_KEYS="SWOOLE_HTTP_PORT SWOOLE_WORKER_NUM DB_NAME DB_USER DB_PASS SITE_URL"
-ROOT_INIT_FROM_BACKEND_KEYS="SWOOLE_HTTP_PORT SWOOLE_WORKER_NUM DB_NAME DB_USER DB_PASS"
+ROOT_TO_BACKEND_KEYS="SWOOLE_HTTP_PORT SWOOLE_WORKER_NUM DB_HOST DB_PORT DB_NAME DB_USER DB_PASS REDIS_HOST REDIS_PORT REDIS_CACHE_DB REDIS_PASSWORD CACHE_DRIVER SITE_URL"
+ROOT_INIT_FROM_BACKEND_KEYS="SWOOLE_HTTP_PORT SWOOLE_WORKER_NUM DB_HOST DB_PORT DB_NAME DB_USER DB_PASS REDIS_HOST REDIS_PORT REDIS_CACHE_DB REDIS_PASSWORD CACHE_DRIVER"
 
 rand24() { LC_ALL=C od -An -N12 -tx1 /dev/urandom | tr -d ' \n'; }
 rand64() { LC_ALL=C od -An -N32 -tx1 /dev/urandom | tr -d ' \n'; }
@@ -101,6 +101,19 @@ randomize_root_if_placeholder() {
     fi
 }
 
+migrate_legacy_redis_port() {
+    if has_key "$ROOT_ENV" "REDIS_HOST_PORT"; then
+        return 0
+    fi
+
+    legacy_port=$(get_value "$ROOT_ENV" "REDIS_PORT")
+    [ -n "$legacy_port" ] || return 0
+
+    set_value "$ROOT_ENV" "REDIS_HOST_PORT" "$legacy_port"
+    set_value "$ROOT_ENV" "REDIS_PORT" "6379"
+    echo ">>> [ensure-env] 检测到旧 REDIS_PORT 写法，已迁移为 REDIS_HOST_PORT=${legacy_port}，REDIS_PORT=6379"
+}
+
 rebuild_backend_env() {
     tmp_env=$(mktemp)
     cp "$BACKEND_TPL" "$tmp_env"
@@ -162,6 +175,7 @@ if [ ! -f "$ROOT_ENV" ]; then
     sync_root_from_existing_backend
 fi
 
+migrate_legacy_redis_port
 fill_missing_from_template "$ROOT_ENV" "$ROOT_TPL"
 randomize_root_if_placeholder "DB_PASS" "$(rand24)"
 randomize_root_if_placeholder "MYSQL_ROOT_PASSWORD" "$(rand24)"

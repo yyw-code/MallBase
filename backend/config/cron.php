@@ -1,11 +1,6 @@
 <?php
 
-$projectRoot = dirname(rtrim(root_path(), DIRECTORY_SEPARATOR));
-$installLockPath = $projectRoot . DIRECTORY_SEPARATOR . 'deploy'
-    . DIRECTORY_SEPARATOR . 'install' . DIRECTORY_SEPARATOR . 'install.lock';
-if (!is_dir(dirname($installLockPath))) {
-    $installLockPath = root_path() . 'install' . DIRECTORY_SEPARATOR . 'install.lock';
-}
+$installLockPath = runtime_path() . 'install' . DIRECTORY_SEPARATOR . 'install.lock';
 $isInstalled = is_file($installLockPath);
 $cronEnabled = filter_var(env('CRON_ENABLE', false), FILTER_VALIDATE_BOOLEAN);
 

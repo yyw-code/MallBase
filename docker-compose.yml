@@ -1,8 +1,9 @@
 # ==========================================
 # 生产环境：单后端容器
 #
-# 配置源：构建时 backend/.env（镜像内 /app/.env）
-# 用法: docker compose --env-file backend/.env up -d --build
+# 配置源：项目根目录 .env；Compose 读取它做变量插值，并通过 env_file 注入容器
+# 容器入口脚本会根据注入的环境变量派生 /app/.env
+# 用法: cp deploy/docker/.example.env .env && 按生产环境修改后 docker compose up -d --build
 # 需要：外部 MySQL 8.0+ / Redis 6.0+
 # ==========================================
 
@@ -17,6 +18,8 @@ services:
     restart: unless-stopped
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    env_file:
+      - .env
     ports:
       - "${SWOOLE_HTTP_PORT:-8080}:${SWOOLE_HTTP_PORT:-8080}"
     environment:

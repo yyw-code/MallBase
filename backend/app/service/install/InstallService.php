@@ -27,13 +27,14 @@ class InstallService extends BaseService
      * @var array<string, string>
      */
     private array $stepTitles = [
-        'db_test'                  => '校验数据库连接',
+        'db_test'                  => '校验并准备数据库',
         'redis_test'               => '校验 Redis 连接',
         'write_env'                => '写入配置文件',
         'create_db'                => '创建数据库',
         'import_sql'               => '导入表结构',
         'create_admin'             => '创建管理员',
         'import_demo'              => '导入演示数据',
+        'copy_demo_static'         => '拷贝演示静态资源',
         'sync_permissions'         => '同步路由权限',
         'sync_setting_permissions' => '同步系统设置菜单',
         'import_regions'           => '导入地区数据',
@@ -138,16 +139,12 @@ class InstallService extends BaseService
     public function getInstallPageMeta(): array
     {
         $envValues = $this->readEnvFile();
-        $projectRoot = dirname(rtrim(root_path(), DIRECTORY_SEPARATOR));
-        $backendRoot = rtrim(root_path(), DIRECTORY_SEPARATOR);
         $swooleHost = trim((string) ($envValues['SWOOLE_HTTP_HOST'] ?? '0.0.0.0'));
         $swoolePort = (int) ($envValues['SWOOLE_HTTP_PORT'] ?? 8080);
         $cronEnable = $this->envFlagText($envValues['CRON_ENABLE'] ?? null);
         $swooleQueueEnable = $this->envFlagText($envValues['SWOOLE_QUEUE_ENABLE'] ?? null);
 
         return [
-            'project_root' => $projectRoot,
-            'backend_root' => $backendRoot,
             'runtime'      => [
                 'app_debug' => $this->envFlagText($envValues['APP_DEBUG'] ?? null),
                 'cron_enable' => $cronEnable,
@@ -166,9 +163,9 @@ class InstallService extends BaseService
                 'redis_db'    => (int) ($envValues['REDIS_CACHE_DB'] ?? 0),
             ],
             'restart_commands' => [
-                'docker_dev' => "cd {$projectRoot}\ndocker compose -f docker-compose.dev.yml restart backend",
-                'docker_prod' => "cd {$projectRoot}\ndocker compose restart",
-                'manual' => "cd {$projectRoot}\nlsof -ti :{$swoolePort} | xargs -r kill -9\ncd {$backendRoot}\nphp think swoole",
+                'docker_dev' => 'docker compose -f docker-compose.dev.yml restart backend',
+                'docker_prod' => 'docker compose restart',
+                'manual' => "kill \$(lsof -ti :{$swoolePort}) 2>/dev/null || true\ncd backend\nphp think swoole",
             ],
         ];
     }
@@ -258,6 +255,15 @@ class InstallService extends BaseService
     public function testDatabase(array $config): array
     {
         try {
+            $dbName = trim((string) ($config['name'] ?? ''));
+            if (!preg_match('/^[A-Za-z0-9_]+$/', $dbName)) {
+                return [
+                    'success' => false,
+                    'message' => '数据库名只能包含字母、数字和下划线',
+                    'detail'  => null,
+                ];
+            }
+
             $dsn = sprintf(
                 'mysql:host=%s;port=%s;charset=utf8mb4',
                 $config['host'],
@@ -270,37 +276,63 @@ class InstallService extends BaseService
                 PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4",
             ]);
 
-            $dbName = $config['name'];
             $stmt = $pdo->query("SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = " . $pdo->quote($dbName));
             $dbExists = $stmt->fetchColumn() !== false;
+            $dbCreated = false;
+
+            if (!$dbExists) {
+                try {
+                    $this->createTargetDatabase($pdo, $dbName);
+                    $dbExists = true;
+                    $dbCreated = true;
+                } catch (PDOException $e) {
+                    return [
+                        'success' => false,
+                        'message' => '连接成功，但当前数据库账号没有创建目标数据库的权限。请换用有建库权限的账号，或先手动创建空数据库并授权当前账号。',
+                        'detail'  => $e->getMessage(),
+                    ];
+                }
+            }
+
             $tableCount = 0;
             $isEmpty = true;
 
-            if ($dbExists) {
-                $tableStmt = $pdo->query(
-                    "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = " . $pdo->quote($dbName)
-                );
-                $tableCount = (int) $tableStmt->fetchColumn();
-                $isEmpty = $tableCount === 0;
+            $tableStmt = $pdo->query(
+                "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = " . $pdo->quote($dbName)
+            );
+            $tableCount = (int) $tableStmt->fetchColumn();
+            $isEmpty = $tableCount === 0;
+
+            if ($isEmpty) {
+                try {
+                    $this->probeInstallDatabasePrivileges($pdo, $dbName);
+                } catch (PDOException $e) {
+                    return [
+                        'success' => false,
+                        'message' => '连接成功，但当前数据库账号无法在目标数据库创建、写入或清理测试表。请授予该库完整权限后再继续安装。',
+                        'detail'  => $e->getMessage(),
+                    ];
+                }
             }
 
             $version = $pdo->query('SELECT VERSION()')->fetchColumn();
 
             $pdo = null;
 
-            $message = '连接成功，数据库不存在（将自动创建）';
-            if ($dbExists && $isEmpty) {
+            $message = '连接成功，目标数据库已创建并为空，可以继续安装';
+            if (!$dbCreated && $isEmpty) {
                 $message = '连接成功，目标数据库为空，可以继续安装';
-            } elseif ($dbExists && !$isEmpty) {
+            } elseif (!$isEmpty) {
                 $message = sprintf('连接成功，但目标数据库已有 %d 张表，请切换到空数据库后再安装', $tableCount);
             }
 
             return [
-                'success'     => !$dbExists || $isEmpty,
+                'success'     => $isEmpty,
                 'version'     => $version,
                 'db_exists'   => $dbExists,
+                'db_created'  => $dbCreated,
                 'table_count' => $tableCount,
-                'is_empty'    => !$dbExists || $isEmpty,
+                'is_empty'    => $isEmpty,
                 'message'     => $message,
             ];
         } catch (PDOException $e) {
@@ -365,17 +397,24 @@ class InstallService extends BaseService
     }
 
     /**
-     * 从进程 env 构建安装参数
+     * 从安装期 env 构建安装参数。
      *
-     * 数据库、Redis、站点域名允许从 env 提供默认值；
+     * 优先级：
+     * 1. 当前进程 env（Docker entrypoint / 用户显式 export）
+     * 2. 项目根目录 .env（统一主配置源）
+     * 3. backend/.env（生产 / 仅后端容器 / 历史环境兜底）
+     *
      * 管理员账号和演示数据不再作为 env 配置入口，Web 安装统一回到安装表单确认。
      * 可选 CLI 安装入口仍使用代码内置默认值，避免依赖第二套 env 配置。
      */
     public function buildParamsFromEnv(): array
     {
-        $get = static function (string $name): string {
-            $value = getenv($name);
-            return $value === false ? '' : trim((string) $value);
+        $rootValues = $this->readRootEnvFile();
+        $backendValues = $this->readBackendEnvFile();
+        $inContainer = $this->isRunningInContainer();
+
+        $get = function (string $name) use ($rootValues, $backendValues, $inContainer): string {
+            return $this->resolveInstallEnvValue($name, $rootValues, $backendValues, $inContainer);
         };
 
         return [
@@ -397,6 +436,152 @@ class InstallService extends BaseService
             // env 中可预置 SITE_URL 作为 CLI 安装（install:auto）的输入；Web 向导提交空串时会回退到当前 request 域名
             'site_url'       => $get('SITE_URL'),
         ];
+    }
+
+    /**
+     * @param array<string, string> $rootValues
+     * @param array<string, string> $backendValues
+     */
+    private function resolveInstallEnvValue(
+        string $name,
+        array $rootValues,
+        array $backendValues,
+        bool $inContainer
+    ): string {
+        $processValue = getenv($name);
+        if ($processValue !== false && trim((string) $processValue) !== '') {
+            return trim((string) $processValue);
+        }
+
+        if ($name === 'DB_HOST') {
+            return $this->resolveInstallHostValue(
+                $rootValues[$name] ?? '',
+                $backendValues[$name] ?? '',
+                '127.0.0.1',
+                $inContainer
+            );
+        }
+
+        if ($name === 'REDIS_HOST') {
+            return $this->resolveInstallHostValue(
+                $rootValues[$name] ?? '',
+                $backendValues[$name] ?? '',
+                '127.0.0.1',
+                $inContainer
+            );
+        }
+
+        if ($name === 'DB_PORT') {
+            return $this->firstNonEmpty([
+                $rootValues['DB_PORT'] ?? '',
+                !$inContainer ? ($rootValues['MYSQL_PORT'] ?? '') : '',
+                $backendValues['DB_PORT'] ?? '',
+            ]);
+        }
+
+        if ($name === 'REDIS_PORT') {
+            return $this->firstNonEmpty([
+                !$inContainer ? ($rootValues['REDIS_PORT'] ?? '') : '',
+                $backendValues['REDIS_PORT'] ?? '',
+                $rootValues['REDIS_PORT'] ?? '',
+            ]);
+        }
+
+        return $this->firstNonEmpty([
+            $rootValues[$name] ?? '',
+            $backendValues[$name] ?? '',
+        ]);
+    }
+
+    private function resolveInstallHostValue(string $rootValue, string $backendValue, string $default, bool $inContainer): string
+    {
+        $rootValue = trim($rootValue);
+        if ($rootValue !== '') {
+            if (!$inContainer && in_array($rootValue, ['mysql', 'redis'], true)) {
+                return $default;
+            }
+
+            return $rootValue;
+        }
+
+        if (!$inContainer && $this->readRootEnvFile() !== []) {
+            return $default;
+        }
+
+        return $this->firstNonEmpty([$backendValue, $default]);
+    }
+
+    /**
+     * @param array<int, mixed> $values
+     */
+    private function firstNonEmpty(array $values): string
+    {
+        foreach ($values as $value) {
+            $text = trim((string) $value);
+            if ($text !== '') {
+                return $text;
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function readRootEnvFile(): array
+    {
+        $backendRoot = rtrim(app()->getRootPath(), DIRECTORY_SEPARATOR);
+        $projectRoot = dirname($backendRoot);
+
+        $paths = array_unique([
+            $projectRoot . DIRECTORY_SEPARATOR . '.env',
+            DIRECTORY_SEPARATOR . 'workspace' . DIRECTORY_SEPARATOR . '.env',
+        ]);
+
+        foreach ($paths as $path) {
+            $values = $this->parseEnvFile($path);
+            if ($values !== []) {
+                return $values;
+            }
+        }
+
+        return [];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function readBackendEnvFile(): array
+    {
+        return $this->parseEnvFile(app()->getRootPath() . '.env');
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function parseEnvFile(string $path): array
+    {
+        if (!is_file($path)) {
+            return [];
+        }
+
+        $data = parse_ini_file($path, false, INI_SCANNER_RAW);
+        if (!is_array($data)) {
+            return [];
+        }
+
+        $values = [];
+        foreach ($data as $key => $value) {
+            $values[(string) $key] = is_string($value) ? trim($value) : trim((string) $value);
+        }
+
+        return $values;
+    }
+
+    private function isRunningInContainer(): bool
+    {
+        return is_file('/.dockerenv');
     }
 
     public function getFormDefaults(): array
@@ -517,7 +702,7 @@ class InstallService extends BaseService
         }
         $runtimeMarker = bin2hex(random_bytes(16));
 
-        $emit('db_test', 'running', '正在校验数据库连接…');
+        $emit('db_test', 'running', '正在校验并准备数据库…');
         $dbTest = $this->testDatabase($dbConfig);
         if (!$dbTest['success']) {
             $emit('db_test', 'error', $dbTest['message'], ['detail' => $dbTest['detail'] ?? null]);
@@ -616,19 +801,33 @@ class InstallService extends BaseService
             try {
                 $emit('copy_demo_static', 'running', '正在拷贝演示静态资源…');
                 $copyResult = $this->copyDemoStatics();
-                if ($copyResult['copied'] > 0 || $copyResult['skipped'] > 0) {
+                if (!empty($copyResult['source_missing'])) {
+                    $emit('copy_demo_static', 'warning', '未找到演示静态资源源目录，已跳过拷贝', ['detail' => $copyResult]);
+                } elseif (!empty($copyResult['errors'])) {
+                    $emit(
+                        'copy_demo_static',
+                        'warning',
+                        sprintf(
+                            '演示静态资源部分就绪（新增 %d，已存在 %d，失败 %d）',
+                            $copyResult['copied'],
+                            $copyResult['existing'],
+                            count($copyResult['errors'])
+                        ),
+                        ['detail' => $copyResult]
+                    );
+                } elseif ($copyResult['copied'] > 0 || $copyResult['existing'] > 0) {
                     $emit(
                         'copy_demo_static',
                         'success',
                         sprintf(
-                            '演示静态资源就绪（新增 %d，跳过 %d）',
+                            '演示静态资源就绪（新增 %d，已存在 %d）',
                             $copyResult['copied'],
-                            $copyResult['skipped']
+                            $copyResult['existing']
                         ),
                         ['detail' => $copyResult]
                     );
                 } else {
-                    $emit('copy_demo_static', 'warning', '未找到演示静态资源源目录，跳过拷贝', ['detail' => $copyResult]);
+                    $emit('copy_demo_static', 'warning', '演示静态资源源目录为空，已跳过拷贝', ['detail' => $copyResult]);
                 }
             } catch (\Throwable $e) {
                 $emit('copy_demo_static', 'warning', '拷贝演示静态资源异常（不影响安装）：' . $e->getMessage());
@@ -662,9 +861,47 @@ class InstallService extends BaseService
 
         try {
             $emit('import_regions', 'running', '正在导入地区数据…');
+            $regionProgress = [
+                'processed' => 0,
+                'total'     => 0,
+                'imported'  => 0,
+                'updated'   => 0,
+                'percent'   => 0,
+            ];
             $imported = app()->make(RegionImportService::class)
-                ->importFromFile($this->installDataPath('region') . DIRECTORY_SEPARATOR . 'pcas-code.json');
-            $emit('import_regions', 'success', "地区数据已导入，本次新增 {$imported} 条");
+                ->importFromFile(
+                    $this->installDataPath('region') . DIRECTORY_SEPARATOR . 'pcas-code.json',
+                    false,
+                    function (array $progress) use (&$regionProgress, $emit): void {
+                        $regionProgress = $progress;
+                        $processed = (int) ($progress['processed'] ?? 0);
+                        $total = (int) ($progress['total'] ?? 0);
+                        $percent = (int) ($progress['percent'] ?? 0);
+                        $importedCount = (int) ($progress['imported'] ?? 0);
+                        $updatedCount = (int) ($progress['updated'] ?? 0);
+                        $message = $total > 0
+                            ? sprintf(
+                                '正在导入地区数据：%d/%d（%d%%），新增 %d，更新 %d',
+                                $processed,
+                                $total,
+                                $percent,
+                                $importedCount,
+                                $updatedCount
+                            )
+                            : '正在导入地区数据…';
+
+                        $emit('import_regions', 'running', $message, ['progress' => $progress]);
+                    }
+                );
+            $processed = (int) ($regionProgress['processed'] ?? 0);
+            $updated = (int) ($regionProgress['updated'] ?? 0);
+            $total = (int) ($regionProgress['total'] ?? 0);
+            $emit(
+                'import_regions',
+                'success',
+                sprintf('地区数据已导入（共处理 %d/%d 条，新增 %d，更新 %d）', $processed, $total, $imported, $updated),
+                ['progress' => array_merge($regionProgress, ['percent' => 100])]
+            );
         } catch (\Throwable $e) {
             $message = '地区数据导入失败：' . $e->getMessage();
             $emit('import_regions', 'error', $message);
@@ -914,6 +1151,11 @@ class InstallService extends BaseService
         $swoole['queue']['enable'] = $this->boolParam($envData['SWOOLE_QUEUE_ENABLE'] ?? false);
         Config::set($swoole, 'swoole');
 
+        $cacheManager = app()->make('cache');
+        if (method_exists($cacheManager, 'forgetDriver')) {
+            $cacheManager->forgetDriver(['redis', 'file']);
+        }
+
         app()->delete('think\\DbManager');
         Db::connect(null, true);
     }
@@ -938,10 +1180,44 @@ class InstallService extends BaseService
         ]);
 
         $dbName = $config['name'];
-        $pdo->exec("CREATE DATABASE IF NOT EXISTS `{$dbName}` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
-        $pdo->exec("USE `{$dbName}`");
+        $this->createTargetDatabase($pdo, $dbName);
+        $pdo->exec('USE ' . $this->quoteIdentifier($dbName));
 
         return $pdo;
+    }
+
+    private function createTargetDatabase(PDO $pdo, string $dbName): void
+    {
+        $pdo->exec(
+            'CREATE DATABASE IF NOT EXISTS ' . $this->quoteIdentifier($dbName)
+            . ' DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci'
+        );
+    }
+
+    private function probeInstallDatabasePrivileges(PDO $pdo, string $dbName): void
+    {
+        $tableName = '_mb_install_probe_' . bin2hex(random_bytes(8));
+        $qualifiedTable = $this->quoteIdentifier($dbName) . '.' . $this->quoteIdentifier($tableName);
+        $created = false;
+
+        try {
+            $pdo->exec(
+                'CREATE TABLE ' . $qualifiedTable
+                . ' (`id` INT NOT NULL PRIMARY KEY, `value` VARCHAR(32) NOT NULL)'
+                . ' ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
+            );
+            $created = true;
+            $pdo->exec("INSERT INTO {$qualifiedTable} (`id`, `value`) VALUES (1, 'ok')");
+        } finally {
+            if ($created) {
+                $pdo->exec('DROP TABLE ' . $qualifiedTable);
+            }
+        }
+    }
+
+    private function quoteIdentifier(string $identifier): string
+    {
+        return '`' . str_replace('`', '``', $identifier) . '`';
     }
 
     private function importSqlFiles(PDO $pdo): void
@@ -1065,7 +1341,7 @@ class InstallService extends BaseService
     }
 
     /**
-     * 把演示用静态图（deploy/install/static/demo/*）拷贝到 backend/public/static/demo/。
+     * 把演示用静态图（backend/install/static/demo/*）拷贝到 backend/public/static/demo/。
      *
      * 行为：
      * - 源目录不存在：返回 ['source_missing' => true]，调用方按 warning 提示。
@@ -1073,13 +1349,14 @@ class InstallService extends BaseService
      * - 同名文件已存在：跳过，避免覆盖用户已替换的图。
      * - 单文件拷贝失败：记录到 errors 数组并继续，整体不抛异常。
      *
-     * @return array{copied:int,skipped:int,source_missing:bool,errors:array<int,string>}
+     * @return array{copied:int,skipped:int,existing:int,source_missing:bool,errors:array<int,string>}
      */
     private function copyDemoStatics(): array
     {
         $result = [
             'copied'         => 0,
             'skipped'        => 0,
+            'existing'       => 0,
             'source_missing' => false,
             'errors'         => [],
         ];
@@ -1119,6 +1396,7 @@ class InstallService extends BaseService
 
             if (is_file($targetPath)) {
                 $result['skipped']++;
+                $result['existing']++;
                 continue;
             }
 
@@ -1146,19 +1424,18 @@ class InstallService extends BaseService
             'installed_at' => date('Y-m-d H:i:s'),
         ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
 
-        file_put_contents($this->lockFilePath(), $content);
+        $path = $this->lockFilePath();
+        $dir = dirname($path);
+        if (!is_dir($dir) && !mkdir($dir, 0755, true) && !is_dir($dir)) {
+            throw new \RuntimeException('安装锁目录创建失败：' . $dir);
+        }
+
+        file_put_contents($path, $content);
     }
 
     private function lockFilePath(): string
     {
-        $projectRoot = dirname(rtrim(root_path(), DIRECTORY_SEPARATOR));
-        $deployPath = $projectRoot . DIRECTORY_SEPARATOR . 'deploy'
-            . DIRECTORY_SEPARATOR . 'install' . DIRECTORY_SEPARATOR . 'install.lock';
-        if (is_dir(dirname($deployPath))) {
-            return $deployPath;
-        }
-
-        return root_path() . 'install' . DIRECTORY_SEPARATOR . 'install.lock';
+        return runtime_path() . 'install' . DIRECTORY_SEPARATOR . 'install.lock';
     }
 
     private function releaseFilePath(): string
@@ -1170,28 +1447,12 @@ class InstallService extends BaseService
 
     private function installDataPath(string $subdir): string
     {
-        $projectRoot = dirname(rtrim(root_path(), DIRECTORY_SEPARATOR));
-        $deployPath = $projectRoot . DIRECTORY_SEPARATOR . 'deploy'
-            . DIRECTORY_SEPARATOR . 'install' . DIRECTORY_SEPARATOR . 'data'
-            . DIRECTORY_SEPARATOR . $subdir;
-        if (is_dir($deployPath)) {
-            return $deployPath;
-        }
-
         return root_path() . 'install' . DIRECTORY_SEPARATOR . 'data'
             . DIRECTORY_SEPARATOR . $subdir;
     }
 
     private function installStaticPath(string $subdir): string
     {
-        $projectRoot = dirname(rtrim(root_path(), DIRECTORY_SEPARATOR));
-        $deployPath = $projectRoot . DIRECTORY_SEPARATOR . 'deploy'
-            . DIRECTORY_SEPARATOR . 'install' . DIRECTORY_SEPARATOR . 'static'
-            . DIRECTORY_SEPARATOR . $subdir;
-        if (is_dir($deployPath)) {
-            return $deployPath;
-        }
-
         return root_path() . 'install' . DIRECTORY_SEPARATOR . 'static'
             . DIRECTORY_SEPARATOR . $subdir;
     }
@@ -1207,6 +1468,15 @@ class InstallService extends BaseService
             return '数据库已拒绝当前来源主机，请检查 MySQL 用户授权或白名单';
         }
         if (str_contains($lower, 'access denied')) {
+            if (
+                str_contains($lower, 'create command denied')
+                || str_contains($lower, 'insert command denied')
+                || str_contains($lower, 'drop command denied')
+                || str_contains($lower, 'to database')
+            ) {
+                return '数据库账号权限不足，请授予目标库完整权限后重试';
+            }
+
             return '数据库用户名或密码错误，请重新检查账号密码';
         }
         if (str_contains($lower, 'connection refused')) {
@@ -1260,21 +1530,6 @@ class InstallService extends BaseService
      */
     private function readEnvFile(): array
     {
-        $envPath = app()->getRootPath() . '.env';
-        if (!is_file($envPath)) {
-            return [];
-        }
-
-        $data = parse_ini_file($envPath, false, INI_SCANNER_RAW);
-        if (!is_array($data)) {
-            return [];
-        }
-
-        $values = [];
-        foreach ($data as $key => $value) {
-            $values[(string) $key] = is_string($value) ? trim($value) : (string) $value;
-        }
-
-        return $values;
+        return array_merge($this->readBackendEnvFile(), $this->readRootEnvFile());
     }
 }

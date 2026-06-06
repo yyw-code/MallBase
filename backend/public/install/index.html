@@ -23,6 +23,10 @@ body{font-family:"Avenir Next","PingFang SC","Microsoft YaHei","Helvetica Neue",
 input[type="text"],input[type="password"],input[type="number"]{width:100%;padding:12px 14px;border:1px solid var(--border);border-radius:12px;font-size:14px;outline:none;transition:border-color .2s,box-shadow .2s;background:#fff}
 input:focus{border-color:var(--primary);box-shadow:0 0 0 4px rgba(15,118,110,.12)}
 .field-hint{margin-top:6px;font-size:12px;line-height:1.7;color:var(--muted)}
+.host-quick-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.host-choice{border:1px solid var(--border);background:#fff;color:var(--text-secondary);border-radius:10px;padding:6px 9px;font-size:12px;line-height:1.35;cursor:pointer;transition:all .2s}
+.host-choice:hover{border-color:var(--primary);color:var(--primary);background:#f8fbff}
+.host-choice code{font-size:12px;color:inherit}
 .btn{padding:12px 20px;border:none;border-radius:14px;font-size:14px;font-weight:700;cursor:pointer;transition:all .2s;display:inline-flex;align-items:center;justify-content:center;gap:6px;text-decoration:none}
 .btn-primary{background:var(--primary);color:#fff}
 .btn-primary:hover{background:var(--primary-hover);transform:translateY(-1px)}
@@ -129,12 +133,15 @@ input:focus{border-color:var(--primary);box-shadow:0 0 0 4px rgba(15,118,110,.12
 .progress-content{flex:1}
 .progress-title{font-size:14px;font-weight:600;color:var(--text)}
 .progress-message{font-size:12px;color:var(--text-secondary);margin-top:4px;line-height:1.6}
+.progress-meter{height:6px;border-radius:999px;background:#e8edf3;overflow:hidden;margin-top:8px}
+.progress-meter span{display:block;width:0;height:100%;border-radius:999px;background:linear-gradient(90deg,#185dbe 0%,#14b8a6 100%);transition:width .2s ease}
 .progress-status{font-size:12px;font-weight:500;flex-shrink:0}
 .progress-item.waiting .progress-status{color:var(--muted)}
 .progress-item.running .progress-status{color:var(--primary)}
 .progress-item.success .progress-status{color:var(--success)}
 .progress-item.error .progress-status{color:var(--danger)}
 .progress-item.skipped .progress-status{color:var(--warning)}
+.progress-item.warning .progress-icon,.progress-item.warning .progress-status{color:var(--warning)}
 [hidden]{display:none!important}
 @media (max-width: 900px){
   .entry-panel-actions,.entry-link-grid,.dual-panel-grid,.status-grid{grid-template-columns:1fr}
@@ -201,7 +208,7 @@ body.complete-mode .container{max-width:1220px}
           <div class="command-desc">当前安装流程会把配置应用到运行进程；如果入口检测提示运行态未刷新，再按你的部署方式重启 Swoole。</div>
           <div class="command-item">
             <div class="command-title">方式二 / 方式三：Docker 开发</div>
-            <div class="command-desc">在项目根目录执行：<code class="mono" id="projectRootDev">-</code></div>
+            <div class="command-desc">在项目根目录执行，也就是包含 <code>docker-compose.dev.yml</code> 的目录。</div>
             <div class="command-box">
               <pre id="cmd-dev-restart">-</pre>
               <button class="btn-copy" onclick="copyCommand('cmd-dev-restart', this)">复制命令</button>
@@ -209,7 +216,7 @@ body.complete-mode .container{max-width:1220px}
           </div>
           <div class="command-item">
             <div class="command-title">方式四：Docker 生产</div>
-            <div class="command-desc">在项目根目录执行：<code class="mono" id="projectRootProd">-</code></div>
+            <div class="command-desc">在项目根目录执行，也就是包含 <code>docker-compose.yml</code> 的目录。</div>
             <div class="command-box">
               <pre id="cmd-prod-restart">-</pre>
               <button class="btn-copy" onclick="copyCommand('cmd-prod-restart', this)">复制命令</button>
@@ -271,7 +278,12 @@ body.complete-mode .container{max-width:1220px}
         <div class="form-group">
           <label>主机地址</label>
           <input type="text" id="db_host" value="127.0.0.1">
-          <div class="field-hint">连接目标：Compose MySQL 容器填 <code>mysql</code>；连接宿主 MySQL 填 <code>host.docker.internal</code> 或宿主机 IP；本地直跑填 <code>127.0.0.1</code>。</div>
+          <div class="field-hint">连接目标：按部署方式选择，也可以手动填写宿主机 IP。</div>
+          <div class="host-quick-actions" aria-label="数据库主机快捷填入">
+            <button type="button" class="host-choice" onclick="fillHostValue('db_host', 'db', 'mysql')">Compose 容器 <code>mysql</code></button>
+            <button type="button" class="host-choice" onclick="fillHostValue('db_host', 'db', 'host.docker.internal')">宿主机 <code>host.docker.internal</code></button>
+            <button type="button" class="host-choice" onclick="fillHostValue('db_host', 'db', '127.0.0.1')">本地直跑 <code>127.0.0.1</code></button>
+          </div>
         </div>
         <div class="form-group">
           <label>端口</label>
@@ -281,7 +293,7 @@ body.complete-mode .container{max-width:1220px}
       <div class="form-group">
         <label>数据库名</label>
         <input type="text" id="db_name" value="mallbase">
-        <div class="field-hint">安装要求：目标数据库必须为空；如果该数据库里已有表，请切换到空数据库后再继续。</div>
+        <div class="field-hint">安装要求：目标数据库必须为空；如果数据库不存在，当前账号需要能创建该库并写入表结构。</div>
       </div>
       <div class="form-row">
         <div class="form-group">
@@ -293,7 +305,7 @@ body.complete-mode .container{max-width:1220px}
           <input type="password" id="db_pass">
         </div>
       </div>
-      <button class="btn btn-test" onclick="testDb()">测试连接</button>
+      <button class="btn btn-test" onclick="testDb()">校验数据库</button>
       <div class="msg" id="dbMsg"></div>
       <div class="actions">
         <button class="btn btn-outline" onclick="goStep(1)">上一步</button>
@@ -307,7 +319,12 @@ body.complete-mode .container{max-width:1220px}
         <div class="form-group">
           <label>主机地址</label>
           <input type="text" id="redis_host" value="127.0.0.1">
-          <div class="field-hint">连接目标：Compose Redis 容器填 <code>redis</code>；连接宿主 Redis 填 <code>host.docker.internal</code> 或宿主机 IP；本地直跑填 <code>127.0.0.1</code>。</div>
+          <div class="field-hint">连接目标：按部署方式选择，也可以手动填写宿主机 IP。</div>
+          <div class="host-quick-actions" aria-label="Redis 主机快捷填入">
+            <button type="button" class="host-choice" onclick="fillHostValue('redis_host', 'redis', 'redis')">Compose 容器 <code>redis</code></button>
+            <button type="button" class="host-choice" onclick="fillHostValue('redis_host', 'redis', 'host.docker.internal')">宿主机 <code>host.docker.internal</code></button>
+            <button type="button" class="host-choice" onclick="fillHostValue('redis_host', 'redis', '127.0.0.1')">本地直跑 <code>127.0.0.1</code></button>
+          </div>
         </div>
         <div class="form-group">
           <label>端口</label>
@@ -479,12 +496,13 @@ body.complete-mode .container{max-width:1220px}
 const API = '/install/api';
 let currentStep = 1;
 let installCompleted = false;
+let installRunning = false;
 let watchersAttached = false;
 let installMeta = null;
 let installStatus = null;
 let lastInstallOptions = { cron_enable: false, swoole_queue_enable: false };
 const installStepOrder = [
-  { step: 'db_test', title: '校验数据库连接' },
+  { step: 'db_test', title: '校验并准备数据库' },
   { step: 'redis_test', title: '校验 Redis 连接' },
   { step: 'write_env', title: '写入配置文件' },
   { step: 'create_db', title: '创建数据库' },
@@ -760,6 +778,19 @@ function invalidateValidation(type) {
   }
 }
 
+function fillHostValue(inputId, validationType, value) {
+  const input = document.getElementById(inputId);
+  if (!input) {
+    return;
+  }
+  input.value = value;
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  if (validationState[validationType]) {
+    invalidateValidation(validationType);
+  }
+  input.focus();
+}
+
 function attachValidationWatchers() {
   if (watchersAttached) {
     return;
@@ -1014,6 +1045,7 @@ function renderProgressList() {
       + '<div class="progress-content">'
       + '<div class="progress-title">' + item.title + '</div>'
       + '<div class="progress-message">等待执行</div>'
+      + '<div class="progress-meter" hidden><span></span></div>'
       + '</div>'
       + '<div class="progress-status">待执行</div>';
     list.appendChild(row);
@@ -1025,6 +1057,7 @@ function statusText(status) {
     waiting: '待执行',
     running: '进行中',
     success: '已完成',
+    warning: '提醒',
     error: '失败',
     skipped: '已跳过',
   };
@@ -1036,6 +1069,7 @@ function statusIcon(status) {
     waiting: '○',
     running: '…',
     success: '✓',
+    warning: '!',
     error: '✕',
     skipped: '-',
   };
@@ -1055,11 +1089,23 @@ function updateProgressStep(event) {
   if (event.title) {
     row.querySelector('.progress-title').textContent = event.title;
   }
+
+  const meter = row.querySelector('.progress-meter');
+  const meterBar = meter ? meter.querySelector('span') : null;
+  const progress = event.progress || (event.percent !== undefined ? event : null);
+  const percent = progress && progress.percent !== undefined ? Number(progress.percent) : null;
+  if (meter && meterBar && Number.isFinite(percent)) {
+    meter.hidden = false;
+    meterBar.style.width = Math.max(0, Math.min(100, percent)) + '%';
+  } else if (meter && event.status === 'waiting') {
+    meter.hidden = true;
+  }
 }
 
 function finishInstallSuccess(message) {
   const maintenanceEnabled = lastInstallOptions.cron_enable || lastInstallOptions.swoole_queue_enable;
   installCompleted = true;
+  installRunning = false;
   document.body.classList.add('complete-mode');
   document.getElementById('installStateTitle').textContent = '5. 安装完成';
   document.getElementById('installStateText').textContent = message || '所有关键步骤都已完成。可以先尝试进入系统；如入口检测提示运行态未刷新，再按下方命令重启 Swoole。';
@@ -1079,6 +1125,7 @@ function finishInstallSuccess(message) {
 }
 
 function finishInstallFailure(message) {
+  installRunning = false;
   document.body.classList.remove('complete-mode');
   document.getElementById('installStateTitle').textContent = '5. 安装未完成';
   document.getElementById('installStateText').textContent = '请根据失败步骤修正配置后重新执行安装。';
@@ -1172,6 +1219,8 @@ async function doInstall() {
   const btn = document.getElementById('installBtn');
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span> 安装中...';
+  installCompleted = false;
+  installRunning = true;
 
   const body = buildInstallPayload();
   lastInstallOptions = {
@@ -1208,6 +1257,7 @@ async function doInstall() {
     if (!installCompleted) {
       btn.disabled = false;
       btn.textContent = '开始安装';
+      finishInstallFailure('安装连接已断开，请确认服务状态后重新执行安装。');
     }
   } catch (e) {
     btn.disabled = false;
@@ -1221,8 +1271,6 @@ function renderInstallMeta() {
   const meta = installMeta || {};
   const runtime = meta.runtime || {};
   const commands = meta.restart_commands || {};
-  const projectRoot = meta.project_root || '-';
-  const backendRoot = meta.backend_root || '-';
   const release = installStatus && installStatus.release ? installStatus.release : null;
   const notes = release && Array.isArray(release.notes) ? release.notes.filter(Boolean) : [];
   const notesCard = document.getElementById('releaseNotesCard');
@@ -1288,8 +1336,6 @@ function renderInstallMeta() {
   renderInfoRows('successDbRows', dbRows);
   renderInfoRows('successRedisRows', redisRows);
 
-  setText('projectRootDev', projectRoot);
-  setText('projectRootProd', projectRoot);
   setText('cmd-dev-restart', commands.docker_dev || '-');
   setText('cmd-prod-restart', commands.docker_prod || '-');
   setText('cmd-manual-restart', commands.manual || '-');
@@ -1367,6 +1413,15 @@ async function copyCommand(targetId, btn) {
 
 window.addEventListener('pageshow', () => {
   refreshInstallStatus();
+});
+
+window.addEventListener('beforeunload', (event) => {
+  if (!installRunning || installCompleted) {
+    return;
+  }
+
+  event.preventDefault();
+  event.returnValue = '';
 });
 
 bootstrap();

@@ -39,10 +39,10 @@ mall-base/
 │   │   ├── client/                 # C 端 API（预留）
 │   │   ├── install/                # 安装模块
 │   │   │   ├── controller/         # 安装接口
-│   │   │   ├── service/            # 安装逻辑
-│   │   │   └── data/               # 建表 SQL / 演示数据 / 地区数据
+│   │   │   └── service/            # 安装逻辑
 │   │   └── middleware/             # 全局中间件（CORS、安装检测）
 │   ├── config/                     # 框架配置
+│   ├── install/                    # 安装资源（SQL / 演示数据 / 地区数据 / 演示静态图）
 │   ├── route/                      # 路由定义
 │   ├── public/                     # 静态文件（前端构建产物、安装页面）
 │   └── mall_base/                  # 项目基础类库（BaseController / BaseService）
@@ -56,7 +56,7 @@ mall-base/
 │   │   ├── Dockerfile              # 后端镜像构建
 │   │   ├── frontend-build.sh       # 后台前端（Admin）打包脚本
 │   │   ├── uniapp-build.sh         # UniApp H5 打包脚本
-│   │   ├── cleanup-dev.sh          # 清理开发全套模式的容器与本地文件
+│   │   ├── cleanup-dev.sh          # 分级清理基础运行态、前端文件、Docker 开发状态与镜像
 │   │   ├── prepare-data-dirs.sh    # 开发全套模式数据目录权限预检
 │   │   ├── ...                     # 其它内部辅助脚本（ensure-env / check-db-auth / 入口脚本等）
 │   │   └── mysql/                  # MySQL 初始化脚本
@@ -66,20 +66,28 @@ mall-base/
 │   └── upload-frontend.local.sh.example  # 上传脚本本地配置示例（复制为 upload-frontend.local.sh，已被 git 忽略）
 │
 ├── docs/                           # 文档
+│   ├── index.md                    # 文档中心总入口
 │   ├── install/                    # 安装与部署（导航入口：install/index.md）
 │   │   ├── index.md                # 安装与部署导航
 │   │   ├── manual.md               # 方式一：手动安装（无 Docker）
 │   │   ├── docker-backend-only.md  # 方式二：Docker 开发（仅后端）
 │   │   ├── docker-fullstack.md     # 方式三：Docker 开发（全套）
 │   │   ├── docker-production.md    # 方式四：Docker 生产
-│   │   ├── commands.md             # 安装与部署命令集合
+│   │   ├── commands.md             # 安装与部署命令导航
+│   │   ├── commands-common.md      # 常用命令速查
+│   │   ├── commands-local.md       # 本地安装与 Swoole 命令
+│   │   ├── commands-docker.md      # Docker 启停、日志与容器命令
+│   │   ├── commands-frontend.md    # 前端构建与静态资源命令
+│   │   ├── commands-cleanup.md     # 删除与清理命令
+│   │   ├── commands-maintenance.md # 验证与维护命令
+│   │   ├── cli-install.md          # 命令行安装 install:auto
 │   │   ├── troubleshooting.md      # 安装与部署故障排查
 │   │   ├── env-files.md            # 环境文件职责说明
 │   │   ├── nginx-reverse-proxy.md  # Nginx 反向代理配置说明
 │   │   ├── admin-build.md          # 后台前端（Admin）打包说明
 │   │   ├── uniapp-build.md         # UniApp H5 打包说明
 │   │   ├── upload-frontend.md      # 前端静态资源上传脚本说明
-│   │   ├── cleanup-dev.md          # 开发全套清理脚本说明
+│   │   ├── cleanup-dev.md          # 分级清理脚本说明
 │   │   └── issues/
 │   │       └── docker-fullstack-first-run.md  # 方式三首装问题排查记录
 │   ├── uniapp-design-brief.md      # UniApp 移动端设计需求文档
@@ -137,16 +145,29 @@ docker compose restart
 
 | 文档 | 说明 |
 |------|------|
+| [文档中心](docs/index.md) | 所有文档的总入口：按场景查常用与不常用文档 |
 | [安装与部署导航](docs/install/index.md) | 唯一入口：选择安装方式、环境要求、专题文档索引 |
 | [方式一：手动安装](docs/install/manual.md) | 无 Docker 场景的完整部署步骤 |
 | [方式二：Docker 开发（仅后端）](docs/install/docker-backend-only.md) | 宿主机 MySQL / Redis + 后端容器 |
 | [方式三：Docker 开发（全套）](docs/install/docker-fullstack.md) | 后端 + MySQL + Redis 一键启动，前端打包单独执行 |
 | [方式四：Docker 生产](docs/install/docker-production.md) | 单后端容器 + 宿主机 Nginx |
-| [安装与部署命令集合](docs/install/commands.md) | 可独立执行的命令（构建、上传、清理、验证） |
+| [安装与部署命令导航](docs/install/commands.md) | 命令分册入口，按常用、本地、Docker、前端、清理、维护拆分 |
+| [命令行安装 install:auto](docs/install/cli-install.md) | 手动安装或本地安装失败时执行 `php think install:auto` |
 | [安装与部署故障排查](docs/install/troubleshooting.md) | 安装、Docker、前端静态资源与运行时故障处理 |
-| [环境文件说明](docs/install/env-files.md) | 根 `.env`、`backend/.env` 与 Docker 全套模式配置职责 |
+| [环境文件说明](docs/install/env-files.md) | 根 `.env`、`backend/.env` 与安装运行时配置职责 |
 | [Nginx 反向代理配置](docs/install/nginx-reverse-proxy.md) | `/`、`/client/`、`/admin/`、`/client/api/`、`/admin/api/` 等路径规则 |
 | [方式三首装问题记录](docs/install/issues/docker-fullstack-first-run.md) | 方式三首次启动的密码错位、时序问题与修复结论 |
+
+### 命令分册
+
+| 文档 | 说明 |
+|------|------|
+| [常用命令速查](docs/install/commands-common.md) | 日常最常用命令：安装、启动、日志、构建、上传、清理 |
+| [本地安装与 Swoole 命令](docs/install/commands-local.md) | 本地 PHP / MySQL / Redis、`install:auto`、Swoole 重启 |
+| [Docker 命令](docs/install/commands-docker.md) | Docker 启停、日志、容器内依赖、连接容器服务 |
+| [前端构建与静态资源命令](docs/install/commands-frontend.md) | Admin / UniApp 构建、前端 dev server、静态资源上传 |
+| [删除与清理命令](docs/install/commands-cleanup.md) | 开发环境清理、安装锁、重新测试首装前检查 |
+| [验证与维护命令](docs/install/commands-maintenance.md) | HTTP 验证、地区数据导入、旧环境升级、E2E 准备 |
 
 ### 前端构建与发布
 
@@ -155,7 +176,7 @@ docker compose restart
 | [后台前端（Admin）打包](docs/install/admin-build.md) | 把 `frontend/admin` 打包到 `backend/public/admin`（Docker 一键 / 本地） |
 | [UniApp H5 打包](docs/install/uniapp-build.md) | 把 UniApp H5 打包到 `backend/public/client` |
 | [前端静态资源上传脚本](docs/install/upload-frontend.md) | 用 `deploy/upload-frontend.sh` 上传 admin / client 到服务器 |
-| [开发全套清理脚本](docs/install/cleanup-dev.md) | `deploy/docker/cleanup-dev.sh`：清理方式三的容器、镜像与本地文件 |
+| [分级清理脚本](docs/install/cleanup-dev.md) | `deploy/docker/cleanup-dev.sh`：按等级清理基础运行态、前端文件、Docker 开发状态与镜像 |
 
 ### 其它
 

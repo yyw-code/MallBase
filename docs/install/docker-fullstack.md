@@ -33,7 +33,7 @@ cp deploy/docker/.example.env .env
 - `MALLBASE_CONTAINER_PREFIX`
 - `SWOOLE_HTTP_PORT`
 - `MYSQL_PORT`
-- `REDIS_PORT`
+- `REDIS_HOST_PORT`
 - `DB_NAME`
 - `DB_USER`
 - `DB_PASS`
@@ -49,9 +49,16 @@ MALLBASE_COMPOSE_PROJECT_NAME=mallbase-demo
 MALLBASE_CONTAINER_PREFIX=mallbase-demo
 SWOOLE_HTTP_PORT=18080
 MYSQL_PORT=13306
-REDIS_PORT=16379
+REDIS_HOST_PORT=16379
+DB_PORT=3306
+REDIS_PORT=6379
 SITE_URL=https://demo.example.com
 ```
+
+这里有两组端口不要混用：
+
+- `MYSQL_PORT` / `REDIS_HOST_PORT`：宿主机访问容器用的端口，例如 Navicat、DBeaver、`redis-cli` 从宿主机连接。
+- `DB_PORT` / `REDIS_PORT`：backend 容器和安装流程连接 MySQL / Redis 的端口。Docker 全套模式下通常保持 `3306` / `6379`。
 
 ### 3. 启动开发运行时服务
 
@@ -67,13 +74,27 @@ docker compose -f docker-compose.dev.yml up -d
 4. `backend` 启动 Swoole
 5. 用户访问 `/install` 并确认执行统一安装主流程
 
-### 4. 单独执行后台前端打包
+### 4. 理解开发目录映射
+
+方式三会把项目目录以开发模式挂到容器里：
+
+| 宿主机路径 | 容器路径 | 读写 | 用途 |
+|------------|----------|------|------|
+| `./backend` | `/app` | 读写 | 后端代码、`vendor`、`runtime`、安装锁、上传文件和前端静态产物都在这里，宿主机和容器看到的是同一份文件。 |
+| `./` | `/workspace` | 只读 | 让后端容器读取项目根 `.env`，用于启动时派生 `backend/.env` 和安装页默认值。 |
+| `./.version` | `/.version` | 只读 | 给安装页和状态页展示当前版本信息。 |
+| `./data/mysql` | `/var/lib/mysql` | 读写 | MySQL 数据目录，删除后等同于清空开发库。 |
+| `./data/redis` | `/data` | 读写 | Redis 数据目录，删除后等同于清空开发 Redis 数据。 |
+
+开发模式的 `/app` 是 bind mount，所以本地改后端文件，容器里会立即看到；但 PHP 代码在 Swoole 下常驻内存，安装完成或改运行时代码后仍建议重启 backend 容器。
+
+### 5. 单独执行后台前端打包
 
 ```bash
 docker compose -f docker-compose.frontend-build.yml up frontend-build
 ```
 
-### 5. 查看关键状态
+### 6. 查看关键状态
 
 ```bash
 PREFIX=${MALLBASE_CONTAINER_PREFIX:-mallbase}
@@ -89,7 +110,7 @@ ls backend/public/admin/index.html
 - 一次性容器：`<prefix>-ensure-env`、`<prefix>-check-db-auth`、`<prefix>-frontend-build` 最终 `Exited (0)`
 - `backend/public/admin/index.html` 存在
 
-### 6. 打开安装向导并确认安装
+### 7. 打开安装向导并确认安装
 
 浏览器打开：
 
@@ -105,9 +126,9 @@ http://localhost:8080/install
 - 设置菜单同步
 - 地区数据导入
 - 站点域名写入
-- 生成 `install.lock`
+- 生成 `backend/runtime/install/install.lock`
 
-### 7. 登录后台
+### 8. 登录后台
 
 ```bash
 http://localhost:8080/admin/
@@ -120,7 +141,7 @@ http://localhost:8080/admin/
 
 首次登录会强制进入改密页。
 
-### 8. 前端改动后重新打包
+### 9. 前端改动后重新打包
 
 如果你改了后台前端代码，重新执行：
 
@@ -130,14 +151,14 @@ docker compose -f docker-compose.frontend-build.yml up frontend-build
 
 它会重新构建 `@vben/web-antd`，并把产物覆盖到 `backend/public/admin`。
 
-### 9. 从宿主机连接 MySQL / Redis
+### 10. 从宿主机连接 MySQL / Redis
 
 ```bash
 mysql -h 127.0.0.1 -P 3306 -u <DB_USER> -p
 redis-cli -h 127.0.0.1 -p 6379
 ```
 
-真实端口、账号和密码以根 `.env` 为准。
+真实端口、账号和密码以根 `.env` 为准：MySQL 看 `MYSQL_PORT`，Redis 看 `REDIS_HOST_PORT`。
 
 ## 完成后验证
 
@@ -151,5 +172,5 @@ ls backend/public/admin/index.html
 ## 常见下一步
 
 - 查看 `.env` 机制与运行时托底字段：[env-files.md](./env-files.md)
-- 看常用命令集合：[commands.md](./commands.md)
+- 看命令导航：[commands.md](./commands.md)
 - 遇到首装时序或密码问题：[troubleshooting.md](./troubleshooting.md) 和 [issues/docker-fullstack-first-run.md](./issues/docker-fullstack-first-run.md)

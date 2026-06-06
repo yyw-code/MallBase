@@ -16,6 +16,8 @@ public/client
 public/h5
 install/install.lock
 
-# 演示图运行时目录（源在 deploy/install/static/demo/，安装时由 InstallService 拷贝）
+# 演示图运行时目录（源在 backend/install/static/demo/，安装时由 InstallService 拷贝）
 public/static/demo/*
 !public/static/demo/README.md
+
+install/data/upgrade

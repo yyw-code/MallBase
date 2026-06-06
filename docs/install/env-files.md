@@ -1,11 +1,11 @@
 # 项目中的两份 `.env` 文件
 
-MallBase 在文件结构上仍然有两份 `.env`，但在 **方式三：Docker 开发（全套）** 下，推荐记住一句话：
+MallBase 在文件结构上仍然有两份 `.env`，但在 **方式二：Docker 开发（仅后端）**、**方式三：Docker 开发（全套）** 和 **本地命令行安装 `install:auto`** 下，推荐记住一句话：
 
 - **项目根目录 `.env` 是唯一主配置源**
-- **`backend/.env` 是派生文件，由 ensure-env 自动生成**
+- **`backend/.env` 是派生 / 运行时文件，由 ensure-env 或安装流程写入**
 
-也就是说，Docker 开发全套模式下，用户只需要维护根 `.env`；`backend/.env` 不再作为第二份手工配置入口。
+也就是说，Docker 开发模式和本地命令行安装下，用户优先维护根 `.env`；`backend/.env` 不再作为第二份手工配置入口。
 
 > 所有命令的"执行目录"都写在注释里，例如 `# 在项目根目录执行` 或 `# 在 backend 目录执行`。不要复制时忽略它们。
 
@@ -16,7 +16,9 @@ MallBase 在文件结构上仍然有两份 `.env`，但在 **方式三：Docker 
 | **项目根目录 `.env`** | docker compose | 解析 `docker-compose*.yml` 做 `${VAR}` 变量插值时 | `deploy/docker/.example.env` |
 | **`backend/.env`** | ThinkPHP 运行时 | Swoole 服务启动、每次 `env()` 调用 | `backend/.example.env` |
 
-docker compose 的变量插值**只认项目根目录的 `.env`**，无法改路径。而 ThinkPHP 的 `env()` 函数**只认 `backend/.env`**。两者机制不同，所以文件仍然分开；但在 Docker 开发全套模式里，我们约定由 `ensure-env` 负责把根 `.env` 派生为 `backend/.env`，避免用户手工维护两份导致不一致。
+docker compose 的变量插值**只认项目根目录的 `.env`**，无法改路径。而 ThinkPHP 的 `env()` 函数**只认 `backend/.env`**。两者机制不同，所以文件仍然分开；但在 Docker 开发模式里，我们约定由 `ensure-env` 或后端容器入口脚本负责把根 `.env` 派生为 `backend/.env`，避免用户手工维护两份导致不一致。
+
+本地命令行安装 `install:auto` 不通过 Docker；命令会读取项目根 `.env` 作为安装输入，并在安装完成后把生效配置写入 `backend/.env`。
 
 ## 二、字段对照表
 
@@ -28,12 +30,21 @@ docker compose 的变量插值**只认项目根目录的 `.env`**，无法改路
 |------|------|------|
 | `SWOOLE_HTTP_PORT` | 宿主 ↔ 容器双向映射（compose 写 `${VAR}:${VAR}`） | 必须与 `backend/.env` 的同名字段一致 |
 | `MYSQL_PORT` | **仅**宿主侧暴露端口（compose 写 `${VAR}:3306`） | 容器内端口固定 3306，backend 通过服务名 `mysql:3306` 连接 |
-| `REDIS_PORT` | **仅**宿主侧暴露端口（compose 写 `${VAR}:6379`） | 容器内端口固定 6379，backend 通过服务名 `redis:6379` 连接 |
+| `REDIS_HOST_PORT` | **仅**宿主侧暴露端口（compose 写 `${VAR}:6379`） | 容器内端口固定 6379，backend 通过服务名 `redis:6379` 连接 |
 | `MYSQL_ROOT_PASSWORD` | MySQL root 密码（首次初始化 + healthcheck） | 仅**首次**容器初始化有效，之后改值无法覆盖已创建的用户 |
+| `DB_HOST` | ThinkPHP / `install:auto` 连接数据库的主机 | Docker 全套模式默认 `mysql`；本地命令行安装通常改为 `127.0.0.1` |
+| `DB_PORT` | ThinkPHP / `install:auto` 连接数据库的端口 | Docker 全套模式容器内固定 `3306`；本地命令行安装按实际端口填写 |
 | `DB_NAME` | 首次初始化创建的业务库名（`MYSQL_DATABASE`） | |
 | `DB_USER` | 首次初始化创建的业务用户（`MYSQL_USER`） | 必须与 `backend/.env` 同名字段一致 |
 | `DB_PASS` | 首次初始化创建的业务用户密码（`MYSQL_PASSWORD`） | 也会同步到 `backend/.env` |
+| `REDIS_HOST` | ThinkPHP / `install:auto` 连接 Redis 的主机 | Docker 全套模式默认 `redis`；本地命令行安装通常改为 `127.0.0.1` |
+| `REDIS_PORT` | ThinkPHP / `install:auto` 连接 Redis 的端口 | Docker 全套模式容器内固定 `6379`；本地命令行安装按实际端口填写 |
+| `REDIS_CACHE_DB` | Redis 缓存 DB | CLI 安装要求该 DB 为空 |
+| `REDIS_PASSWORD` | Redis 密码 | 无密码时留空 |
+| `CACHE_DRIVER` | 缓存驱动 | 默认 `redis` |
 | `SITE_URL` | 安装页默认站点域名、CLI 安装输入、安装完成后的静态副本 | 安装完成后权威值仍以 `mb_setting.site_url` 为准 |
+
+如果为了测试副本把 `SWOOLE_HTTP_PORT` 改成了非默认值，例如 `18080`，请同步把 `SITE_URL` 改成对应访问地址，例如 `http://localhost:18080`。CLI 安装没有浏览器 request 上下文，`SITE_URL` 不应继续保留为旧端口。
 
 ### `backend/.env`（~40+ 字段）
 
@@ -43,8 +54,8 @@ docker compose 的变量插值**只认项目根目录的 `.env`**，无法改路
 
 - 应用：`APP_DEBUG` / `DEFAULT_LANG` / `CRON_ENABLE`
 - 队列：`QUEUE_CONNECTION` / `QUEUE_REDIS_*` / `SWOOLE_QUEUE_ENABLE`
-- 数据库：`DB_TYPE` / `DB_HOST` / `DB_PORT`（固定 3306，容器内端口）/ `DB_NAME` / `DB_USER` / `DB_PASS` / `DB_CHARSET` / `DB_PREFIX`
-- Redis：`REDIS_HOST` / `REDIS_PORT`（固定 6379，容器内端口）/ `REDIS_PASSWORD` / `REDIS_TIMEOUT` / `REDIS_PERSISTENT` / `REDIS_CACHE_DB`
+- 数据库：`DB_TYPE` / `DB_HOST` / `DB_PORT` / `DB_NAME` / `DB_USER` / `DB_PASS` / `DB_CHARSET` / `DB_PREFIX`
+- Redis：`REDIS_HOST` / `REDIS_PORT` / `REDIS_PASSWORD` / `REDIS_TIMEOUT` / `REDIS_PERSISTENT` / `REDIS_CACHE_DB`
 - 缓存：`CACHE_*`
 - JWT：`JWT_SECRET` / `JWT_EXPIRE` / `JWT_REFRESH_EXPIRE`
 - Swoole：`SWOOLE_HTTP_PORT` / `SWOOLE_*`
@@ -55,11 +66,13 @@ docker compose 的变量插值**只认项目根目录的 `.env`**，无法改路
 - Web 安装向导的高级选项会写入 `CRON_ENABLE` / `SWOOLE_QUEUE_ENABLE`，默认关闭，避免安装前任务写入 Redis
 - 单机部署：安装时可勾选定时任务和 Swoole 内置队列 Worker；安装完成后需重启 Swoole 生效
 - K8s / 多副本部署：Web Deployment 保持 `CRON_ENABLE=false`；Scheduler Deployment 副本数固定 `1` 且设置 `CRON_ENABLE=true`；Queue Worker Deployment 运行 `php think queue:work redis --queue=default --tries=3`，可按压力水平扩容
-- 未生成 `deploy/install/install.lock` 前，即使 env 中误设为 `true`，Cron 和 Swoole 内置队列 Worker 也不会启动。
+- 未生成 `backend/runtime/install/install.lock` 前，即使 env 中误设为 `true`，Cron 和 Swoole 内置队列 Worker 也不会启动。
 
 **⚠️ 容易混淆的点**：
 
-- `backend/.env` 里的 `DB_PORT` / `REDIS_PORT` 都是**容器内端口**（3306 / 6379 固定不变），与根 `.env` 里的宿主暴露端口语义不同
+- `MYSQL_PORT` / `REDIS_HOST_PORT` 是宿主机连接容器用的映射端口，只给 Docker Compose 端口映射使用。
+- `DB_PORT` / `REDIS_PORT` 是应用连接数据库和 Redis 的端口，会同步到 `backend/.env`；Docker 全套模式通常保持 `3306` / `6379`。
+- 例如同一台机器跑多套实例时，可以写 `MYSQL_PORT=13306`、`REDIS_HOST_PORT=16379`，但 `DB_PORT=3306`、`REDIS_PORT=6379` 通常不要改。
 - Docker 开发全套模式下，`backend/.env` 文件头会明确写出“请改根 `.env`，不要改 `backend/.env`”
 
 ## 三、两种初始化方式
@@ -130,13 +143,20 @@ openssl rand -hex 32
 
 下面这些字段在 Docker 开发全套模式下，都会由根 `.env` 自动同步到 `backend/.env`：
 
+- `DB_HOST`
+- `DB_PORT`
 - `DB_NAME`
 - `DB_USER`
 - `DB_PASS`
+- `REDIS_HOST`
+- `REDIS_PORT`
+- `REDIS_CACHE_DB`
+- `REDIS_PASSWORD`
+- `CACHE_DRIVER`
 - `SWOOLE_HTTP_PORT`
 - `SITE_URL`
 
-`MYSQL_ROOT_PASSWORD` 只存在于根 `.env`，不会写进 `backend/.env`。`CRON_ENABLE` / `SWOOLE_QUEUE_ENABLE` 不再由根 `.env` 同步，统一由安装向导高级选项写入。
+`MYSQL_PORT` / `REDIS_HOST_PORT` / `MYSQL_ROOT_PASSWORD` 只存在于根 `.env`，不会写进 `backend/.env`。`CRON_ENABLE` / `SWOOLE_QUEUE_ENABLE` 不再由根 `.env` 同步，统一由安装向导高级选项写入。
 
 ## 五、常见错误
 
@@ -156,7 +176,7 @@ openssl rand -hex 32
 3. 如果**不要现有数据**：按下文“完全清零重来”执行
 
 ### ❌ `/install` 页面报 500
-**原因**：已经安装过，`deploy/install/install.lock` 存在，但前端旧版本无错误处理。
+**原因**：已经安装过，`backend/runtime/install/install.lock` 存在，但前端旧版本无错误处理。
 **解决**：页面应自动显示"系统已安装"卡片（新版本已修复）。强制刷新（Cmd+Shift+R / Ctrl+F5）清缓存。
 
 ### ❌ 改了端口后 `curl http://localhost:9999/` 连不上
@@ -182,8 +202,8 @@ openssl rand -hex 32
 如果配置状态混乱，想回到全新状态：
 
 ```bash
-# 在项目根目录执行：推荐，一键清理 Docker 开发全套模式产生的本地状态
-sh deploy/docker/cleanup-dev.sh
+# 在项目根目录执行：推荐，清理 Docker 开发全套状态和本地数据
+sh deploy/docker/cleanup-dev.sh --docker
 ```
 
 如果你想手动分步执行，也可以继续用下面这些命令：
@@ -195,7 +215,7 @@ docker compose -f docker-compose.dev.yml down -v
 ```bash
 # 在项目根目录执行：清理本地目录
 rm -rf data/
-rm -rf deploy/install/install.lock
+rm -rf backend/runtime/install/install.lock
 rm -f backend/.env
 rm -f .env
 rm -rf backend/public/admin
@@ -230,7 +250,7 @@ docker compose -f docker-compose.dev.yml up -d
 docker compose 变量插值只在 parse yml 时发生，不能热加载。
 
 **Q：生产环境怎么办？**
-A：生产用 `docker-compose.yml`（单容器，镜像构建时 `COPY backend/.`，`/app/.env` 打进镜像）。发布前准备好生产版 `backend/.env`，无需项目根目录 `.env`。
+A：生产用 `docker-compose.yml`（单后端容器），只维护项目根目录 `.env`。根 `.env` 必须存在，Compose 会用它做变量插值，并通过 `env_file: .env` 注入后端容器；容器入口脚本再派生 `/app/.env`。数据库、Redis 和站点域名可以在 Web 安装向导里填写，但安装完成后建议把最终生效值同步回根 `.env`，避免容器重新创建后配置回退。不要把 `backend/.env` 当成生产手工配置入口。
 
 **Q：`deploy/docker/.example.env` 和 `backend/.example.env` 有啥区别？**
 A：

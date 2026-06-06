@@ -45,7 +45,7 @@ class UpgradeAdminSchema extends Command
      * 历史上公开出现过的默认超管密码清单。
      *
      * - 'admin123'：当前 install:auto / install 向导 / createSuperAdmin 使用的默认
-     * - 'password'：deploy/install/data/schema/01_mb_auth.sql 里硬编码种子哈希对应的明文；
+     * - 'password'：backend/install/data/schema/01_mb_auth.sql 里硬编码种子哈希对应的明文；
      *               在 createSuperAdmin ON DUPLICATE 覆写引入前，老环境可能还在用
      *
      * 只要 password_verify 任意命中其中一个，就判定"仍在用公开默认密码" → 保留 NULL

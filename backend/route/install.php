@@ -5,7 +5,7 @@ use think\facade\Route;
 
 Route::group('install', function () {
 
-    Route::get('/', function () {
+    $installPage = function () {
         $path = app()->getRootPath() . 'public' . DIRECTORY_SEPARATOR . 'install' . DIRECTORY_SEPARATOR . 'index.html';
         if (is_file($path)) {
             return response(file_get_contents($path), 200, [
@@ -13,7 +13,10 @@ Route::group('install', function () {
             ]);
         }
         abort(404, '安装页面未找到');
-    });
+    };
+
+    Route::get('', $installPage);
+    Route::get('/', $installPage);
 
     Route::group('api', function () {
         Route::get('status', 'status')->withoutMiddleware([InstallCheckMiddleware::class]);

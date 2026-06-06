@@ -14,7 +14,7 @@
 - `<prefix>-mysql` 第一次启动不健康，第二次又恢复正常
 - `<prefix>-check-db-auth` 首次执行报业务库账号认证失败
 - `<prefix>-install-auto` 因依赖失败没有真正开始执行
-- `deploy/install/install.lock` 没有生成
+- `backend/runtime/install/install.lock` 没有生成
 ## 根因分析
 
 这次问题实际由两类初始化时序问题叠加导致。
@@ -109,7 +109,7 @@ docker compose -f docker-compose.frontend-build.yml up frontend-build
 - `<prefix>-install-auto`：`Exited (0)`
 - `<prefix>-dev`：`Up`
 - `<prefix>-frontend-build`：`Exited (0)`
-- `deploy/install/install.lock` 成功生成
+- `backend/runtime/install/install.lock` 成功生成
 - `backend/public/admin` 成功生成后台静态资源
 - `http://127.0.0.1:8080` 返回 `HTTP/1.1 200 OK`
 

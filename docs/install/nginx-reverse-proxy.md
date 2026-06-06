@@ -8,7 +8,7 @@
 
 ## 设计目标
 
-MallBase 的前后端路径拆分规则如下：
+MallBase 默认推荐“前端静态文件由 Nginx 托管，后端接口代理到 Swoole”。路径拆分规则如下：
 
 | 路径 | 处理方式 | 说明 |
 |------|----------|------|
@@ -19,6 +19,17 @@ MallBase 的前后端路径拆分规则如下：
 | `/install` | 反向代理到 Swoole | 安装向导 |
 | `/client/api/` | 反向代理到 Swoole | 客户端 API |
 | `/uploads/` | 反向代理到 Swoole | 上传文件访问 |
+
+如果希望减少 Nginx location 配置，也可以使用“统一代理到 Swoole”方案，由 ThinkPHP/Swoole 处理静态文件兜底、API、安装向导和上传文件访问。
+
+## 方案选择
+
+| 方案 | 适合场景 | 说明 |
+|------|----------|------|
+| 方案一：Nginx 静态托管 + Swoole API | 生产环境、流量较高、希望利用 Nginx 静态缓存和访问控制 | 推荐方案，也是 `deploy/nginx/mallbase.conf` 的默认示例 |
+| 方案二：统一代理到 Swoole | 面板配置受限、低流量部署、先跑通环境 | 配置更少，但静态资源和上传文件也会进入 Swoole |
+
+生产环境优先使用方案一。方案二可以降低配置复杂度，但会放弃 Nginx 静态资源长缓存、上传目录可执行后缀拦截等能力，需要确认前端产物对 Swoole 进程可见。
 
 ## 使用前确认
 
@@ -38,6 +49,10 @@ curl -I http://127.0.0.1:8080/
 ls /var/www/mallbase/backend/public/client/index.html
 ls /var/www/mallbase/backend/public/admin/index.html
 ```
+
+如果使用方案一，以上路径应改成 Nginx 进程能访问的真实静态目录。如果使用方案二，前端产物必须位于 Swoole 进程能访问的 `backend/public/client` 和 `backend/public/admin`。
+
+Docker 生产模式下，统一代理到 Swoole 时不能只把前端产物上传到宿主机 Nginx 静态目录；需要让产物进入镜像，或挂载到容器内 `/app/public/client` 和 `/app/public/admin`。
 
 如果文件不存在，先按 [index.md](./index.md) 选择对应安装方式，完成前端构建和上传。
 
@@ -65,9 +80,9 @@ VITE_UNIAPP_API_PREFIX=/client/api
 
 ## Nginx 配置示例
 
-项目已提供示例文件：`deploy/nginx/mallbase.conf`。下面给出一个可直接理解的精简版。
+项目已提供推荐生产示例文件：`deploy/nginx/mallbase.conf`。该文件采用方案一，不包含方案二，避免复制时把两种方案混用。
 
-### HTTP 版本
+### 方案一：Nginx 静态托管 + Swoole API
 
 ```nginx
 server {
@@ -82,6 +97,7 @@ server {
 
     root /var/www/mallbase/backend/public;
     index index.html;
+    client_max_body_size 220m;
 
     location = / {
         proxy_pass http://127.0.0.1:8080;
@@ -154,7 +170,7 @@ server {
 }
 ```
 
-### HTTPS 版本
+这个方案中，`/client/` 和 `/admin/` 由 Nginx 直接返回静态文件，`/client/api/`、`/admin/api/`、`/install`、`/uploads/` 代理到 Swoole。
 
 如果线上启用 HTTPS，直接使用仓库里的 `deploy/nginx/mallbase.conf` 更合适；它已经包含：
 
@@ -162,6 +178,47 @@ server {
 - `ssl_certificate` / `ssl_certificate_key`
 - 与 HTTP 版一致的路径拆分规则：根路径进入安装检查，`/client` 进入 H5，`/admin` 进入后台
 - 站点 `root` 指向 `backend/public`，H5 由 `/client/` 承接
+
+### 方案二：统一代理到 Swoole
+
+如果希望所有请求都交给 Swoole 处理，可以只保留一个统一代理规则：
+
+```nginx
+server {
+    listen 80;
+    server_name mall.example.com;
+
+    location ^~ / {
+        client_max_body_size 220m;
+
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        proxy_connect_timeout 60s;
+        proxy_read_timeout 120s;
+        proxy_send_timeout 60s;
+        proxy_buffering off;
+    }
+}
+```
+
+`location ^~ /` 会覆盖普通前缀匹配，并避免面板自动生成的 `.js`、`.css`、`.png` 等正则静态规则抢走请求。
+
+使用方案二时注意：
+
+- 不要同时保留方案一里的 `location ^~ /admin/`、`location ^~ /client/`、`location ^~ /uploads/` 等更具体规则，否则这些路径仍会优先命中更具体的 location。
+- 不要把方案二写成 `location = /`，它只匹配根路径 `/`，不能覆盖 `/admin/`、`/client/`、`/install` 等路径。
+- 前端产物必须位于 Swoole 能访问的 `backend/public/admin` 和 `backend/public/client`。
+- Docker 生产模式下，需要让前端产物进入容器镜像，或挂载到容器内 `/app/public/admin`、`/app/public/client`。
+- `proxy_buffering off` 用于避免安装向导的流式执行接口被 Nginx 缓冲。
+- `client_max_body_size 220m` 应与项目上传限制保持一致；如果后台调整了视频或文件上传上限，需要同步调整该值。
+
+### HTTPS 版本
+
+HTTPS 场景只是在对应方案外层补充证书、监听端口和 HTTP 到 HTTPS 跳转。核心 location 规则保持不变。
 
 ## 推荐部署步骤
 
@@ -180,6 +237,8 @@ server {
 3. Nginx 的 `/admin/api/`、`/install`、`/client/api/`、`/uploads/` 指向宿主机暴露的 `127.0.0.1:8080`
 4. 执行 `nginx -t && systemctl reload nginx`
 
+如果 Docker 生产环境选择方案二，需要确保 `/app/public/client/index.html` 和 `/app/public/admin/index.html` 在后端容器内存在。
+
 ## 自检命令
 
 ### 1. 检查静态首页
@@ -190,7 +249,7 @@ curl -I http://mall.example.com/client/
 curl -I http://mall.example.com/admin/
 ```
 
-预期根路径未安装时跳转到 `/install`，已安装时跳转到 `/client/`；`/client/` 是 H5，`/admin/` 是后台。
+预期根路径未安装时跳转到 `/install`，已安装时跳转到 `/client/`；`/client/` 是 H5，`/admin/` 是后台。方案一由 Nginx 返回静态页面，方案二由 Swoole 返回静态页面。
 
 ### 2. 检查后台 API 已经过代理
 
@@ -242,8 +301,26 @@ curl -I http://127.0.0.1:8080/
 - `/var/www/mallbase/backend/public/client/index.html` 是否存在
 - H5 构建产物里的 JS/CSS 是否使用 `/client/assets/...` 前缀
 - Nginx 是否保留了 `/client/` 静态 alias
+- 如果使用方案二，确认 Swoole 进程或容器内能访问 `backend/public/client/index.html`
 
 H5 生产构建应使用 `/client/` 作为 base。构建后 `index.html` 里的主资源应类似 `/client/assets/index-*.js`、`/client/assets/index-*.css`。如果仍然是 `/assets/...`，说明 H5 构建配置没有生效，需要重新构建并部署 `backend/public/client/`。
+
+### 统一代理方案下静态资源或上传异常
+
+优先检查三点：
+
+- 是否仍保留了更具体的 `/admin/`、`/client/`、`/uploads/` location，导致请求没有进入统一代理规则
+- 前端产物是否在 Swoole 可访问的 `backend/public/admin`、`backend/public/client`
+- Nginx 是否设置了足够的 `client_max_body_size`
+
+如果使用 Docker 生产模式，还要进入容器确认：
+
+```bash
+PREFIX=${MALLBASE_CONTAINER_PREFIX:-mallbase}
+docker exec -it ${PREFIX} sh
+ls /app/public/client/index.html
+ls /app/public/admin/index.html
+```
 
 ### 前端能打开，但接口走成了错误地址
 

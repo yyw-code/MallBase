@@ -3,7 +3,6 @@ declare (strict_types = 1);
 
 namespace app;
 
-use app\service\UploadService;
 use mall_base\drivers\DriverManager;
 use mall_base\drivers\sms\AliyunPnvsDriver;
 use mall_base\drivers\sms\AliyunSmsDriver;
@@ -24,7 +23,9 @@ class AppService extends Service
             'local' => LocalUploadDriver::class,
             'oss' => OssUploadDriver::class,
         ]);
-        DriverManager::setDefault('upload', UploadService::getDriver());
+        // 应用启动阶段不能访问系统设置，避免安装前或 CLI 启动时提前连接 DB/Redis。
+        // UploadService 实际执行上传时会重新读取系统设置中的真实驱动。
+        DriverManager::setDefault('upload', 'local');
 
         // 注册短信驱动(默认驱动由 SmsService 按场景绑定动态选择,这里仅注册可用集合)
         DriverManager::register('sms', [

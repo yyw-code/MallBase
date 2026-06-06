@@ -11,27 +11,37 @@
 
 ## 完整步骤
 
-### 1. 准备后端环境变量
+### 1. 准备生产环境变量
 
-生产单容器模式只使用 `backend/.env`：
+生产单容器模式只维护项目根目录 `.env`。根 `.env` 必须存在，因为 `docker-compose.yml` 使用 `env_file: .env` 注入容器环境变量；但这不等于安装前必须把数据库和 Redis 全部填完。
+
+推荐先从模板生成：
 
 ```bash
-cp backend/.example.env backend/.env
+cp deploy/docker/.example.env .env
 ```
+
+也可以手动创建 `.env`，只要文件位于项目根目录即可。
 
 生成强随机值：
 
 ```bash
-cd backend
 openssl rand -hex 16
 openssl rand -hex 32
 ```
 
-重点修改：
+启动容器前建议先确认这些字段：
 
 - `MALLBASE_COMPOSE_PROJECT_NAME`
 - `MALLBASE_CONTAINER_PREFIX`
 - `APP_DEBUG=false`
+- `SWOOLE_HTTP_PORT`
+- `JWT_SECRET`
+
+其中 `MALLBASE_COMPOSE_PROJECT_NAME` / `MALLBASE_CONTAINER_PREFIX` / `SWOOLE_HTTP_PORT` 是 Compose 启动层配置，安装流程不会修改它们。`JWT_SECRET` 如果留空或保持占位符，后端容器入口脚本会生成随机值；生产环境建议把固定强随机值写回根 `.env`，避免容器重新创建后登录 Token 签名密钥变化。
+
+下面这些字段可以提前写在根 `.env` 里，也可以先在 Web 安装向导里填写：
+
 - `DB_HOST`
 - `DB_PORT`
 - `DB_NAME`
@@ -39,8 +49,13 @@ openssl rand -hex 32
 - `DB_PASS`
 - `REDIS_HOST`
 - `REDIS_PORT`
-- `JWT_SECRET`
 - `SITE_URL`
+
+安装向导提交后，会把表单里的数据库、Redis、站点域名等配置写入容器内 `/app/.env` 并应用到当前安装进程。为了保证后续 `docker compose up -d --build`、重新创建容器或迁移服务器时配置不回退，安装完成后请把最终生效值同步回项目根目录 `.env`。
+
+生产单后端容器不启动 MySQL / Redis 容器，所以不需要配置 `MYSQL_PORT` / `REDIS_HOST_PORT`。这两个字段只用于 Docker 开发全套模式把 MySQL / Redis 容器端口暴露给宿主机。
+
+不要手动复制或编辑 `backend/.env`。生产 `docker-compose.yml` 会通过 `env_file: .env` 把根 `.env` 注入后端容器；容器入口脚本会根据这些环境变量派生 `/app/.env`。
 
 同一台服务器部署主站和演示站时，给演示站使用独立的 Compose 名称、容器名前缀和后端宿主机端口。例如：
 
@@ -102,9 +117,35 @@ sh deploy/upload-frontend.sh \
 docker compose up -d --build
 ```
 
-如果这次只有后端代码或 `backend/.env` 变化，不需要重复构建前端。
+如果这次只有根 `.env` 变化，不需要重新构建镜像，执行下面命令让 Compose 重新创建容器并注入新变量：
 
-### 6. 配置宿主机 Nginx
+```bash
+docker compose up -d
+```
+
+生产镜像由 Dockerfile 执行 `COPY backend/ .` 构建，因此 `backend/install/` 会随镜像进入容器内 `/app/install/`。安装完成标记写入 `/app/runtime/install/install.lock`，由 `backend_runtime` volume 持久化。
+
+生产镜像也会把项目根目录 `.version` 复制到容器 `/.version`，用于安装页和状态页展示版本信息。生产 compose 不挂载 `/workspace`，后端容器不会读取项目根目录文件，只读取 Compose 注入的环境变量。
+
+后端 PHP 依赖也在 Dockerfile 构建阶段处理：镜像会安装生产依赖并执行优化后的自动加载生成。生产 Docker 部署时不需要进入容器手动执行 `composer install --no-dev --optimize-autoloader`。
+
+### 6. 理解生产容器文件与数据卷
+
+生产模式和本地开发模式不同，不会把项目源码目录 bind mount 到容器：
+
+| 来源 | 容器路径 | 类型 | 用途 |
+|------|----------|------|------|
+| Docker 镜像 | `/app` | 镜像内文件 | 后端代码、`vendor`、`install`、已随镜像打入的静态文件。 |
+| Docker 镜像 | `/.version` | 镜像内文件 | 安装页和状态页展示版本信息。 |
+| 根 `.env` | 容器环境变量 | `env_file` 注入 | Compose 读取项目根 `.env`，启动时注入容器；入口脚本再派生 `/app/.env`。 |
+| `backend_runtime` volume | `/app/runtime` | 命名 volume | 运行时缓存、日志、安装锁等持久化数据。 |
+| `backend_uploads` volume | `/app/public/uploads` | 命名 volume | 用户上传文件持久化数据。 |
+
+生产 compose 不挂载 `/workspace`，也不会把服务器上的项目根目录映射进容器。重建镜像后，代码来自新镜像；运行时数据和上传文件继续由两个命名 volume 保留。
+
+如果生产环境选择 Nginx 直接托管静态资源，前端文件在宿主机 Nginx 目录；如果选择所有请求统一代理到 Swoole，需要确保前端产物已经进入镜像，或额外挂载到容器内 `/app/public/admin` 和 `/app/public/client`。
+
+### 7. 配置宿主机 Nginx
 
 ```bash
 sudo cp deploy/nginx/mallbase.conf /etc/nginx/sites-available/mallbase.conf
@@ -116,7 +157,7 @@ sudo systemctl reload nginx
 
 路径规则与示例配置见 [nginx-reverse-proxy.md](./nginx-reverse-proxy.md)。
 
-### 7. 访问安装向导
+### 8. 访问安装向导
 
 浏览器打开：
 
@@ -128,17 +169,22 @@ https://mall.example.com/install
 
 安装流程完成后会自动执行：
 
+- 从 `/app/install/data/schema` 导入首装 SQL
 - 路由权限同步
 - 设置菜单权限同步
 - 地区数据导入
 
-### 8. 重启容器
+### 9. 重启容器
 
 安装向导写入配置后，重启后端容器：
 
 ```bash
 docker compose restart
 ```
+
+重启不会丢失安装状态；`install.lock` 位于 `/app/runtime/install/install.lock`，生产 compose 已将 `/app/runtime` 挂载为命名 volume。
+
+如果后续执行 `docker compose up -d --build` 重建容器，容器会重新根据根 `.env` 派生 `/app/.env`。因此生产环境长期配置应回写到根 `.env`，不要依赖容器内临时修改过的 `/app/.env`。
 
 ## 完成后验证
 
@@ -159,5 +205,5 @@ ls /var/www/mallbase/admin/index.html
 
 - 上传静态资源脚本：[upload-frontend.md](./upload-frontend.md)
 - Nginx 代理与静态目录：[nginx-reverse-proxy.md](./nginx-reverse-proxy.md)
-- 常用运维命令：[commands.md](./commands.md)
+- 常用运维命令：[commands-common.md](./commands-common.md)
 - 安装与部署排障：[troubleshooting.md](./troubleshooting.md)

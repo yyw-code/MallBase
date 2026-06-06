@@ -68,13 +68,6 @@ class CronManager
 
     private function isInstalled(): bool
     {
-        $projectRoot = dirname(rtrim(root_path(), DIRECTORY_SEPARATOR));
-        $deployPath = $projectRoot . DIRECTORY_SEPARATOR . 'deploy'
-            . DIRECTORY_SEPARATOR . 'install' . DIRECTORY_SEPARATOR . 'install.lock';
-        if (is_dir(dirname($deployPath))) {
-            return is_file($deployPath);
-        }
-
-        return is_file(root_path() . 'install' . DIRECTORY_SEPARATOR . 'install.lock');
+        return is_file(runtime_path() . 'install' . DIRECTORY_SEPARATOR . 'install.lock');
     }
 }

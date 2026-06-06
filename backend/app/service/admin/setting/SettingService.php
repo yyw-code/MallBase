@@ -13,6 +13,7 @@ use app\validate\admin\setting\SettingValueValidate;
 use app\service\UploadService;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
+use think\facade\Log;
 
 /**
  * 设置服务（分组 + 设置项 + 权限同步 统一管理）
@@ -907,11 +908,22 @@ class SettingService extends BaseService
         }
 
         if ($changed) {
-            // 清理缓存以反映最新分组
-            $this->cacheService->clearAll();
+            $this->clearRebuildPermissionCacheSafely();
         }
 
         return $created;
+    }
+
+    /**
+     * 权限重建结果以数据库为准，缓存清理失败不应阻断安装流程。
+     */
+    private function clearRebuildPermissionCacheSafely(): void
+    {
+        try {
+            $this->cacheService->clearAll();
+        } catch (\Throwable $e) {
+            Log::warning('设置菜单权限已重建，但清理设置缓存失败：' . $e->getMessage());
+        }
     }
 
     // ==================== 表单配置 ====================

@@ -55,6 +55,21 @@ describe('preferences', () => {
     expect(preferenceManager.getPreferences()).toEqual(expected);
   });
 
+  it('initializes theme mode from overrides', async () => {
+    const overrides: any = {
+      theme: {
+        mode: 'light',
+      },
+    };
+
+    await preferenceManager.initPreferences({
+      namespace: 'themeOverrideNamespace',
+      overrides,
+    });
+
+    expect(preferenceManager.getPreferences().theme.mode).toBe('light');
+  });
+
   it('updates theme mode correctly', () => {
     preferenceManager.updatePreferences({
       theme: {
