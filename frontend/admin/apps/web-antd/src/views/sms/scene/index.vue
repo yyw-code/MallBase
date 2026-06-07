@@ -4,7 +4,7 @@ import type { SmsProviderApi } from '#/api/sms/provider';
 import type { SmsSignApi } from '#/api/sms/sign';
 import type { SmsTemplateApi } from '#/api/sms/template';
 
-import { computed, ref } from 'vue';
+import { computed, reactive, ref } from 'vue';
 
 import { useAccess } from '@vben/access';
 
@@ -37,6 +37,22 @@ const templates = ref<SmsTemplateApi.TemplateItem[]>([]);
 
 const modalVisible = ref(false);
 const editingScene = ref<SmsSceneApi.SceneItem | null>(null);
+const searchParams = ref<SmsSceneApi.ListParams>({
+  keyword: '',
+  provider_id: undefined,
+  status: undefined,
+});
+const pagination = reactive({
+  current: 1,
+  pageSize: 10,
+  showSizeChanger: true,
+  showTotal: (total: number) => `共 ${total} 条`,
+  total: 0,
+});
+const statusOptions = [
+  { label: '启用', value: 1 },
+  { label: '禁用', value: 0 },
+];
 const formData = ref<SmsSceneApi.BindParams>({
   scene_code: '',
   provider_id: 0,
@@ -120,19 +136,49 @@ const filteredSigns = computed(() =>
 const loadAll = async () => {
   loading.value = true;
   try {
-    const [scenes, providerList, signList, templateList] = await Promise.all([
-      getSmsSceneListApi(),
-      getSmsProviderListApi({ page: 1, limit: 100 }),
-      getSmsSignListApi({ page: 1, limit: 200 }),
-      getSmsTemplateListApi({ page: 1, limit: 200 }),
-    ]);
-    tableData.value = scenes;
+    const [sceneResult, providerList, signList, templateList] =
+      await Promise.all([
+        getSmsSceneListApi({
+          ...searchParams.value,
+          limit: pagination.pageSize,
+          page: pagination.current,
+        }),
+        getSmsProviderListApi({ page: 1, limit: 100 }),
+        getSmsSignListApi({ page: 1, limit: 200 }),
+        getSmsTemplateListApi({ page: 1, limit: 200 }),
+      ]);
+    tableData.value = sceneResult.list;
+    pagination.total = sceneResult.total;
     providers.value = providerList.list;
     signs.value = signList.list;
     templates.value = templateList.list;
   } finally {
     loading.value = false;
   }
+};
+
+const handleSearch = () => {
+  pagination.current = 1;
+  loadAll();
+};
+
+const resetSearch = () => {
+  searchParams.value = {
+    keyword: '',
+    provider_id: undefined,
+    status: undefined,
+  };
+  pagination.current = 1;
+  loadAll();
+};
+
+const handleTableChange = (newPagination: {
+  current?: number;
+  pageSize?: number;
+}) => {
+  pagination.current = newPagination.current || 1;
+  pagination.pageSize = newPagination.pageSize || pagination.pageSize;
+  loadAll();
 };
 
 const openBindModal = (row: SmsSceneApi.SceneItem) => {
@@ -142,7 +188,7 @@ const openBindModal = (row: SmsSceneApi.SceneItem) => {
     provider_id: row.provider_id || providers.value[0]?.id || 0,
     template_id: row.template_id || 0,
     sign_id: row.sign_id || 0,
-    status: row.status || 1,
+    status: row.status ?? 1,
   };
   // 回填的模板若与当前场景占位符不兼容,清空并提示重选
   if (formData.value.template_id) {
@@ -185,11 +231,13 @@ const handleUnbind = async (row: SmsSceneApi.SceneItem) => {
 };
 
 const columns = [
+  { title: 'ID', dataIndex: 'id', width: 80 },
   { title: '场景', dataIndex: 'scene_name', width: 180 },
   { title: '场景编码', dataIndex: 'scene_code', width: 200 },
   { title: '服务商', dataIndex: 'provider_name', width: 160 },
   { title: '模板', dataIndex: 'template_name', width: 200 },
   { title: '签名', dataIndex: 'sign_name', width: 160 },
+  { title: '状态', dataIndex: 'status', width: 100 },
   { title: '更新时间', dataIndex: 'update_time', width: 180 },
   { title: '操作', key: 'action', width: 200 },
 ];
@@ -209,16 +257,54 @@ if (hasAccessByCodes(['SmsSceneList'])) {
       />
     </div>
 
+    <a-form layout="inline" class="mb-4" v-access:code="'SmsSceneList'">
+      <a-form-item label="服务商">
+        <a-select
+          v-model:value="searchParams.provider_id"
+          placeholder="全部"
+          allow-clear
+          :options="providers.map((p) => ({ label: p.name, value: p.id }))"
+          style="width: 180px"
+        />
+      </a-form-item>
+      <a-form-item label="关键词">
+        <a-input
+          v-model:value="searchParams.keyword"
+          placeholder="场景/编码/模板/签名"
+          allow-clear
+          style="width: 220px"
+          @press-enter="handleSearch"
+        />
+      </a-form-item>
+      <a-form-item label="状态">
+        <a-select
+          v-model:value="searchParams.status"
+          placeholder="全部"
+          allow-clear
+          :options="statusOptions"
+          style="width: 120px"
+        />
+      </a-form-item>
+      <a-form-item>
+        <a-button type="primary" @click="handleSearch">搜索</a-button>
+        <a-button class="ml-2" @click="resetSearch">重置</a-button>
+      </a-form-item>
+    </a-form>
+
     <a-table
       :columns="columns"
       :data-source="tableData"
       :loading="loading"
-      :pagination="false"
-      :scroll="{ x: 1200 }"
+      :pagination="pagination"
+      :scroll="{ x: 1460 }"
       row-key="scene_code"
+      @change="handleTableChange"
       v-access:code="'SmsSceneList'"
     >
       <template #bodyCell="{ column, record }">
+        <template v-if="column.dataIndex === 'id'">
+          <span>{{ record.id || '-' }}</span>
+        </template>
         <template
           v-if="
             ['provider_name', 'template_name', 'sign_name'].includes(
@@ -230,6 +316,17 @@ if (hasAccessByCodes(['SmsSceneList'])) {
             record[column.dataIndex]
           }}</span>
           <a-tag v-else color="default">未绑定</a-tag>
+        </template>
+        <template v-if="column.dataIndex === 'status'">
+          <a-tag :color="record.status === 1 ? 'green' : 'default'">
+            {{
+              record.status === 1
+                ? '启用'
+                : record.status === 0
+                  ? '禁用'
+                  : '未绑定'
+            }}
+          </a-tag>
         </template>
         <template v-if="column.key === 'action'">
           <a-space>

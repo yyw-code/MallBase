@@ -25,7 +25,24 @@ class SmsTemplateService extends BaseService
 
     public function getList(array $where, int $page, int $limit): array
     {
-        $query = $this->model()
+        $total = $this->buildListQuery($where)->count();
+        $list = $this->buildListQuery($where)
+            ->order('id', 'desc')
+            ->page($page, $limit)
+            ->select()
+            ->toArray();
+
+        foreach ($list as &$row) {
+            $row['placeholders'] = SmsTemplate::extractPlaceholders((string) ($row['template_content'] ?? ''));
+        }
+        unset($row);
+
+        return compact('total', 'list');
+    }
+
+    protected function buildListQuery(array $where)
+    {
+        return $this->model()
             ->when(!empty($where['keyword']), function ($q) use ($where) {
                 $q->whereLike('template_name|template_code', "%{$where['keyword']}%");
             })
@@ -35,16 +52,6 @@ class SmsTemplateService extends BaseService
             ->when(!empty($where['audit_status']), function ($q) use ($where) {
                 $q->where('audit_status', $where['audit_status']);
             });
-
-        $total = $query->count();
-        $list = $query->order('id', 'desc')->page($page, $limit)->select()->toArray();
-
-        foreach ($list as &$row) {
-            $row['placeholders'] = SmsTemplate::extractPlaceholders((string) ($row['template_content'] ?? ''));
-        }
-        unset($row);
-
-        return compact('total', 'list');
     }
 
     public function getInfo(int $id): array
@@ -70,7 +77,7 @@ class SmsTemplateService extends BaseService
         if ($signId <= 0) {
             throw new BusinessException('请选择关联签名');
         }
-        $sign = SmsSign::find($signId);
+        $sign = $this->model(SmsSign::class)->find($signId);
         if ($sign === null || (int) $sign->provider_id !== $providerId) {
             throw new BusinessException('关联签名不存在或不属于当前服务商');
         }
@@ -90,7 +97,7 @@ class SmsTemplateService extends BaseService
      */
     public function create(array $data): int
     {
-        $provider = SmsProvider::find($data['provider_id']);
+        $provider = $this->model(SmsProvider::class)->find($data['provider_id']);
         if ($provider === null) {
             throw new BusinessException('服务商不存在');
         }
@@ -131,10 +138,7 @@ class SmsTemplateService extends BaseService
             $payload['template_code'] = $templateCode;
             $payload['audit_reason'] = 'PNVS 系统赠送模板,无需远端审核';
 
-            // 必须 new 出独立实例:$this->model() 走容器 make() 返回单例,
-            // 同一请求内多次创建(如 createByScenes 循环)会复用带 id 的实例,
-            // 第二次起 save() 退化为 UPDATE,导致只落库最后一条
-            $row = new SmsTemplate();
+            $row = $this->model();
             $row->save($payload);
             return (int) $row->id;
         }
@@ -157,8 +161,7 @@ class SmsTemplateService extends BaseService
         $payload['audit_status'] = SmsTemplate::AUDIT_SUBMITTING;
         $payload['audit_reason'] = null;
 
-        // 必须 new 独立实例,理由同 PNVS 分支:避免单例复用导致循环创建退化为 UPDATE
-        $row = new SmsTemplate();
+        $row = $this->model();
         $row->save($payload);
 
         JobQueue::push(SmsTemplateSyncJob::class, ['templateId' => (int) $row->id]);
@@ -172,7 +175,7 @@ class SmsTemplateService extends BaseService
         if ($row === null) {
             throw new BusinessException('模板不存在');
         }
-        $provider = SmsProvider::find($row->provider_id);
+        $provider = $this->model(SmsProvider::class)->find($row->provider_id);
         if ($provider === null) {
             throw new BusinessException('服务商不存在');
         }
@@ -231,7 +234,9 @@ class SmsTemplateService extends BaseService
             try {
                 $manager = SmsDriverFactory::manager($provider);
                 // 阿里云新接口 UpdateSmsTemplate 必填 RelatedSignName,取用户所选签名
-                $newData['related_sign_name'] = (string) SmsSign::where('id', $signId)->value('sign_name');
+                $newData['related_sign_name'] = (string) $this->model(SmsSign::class)
+                    ->where('id', $signId)
+                    ->value('sign_name');
                 $manager->modifyTemplate((string) $row->template_code, $newData);
                 $newData['audit_status'] = SmsTemplate::AUDIT_PENDING;
                 $newData['audit_reason'] = null;
@@ -258,7 +263,7 @@ class SmsTemplateService extends BaseService
         }
 
         if ((string) $row->template_code !== '') {
-            $provider = SmsProvider::find($row->provider_id);
+            $provider = $this->model(SmsProvider::class)->find($row->provider_id);
             if ($provider !== null && SmsDriverFactory::supportsRemoteSignManagement($provider)) {
                 try {
                     $manager = SmsDriverFactory::manager($provider);
@@ -283,7 +288,7 @@ class SmsTemplateService extends BaseService
      */
     public function importFromRemote(int $providerId, string $templateCode): int
     {
-        $provider = SmsProvider::find($providerId);
+        $provider = $this->model(SmsProvider::class)->find($providerId);
         if ($provider === null) {
             throw new BusinessException('服务商不存在');
         }
@@ -333,7 +338,7 @@ class SmsTemplateService extends BaseService
         if ($row === null) {
             throw new BusinessException('模板不存在');
         }
-        $provider = SmsProvider::find($row->provider_id);
+        $provider = $this->model(SmsProvider::class)->find($row->provider_id);
         if ($provider === null) {
             throw new BusinessException('服务商不存在');
         }
@@ -355,7 +360,7 @@ class SmsTemplateService extends BaseService
      */
     public function syncAll(int $providerId): array
     {
-        $provider = SmsProvider::find($providerId);
+        $provider = $this->model(SmsProvider::class)->find($providerId);
         if ($provider === null) {
             throw new BusinessException('服务商不存在');
         }
@@ -397,7 +402,7 @@ class SmsTemplateService extends BaseService
                 $skipped++;
                 continue;
             }
-            $provider = SmsProvider::find($row->provider_id);
+            $provider = $this->model(SmsProvider::class)->find($row->provider_id);
             if ($provider === null || !SmsDriverFactory::supportsRemoteSignManagement($provider)) {
                 $skipped++;
                 continue;
@@ -420,7 +425,7 @@ class SmsTemplateService extends BaseService
      */
     public function createByScenes(int $providerId, int $signId, array $items): array
     {
-        $provider = SmsProvider::find($providerId);
+        $provider = $this->model(SmsProvider::class)->find($providerId);
         if ($provider === null) {
             throw new BusinessException('服务商不存在');
         }

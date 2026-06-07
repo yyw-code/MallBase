@@ -23,19 +23,9 @@ class SmsProviderService extends BaseService
      */
     public function getList(array $where, int $page, int $limit): array
     {
-        $query = $this->model()
-            ->when(!empty($where['keyword']), function ($q) use ($where) {
-                $q->whereLike('name', "%{$where['keyword']}%");
-            })
-            ->when(!empty($where['driver']), function ($q) use ($where) {
-                $q->where('driver', $where['driver']);
-            })
-            ->when(isset($where['status']) && $where['status'] !== '', function ($q) use ($where) {
-                $q->where('status', (int) $where['status']);
-            });
-
-        $total = $query->count();
-        $list = $query->order('sort', 'asc')
+        $total = $this->buildListQuery($where)->count();
+        $list = $this->buildListQuery($where)
+            ->order('sort', 'asc')
             ->order('id', 'desc')
             ->page($page, $limit)
             ->select()
@@ -48,6 +38,20 @@ class SmsProviderService extends BaseService
         }
 
         return compact('total', 'list');
+    }
+
+    protected function buildListQuery(array $where)
+    {
+        return $this->model()
+            ->when(!empty($where['keyword']), function ($q) use ($where) {
+                $q->whereLike('name', "%{$where['keyword']}%");
+            })
+            ->when(!empty($where['driver']), function ($q) use ($where) {
+                $q->where('driver', $where['driver']);
+            })
+            ->when(($where['status'] ?? null) !== null && $where['status'] !== '', function ($q) use ($where) {
+                $q->where('status', (int) $where['status']);
+            });
     }
 
     public function getInfo(int $id): array

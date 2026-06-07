@@ -21,7 +21,19 @@ class SmsSignService extends BaseService
 
     public function getList(array $where, int $page, int $limit): array
     {
-        $query = $this->model()
+        $total = $this->buildListQuery($where)->count();
+        $list = $this->buildListQuery($where)
+            ->order('id', 'desc')
+            ->page($page, $limit)
+            ->select()
+            ->toArray();
+
+        return compact('total', 'list');
+    }
+
+    protected function buildListQuery(array $where)
+    {
+        return $this->model()
             ->when(!empty($where['keyword']), function ($q) use ($where) {
                 $q->whereLike('sign_name', "%{$where['keyword']}%");
             })
@@ -31,11 +43,6 @@ class SmsSignService extends BaseService
             ->when(!empty($where['audit_status']), function ($q) use ($where) {
                 $q->where('audit_status', $where['audit_status']);
             });
-
-        $total = $query->count();
-        $list = $query->order('id', 'desc')->page($page, $limit)->select()->toArray();
-
-        return compact('total', 'list');
     }
 
     public function getInfo(int $id): array
@@ -63,7 +70,7 @@ class SmsSignService extends BaseService
      */
     public function create(array $data): int
     {
-        $provider = SmsProvider::find($data['provider_id']);
+        $provider = $this->model(SmsProvider::class)->find($data['provider_id']);
         if ($provider === null) {
             throw new BusinessException('服务商不存在');
         }
@@ -98,7 +105,7 @@ class SmsSignService extends BaseService
      */
     public function importFromRemote(int $providerId, string $signName): int
     {
-        $provider = SmsProvider::find($providerId);
+        $provider = $this->model(SmsProvider::class)->find($providerId);
         if ($provider === null) {
             throw new BusinessException('服务商不存在');
         }
@@ -138,7 +145,7 @@ class SmsSignService extends BaseService
             throw new BusinessException('签名不存在');
         }
 
-        $provider = SmsProvider::find($row->provider_id);
+        $provider = $this->model(SmsProvider::class)->find($row->provider_id);
         if ($provider !== null && SmsDriverFactory::supportsRemoteSignManagement($provider)) {
             try {
                 $manager = SmsDriverFactory::manager($provider);
@@ -159,7 +166,7 @@ class SmsSignService extends BaseService
         if ($row === null) {
             throw new BusinessException('签名不存在');
         }
-        $provider = SmsProvider::find($row->provider_id);
+        $provider = $this->model(SmsProvider::class)->find($row->provider_id);
         if ($provider === null) {
             throw new BusinessException('服务商不存在');
         }

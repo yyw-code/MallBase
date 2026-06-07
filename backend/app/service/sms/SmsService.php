@@ -8,6 +8,7 @@ use app\model\sms\SmsProvider;
 use app\model\sms\SmsSceneBinding;
 use app\model\sms\SmsSign;
 use app\model\sms\SmsTemplate;
+use mall_base\base\BaseService;
 use mall_base\drivers\DriverManager;
 use mall_base\drivers\sms\BaseSmsDriver;
 use mall_base\exception\SmsException;
@@ -28,10 +29,14 @@ use mall_base\exception\SmsException;
  *
  * 兼容性硬约束:
  *  - sendCode 方法签名保持不变,uniapp 调用方零修改
+ *
+ * @extends BaseService<SmsSceneBinding>
  */
-class SmsService
+class SmsService extends BaseService
 {
     private const CODE_KEY_PREFIX = 'sms:code:';
+
+    protected string $modelClass = SmsSceneBinding::class;
 
     public function __construct(
         private readonly ?BaseSmsDriver $driver,
@@ -127,14 +132,15 @@ class SmsService
             return [$this->driver, $extra];
         }
 
-        $binding = SmsSceneBinding::where('scene_code', $scene)
+        $binding = $this->model()
+            ->where('scene_code', $scene)
             ->where('status', 1)
             ->find();
         if ($binding === null) {
             throw new SmsException("场景 [{$scene}] 尚未绑定短信模板,请在后台短信配置中完成绑定");
         }
 
-        $provider = SmsProvider::find($binding->provider_id);
+        $provider = $this->model(SmsProvider::class)->find($binding->provider_id);
         if ($provider === null || (int) $provider->status !== 1) {
             throw new SmsException("场景 [{$scene}] 绑定的服务商不可用,请检查启用状态");
         }
@@ -152,13 +158,13 @@ class SmsService
             $allowedStatuses = [SmsSign::AUDIT_PASSED, SmsSign::AUDIT_LOCAL_ONLY];
             $pnvsTemplate = null;
             if (!empty($binding->sign_id)) {
-                $sign = SmsSign::find($binding->sign_id);
+                $sign = $this->model(SmsSign::class)->find($binding->sign_id);
                 if ($sign !== null && in_array($sign->audit_status, $allowedStatuses, true)) {
                     $extra['sign_name'] = $sign->sign_name;
                 }
             }
             if (!empty($binding->template_id)) {
-                $template = SmsTemplate::find($binding->template_id);
+                $template = $this->model(SmsTemplate::class)->find($binding->template_id);
                 if ($template !== null && in_array($template->audit_status, $allowedStatuses, true)) {
                     $extra['template_code'] = $template->template_code;
                     $pnvsTemplate = $template;
@@ -173,7 +179,7 @@ class SmsService
         }
 
         // 传统短信驱动:签名/模板必填
-        $template = SmsTemplate::find($binding->template_id);
+        $template = $this->model(SmsTemplate::class)->find($binding->template_id);
         if ($template === null) {
             throw new SmsException("场景 [{$scene}] 绑定的模板不存在,请重新绑定");
         }
@@ -181,7 +187,7 @@ class SmsService
             throw new SmsException("场景 [{$scene}] 绑定的模板尚未审核通过");
         }
 
-        $sign = SmsSign::find($binding->sign_id);
+        $sign = $this->model(SmsSign::class)->find($binding->sign_id);
         if ($sign === null) {
             throw new SmsException("场景 [{$scene}] 绑定的签名不存在,请重新绑定");
         }
@@ -236,14 +242,15 @@ class SmsService
             return $this->driver;
         }
 
-        $binding = SmsSceneBinding::where('scene_code', $scene)
+        $binding = $this->model()
+            ->where('scene_code', $scene)
             ->where('status', 1)
             ->find();
         if ($binding === null) {
             return null;
         }
 
-        $provider = SmsProvider::find($binding->provider_id);
+        $provider = $this->model(SmsProvider::class)->find($binding->provider_id);
         if ($provider === null || (int) $provider->status !== 1) {
             return null;
         }

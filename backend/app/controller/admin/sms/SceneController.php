@@ -19,8 +19,11 @@ class SceneController extends BaseController
 
     public function list()
     {
-        $list = $this->service()->getList();
-        return $this->success($list, '获取成功');
+        $where = $this->request->param(['keyword', 'provider_id', 'status']);
+        [$page, $limit] = $this->getPagination(1, 15);
+
+        $result = $this->service()->getList($where, $page, $limit);
+        return $this->success($result, '获取成功');
     }
 
     public function bind()

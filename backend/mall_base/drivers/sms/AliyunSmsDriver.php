@@ -347,6 +347,19 @@ class AliyunSmsDriver extends BaseSmsDriver implements SmsTemplateManagerInterfa
      */
     private function mapTemplateStatus(string $status): string
     {
+        $status = strtoupper(trim($status));
+
+        // GetSmsTemplate 返回 "0"/"1"/"2"/"10",QuerySmsTemplateList 返回 AUDIT_STATE_*。
+        // 两种来源都统一映射成本地审核枚举,避免已通过模板被默认分支误判为失败。
+        if (in_array($status, ['2', '10', 'AUDIT_STATE_NOT_PASS', 'AUDIT_STATE_CANCEL', 'AUDIT_SATE_CANCEL'], true)) {
+            return 'rejected';
+        }
+        if (in_array($status, ['1', 'AUDIT_STATE_PASS'], true)) {
+            return 'passed';
+        }
+        if (in_array($status, ['0', 'AUDIT_STATE_INIT'], true)) {
+            return 'pending';
+        }
         if (str_contains($status, 'NOT_PASS')) {
             return 'rejected';
         }

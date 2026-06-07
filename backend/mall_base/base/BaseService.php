@@ -3,6 +3,7 @@
 namespace mall_base\base;
 
 use think\facade\Db;
+use think\Container;
 
 /**
  * 服务基类
@@ -54,7 +55,7 @@ abstract class BaseService
             throw new \RuntimeException('Service 必须定义 $modelClass 属性');
         }
 
-        return app()->make($className);
+        return Container::getInstance()->make($className, [], true);
     }
 
     /**

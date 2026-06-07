@@ -21,10 +21,21 @@ class SmsSceneService extends BaseService
 {
     protected string $modelClass = SmsSceneBinding::class;
 
+    public function getList(array $where = [], int $page = 1, int $limit = 15): array
+    {
+        $list = $this->filterSceneRows($this->buildSceneRows(), $where);
+        $total = count($list);
+        $list = array_slice($list, ($page - 1) * $limit, $limit);
+
+        return compact('total', 'list');
+    }
+
     /**
      * 列出所有内置场景 + 当前绑定情况(无绑定的也要返回行)
+     *
+     * @return array<int, array<string, mixed>>
      */
-    public function getList(): array
+    protected function buildSceneRows(): array
     {
         $bindings = $this->model()->select()->toArray();
         $byScene = [];
@@ -32,14 +43,15 @@ class SmsSceneService extends BaseService
             $byScene[$row['scene_code']] = $row;
         }
 
-        $providerMap = SmsProvider::column('name', 'id');
-        $templateMap = SmsTemplate::column('template_name', 'id');
-        $signMap = SmsSign::column('sign_name', 'id');
+        $providerMap = $this->model(SmsProvider::class)->column('name', 'id');
+        $templateMap = $this->model(SmsTemplate::class)->column('template_name', 'id');
+        $signMap = $this->model(SmsSign::class)->column('sign_name', 'id');
 
         $list = [];
         foreach (SmsScene::allValues() as $code) {
             $row = $byScene[$code] ?? null;
             $list[] = [
+                'id' => $row['id'] ?? null,
                 'scene_code' => $code,
                 'scene_name' => SmsScene::textOf($code),
                 'provider_id' => $row['provider_id'] ?? null,
@@ -48,13 +60,48 @@ class SmsSceneService extends BaseService
                 'template_name' => $row ? ($templateMap[$row['template_id']] ?? null) : null,
                 'sign_id' => $row['sign_id'] ?? null,
                 'sign_name' => $row ? ($signMap[$row['sign_id']] ?? null) : null,
-                'status' => $row['status'] ?? 0,
+                'status' => $row['status'] ?? null,
                 'update_time' => $row['update_time'] ?? null,
                 'available_params' => SmsScene::availableParamNames($code),
             ];
         }
 
         return $list;
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $list
+     * @return array<int, array<string, mixed>>
+     */
+    protected function filterSceneRows(array $list, array $where): array
+    {
+        $keyword = trim((string) ($where['keyword'] ?? ''));
+        if ($keyword !== '') {
+            $list = array_filter($list, static function (array $row) use ($keyword): bool {
+                foreach (['scene_code', 'scene_name', 'provider_name', 'template_name', 'sign_name'] as $field) {
+                    if (str_contains((string) ($row[$field] ?? ''), $keyword)) {
+                        return true;
+                    }
+                }
+                return false;
+            });
+        }
+
+        if (($where['provider_id'] ?? null) !== null && $where['provider_id'] !== '') {
+            $providerId = (int) $where['provider_id'];
+            $list = array_filter($list, static fn(array $row): bool => (int) ($row['provider_id'] ?? 0) === $providerId);
+        }
+
+        if (($where['status'] ?? null) !== null && $where['status'] !== '') {
+            $status = (int) $where['status'];
+            $list = array_filter(
+                $list,
+                static fn(array $row): bool => ($row['status'] ?? null) !== null
+                    && (int) $row['status'] === $status
+            );
+        }
+
+        return array_values($list);
     }
 
     public function bind(array $data): void
@@ -65,7 +112,7 @@ class SmsSceneService extends BaseService
         }
 
         $providerId = (int) $data['provider_id'];
-        $provider = SmsProvider::find($providerId);
+        $provider = $this->model(SmsProvider::class)->find($providerId);
         if ($provider === null) {
             throw new BusinessException('服务商不存在');
         }
@@ -81,11 +128,11 @@ class SmsSceneService extends BaseService
             throw new BusinessException('请选择签名');
         }
 
-        $template = SmsTemplate::find($templateId);
+        $template = $this->model(SmsTemplate::class)->find($templateId);
         if ($template === null || $template->provider_id !== $providerId) {
             throw new BusinessException('模板与服务商不匹配');
         }
-        $sign = SmsSign::find($signId);
+        $sign = $this->model(SmsSign::class)->find($signId);
         if ($sign === null || $sign->provider_id !== $providerId) {
             throw new BusinessException('签名与服务商不匹配');
         }

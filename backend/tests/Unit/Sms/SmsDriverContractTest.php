@@ -41,6 +41,24 @@ final class SmsDriverContractTest extends TestCase
         );
     }
 
+    public function testAliyunTemplateStatusMappingSupportsNumericGetSmsTemplateStatus(): void
+    {
+        $driver = new AliyunSmsDriver([
+            'access_key_id' => 'test',
+            'access_key_secret' => 'test',
+            'region' => 'cn-hangzhou',
+        ]);
+        $method = new \ReflectionMethod(AliyunSmsDriver::class, 'mapTemplateStatus');
+        $method->setAccessible(true);
+
+        $this->assertSame('pending', $method->invoke($driver, '0'));
+        $this->assertSame('passed', $method->invoke($driver, '1'));
+        $this->assertSame('rejected', $method->invoke($driver, '2'));
+        $this->assertSame('rejected', $method->invoke($driver, '10'));
+        $this->assertSame('passed', $method->invoke($driver, 'AUDIT_STATE_PASS'));
+        $this->assertSame('rejected', $method->invoke($driver, 'AUDIT_STATE_NOT_PASS'));
+    }
+
     public function testPnvsDriverSupportsCodeVerification(): void
     {
         $driver = new AliyunPnvsDriver([

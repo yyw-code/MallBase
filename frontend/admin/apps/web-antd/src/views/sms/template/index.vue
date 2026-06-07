@@ -12,7 +12,7 @@ import { message } from 'ant-design-vue';
 import { extractPlaceholders, isPnvsDriver } from '#/api/sms/constants';
 import { getSmsProviderListApi } from '#/api/sms/provider';
 import type { SmsProviderApi } from '#/api/sms/provider';
-import { getSmsSceneListApi } from '#/api/sms/scene';
+import { getAllSmsSceneApi } from '#/api/sms/scene';
 import { getSmsSignListApi } from '#/api/sms/sign';
 import {
   createSmsTemplateApi,
@@ -201,7 +201,7 @@ const handleCreate = async () => {
   resetSceneCreateState();
   if (sceneList.value.length === 0) {
     try {
-      sceneList.value = await getSmsSceneListApi();
+      sceneList.value = await getAllSmsSceneApi();
     } catch (error) {
       console.error('加载场景列表失败:', error);
     }
