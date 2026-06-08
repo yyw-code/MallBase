@@ -1117,7 +1117,8 @@ class UploadService extends BaseService
             $driverConfig['base_url'] = (string) getSystemSetting('site_url', '');
         }
 
-        return DriverManager::driver('upload', $driverName, $driverConfig);
+        // 上传配置来自后台系统设置，Swoole 常驻进程下不缓存实例，避免切换凭证或域名后沿用旧客户端。
+        return DriverManager::driver('upload', $driverName, $driverConfig, false);
     }
 
     /**

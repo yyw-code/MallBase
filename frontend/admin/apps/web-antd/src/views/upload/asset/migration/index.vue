@@ -1,10 +1,12 @@
 <script lang="ts" setup>
+import type { UploadApi } from '#/api/core/upload';
 import type { UploadAssetApi } from '#/api/upload/asset';
 
 import { computed, h, onMounted, reactive, ref } from 'vue';
 
 import { message, Modal, Tag } from 'ant-design-vue';
 
+import { getUploadOptionsCached } from '#/api/core/upload-config-cache';
 import {
   cleanupUploadAssetMigrationApi,
   createUploadAssetMigrationApi,
@@ -22,6 +24,8 @@ const logLoading = ref(false);
 const tableData = ref<UploadAssetApi.MigrationItem[]>([]);
 const logData = ref<UploadAssetApi.MigrationLogItem[]>([]);
 const currentMigration = ref<UploadAssetApi.MigrationItem>();
+const uploadOptions = ref<null | UploadApi.UploadOptions>(null);
+const uploadOptionsLoading = ref(false);
 const pagination = reactive({ current: 1, pageSize: 20, total: 0 });
 const logPagination = reactive({ current: 1, pageSize: 20, total: 0 });
 const logFilters = reactive<{ keyword: string; status?: number }>({
@@ -32,20 +36,30 @@ const formRef = ref();
 const formData = reactive({
   name: '',
   source_driver: 'legacy_local',
-  target_driver: 'oss',
+  target_driver: '',
   options: {
     delete_source_after_success: false,
   },
 });
 
-const driverOptions = [
-  { label: '历史图片路径', value: 'legacy_local' },
-  { label: '本地', value: 'local' },
-  { label: '阿里云 OSS', value: 'oss' },
-  { label: '腾讯云 COS', value: 'cos' },
-];
-const driverLabelMap = Object.fromEntries(
-  driverOptions.map((item) => [item.value, item.label]),
+const legacyDriverOption = { label: '历史图片路径', value: 'legacy_local' };
+
+const storageDriverOptions = computed(() =>
+  (uploadOptions.value?.upload_drivers || []).map((item) => ({
+    label: item.label,
+    value: item.value,
+  })),
+);
+
+const driverOptions = computed(() => [
+  legacyDriverOption,
+  ...storageDriverOptions.value,
+]);
+
+const driverLabelMap = computed(() =>
+  Object.fromEntries(
+    driverOptions.value.map((item) => [item.value, item.label]),
+  ),
 );
 
 const statusText: Record<number, string> = {
@@ -92,9 +106,33 @@ const getStatusText = (record: UploadAssetApi.MigrationItem) =>
 const getStatusColor = (record: UploadAssetApi.MigrationItem) =>
   isEmptyDone(record) ? 'default' : statusColor[record.status] || 'default';
 
-const formatDriver = (driver: string) => driverLabelMap[driver] || driver;
+const formatDriver = (driver: string) => driverLabelMap.value[driver] || driver;
 
 const formatYesNo = (value: number) => (value === 1 ? '是' : '否');
+
+const loadUploadOptions = async () => {
+  uploadOptionsLoading.value = true;
+  try {
+    uploadOptions.value = await getUploadOptionsCached();
+    const targetOptions = storageDriverOptions.value;
+    const enabledDriver =
+      uploadOptions.value.upload_drivers?.find((item) => item.enabled)?.value ||
+      '';
+    if (
+      targetOptions.length > 0 &&
+      (!formData.target_driver ||
+        !targetOptions.some((item) => item.value === formData.target_driver))
+    ) {
+      formData.target_driver = enabledDriver || targetOptions[0]?.value || '';
+    }
+  } catch (error) {
+    console.warn('加载上传选项失败:', error);
+    uploadOptions.value = null;
+    message.error('上传配置加载失败');
+  } finally {
+    uploadOptionsLoading.value = false;
+  }
+};
 
 const loadData = async () => {
   loading.value = true;
@@ -284,7 +322,10 @@ const logColumns = [
 ];
 const logTableScroll = { x: 2010 };
 
-onMounted(loadData);
+onMounted(async () => {
+  await loadUploadOptions();
+  await loadData();
+});
 </script>
 
 <template>
@@ -327,7 +368,7 @@ onMounted(loadData);
               type="link"
               size="small"
               @click="openLogs(record)"
-              v-access:code="'SystemUploadAssetMigrationList'"
+              v-access:code="'SystemUploadAssetMigrationLogs'"
             >
               日志
             </a-button>
@@ -368,6 +409,9 @@ onMounted(loadData);
           <a-select
             v-model:value="formData.source_driver"
             :options="driverOptions"
+            :loading="uploadOptionsLoading"
+            show-search
+            option-filter-prop="label"
             @change="handleSourceChange"
           />
         </a-form-item>
@@ -378,9 +422,10 @@ onMounted(loadData);
         >
           <a-select
             v-model:value="formData.target_driver"
-            :options="
-              driverOptions.filter((item) => item.value !== 'legacy_local')
-            "
+            :options="storageDriverOptions"
+            :loading="uploadOptionsLoading"
+            show-search
+            option-filter-prop="label"
           />
         </a-form-item>
         <a-form-item

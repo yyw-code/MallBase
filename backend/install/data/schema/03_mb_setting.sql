@@ -141,12 +141,7 @@ INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`
 (1021, '多文件最大个数', 'upload_files_max_count', '5', 'number', NULL, NULL, NULL, NULL, 100),
 (1021, '单视频最大体积(MB)', 'upload_video_max_size', '200', 'number', NULL, NULL, NULL, NULL, 110),
 (1021, '多视频单个最大体积(MB)', 'upload_videos_max_size', '200', 'number', NULL, NULL, NULL, NULL, 120),
-(1021, '多视频最大个数', 'upload_videos_max_count', '5', 'number', NULL, NULL, NULL, NULL, 130),
-(1021, '素材清理开关', 'asset_cleanup_enabled', '1', 'switch', NULL, NULL, NULL, '开启后定时清理过期回收站素材、临时素材和迁移旧位置', 150),
-(1021, '回收站保留天数', 'asset_recycle_retention_days', '30', 'number', NULL, NULL, NULL, '无引用素材进入回收站后保留天数', 160),
-(1021, '临时素材保留天数', 'asset_temp_retention_days', '7', 'number', NULL, NULL, NULL, '上传后未被任何业务引用的素材保留天数', 170),
-(1021, '迁移旧位置保留天数', 'asset_migration_old_location_retention_days', '30', 'number', NULL, NULL, NULL, '跨存储迁移后非主存储位置保留天数', 180),
-(1021, '素材清理批量数', 'asset_cleanup_batch_size', '100', 'number', NULL, NULL, NULL, '单次清理任务最多处理的素材或存储位置数量', 190);
+(1021, '多视频最大个数', 'upload_videos_max_count', '5', 'number', NULL, NULL, NULL, NULL, 130);
 
 -- 设置项：1022 UploadLocal 本地存储
 INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`, `rules`, `placeholder`, `remark`, `sort`) VALUES
@@ -166,9 +161,9 @@ INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`
 INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`, `rules`, `placeholder`, `remark`, `sort`) VALUES
 (1024, 'SecretId', 'cos_secret_id', '', 'input', NULL, '[{"type":"required","message":"启用该驱动必须填写"}]', NULL, NULL, 10),
 (1024, 'SecretKey', 'cos_secret_key', '', 'password', NULL, '[{"type":"required","message":"启用该驱动必须填写"}]', NULL, NULL, 20),
-(1024, 'Bucket', 'cos_bucket', '', 'input', NULL, '[{"type":"required","message":"启用该驱动必须填写"}]', 'appid-bucketname', NULL, 30),
+(1024, 'Bucket', 'cos_bucket', '', 'input', NULL, '[{"type":"required","message":"启用该驱动必须填写"}]', 'examplebucket-1250000000', NULL, 30),
 (1024, 'Region', 'cos_region', '', 'input', NULL, '[{"type":"required","message":"启用该驱动必须填写"}]', 'ap-shanghai', NULL, 40),
-(1024, '访问域名', 'cos_url_prefix', '', 'input', NULL, '[{"type":"required","message":"启用该驱动必须填写"}]', NULL, NULL, 50);
+(1024, '访问域名', 'cos_url_prefix', '', 'input', NULL, '[{"type":"required","message":"启用该驱动必须填写"}]', 'https://examplebucket-1250000000.cos.ap-shanghai.myqcloud.com', NULL, 50);
 
 -- 设置项：1031 WechatMiniProgram 微信小程序
 INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`, `rules`, `placeholder`, `remark`, `sort`) VALUES

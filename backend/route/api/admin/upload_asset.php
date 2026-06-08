@@ -55,7 +55,7 @@ Route::group('upload/asset/migration', function () {
     Route::get('list', 'list')->name('SystemUploadAssetMigrationList')->option(['_alias' => '迁移任务列表', '_desc' => '获取素材迁移任务列表', '_auth' => true]);
     Route::post('create', 'create')->name('SystemUploadAssetMigrationCreate')->option(['_alias' => '创建迁移任务', '_desc' => '创建素材迁移任务', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::post('retry/:id', 'retry')->name('SystemUploadAssetMigrationRetry')->option(['_alias' => '重试迁移任务', '_desc' => '重新执行素材迁移任务', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
-    Route::get('logs/:id', 'logs')->name('SystemUploadAssetMigrationLogs')->option(['_alias' => '迁移明细日志', '_desc' => '查看素材迁移明细日志', '_auth' => true, '_type' => Permission::TYPE_MENU]);
+    Route::get('logs/:id', 'logs')->name('SystemUploadAssetMigrationLogs')->option(['_alias' => '迁移明细日志', '_desc' => '查看素材迁移明细日志', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::delete('cleanup', 'cleanup')->name('SystemUploadAssetMigrationCleanup')->option(['_alias' => '清理迁移任务', '_desc' => '清理已完成迁移任务', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
 })->prefix('admin.upload.UploadAssetMigrationController/')
     ->middleware([JwtAuth::class, CheckPermission::class])
@@ -72,6 +72,7 @@ Route::group('upload/asset/migration', function () {
 
 Route::group('upload/asset/recycle', function () {
     Route::get('list', 'list')->name('SystemUploadAssetRecycleList')->option(['_alias' => '回收站列表', '_desc' => '获取回收站素材列表', '_auth' => true]);
+    Route::delete('clear', 'clearRecycle')->name('SystemUploadAssetRecycleClear')->option(['_alias' => '清空回收站', '_desc' => '永久删除回收站内素材和存储对象', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
 })->prefix('admin.upload.UploadAssetController/')
     ->middleware([JwtAuth::class, CheckPermission::class])
     ->option([

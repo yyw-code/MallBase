@@ -261,9 +261,9 @@ const openAssetPicker = async () => {
   selectedAssetIds.value = [];
   selectedAssets.value = [];
   assetPickerOpen.value = true;
-  // 打开素材弹窗时强制刷新 uploadConfig，让上传提示和弹窗上传区绑定。
+  // 打开素材弹窗时按需刷新 uploadConfig，让上传提示和弹窗上传区绑定。
   await Promise.all([
-    loadRemoteConfig(true),
+    ensureRemoteConfig(true),
     loadAssetCategories(),
     loadAssets(),
   ]);
@@ -479,7 +479,9 @@ const isPickerFileAccepted = (file: File) => {
   });
 };
 
-const handlePickerBeforeUpload = (file: File) => {
+const handlePickerBeforeUpload = async (file: File) => {
+  if (!(await ensureRemoteConfigBeforeUpload())) return false;
+
   if (!canSelectMore(true)) {
     message.error(`最多上传 ${effectiveMaxCount.value ?? 0} 个文件`);
     return false;
@@ -578,10 +580,31 @@ const loadRemoteConfig = async (force = false) => {
   }
 };
 
+const shouldLoadRemoteConfig = () =>
+  !props.secure &&
+  (props.maxSize === undefined ||
+    props.maxCount === undefined ||
+    props.accept === undefined);
+
+const ensureRemoteConfig = async (force = false) => {
+  if (!shouldLoadRemoteConfig()) return true;
+  if (!force && remoteConfig.value) return true;
+  await loadRemoteConfig(force);
+  return !!remoteConfig.value;
+};
+
+const ensureRemoteConfigBeforeUpload = async () => {
+  const loaded = await ensureRemoteConfig();
+  if (!loaded) {
+    message.error(uploadConfigError.value || '上传配置加载失败，请稍后重试');
+    return false;
+  }
+  return true;
+};
+
 onMounted(() => {
   // uploadOptions 是公共字典：用于把 type 映射成素材类型/多选规则，并渲染驱动 label。
   loadUploadOptions();
-  loadRemoteConfig();
 });
 
 // ==================== 合并后的配置 ====================
@@ -851,7 +874,9 @@ watch(
 
 // ==================== 事件处理 ====================
 
-const handleBeforeUpload = (file: File) => {
+const handleBeforeUpload = async (file: File) => {
+  if (!(await ensureRemoteConfigBeforeUpload())) return false;
+
   // 数量校验：已上传 + 正在上传/排队中 不能超过 maxCount
   const maxCount = effectiveMaxCount.value;
   const currentCount = fileList.value.length + pendingCount.value;

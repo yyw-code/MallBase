@@ -84,6 +84,7 @@ mall-base/
 │   │   ├── troubleshooting.md      # 安装与部署故障排查
 │   │   ├── env-files.md            # 环境文件职责说明
 │   │   ├── nginx-reverse-proxy.md  # Nginx 反向代理配置说明
+│   │   ├── cloud-storage-upload.md # 上传云存储配置（本地 / OSS / COS）
 │   │   ├── admin-build.md          # 后台前端（Admin）打包说明
 │   │   ├── uniapp-build.md         # UniApp H5 打包说明
 │   │   ├── upload-frontend.md      # 前端静态资源上传脚本说明
@@ -92,6 +93,7 @@ mall-base/
 │   │       └── docker-fullstack-first-run.md  # 方式三首装问题排查记录
 │   ├── uniapp-design-brief.md      # UniApp 移动端设计需求文档
 │   ├── freight-template-roadmap.md # 运费模板路线图
+│   ├── upload-storage-driver-extension.md # 新增云存储上传驱动开发指南
 │   ├── claude-code-guide.md        # Claude Code 使用指南
 │   └── testing/
 │       └── change-trigger-test-matrix.md  # 测试基线与触发矩阵
@@ -156,6 +158,7 @@ docker compose restart
 | [安装与部署故障排查](docs/install/troubleshooting.md) | 安装、Docker、前端静态资源与运行时故障处理 |
 | [环境文件说明](docs/install/env-files.md) | 根 `.env`、`backend/.env` 与安装运行时配置职责 |
 | [Nginx 反向代理配置](docs/install/nginx-reverse-proxy.md) | `/`、`/client/`、`/admin/`、`/client/api/`、`/admin/api/` 等路径规则 |
+| [上传云存储配置](docs/install/cloud-storage-upload.md) | 本地存储、阿里云 OSS、腾讯云 COS 上传驱动配置与验证 |
 | [方式三首装问题记录](docs/install/issues/docker-fullstack-first-run.md) | 方式三首次启动的密码错位、时序问题与修复结论 |
 
 ### 命令分册
@@ -184,6 +187,7 @@ docker compose restart
 |------|------|
 | [UniApp 移动端设计需求](docs/uniapp-design-brief.md) | UniApp 端功能范围、页面清单、数据结构与设计方向 |
 | [运费模板路线图](docs/freight-template-roadmap.md) | 运费计算能力落地进度与订单接入计划 |
+| [新增云存储上传驱动开发指南](docs/upload-storage-driver-extension.md) | 新增云存储服务商时需要修改的后端、前端、seed、测试和文档清单 |
 | [测试基线与触发矩阵](docs/testing/change-trigger-test-matrix.md) | 后端 / 前端测试入口与变更触发规则 |
 | [Claude Code 使用指南](docs/claude-code-guide.md) | AI 工具、Skills、MCP、多 Agent 协作 |
 

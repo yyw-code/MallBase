@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import type { UploadApi } from '#/api/core/upload';
 import type { UploadAssetApi } from '#/api/upload/asset';
 
 import { computed, h, onMounted, reactive, ref, watch } from 'vue';
@@ -8,6 +9,7 @@ import { Image, message, Modal, Tag } from 'ant-design-vue';
 
 import { getUploadOptionsCached } from '#/api/core/upload-config-cache';
 import {
+  clearUploadAssetRecycleApi,
   deleteUploadAssetApi,
   getUploadAssetCategoryTreeApi,
   getUploadAssetInfoApi,
@@ -22,9 +24,8 @@ const loading = ref(false);
 const route = useRoute();
 const tableData = ref<UploadAssetApi.AssetItem[]>([]);
 const categories = ref<UploadAssetApi.CategoryItem[]>([]);
-const assetTypeOptions = ref<{ label: string; value: string }[]>([]);
-const driverOptions = ref<{ label: string; value: string }[]>([]);
-const currentDriverLabel = ref('');
+const uploadOptions = ref<null | UploadApi.UploadOptions>(null);
+const uploadOptionsLoading = ref(false);
 const detailOpen = ref(false);
 const detailLoading = ref(false);
 const assetDetail = ref<null | UploadAssetApi.AssetDetail>(null);
@@ -52,29 +53,40 @@ const categoryOptions = () =>
     })),
   }));
 
+const assetTypeOptions = computed(() =>
+  (uploadOptions.value?.asset_types || []).map((item) => ({
+    label: item.label,
+    value: item.value,
+  })),
+);
+
+const driverOptions = computed(() =>
+  (uploadOptions.value?.upload_drivers || []).map((item) => ({
+    label: item.label,
+    value: item.value,
+  })),
+);
+
+const currentDriverLabel = computed(
+  () =>
+    uploadOptions.value?.upload_drivers?.find((item) => item.enabled)?.label ||
+    '',
+);
+
 const loadCategories = async () => {
   categories.value = await getUploadAssetCategoryTreeApi({ status: 1 });
 };
 
 const loadUploadOptions = async () => {
+  uploadOptionsLoading.value = true;
   try {
-    const options = await getUploadOptionsCached();
-    assetTypeOptions.value = (options.asset_types || []).map((item) => ({
-      label: item.label,
-      value: item.value,
-    }));
-    driverOptions.value = (options.upload_drivers || []).map((item) => ({
-      label: item.label,
-      value: item.value,
-    }));
-    currentDriverLabel.value =
-      options.upload_drivers?.find((item) => item.enabled)?.label || '';
+    uploadOptions.value = await getUploadOptionsCached();
   } catch (error) {
     console.warn('加载上传选项失败:', error);
-    assetTypeOptions.value = [];
-    driverOptions.value = [];
-    currentDriverLabel.value = '';
+    uploadOptions.value = null;
     message.error('上传配置加载失败');
+  } finally {
+    uploadOptionsLoading.value = false;
   }
 };
 
@@ -142,6 +154,22 @@ const handlePurge = (record: UploadAssetApi.AssetItem) =>
   confirmAction('永久删除', '永久删除会清理存储对象，确认继续吗？', () =>
     purgeUploadAssetApi(record.id),
   );
+
+const handleClearRecycle = () => {
+  Modal.confirm({
+    title: '清空回收站',
+    content:
+      '将永久删除回收站内全部素材和存储对象，删除后不可恢复，确认继续吗？',
+    okText: '清空',
+    okButtonProps: { danger: true },
+    async onOk() {
+      const res = await clearUploadAssetRecycleApi();
+      message.success(`已清空 ${res?.count || 0} 个素材`);
+      pagination.current = 1;
+      await loadData();
+    },
+  });
+};
 
 const openDetail = async (record: UploadAssetApi.AssetItem) => {
   detailOpen.value = true;
@@ -359,15 +387,21 @@ watch(
         v-model:value="searchParams.type"
         placeholder="类型"
         allow-clear
+        show-search
         class="asset-toolbar__item"
+        option-filter-prop="label"
         :options="assetTypeOptions"
+        :loading="uploadOptionsLoading"
       />
       <a-select
         v-model:value="searchParams.driver"
         placeholder="上传驱动"
         allow-clear
+        show-search
         class="asset-toolbar__item"
+        option-filter-prop="label"
         :options="driverOptions"
+        :loading="uploadOptionsLoading"
       />
       <span v-if="currentDriverLabel" class="asset-toolbar__hint">
         当前驱动：{{ currentDriverLabel }}
@@ -380,6 +414,15 @@ watch(
         查询
       </a-button>
       <a-button @click="resetSearch">重置</a-button>
+      <a-button
+        v-if="isRecyclePage"
+        danger
+        :disabled="pagination.total <= 0"
+        @click="handleClearRecycle"
+        v-access:code="'SystemUploadAssetRecycleClear'"
+      >
+        清空回收站
+      </a-button>
     </div>
 
     <a-table

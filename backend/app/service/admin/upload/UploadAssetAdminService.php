@@ -200,6 +200,27 @@ class UploadAssetAdminService extends BaseService
     }
 
     /**
+     * 清空回收站。
+     */
+    public function clearRecycleBin(): int
+    {
+        $count = 0;
+        do {
+            $ids = $this->model()
+                ->where('status', UploadAsset::STATUS_DELETED)
+                ->limit(100)
+                ->column('id');
+
+            foreach ($ids as $id) {
+                $this->purge((int) $id);
+                $count++;
+            }
+        } while ($ids !== []);
+
+        return $count;
+    }
+
+    /**
      * 清理过期回收站素材。
      */
     public function cleanupRecycleBin(int $retentionDays, int $batchSize): int

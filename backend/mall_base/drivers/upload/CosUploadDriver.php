@@ -40,17 +40,26 @@ class CosUploadDriver extends BaseUploadDriver
             throw new \Exception($this->getError());
         }
 
+        $body = fopen($filePath, 'rb');
+        if ($body === false) {
+            throw new \Exception('文件不可读');
+        }
+
         try {
             $this->client()->putObject([
                 'Bucket' => $this->bucket,
                 'Key' => ltrim($objectName, '/'),
-                'Body' => fopen($filePath, 'rb'),
+                'Body' => $body,
             ]);
 
             return $this->getUrl($objectName);
         } catch (\Throwable $e) {
             $this->setError('上传失败: ' . $e->getMessage());
             throw $e;
+        } finally {
+            if (is_resource($body)) {
+                fclose($body);
+            }
         }
     }
 
@@ -174,12 +183,12 @@ class CosUploadDriver extends BaseUploadDriver
         }
     }
 
-    private function createClient(): object
+    protected function createClient(): object
     {
         $clientClass = '\\Qcloud\\Cos\\Client';
         return new $clientClass([
             'region' => trim((string) $this->getConfig('region', '')),
-            'schema' => 'https',
+            'scheme' => 'https',
             'credentials' => [
                 'secretId' => trim((string) $this->getConfig('secret_id', '')),
                 'secretKey' => trim((string) $this->getConfig('secret_key', '')),

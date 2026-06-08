@@ -101,6 +101,12 @@ class UploadAssetController extends BaseController
         return $this->success(null, '永久删除成功');
     }
 
+    public function clearRecycle()
+    {
+        $count = $this->service()->clearRecycleBin();
+        return $this->success(['count' => $count], '清空成功');
+    }
+
     public function usage()
     {
         $id = (int) $this->request->param('id', 0);

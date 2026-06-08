@@ -109,6 +109,10 @@ export namespace UploadAssetApi {
     total: number;
     list: T[];
   }
+
+  export interface ClearRecycleResult {
+    count: number;
+  }
 }
 
 export function getUploadAssetListApi(params?: Record<string, any>) {
@@ -151,6 +155,12 @@ export function restoreUploadAssetApi(id: number) {
 
 export function purgeUploadAssetApi(id: number) {
   return requestClient.delete(`/upload/asset/purge/${id}`);
+}
+
+export function clearUploadAssetRecycleApi() {
+  return requestClient.delete<UploadAssetApi.ClearRecycleResult>(
+    '/upload/asset/recycle/clear',
+  );
 }
 
 export function getUploadAssetUsageApi(id: number) {
