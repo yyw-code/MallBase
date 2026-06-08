@@ -9,6 +9,7 @@ use app\model\setting\RuleType;
 use app\model\setting\Setting;
 use app\model\setting\SettingGroup;
 use app\service\cache\SettingCacheService;
+use app\service\upload\AssetHydrator;
 use app\validate\admin\setting\SettingValueValidate;
 use app\service\UploadService;
 use mall_base\base\BaseService;
@@ -1376,6 +1377,7 @@ class SettingService extends BaseService
                         ->select()
                         ->toArray();
                 });
+                $settings = $this->hydrateSettings($settings);
                 // 返回扁平化的 TabConfigItem 格式：code, icon, id, name, settings
                 $tabs[] = [
                     'code' => $child['code'],
@@ -1410,6 +1412,7 @@ class SettingService extends BaseService
                 ->select()
                 ->toArray();
         });
+        $settings = $this->hydrateSettings($settings);
 
         // 检查是否有 tab 类型的子分组
         $tabChildren = $this->model()
@@ -1431,6 +1434,7 @@ class SettingService extends BaseService
                         ->select()
                         ->toArray();
                 });
+                $childSettings = $this->hydrateSettings($childSettings);
                 $tabs[] = [
                     'code' => $child['code'],
                     'icon' => $child['icon'] ?? null,
@@ -1625,5 +1629,14 @@ class SettingService extends BaseService
         }
 
         return $config['settings'] ?? [];
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $settings
+     * @return array<int, array<string, mixed>>
+     */
+    private function hydrateSettings(array $settings): array
+    {
+        return app()->make(AssetHydrator::class)->hydrateSettings($settings);
     }
 }

@@ -58,4 +58,14 @@ class ConfigController extends BaseController
         $data = $this->service()->getRechargeMethods();
         return $this->success($data, '获取成功');
     }
+
+    /**
+     * 获取客户端上传配置（仅返回安全展示字段）
+     * GET /client/api/setting/uploadConfig?type=image
+     */
+    public function uploadConfig()
+    {
+        $type = (string) $this->request->param('type', 'image');
+        return $this->success($this->service()->uploadConfig($type), '获取成功');
+    }
 }

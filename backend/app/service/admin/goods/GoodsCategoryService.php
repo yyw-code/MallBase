@@ -4,6 +4,9 @@ declare(strict_types=1);
 namespace app\service\admin\goods;
 
 use app\model\goods\GoodsCategory;
+use app\service\upload\AssetHydrator;
+use app\service\upload\AssetIdNormalizer;
+use app\service\upload\AssetService;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
 
@@ -42,7 +45,9 @@ class GoodsCategoryService extends BaseService
 
         $total = $this->buildListQuery($where)->count();
 
-        $list = $list->toArray();
+        $list = app()->make(AssetHydrator::class)->hydrateFields($list->toArray(), [
+            'image' => 'image_full_url',
+        ]);
 
         return compact('total', 'list');
     }
@@ -59,6 +64,9 @@ class GoodsCategoryService extends BaseService
             ->order('id', 'asc')
             ->select()
             ->toArray();
+        $list = app()->make(AssetHydrator::class)->hydrateFields($list, [
+            'image' => 'image_full_url',
+        ]);
 
         return $this->buildTree($list);
     }
@@ -74,7 +82,9 @@ class GoodsCategoryService extends BaseService
             ->order('id', 'asc')
             ->select();
 
-        $list = $list->toArray();
+        $list = app()->make(AssetHydrator::class)->hydrateFields($list->toArray(), [
+            'image' => 'image_full_url',
+        ]);
 
         return $this->buildTree($list);
     }
@@ -90,7 +100,10 @@ class GoodsCategoryService extends BaseService
             throw new BusinessException('分类不存在');
         }
 
-        return $info->toArray();
+        $rows = app()->make(AssetHydrator::class)->hydrateFields([$info->toArray()], [
+            'image' => 'image_full_url',
+        ]);
+        return $rows[0] ?? $info->toArray();
     }
 
     /**
@@ -98,6 +111,8 @@ class GoodsCategoryService extends BaseService
      */
     public function create(array $data): int
     {
+        $data['image'] = $this->normalizeImageField($data['image'] ?? '');
+
         // 校验同级名称唯一（事务外）
         $this->validateUniqueName($data['name'], (int) $data['pid']);
 
@@ -107,6 +122,7 @@ class GoodsCategoryService extends BaseService
         }
 
         $category = $this->model()->create($data);
+        app()->make(AssetService::class)->syncUsage('goods_category', (int) $category->id, 'image', [$data['image']]);
 
         return $category->id;
     }
@@ -120,6 +136,10 @@ class GoodsCategoryService extends BaseService
 
         if (!$category) {
             throw new BusinessException('分类不存在');
+        }
+
+        if (array_key_exists('image', $data)) {
+            $data['image'] = $this->normalizeImageField($data['image']);
         }
 
         // 校验同级名称唯一
@@ -138,6 +158,7 @@ class GoodsCategoryService extends BaseService
         }
 
         $category->save($data);
+        app()->make(AssetService::class)->syncUsage('goods_category', $id, 'image', [$data['image'] ?? '']);
 
         return true;
     }
@@ -233,5 +254,15 @@ class GoodsCategoryService extends BaseService
             }
         }
         return $tree;
+    }
+
+    protected function normalizeImageField(mixed $value): int|string
+    {
+        $normalized = app()->make(AssetIdNormalizer::class)->normalizeSingle($value);
+        if (is_int($normalized)) {
+            app()->make(AssetService::class)->assertUsableImageAssets([$normalized]);
+        }
+
+        return $normalized;
     }
 }

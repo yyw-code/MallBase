@@ -39,6 +39,15 @@ abstract class BaseUploadDriver extends BaseDriver
     abstract public function upload(string $filePath, string $objectName): string;
 
     /**
+     * 下载文件到本地临时路径
+     *
+     * @param string $objectName 存储对象名称
+     * @param string $targetPath 本地目标路径
+     * @return bool
+     */
+    abstract public function download(string $objectName, string $targetPath): bool;
+
+    /**
      * 删除文件
      * 
      * @param string $objectName 存储对象名称

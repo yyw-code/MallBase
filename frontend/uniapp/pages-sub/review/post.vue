@@ -1,10 +1,13 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
-import { postReview } from '@/api/goods/review'
+import { postReview, uploadReviewImage } from '@/api/goods/review'
+import { getOrderDetail } from '@/api/order/order'
+import { getUploadConfig, getUploadedAssetValue } from '@/api/upload'
 
 // ---------- query params ----------
 const orderId = ref('')
+const orderItemId = ref('')
 const goodsId = ref('')
 const goodsName = ref('')
 const goodsImage = ref('')
@@ -12,16 +15,24 @@ const skuSpecText = ref('')
 
 onLoad((query) => {
   orderId.value = query?.order_id || ''
+  orderItemId.value = query?.order_item_id || ''
+  selectedOrderItemId.value = orderItemId.value
   goodsId.value = query?.goods_id || ''
-  goodsName.value = decodeURIComponent(query?.goods_name || '')
-  goodsImage.value = decodeURIComponent(query?.goods_image || '')
-  skuSpecText.value = decodeURIComponent(query?.sku_spec_text || '')
+  goodsName.value = safeDecode(query?.goods_name || '')
+  goodsImage.value = safeDecode(query?.goods_image || '')
+  skuSpecText.value = safeDecode(query?.sku_spec_text || '')
+  fetchOrderItems()
+  fetchUploadTips()
 })
 
 // ---------- state ----------
+const orderItems = ref([])
+const selectedOrderItemId = ref('')
+const loadingOrder = ref(false)
 const rating = ref(0)
 const content = ref('')
 const images = ref([])
+const uploadTips = ref([])
 const isAnonymous = ref(false)
 const submitting = ref(false)
 
@@ -31,9 +42,100 @@ const MAX_IMAGES = 6
 // ---------- computed ----------
 const contentLength = computed(() => content.value.length)
 
+const selectedItem = computed(() => {
+  if (!selectedOrderItemId.value) return null
+  return (
+    orderItems.value.find((item) => String(item.id) === String(selectedOrderItemId.value)) || null
+  )
+})
+
+const displayGoodsName = computed(() => selectedItem.value?.goodsName || goodsName.value || '商品')
+const displayGoodsImage = computed(() => selectedItem.value?.goodsImage || goodsImage.value)
+const displaySkuSpecText = computed(() => selectedItem.value?.skuSpecText || skuSpecText.value)
+const hasMultipleItems = computed(() => orderItems.value.length > 1)
+const submitText = computed(() => (submitting.value ? '发布中...' : '发布评价'))
+
 const canSubmit = computed(
-  () => rating.value > 0 && !submitting.value,
+  () => rating.value > 0 && !!selectedOrderItemId.value && !submitting.value && !loadingOrder.value
 )
+
+// ---------- order item ----------
+async function fetchOrderItems() {
+  if (!orderId.value) return
+
+  loadingOrder.value = true
+
+  try {
+    const detail = await getOrderDetail(orderId.value)
+    orderItems.value = normalizeOrderItems(detail)
+
+    const hasSelected = orderItems.value.some(
+      (item) => String(item.id) === String(selectedOrderItemId.value)
+    )
+    if (!hasSelected && orderItems.value.length === 1) {
+      selectedOrderItemId.value = orderItems.value[0].id
+    } else if (!hasSelected && orderItemId.value) {
+      selectedOrderItemId.value = orderItemId.value
+    }
+  } catch {
+    // 旧入口兜底：继续使用 query 参数展示，提交时仍以后端校验 order_item_id 为准。
+  } finally {
+    loadingOrder.value = false
+  }
+}
+
+function normalizeOrderItems(detail) {
+  const source = Array.isArray(detail?.items)
+    ? detail.items
+    : Array.isArray(detail?.order_items)
+      ? detail.order_items
+      : []
+
+  return source
+    .map((item) => {
+      const id = item?.id || item?.order_item_id || ''
+      return {
+        id: String(id),
+        goodsId: item?.goods_id || '',
+        goodsName: item?.goods_name || item?.name || '商品',
+        goodsImage: normalizeImageUrl(
+          item?.goods_image_full_url ||
+            item?.goods_image_url ||
+            item?.main_image_full_url ||
+            item?.image_full_url ||
+            item?.cover_full_url ||
+            item?.goods_image ||
+            item?.main_image ||
+            item?.cover ||
+            ''
+        ),
+        skuSpecText: item?.sku_spec_text || item?.sku_spec || item?.spec_text || item?.spec || '',
+        quantity: Number(item?.quantity || 1)
+      }
+    })
+    .filter((item) => item.id)
+}
+
+function selectOrderItem(item) {
+  selectedOrderItemId.value = item.id
+}
+
+function safeDecode(value) {
+  try {
+    return decodeURIComponent(String(value || ''))
+  } catch {
+    return String(value || '')
+  }
+}
+
+function normalizeImageUrl(url) {
+  const value = String(url || '')
+  if (!value) return ''
+  if (/^(https?:)?\/\//.test(value) || value.startsWith('data:') || value.startsWith('blob:')) {
+    return value.startsWith('//') ? `https:${value}` : value
+  }
+  return value
+}
 
 // ---------- star rating ----------
 function setRating(star) {
@@ -55,7 +157,7 @@ function chooseImage() {
     success(res) {
       const newImages = [...images.value, ...res.tempFilePaths].slice(0, MAX_IMAGES)
       images.value = newImages
-    },
+    }
   })
 }
 
@@ -63,25 +165,37 @@ function removeImage(index) {
   images.value = images.value.filter((_, i) => i !== index)
 }
 
+async function fetchUploadTips() {
+  try {
+    const config = await getUploadConfig('image')
+    uploadTips.value = Array.isArray(config?.tips) ? config.tips : []
+  } catch {
+    uploadTips.value = []
+  }
+}
+
 // ---------- submit ----------
 async function handleSubmit() {
   if (!canSubmit.value) {
     if (rating.value === 0) {
       uni.showToast({ title: '请选择评分', icon: 'none' })
+    } else if (!selectedOrderItemId.value) {
+      uni.showToast({ title: '请选择要评价的商品', icon: 'none' })
     }
     return
   }
 
   submitting.value = true
+  uni.showLoading({ title: '发布中...', mask: true })
 
   try {
+    const uploadedImages = await uploadSelectedImages()
     await postReview({
-      order_id: orderId.value,
-      goods_id: goodsId.value,
+      order_item_id: selectedOrderItemId.value,
       rating: rating.value,
       content: content.value,
-      images: images.value,
-      is_anonymous: isAnonymous.value ? 1 : 0,
+      images: uploadedImages,
+      is_anonymous: isAnonymous.value ? 1 : 0
     })
 
     uni.showToast({ title: '评价发布成功', icon: 'success' })
@@ -92,8 +206,26 @@ async function handleSubmit() {
   } catch {
     uni.showToast({ title: '发布失败，请重试', icon: 'none' })
   } finally {
+    uni.hideLoading()
     submitting.value = false
   }
+}
+
+async function uploadSelectedImages() {
+  const result = []
+  for (const filePath of images.value) {
+    const uploaded = await uploadReviewImage(filePath)
+    const url = normalizeUploadedPath(uploaded)
+    if (!url) {
+      throw new Error('图片上传返回为空')
+    }
+    result.push(url)
+  }
+  return result
+}
+
+function normalizeUploadedPath(uploaded) {
+  return getUploadedAssetValue(uploaded)
 }
 </script>
 
@@ -101,20 +233,58 @@ async function handleSubmit() {
   <view class="page">
     <mb-navbar title="发布评价" />
 
+    <view v-if="loadingOrder" class="order-picker order-picker--loading">
+      <text class="order-picker__loading-text">商品加载中...</text>
+    </view>
+
+    <view v-else-if="hasMultipleItems" class="order-picker">
+      <text class="order-picker__title">选择评价商品</text>
+      <view
+        v-for="item in orderItems"
+        :key="item.id"
+        class="order-picker__item"
+        :class="{
+          'order-picker__item--active': String(item.id) === String(selectedOrderItemId)
+        }"
+        @tap="selectOrderItem(item)"
+      >
+        <image
+          v-if="item.goodsImage"
+          class="order-picker__img"
+          :src="item.goodsImage"
+          mode="aspectFill"
+        />
+        <view v-else class="order-picker__img order-picker__img--empty">
+          <view class="order-picker__placeholder-box" />
+        </view>
+        <view class="order-picker__info">
+          <text class="order-picker__name">{{ item.goodsName }}</text>
+          <text v-if="item.skuSpecText" class="order-picker__spec">{{ item.skuSpecText }}</text>
+          <text class="order-picker__qty">x{{ item.quantity }}</text>
+        </view>
+        <view class="order-picker__radio">
+          <view
+            v-if="String(item.id) === String(selectedOrderItemId)"
+            class="order-picker__radio-dot"
+          />
+        </view>
+      </view>
+    </view>
+
     <!-- Product info card -->
     <view class="product-card">
       <image
-        v-if="goodsImage"
+        v-if="displayGoodsImage"
         class="product-card__img"
-        :src="goodsImage"
+        :src="displayGoodsImage"
         mode="aspectFill"
       />
       <view v-else class="product-card__img product-card__img--empty">
         <text class="product-card__img-placeholder">&#x1F4E6;</text>
       </view>
       <view class="product-card__info">
-        <text class="product-card__name">{{ goodsName || '商品' }}</text>
-        <text v-if="skuSpecText" class="product-card__spec">{{ skuSpecText }}</text>
+        <text class="product-card__name">{{ displayGoodsName }}</text>
+        <text v-if="displaySkuSpecText" class="product-card__spec">{{ displaySkuSpecText }}</text>
       </view>
     </view>
 
@@ -128,7 +298,8 @@ async function handleSubmit() {
           class="star-row__star"
           :class="{ 'star-row__star--active': star <= rating }"
           @tap="setRating(star)"
-        >{{ star <= rating ? '★' : '☆' }}</text>
+          >{{ star <= rating ? '★' : '☆' }}</text
+        >
       </view>
       <text class="star-row__hint">点击星级进行评分</text>
     </view>
@@ -152,26 +323,15 @@ async function handleSubmit() {
     <!-- Image upload section -->
     <view class="section">
       <text class="section__title">上传图片 ({{ images.length }}/{{ MAX_IMAGES }})</text>
+      <text v-if="uploadTips.length > 0" class="section__hint">{{ uploadTips.join('，') }}</text>
       <view class="image-grid">
-        <view
-          v-for="(img, index) in images"
-          :key="index"
-          class="image-grid__item"
-        >
-          <image
-            class="image-grid__img"
-            :src="img"
-            mode="aspectFill"
-          />
+        <view v-for="(img, index) in images" :key="index" class="image-grid__item">
+          <image class="image-grid__img" :src="img" mode="aspectFill" />
           <view class="image-grid__delete" @tap="removeImage(index)">
             <text class="image-grid__delete-text">&#x2715;</text>
           </view>
         </view>
-        <view
-          v-if="images.length < MAX_IMAGES"
-          class="image-grid__add"
-          @tap="chooseImage"
-        >
+        <view v-if="images.length < MAX_IMAGES" class="image-grid__add" @tap="chooseImage">
           <text class="image-grid__add-icon">+</text>
         </view>
       </view>
@@ -183,7 +343,11 @@ async function handleSubmit() {
       <switch
         :checked="isAnonymous"
         color="#0d50d5"
-        @change="(e) => { isAnonymous = e.detail.value }"
+        @change="
+          (e) => {
+            isAnonymous = e.detail.value
+          }
+        "
       />
     </view>
 
@@ -197,7 +361,7 @@ async function handleSubmit() {
         :class="{ 'submit-bar__btn--disabled': !canSubmit }"
         @tap="handleSubmit"
       >
-        <text class="submit-bar__btn-text">发布评价</text>
+        <text class="submit-bar__btn-text">{{ submitText }}</text>
       </view>
     </view>
   </view>
@@ -208,6 +372,115 @@ async function handleSubmit() {
   min-height: 100vh;
   background: $mb-color-bg;
   padding: 0 $mb-spacing-page $mb-spacing-lg;
+}
+
+// ---- Order item picker ----
+.order-picker {
+  margin-top: $mb-spacing-md;
+  padding: $mb-spacing-lg;
+  background: $mb-color-bg-secondary;
+  border-radius: $mb-radius-lg;
+}
+
+.order-picker--loading {
+  min-height: 96rpx;
+  display: flex;
+  align-items: center;
+}
+
+.order-picker__loading-text {
+  font-size: $mb-font-sm;
+  color: $mb-color-text-tertiary;
+}
+
+.order-picker__title {
+  display: block;
+  margin-bottom: $mb-spacing-md;
+  font-size: $mb-font-md;
+  font-weight: 600;
+  color: $mb-color-text-title;
+}
+
+.order-picker__item {
+  display: flex;
+  align-items: center;
+  gap: $mb-spacing-md;
+  padding: $mb-spacing-md 0;
+  border-top: 1rpx solid $mb-color-divider;
+}
+
+.order-picker__item:first-of-type {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.order-picker__item--active .order-picker__name {
+  color: $mb-color-primary;
+}
+
+.order-picker__img {
+  flex-shrink: 0;
+  width: 104rpx;
+  height: 104rpx;
+  border-radius: $mb-radius-md;
+  background: $mb-color-bg;
+}
+
+.order-picker__img--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.order-picker__placeholder-box {
+  width: 44rpx;
+  height: 44rpx;
+  border-radius: $mb-radius-sm;
+  background: $mb-color-divider;
+}
+
+.order-picker__info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+}
+
+.order-picker__name {
+  font-size: $mb-font-sm;
+  font-weight: 600;
+  color: $mb-color-text-title;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.order-picker__spec,
+.order-picker__qty {
+  font-size: $mb-font-xs;
+  color: $mb-color-text-tertiary;
+  line-height: 1.4;
+}
+
+.order-picker__radio {
+  flex-shrink: 0;
+  width: 36rpx;
+  height: 36rpx;
+  border-radius: 50%;
+  border: 2rpx solid $mb-color-border;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.order-picker__radio-dot {
+  width: 20rpx;
+  height: 20rpx;
+  border-radius: 50%;
+  background: $mb-color-primary;
 }
 
 // ---- Product card ----
@@ -276,6 +549,15 @@ async function handleSubmit() {
   font-weight: 600;
   color: $mb-color-text-title;
   margin-bottom: $mb-spacing-md;
+}
+
+.section__hint {
+  display: block;
+  margin-top: -8rpx;
+  margin-bottom: $mb-spacing-md;
+  font-size: $mb-font-xs;
+  color: $mb-color-text-tertiary;
+  line-height: 1.4;
 }
 
 // ---- Star rating ----
@@ -425,7 +707,9 @@ async function handleSubmit() {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: opacity 0.15s, transform 0.15s;
+  transition:
+    opacity 0.15s,
+    transform 0.15s;
 
   &:active {
     opacity: 0.85;

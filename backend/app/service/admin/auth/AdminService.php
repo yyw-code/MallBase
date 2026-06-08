@@ -7,6 +7,7 @@ namespace app\service\admin\auth;
 use app\model\auth\Admin as AdminModel;
 use app\model\auth\AdminRole;
 use app\service\cache\PermissionCacheService;
+use app\service\upload\AssetHydrator;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
 use mall_base\service\JwtCacheService;
@@ -126,6 +127,11 @@ class AdminService extends BaseService
             $admin['roles'] = $adminRoles;
             $admin['role_ids'] = array_column($adminRoles, 'id');
         }
+        unset($admin);
+
+        $list = app()->make(AssetHydrator::class)->hydrateFields($list, [
+            'avatar' => 'avatar_full_url',
+        ]);
 
         return compact('total', 'list');
     }
@@ -143,6 +149,10 @@ class AdminService extends BaseService
 
         $info = $admin->toArray();
         unset($info['password']);
+        $rows = app()->make(AssetHydrator::class)->hydrateFields([$info], [
+            'avatar' => 'avatar_full_url',
+        ]);
+        $info = $rows[0] ?? $info;
 
         // 手动加载角色列表
         $admin['roles'] = [];

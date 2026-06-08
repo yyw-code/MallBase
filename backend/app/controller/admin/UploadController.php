@@ -35,6 +35,7 @@ class UploadController extends BaseController
         $type      = $this->request->param('type', 'image');
         $module    = $this->request->param('module', '');
         $relatedId = $this->request->param('related_id', 0);
+        $categoryId = (int) $this->request->param('category_id', 0);
 
         $rules  = $this->service()->resolveUploadRules($type, $module, (int)$relatedId);
         // cert 模块需要在 service::upload() 里走专用分支（落私有目录、跳过 MIME 校验）；
@@ -42,7 +43,15 @@ class UploadController extends BaseController
         $storageModule = $module === UploadService::MODULE_CERT
             ? UploadService::MODULE_CERT
             : 'admin';
-        $result = $this->service()->upload($file, $rules, $storageModule);
+        $result = $this->service()->upload(
+            $file,
+            $rules,
+            $storageModule,
+            $module !== '' ? $module : 'admin',
+            'admin',
+            (int)($this->request->admin_id ?? 0),
+            $categoryId
+        );
 
         return $this->success($result, '上传成功');
     }
@@ -63,13 +72,22 @@ class UploadController extends BaseController
         $type      = $this->request->param('type', 'images');
         $module    = $this->request->param('module', '');
         $relatedId = $this->request->param('related_id', 0);
+        $categoryId = (int) $this->request->param('category_id', 0);
 
         $rules   = $this->service()->resolveUploadRules($type, $module, (int)$relatedId);
         // cert 模块走专用私有上传分支；其他模块走 'admin' 子目录保持原行为
         $storageModule = $module === UploadService::MODULE_CERT
             ? UploadService::MODULE_CERT
             : 'admin';
-        $results = $this->service()->batchUpload($files, $rules, $storageModule);
+        $results = $this->service()->batchUpload(
+            $files,
+            $rules,
+            $storageModule,
+            $module !== '' ? $module : 'admin',
+            'admin',
+            (int)($this->request->admin_id ?? 0),
+            $categoryId
+        );
 
         return $this->success($results, '上传成功');
     }

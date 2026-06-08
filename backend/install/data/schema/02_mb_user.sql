@@ -16,7 +16,7 @@ CREATE TABLE `mb_user` (
   `email` varchar(100) DEFAULT NULL COMMENT '邮箱（仅后台 admin 可填，C 端注册不再写入）',
   `password` varchar(255) DEFAULT NULL COMMENT '密码（加密）',
   `nickname` varchar(50) DEFAULT NULL COMMENT '昵称',
-  `avatar` varchar(255) DEFAULT NULL COMMENT '头像URL',
+  `avatar` bigint(20) unsigned DEFAULT NULL COMMENT '头像素材ID',
 
   -- 微信相关字段（多端独立 openid，unionid 跨主体共享）
   `wx_miniapp_openid` varchar(100) DEFAULT NULL COMMENT '微信小程序 openid',

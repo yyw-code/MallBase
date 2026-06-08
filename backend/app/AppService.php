@@ -9,6 +9,7 @@ use mall_base\drivers\sms\AliyunSmsDriver;
 use mall_base\drivers\sms\MockSmsDriver;
 use mall_base\drivers\upload\LocalUploadDriver;
 use mall_base\drivers\upload\OssUploadDriver;
+use mall_base\drivers\upload\CosUploadDriver;
 use think\Service;
 
 /**
@@ -22,6 +23,7 @@ class AppService extends Service
         DriverManager::register('upload', [
             'local' => LocalUploadDriver::class,
             'oss' => OssUploadDriver::class,
+            'cos' => CosUploadDriver::class,
         ]);
         // 应用启动阶段不能访问系统设置，避免安装前或 CLI 启动时提前连接 DB/Redis。
         // UploadService 实际执行上传时会重新读取系统设置中的真实驱动。

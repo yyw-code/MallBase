@@ -18,7 +18,14 @@ Route::group('config', function () {
         '_desc'  => '获取上传验证规则和文件图标配置',
         '_auth'  => false,
         '_type'  => Permission::TYPE_API,
-    ]);
+    ])->withoutMiddleware([CheckPermission::class]);
+
+    Route::get('uploadOptions', 'uploadOptions')->name('SystemConfigUploadOptions')->option([
+        '_alias' => '上传选项',
+        '_desc'  => '获取上传类型、素材类型和当前上传驱动选项',
+        '_auth'  => false,
+        '_type'  => Permission::TYPE_API,
+    ])->withoutMiddleware([CheckPermission::class]);
 
     // 后台应用元数据（公开：登录前也需要读取 logo/favicon/登录页文案）
     Route::get('appMeta', 'appMeta')

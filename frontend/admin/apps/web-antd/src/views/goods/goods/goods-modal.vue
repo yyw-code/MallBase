@@ -109,6 +109,7 @@ const getPicUrl = (pic: FileInfo | string): string => {
   if (typeof pic === 'object') return pic.url || '';
   return pic;
 };
+const fileNameFromValue = (value: unknown) => String(value || '').split('/').pop() || '';
 
 const handleAddSpec = () => {
   attrs.value.push({ id: createLocalId(), value: '', add_pic: 0, detail: [{ id: createLocalId(), value: '', pic: '' }] });
@@ -517,15 +518,25 @@ const loadEditData = async (id: number) => {
       price: detail.price || 0,
       market_price: detail.market_price || 0,
       stock: detail.stock || 0,
-      main_image: detail.main_image || undefined,
-      main_video: detail.main_video
+      main_image: detail.main_image
         ? {
-            url: detail.main_video,
-            full_url: detail.main_video_full_url || detail.main_video,
-            name: detail.main_video.split('/').pop() || '',
+            url: String(detail.main_image),
+            full_url: detail.main_image_full_url || String(detail.main_image),
+            name: fileNameFromValue(detail.main_image),
           }
         : undefined,
-      images: (detail.images || []).map((img) => ({ url: img.url, name: img.url.split('/').pop() || '' })),
+      main_video: detail.main_video
+        ? {
+            url: String(detail.main_video),
+            full_url: detail.main_video_full_url || String(detail.main_video),
+            name: fileNameFromValue(detail.main_video),
+          }
+        : undefined,
+      images: (detail.images || []).map((img) => ({
+        url: String(img.url),
+        full_url: img.full_url || String(img.url),
+        name: fileNameFromValue(img.url),
+      })),
       description: detail.description || '',
       sort: detail.sort || 0,
       status: detail.status ?? 1,
@@ -568,7 +579,13 @@ const loadEditData = async (id: number) => {
           row.market_price = sku.market_price || 0;
           row.stock = sku.stock;
           row.sku_code = sku.sku_code || '';
-          row.image = sku.image || undefined;
+          row.image = sku.image
+            ? {
+                url: String(sku.image),
+                full_url: sku.image_full_url || String(sku.image),
+                name: fileNameFromValue(sku.image),
+              }
+            : undefined;
         }
       }
       saveMultiSpecDraft();

@@ -55,6 +55,15 @@ class ConfigController extends BaseController
     }
 
     /**
+     * 获取上传公共选项（后台 Upload / 素材选择器使用）
+     * GET /config/uploadOptions
+     */
+    public function uploadOptions()
+    {
+        return $this->success($this->service()->getUploadOptions(), '获取成功');
+    }
+
+    /**
      * 获取后台应用元数据（公开接口，无需登录）
      * GET /config/appMeta
      *

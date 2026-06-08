@@ -5,7 +5,7 @@ import { h, onMounted, ref } from 'vue';
 
 import { useAccess } from '@vben/access';
 
-import { message, Modal, Rate, Switch } from 'ant-design-vue';
+import { Avatar, message, Modal, Rate, Switch } from 'ant-design-vue';
 
 import {
   deleteGoodsCommentApi,
@@ -48,6 +48,41 @@ const resetSearch = () => {
   loadData(searchParams.value);
 };
 
+const normalizeImageUrls = (
+  record: GoodsCommentApi.CommentItem,
+  fullKey: 'append_images_full_urls' | 'images_full_urls',
+  rawKey: 'append_images' | 'images',
+) => {
+  const fullUrls = record[fullKey];
+  if (Array.isArray(fullUrls) && fullUrls.length > 0) {
+    return fullUrls.filter(Boolean);
+  }
+
+  const raw = record[rawKey];
+  return Array.isArray(raw) ? raw.filter(Boolean) : [];
+};
+
+const renderImageThumbs = (
+  record: GoodsCommentApi.CommentItem,
+  fullKey: 'append_images_full_urls' | 'images_full_urls',
+  rawKey: 'append_images' | 'images',
+) => {
+  const urls = normalizeImageUrls(record, fullKey, rawKey);
+  if (urls.length === 0) return '-';
+
+  return h(
+    'div',
+    { style: 'display:flex;gap:4px;align-items:center;' },
+    urls.slice(0, 3).map((url) =>
+      h(Avatar, {
+        src: url,
+        size: 32,
+        shape: 'square',
+      }),
+    ),
+  );
+};
+
 /* ---------------- 状态切换 ---------------- */
 const handleStatusChange = async (
   record: GoodsCommentApi.CommentItem,
@@ -62,6 +97,15 @@ const handleStatusChange = async (
     // 失败后刷新列表恢复状态
     await loadData(searchParams.value);
   }
+};
+
+const handleTableChange = (newPagination: {
+  current?: number;
+  pageSize?: number;
+}) => {
+  pagination.current = newPagination.current || pagination.current;
+  pagination.pageSize = newPagination.pageSize || pagination.pageSize;
+  loadData(searchParams.value);
 };
 
 /* ---------------- 回复评论 ---------------- */
@@ -104,6 +148,7 @@ const handleReply = (record: GoodsCommentApi.CommentItem) => {
 const columns = [
   { title: 'ID', dataIndex: 'id', width: 70 },
   { title: '商品名称', dataIndex: 'goods_name', width: 150, ellipsis: true },
+  { title: '规格', dataIndex: 'sku_spec', width: 130, ellipsis: true },
   { title: '用户昵称', dataIndex: 'user_nickname', width: 120 },
   {
     title: '评分',
@@ -119,7 +164,30 @@ const columns = [
   {
     title: '评论内容',
     dataIndex: 'content',
+    width: 180,
     ellipsis: true,
+  },
+  {
+    title: '图片',
+    dataIndex: 'images',
+    width: 120,
+    customRender: ({ record }: { record: GoodsCommentApi.CommentItem }) =>
+      renderImageThumbs(record, 'images_full_urls', 'images'),
+  },
+  {
+    title: '追评',
+    dataIndex: 'append_content',
+    width: 180,
+    ellipsis: true,
+    customRender: ({ record }: { record: GoodsCommentApi.CommentItem }) =>
+      record.append_content || '-',
+  },
+  {
+    title: '追评图片',
+    dataIndex: 'append_images',
+    width: 120,
+    customRender: ({ record }: { record: GoodsCommentApi.CommentItem }) =>
+      renderImageThumbs(record, 'append_images_full_urls', 'append_images'),
   },
   {
     title: '回复状态',
@@ -141,7 +209,8 @@ const columns = [
         checked: record.status === 1,
         checkedChildren: '显示',
         unCheckedChildren: '隐藏',
-        onChange: (checked: boolean) => handleStatusChange(record, checked),
+        onChange: (checked: boolean | number | string) =>
+          handleStatusChange(record, checked === true),
       });
     },
   },
@@ -220,15 +289,9 @@ onMounted(() => {
       :data-source="tableData"
       :loading="loading"
       :pagination="pagination"
-      :scroll="{ x: 1200 }"
+      :scroll="{ x: 1500 }"
       row-key="id"
-      @change="
-        (newPagination) => {
-          pagination.current = newPagination.current;
-          pagination.pageSize = newPagination.pageSize;
-          loadData(searchParams);
-        }
-      "
+      @change="handleTableChange"
     >
       <template #bodyCell="{ column, record }">
         <template v-if="column.key === 'action'">

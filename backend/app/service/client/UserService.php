@@ -10,6 +10,7 @@ use app\model\user\UserGroupRelation;
 use app\model\user\UserTag;
 use app\model\user\UserTagRelation;
 use app\service\UploadService;
+use app\service\upload\AssetHydrator;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
 use mall_base\service\JwtCacheService;
@@ -163,6 +164,10 @@ class UserService extends BaseService
         foreach ($list as &$item) {
             unset($item['password']);
         }
+        unset($item);
+        $list = app()->make(AssetHydrator::class)->hydrateFields($list, [
+            'avatar' => 'avatar_full_url',
+        ]);
 
         return compact('total', 'list');
     }
@@ -179,6 +184,10 @@ class UserService extends BaseService
 
         $info = $user->toArray();
         unset($info['password']);
+        $hydrated = app()->make(AssetHydrator::class)->hydrateFields([$info], [
+            'avatar' => 'avatar_full_url',
+        ]);
+        $info = $hydrated[0] ?? $info;
 
         // 获取用户分组
         $info['groups'] = $this->getUserGroups($id);
@@ -194,6 +203,11 @@ class UserService extends BaseService
      */
     public function create(array $data): int
     {
+        if (array_key_exists('avatar', $data)) {
+            $data['avatar'] = app()->make(UploadService::class)
+                ->normalizeStoredImagePath((string) $data['avatar']);
+        }
+
         // 检查手机号或邮箱是否已存在
         if (!empty($data['mobile'])) {
             $exists = $this->model()->where('mobile', $data['mobile'])->find();
@@ -218,6 +232,7 @@ class UserService extends BaseService
                 'real_name' => $data['real_name'] ?? '',
                 'gender' => $data['gender'] ?? 0,
                 'birthday' => $data['birthday'] ?? null,
+                'avatar' => $data['avatar'] ?? '',
                 'status' => $data['status'] ?? 1,
                 'remark' => $data['remark'] ?? '',
             ]);
@@ -234,6 +249,11 @@ class UserService extends BaseService
         $user = $this->model()->find($id);
         if (!$user) {
             throw new BusinessException('用户不存在');
+        }
+
+        if (array_key_exists('avatar', $data)) {
+            $data['avatar'] = app()->make(UploadService::class)
+                ->normalizeStoredImagePath((string) $data['avatar']);
         }
 
         // 检查手机号是否重复
@@ -350,6 +370,10 @@ class UserService extends BaseService
 
         $info = $user->toArray();
         unset($info['password']);
+        $hydrated = app()->make(AssetHydrator::class)->hydrateFields([$info], [
+            'avatar' => 'avatar_full_url',
+        ]);
+        $info = $hydrated[0] ?? $info;
 
         // 获取用户分组
         $info['groups'] = $this->getUserGroups($userId);

@@ -7,6 +7,7 @@ namespace app\service\client\order;
 use app\model\goods\Goods;
 use app\model\goods\GoodsSku;
 use app\model\order\Cart;
+use app\service\upload\AssetHydrator;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
 
@@ -171,8 +172,8 @@ class CartService extends BaseService
                 'quantity'    => (int) $row['quantity'],
                 'selected'    => (int) $row['selected'],
                 'goods_name'  => $goods['name'] ?? '',
-                'goods_image' => buildUploadUrl($goods['main_image'] ?? ''),
-                'sku_image'   => buildUploadUrl($sku['image'] ?? ''),
+                'goods_image' => $goods['main_image'] ?? '',
+                'sku_image'   => $sku['image'] ?? '',
                 'sku_spec'    => $sku['spec_values'] ?? '',
                 'unit_price'  => $sku !== null ? (float) $sku['price'] : 0.0,
                 'stock'       => $sku !== null ? (int) $sku['stock'] : 0,
@@ -185,6 +186,22 @@ class CartService extends BaseService
                 $selectedQuantity += (int) $row['quantity'];
             }
         }
+
+        $list = app()->make(AssetHydrator::class)->hydrateFields($list, [
+            'goods_image' => 'goods_image_full_url',
+            'sku_image' => 'sku_image_full_url',
+        ]);
+        foreach ($list as &$item) {
+            $item['goods_image_url'] = $item['goods_image_full_url'] ?? '';
+            $item['sku_image_url'] = $item['sku_image_full_url'] ?? '';
+            if (($item['goods_image_url'] ?? '') !== '') {
+                $item['goods_image'] = $item['goods_image_url'];
+            }
+            if (($item['sku_image_url'] ?? '') !== '') {
+                $item['sku_image'] = $item['sku_image_url'];
+            }
+        }
+        unset($item);
 
         return [
             'list' => $list,

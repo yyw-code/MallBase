@@ -24,7 +24,11 @@
 
       <!-- #ifdef MP-WEIXIN -->
       <view v-if="wechatBindStep === 'none'" class="form-section">
-        <button class="btn-wechat" :class="{ 'btn-wechat--loading': loading }" @tap="handleWechatMiniLogin">
+        <button
+          class="btn-wechat"
+          :class="{ 'btn-wechat--loading': loading }"
+          @tap="handleWechatMiniLogin"
+        >
           <text class="btn-wechat-label">微信一键登录</text>
         </button>
       </view>
@@ -32,8 +36,18 @@
       <view v-else-if="wechatBindStep === 'bind'" class="form-section">
         <text class="bind-hint">请绑定手机号以完成登录</text>
         <view v-if="wechatNeedUserInfo" class="profile-card">
-          <button class="avatar-picker" open-type="chooseAvatar" @chooseavatar="onChooseAvatar" :disabled="wechatAvatarUploading">
-            <image v-if="wechatAvatarPreview || wechatAvatar" class="avatar-image" :src="wechatAvatarPreview || wechatAvatar" mode="aspectFill" />
+          <button
+            class="avatar-picker"
+            open-type="chooseAvatar"
+            @chooseavatar="onChooseAvatar"
+            :disabled="wechatAvatarUploading"
+          >
+            <image
+              v-if="wechatAvatarPreview || wechatAvatar"
+              class="avatar-image"
+              :src="wechatAvatarPreview || wechatAvatar"
+              mode="aspectFill"
+            />
             <text v-else class="avatar-plus">+</text>
           </button>
           <input
@@ -60,19 +74,39 @@
         <view v-if="!wechatForcePhone" class="input-line">
           <text class="area-code">+86</text>
           <text class="chevron">&#x25BE;</text>
-          <input v-model="phone" class="line-input" type="number" maxlength="11"
-            placeholder="请输入手机号" placeholder-class="placeholder" />
+          <input
+            v-model="phone"
+            class="line-input"
+            type="number"
+            maxlength="11"
+            placeholder="请输入手机号"
+            placeholder-class="placeholder"
+          />
         </view>
         <view v-if="!wechatForcePhone" class="input-line">
           <text class="input-label">验证码</text>
-          <input v-model="smsCode" class="line-input" type="number" maxlength="6"
-            placeholder="" placeholder-class="placeholder" />
-          <text class="sms-btn" :class="{ 'sms-btn--off': countdown > 0 }"
-            @tap="handleSendCode('bind_mobile')">
+          <input
+            v-model="smsCode"
+            class="line-input"
+            type="number"
+            maxlength="6"
+            placeholder=""
+            placeholder-class="placeholder"
+          />
+          <text
+            class="sms-btn"
+            :class="{ 'sms-btn--off': countdown > 0 }"
+            @tap="handleSendCode('bind_mobile')"
+          >
             {{ countdown > 0 ? `${countdown}s` : '获取验证码' }}
           </text>
         </view>
-        <view v-if="!wechatForcePhone" class="primary-btn" :class="{ 'primary-btn--loading': loading }" @tap="handleBindMobile">
+        <view
+          v-if="!wechatForcePhone"
+          class="primary-btn"
+          :class="{ 'primary-btn--loading': loading }"
+          @tap="handleBindMobile"
+        >
           <text class="primary-btn-text">{{ loading ? '绑定中...' : '绑 定' }}</text>
         </view>
       </view>
@@ -80,8 +114,18 @@
       <view v-else-if="wechatBindStep === 'profile'" class="form-section">
         <text class="bind-hint">请完善头像昵称以完成登录</text>
         <view class="profile-card">
-          <button class="avatar-picker" open-type="chooseAvatar" @chooseavatar="onChooseAvatar" :disabled="wechatAvatarUploading">
-            <image v-if="wechatAvatarPreview || wechatAvatar" class="avatar-image" :src="wechatAvatarPreview || wechatAvatar" mode="aspectFill" />
+          <button
+            class="avatar-picker"
+            open-type="chooseAvatar"
+            @chooseavatar="onChooseAvatar"
+            :disabled="wechatAvatarUploading"
+          >
+            <image
+              v-if="wechatAvatarPreview || wechatAvatar"
+              class="avatar-image"
+              :src="wechatAvatarPreview || wechatAvatar"
+              mode="aspectFill"
+            />
             <text v-else class="avatar-plus">+</text>
           </button>
           <input
@@ -92,7 +136,11 @@
             placeholder-class="placeholder"
           />
         </view>
-        <view class="primary-btn" :class="{ 'primary-btn--loading': loading }" @tap="handleBindUserInfo">
+        <view
+          class="primary-btn"
+          :class="{ 'primary-btn--loading': loading }"
+          @tap="handleBindUserInfo"
+        >
           <text class="primary-btn-text">{{ loading ? '登录中...' : '完 成' }}</text>
         </view>
       </view>
@@ -104,29 +152,56 @@
         <view class="input-line">
           <text class="area-code">+86</text>
           <text class="chevron">&#x25BE;</text>
-          <input v-model="phone" class="line-input" type="number" maxlength="11"
-            placeholder="请输入手机号" placeholder-class="placeholder" />
+          <input
+            v-model="phone"
+            class="line-input"
+            type="number"
+            maxlength="11"
+            placeholder="请输入手机号"
+            placeholder-class="placeholder"
+          />
         </view>
         <view class="input-line">
           <text class="input-label">验证码</text>
-          <input v-model="smsCode" class="line-input" type="number" maxlength="6"
-            placeholder="" placeholder-class="placeholder" />
-          <text class="sms-btn" :class="{ 'sms-btn--off': countdown > 0 }"
-            @tap="handleSendCode('wechat_official_bind')">
+          <input
+            v-model="smsCode"
+            class="line-input"
+            type="number"
+            maxlength="6"
+            placeholder=""
+            placeholder-class="placeholder"
+          />
+          <text
+            class="sms-btn"
+            :class="{ 'sms-btn--off': countdown > 0 }"
+            @tap="handleSendCode('wechat_official_bind')"
+          >
             {{ countdown > 0 ? `${countdown}s` : '获取验证码' }}
           </text>
         </view>
-        <view class="primary-btn" :class="{ 'primary-btn--loading': loading }" @tap="handleOfficialBindMobile">
+        <view
+          class="primary-btn"
+          :class="{ 'primary-btn--loading': loading }"
+          @tap="handleOfficialBindMobile"
+        >
           <text class="primary-btn-text">{{ loading ? '绑定中...' : '绑 定' }}</text>
         </view>
       </view>
 
       <view v-else class="form-section auth-panel">
         <view class="login-tabs">
-          <view class="login-tabs__item" :class="{ 'login-tabs__item--active': loginMode === 'sms' }" @tap="loginMode = 'sms'">
+          <view
+            class="login-tabs__item"
+            :class="{ 'login-tabs__item--active': loginMode === 'sms' }"
+            @tap="loginMode = 'sms'"
+          >
             <text class="login-tabs__text">手机号登录</text>
           </view>
-          <view class="login-tabs__item" :class="{ 'login-tabs__item--active': loginMode === 'password' }" @tap="loginMode = 'password'">
+          <view
+            class="login-tabs__item"
+            :class="{ 'login-tabs__item--active': loginMode === 'password' }"
+            @tap="loginMode = 'password'"
+          >
             <text class="login-tabs__text">账号密码</text>
           </view>
         </view>
@@ -134,15 +209,30 @@
         <view v-if="loginMode === 'sms'" class="login-fields">
           <view class="input-line input-line--icon">
             <view class="field-icon field-icon--phone" />
-            <input v-model="phone" class="line-input" type="number" maxlength="11"
-              placeholder="请输入手机号" placeholder-class="placeholder" />
+            <input
+              v-model="phone"
+              class="line-input"
+              type="number"
+              maxlength="11"
+              placeholder="请输入手机号"
+              placeholder-class="placeholder"
+            />
           </view>
           <view class="input-line input-line--icon">
             <view class="field-icon field-icon--code" />
-            <input v-model="smsCode" class="line-input" type="number" maxlength="6"
-              placeholder="验证码" placeholder-class="placeholder" />
-            <text class="sms-btn" :class="{ 'sms-btn--off': countdown > 0 }"
-              @tap="handleSendCode('login')">
+            <input
+              v-model="smsCode"
+              class="line-input"
+              type="number"
+              maxlength="6"
+              placeholder="验证码"
+              placeholder-class="placeholder"
+            />
+            <text
+              class="sms-btn"
+              :class="{ 'sms-btn--off': countdown > 0 }"
+              @tap="handleSendCode('login')"
+            >
               {{ countdown > 0 ? `${countdown}s` : '获取验证码' }}
             </text>
           </view>
@@ -151,14 +241,23 @@
         <view v-else class="login-fields">
           <view class="input-line input-line--icon">
             <view class="field-icon field-icon--user" />
-            <input v-model="account" class="line-input line-input--full" type="text"
-              placeholder="手机号 / 用户名" placeholder-class="placeholder" />
+            <input
+              v-model="account"
+              class="line-input line-input--full"
+              type="text"
+              placeholder="手机号 / 用户名"
+              placeholder-class="placeholder"
+            />
           </view>
           <view class="input-line input-line--icon">
             <view class="field-icon field-icon--lock" />
-            <input v-model="password" class="line-input line-input--full"
+            <input
+              v-model="password"
+              class="line-input line-input--full"
               :type="showPassword ? 'text' : 'password'"
-              placeholder="密码" placeholder-class="placeholder" />
+              placeholder="密码"
+              placeholder-class="placeholder"
+            />
             <view class="eye-toggle" @tap="showPassword = !showPassword">
               <view class="eye-shape" />
               <view v-if="!showPassword" class="eye-slash" />
@@ -239,8 +338,9 @@ import {
   uploadWechatBindAvatar,
   getWechatOfficialOauthUrl,
   wechatOfficialLogin,
-  wechatOfficialBindMobile,
+  wechatOfficialBindMobile
 } from '@/api/user/auth'
+import { getUploadedAssetValue, getUploadedPreviewUrl } from '@/api/upload'
 
 const userStore = useUserStore()
 const appStore = useAppStore()
@@ -267,18 +367,22 @@ const redirectUrl = ref('')
 
 let countdownTimer = null
 
-const brandName = computed(() => (
-  appStore.siteConfig?.client_auth_name
-  || appStore.siteConfig?.client_site_name
-  || appStore.siteConfig?.site_name
-  || 'MallBase'
-))
-const brandSubtitle = computed(() => appStore.siteConfig?.site_slogan || '欢迎回来，继续你的品质购物体验')
-const loginLogo = computed(() => (
-  appStore.siteConfig?.client_auth_logo
-  || appStore.siteConfig?.client_logo
-  || '/static/logo-light.png'
-))
+const brandName = computed(
+  () =>
+    appStore.siteConfig?.client_auth_name ||
+    appStore.siteConfig?.client_site_name ||
+    appStore.siteConfig?.site_name ||
+    'MallBase'
+)
+const brandSubtitle = computed(
+  () => appStore.siteConfig?.site_slogan || '欢迎回来，继续你的品质购物体验'
+)
+const loginLogo = computed(
+  () =>
+    appStore.siteConfig?.client_auth_logo ||
+    appStore.siteConfig?.client_logo ||
+    '/static/logo-light.png'
+)
 
 onLoad((query) => {
   if (query?.redirect) {
@@ -356,7 +460,7 @@ function getWechatProfilePayload() {
   if (!wechatNeedUserInfo.value) return {}
   return {
     avatar: wechatAvatar.value,
-    nickname: wechatNickname.value.trim(),
+    nickname: wechatNickname.value.trim()
   }
 }
 
@@ -367,7 +471,9 @@ async function handleSendCode(scene = 'login') {
     await sendSmsCode(phone.value, scene)
     startCountdown()
     uni.showToast({ title: '验证码已发送', icon: 'none' })
-  } catch (_) { /* request.js shows toast */ }
+  } catch (_) {
+    /* request.js shows toast */
+  }
 }
 
 async function onLoginSuccess(data) {
@@ -379,7 +485,7 @@ async function onLoginSuccess(data) {
       url,
       fail() {
         uni.switchTab({ url: url.split('?')[0] })
-      },
+      }
     })
     return
   }
@@ -401,8 +507,11 @@ async function handleSmsLogin() {
   loading.value = true
   try {
     await onLoginSuccess(await loginBySms(phone.value, smsCode.value))
-  } catch (_) { /* handled */ }
-  finally { loading.value = false }
+  } catch (_) {
+    /* handled */
+  } finally {
+    loading.value = false
+  }
 }
 
 function handleLogin() {
@@ -431,8 +540,11 @@ async function handlePasswordLogin() {
       ? await loginByPassword(account.value, password.value)
       : await loginByUsername(account.value, password.value)
     await onLoginSuccess(data)
-  } catch (_) { /* handled */ }
-  finally { loading.value = false }
+  } catch (_) {
+    /* handled */
+  } finally {
+    loading.value = false
+  }
 }
 
 // #ifdef MP-WEIXIN
@@ -441,7 +553,7 @@ function loginWithWechatMini() {
     uni.login({
       provider: 'weixin',
       success: resolve,
-      fail: reject,
+      fail: reject
     })
   })
 }
@@ -475,8 +587,11 @@ async function handleWechatMiniLogin() {
     } else {
       await onLoginSuccess(data)
     }
-  } catch (_) { /* request.js shows toast */ }
-  finally { loading.value = false }
+  } catch (_) {
+    /* request.js shows toast */
+  } finally {
+    loading.value = false
+  }
 }
 
 async function onBindPhoneNumber(e) {
@@ -498,9 +613,14 @@ async function onBindPhoneNumber(e) {
   }
   loading.value = true
   try {
-    await onLoginSuccess(await wechatBindByPhoneCode(wechatBindToken.value, e.detail.code, getWechatProfilePayload()))
-  } catch (_) { /* handled */ }
-  finally { loading.value = false }
+    await onLoginSuccess(
+      await wechatBindByPhoneCode(wechatBindToken.value, e.detail.code, getWechatProfilePayload())
+    )
+  } catch (_) {
+    /* handled */
+  } finally {
+    loading.value = false
+  }
 }
 
 async function onChooseAvatar(e) {
@@ -517,10 +637,12 @@ async function onChooseAvatar(e) {
   wechatAvatarUploading.value = true
   try {
     const uploadRes = await uploadWechatBindAvatar(wechatBindToken.value, avatarUrl)
-    if (!uploadRes?.url) {
+    const submitValue = getUploadedAssetValue(uploadRes)
+    if (!submitValue) {
       throw new Error('上传结果缺少头像路径')
     }
-    wechatAvatar.value = uploadRes.url
+    wechatAvatar.value = String(submitValue)
+    wechatAvatarPreview.value = getUploadedPreviewUrl(uploadRes, avatarUrl)
   } catch (_) {
     wechatAvatarPreview.value = ''
     wechatAvatar.value = ''
@@ -546,9 +668,19 @@ async function handleBindMobile() {
   }
   loading.value = true
   try {
-    await onLoginSuccess(await wechatBindMobile(wechatBindToken.value, phone.value, smsCode.value, getWechatProfilePayload()))
-  } catch (_) { /* handled */ }
-  finally { loading.value = false }
+    await onLoginSuccess(
+      await wechatBindMobile(
+        wechatBindToken.value,
+        phone.value,
+        smsCode.value,
+        getWechatProfilePayload()
+      )
+    )
+  } catch (_) {
+    /* handled */
+  } finally {
+    loading.value = false
+  }
 }
 
 async function handleBindUserInfo() {
@@ -571,8 +703,11 @@ async function handleBindUserInfo() {
     } else {
       await onLoginSuccess(data)
     }
-  } catch (_) { /* handled */ }
-  finally { loading.value = false }
+  } catch (_) {
+    /* handled */
+  } finally {
+    loading.value = false
+  }
 }
 
 async function handleOfficialBindMobile() {
@@ -590,9 +725,14 @@ async function handleOfficialBindMobile() {
   }
   loading.value = true
   try {
-    await onLoginSuccess(await wechatOfficialBindMobile(wechatBindToken.value, phone.value, smsCode.value))
-  } catch (_) { /* handled */ }
-  finally { loading.value = false }
+    await onLoginSuccess(
+      await wechatOfficialBindMobile(wechatBindToken.value, phone.value, smsCode.value)
+    )
+  } catch (_) {
+    /* handled */
+  } finally {
+    loading.value = false
+  }
 }
 
 // #ifdef H5
@@ -616,7 +756,9 @@ function handleWechatH5Callback() {
       }
     })
     .catch(() => {})
-    .finally(() => { loading.value = false })
+    .finally(() => {
+      loading.value = false
+    })
 }
 // #endif
 
@@ -631,18 +773,20 @@ async function handleWechatOfficialLogin() {
       if (data.url) {
         window.location.href = data.url
       }
-    } catch (_) { /* request.js shows toast */ }
-    finally { loading.value = false }
+    } catch (_) {
+      /* request.js shows toast */
+    } finally {
+      loading.value = false
+    }
   }
   // #endif
 }
 
 function openAgreement(type) {
   uni.navigateTo({
-    url: `/pages-sub/user/agreement?type=${type === 'privacy' ? 'privacy' : 'service'}`,
+    url: `/pages-sub/user/agreement?type=${type === 'privacy' ? 'privacy' : 'service'}`
   })
 }
-
 </script>
 
 <style lang="scss" scoped>
@@ -685,7 +829,11 @@ $glass-accent: #4fe3d7;
   left: -180rpx;
   width: 800rpx;
   height: 800rpx;
-  background: radial-gradient(circle at center, rgba(255, 92, 182, 0.55) 0%, rgba(255, 92, 182, 0) 70%);
+  background: radial-gradient(
+    circle at center,
+    rgba(255, 92, 182, 0.55) 0%,
+    rgba(255, 92, 182, 0) 70%
+  );
 }
 
 .blob--2 {
@@ -693,7 +841,11 @@ $glass-accent: #4fe3d7;
   right: -240rpx;
   width: 760rpx;
   height: 760rpx;
-  background: radial-gradient(circle at center, rgba(79, 227, 215, 0.55) 0%, rgba(79, 227, 215, 0) 70%);
+  background: radial-gradient(
+    circle at center,
+    rgba(79, 227, 215, 0.55) 0%,
+    rgba(79, 227, 215, 0) 70%
+  );
 }
 
 .blob--3 {
@@ -701,7 +853,11 @@ $glass-accent: #4fe3d7;
   right: -120rpx;
   width: 840rpx;
   height: 840rpx;
-  background: radial-gradient(circle at center, rgba(124, 92, 255, 0.32) 0%, rgba(124, 92, 255, 0) 70%);
+  background: radial-gradient(
+    circle at center,
+    rgba(124, 92, 255, 0.32) 0%,
+    rgba(124, 92, 255, 0) 70%
+  );
 }
 
 .stars {
@@ -890,7 +1046,9 @@ $glass-accent: #4fe3d7;
   justify-content: center;
   border-radius: 999rpx;
   color: rgba(255, 255, 255, 0.6);
-  transition: background 0.2s, color 0.2s;
+  transition:
+    background 0.2s,
+    color 0.2s;
 }
 
 .login-tabs__item--active {
@@ -920,7 +1078,10 @@ $glass-accent: #4fe3d7;
   border-radius: 28rpx;
   background: rgba(255, 255, 255, 0.1);
   padding: 0 28rpx;
-  transition: border-color 0.2s, background-color 0.2s, box-shadow 0.2s;
+  transition:
+    border-color 0.2s,
+    background-color 0.2s,
+    box-shadow 0.2s;
 
   &:focus-within {
     border-color: rgba(255, 255, 255, 0.5);
@@ -1135,9 +1296,14 @@ $glass-accent: #4fe3d7;
   align-items: center;
   justify-content: center;
   margin-top: 16rpx;
-  box-shadow: 0 0 32rpx rgba(255, 255, 255, 0.25), 0 12rpx 32rpx rgba(0, 0, 0, 0.18);
+  box-shadow:
+    0 0 32rpx rgba(255, 255, 255, 0.25),
+    0 12rpx 32rpx rgba(0, 0, 0, 0.18);
   overflow: hidden;
-  transition: transform 0.15s, opacity 0.15s, box-shadow 0.15s;
+  transition:
+    transform 0.15s,
+    opacity 0.15s,
+    box-shadow 0.15s;
 
   &::before {
     content: '';
@@ -1146,7 +1312,12 @@ $glass-accent: #4fe3d7;
     left: 12rpx;
     right: 12rpx;
     height: 1rpx;
-    background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.95) 50%, transparent 100%);
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.95) 50%,
+      transparent 100%
+    );
   }
 
   &:active {

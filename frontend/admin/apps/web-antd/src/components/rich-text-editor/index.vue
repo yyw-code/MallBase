@@ -128,6 +128,55 @@ const validateFile = (
   return true;
 };
 
+const escapeHtmlAttr = (value: string) =>
+  value
+    .replaceAll('&', '&amp;')
+    .replaceAll('"', '&quot;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;');
+
+const uploadModule = () => props.module || 'rich_text';
+
+const insertImageHtml = (
+  result: { asset_id?: number; full_url?: string; name?: string; url?: string },
+  insertFn: (url: string, alt?: string, href?: string) => void,
+) => {
+  const url = result.full_url || result.url || '';
+  if (!url) {
+    message.error('图片上传返回为空');
+    return;
+  }
+
+  if (result.asset_id && editorRef.value && typeof (editorRef.value as any).dangerouslyInsertHtml === 'function') {
+    (editorRef.value as any).dangerouslyInsertHtml(
+      `<img src="${escapeHtmlAttr(url)}" alt="${escapeHtmlAttr(result.name || '')}" data-asset-id="${result.asset_id}">`,
+    );
+    return;
+  }
+
+  insertFn(url, result.name, url);
+};
+
+const insertVideoHtml = (
+  result: { asset_id?: number; full_url?: string; url?: string },
+  insertFn: (src: string, poster: string) => void,
+) => {
+  const url = result.full_url || result.url || '';
+  if (!url) {
+    message.error('视频上传返回为空');
+    return;
+  }
+
+  if (result.asset_id && editorRef.value && typeof (editorRef.value as any).dangerouslyInsertHtml === 'function') {
+    (editorRef.value as any).dangerouslyInsertHtml(
+      `<video src="${escapeHtmlAttr(url)}" controls data-asset-id="${result.asset_id}"></video>`,
+    );
+    return;
+  }
+
+  insertFn(url, '');
+};
+
 const toolbarConfig: Partial<IToolbarConfig> = {
   excludeKeys: ['fullScreen'],
 };
@@ -142,10 +191,10 @@ const editorConfig: Partial<IEditorConfig> = {
           }
           const result = await uploadSingleApi(file, {
             type: 'image',
-            module: props.module,
+            module: uploadModule(),
             related_id: props.relatedId,
           });
-          insertFn(result.full_url || result.url, result.name, result.full_url || result.url);
+          insertImageHtml(result, insertFn);
         } catch (error) {
           console.error('富文本图片上传失败:', error);
           message.error('图片上传失败');
@@ -160,10 +209,10 @@ const editorConfig: Partial<IEditorConfig> = {
           }
           const result = await uploadSingleApi(file, {
             type: 'video',
-            module: props.module,
+            module: uploadModule(),
             related_id: props.relatedId,
           });
-          insertFn(result.full_url || result.url, '');
+          insertVideoHtml(result, insertFn);
         } catch (error) {
           console.error('富文本视频上传失败:', error);
           message.error('视频上传失败');

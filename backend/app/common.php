@@ -48,11 +48,37 @@ if (!function_exists('buildUploadUrl')) {
             return '';
         }
 
+        if (ctype_digit($path)) {
+            return '';
+        }
+
         if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://')) {
             return $path;
         }
 
-        return getUploadDomain() . $path;
+        $normalizedPath = ltrim($path, '/');
+        if (str_starts_with($normalizedPath, 'static/')) {
+            $siteUrl = rtrim(trim((string) getSystemSetting('site_url', '')), '/');
+            $staticPath = '/' . $normalizedPath;
+            return $siteUrl === '' ? $staticPath : $siteUrl . $staticPath;
+        }
+
+        $localUrlPrefix = trim((string) getSystemSetting('local_url_prefix', '/uploads'), '/');
+        if ($localUrlPrefix !== '' && str_starts_with($normalizedPath, $localUrlPrefix . '/')) {
+            $localBaseUrl = rtrim(trim((string) getSystemSetting('local_base_url', '')), '/');
+            if ($localBaseUrl === '') {
+                $localBaseUrl = rtrim(trim((string) getSystemSetting('site_url', '')), '/');
+            }
+            $localPath = '/' . $normalizedPath;
+            return $localBaseUrl === '' ? $localPath : $localBaseUrl . $localPath;
+        }
+
+        $domain = rtrim(trim(getUploadDomain()), '/');
+        if ($domain === '') {
+            return $path;
+        }
+
+        return $domain . '/' . ltrim($path, '/');
     }
 }
 

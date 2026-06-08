@@ -1,5 +1,6 @@
 <?php
 
+use app\middleware\client\JwtAuth;
 use think\facade\Route;
 
 // 商品(无需登录,匿名可访问)
@@ -19,3 +20,7 @@ Route::group('goods/category', function () {
 Route::group('review', function () {
     Route::get('list', 'list');
 })->prefix('client.goods.GoodsCommentController/');
+
+Route::group('review', function () {
+    Route::post('create', 'create');
+})->prefix('client.goods.GoodsCommentController/')->middleware([JwtAuth::class]);

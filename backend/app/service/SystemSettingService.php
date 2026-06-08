@@ -7,6 +7,7 @@ namespace app\service;
 use app\model\setting\Setting;
 use app\model\setting\SettingGroup;
 use app\service\cache\SettingCacheService;
+use app\service\upload\AssetHydrator;
 use mall_base\base\BaseService;
 
 /**
@@ -19,7 +20,7 @@ use mall_base\base\BaseService;
  * 设计要点（遵守 service-stateless-swoole）：
  * - 无状态：Model 每次通过 $this->model() 动态获取，不缓存实例。
  * - 缓存：直接复用 {@see SettingCacheService}（Redis 层），与 SettingService 写入路径同 key，读写一致。
- * - 图片字段：通过 Setting::getFullUrlAttr() 自动补全 full_url。
+ * - 图片字段：通过 AssetHydrator 批量补全 full_url，兼容素材 ID 与旧路径。
  *
  * @extends BaseService<SettingGroup>
  */
@@ -186,12 +187,14 @@ class SystemSettingService extends BaseService
         $settings = $this->model(Setting::class)
             ->where('group_id', $group->id)
             ->order('sort', 'asc')
-            ->select();
+            ->select()
+            ->toArray();
+        $settings = app()->make(AssetHydrator::class)->hydrateSettings($settings);
 
         $values = [];
         $meta = [];
         foreach ($settings as $setting) {
-            $arr = $setting->toArray();
+            $arr = $setting;
             $code = (string) $arr['code'];
             $values[$code] = $arr['value'] ?? null;
             $meta[$code] = [

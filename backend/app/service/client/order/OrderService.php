@@ -20,6 +20,7 @@ use app\service\order\OrderSettingService;
 use app\service\order\OrderStatusMachine;
 use app\service\order\StockService;
 use app\service\order\WechatPrepayCloseService;
+use app\service\upload\AssetHydrator;
 use app\model\user\UserAddress;
 use app\common\enum\OperatorType;
 use app\common\enum\OrderStatus;
@@ -195,12 +196,22 @@ class OrderService extends BaseService
             'goods_id'             => $i['goods_id'],
             'goods_name'           => $i['goods_name'],
             'goods_image'          => $i['goods_image'],
-            'goods_image_full_url' => buildUploadUrl((string) $i['goods_image']),
+            'goods_image_full_url' => '',
             'sku_spec'             => $i['sku_spec'],
             'unit_price'           => $i['unit_price'],
             'quantity'             => $i['quantity'],
             'subtotal'             => bcmul($i['unit_price'], (string) $i['quantity'], 2),
         ], $resolved);
+        $previewItems = app()->make(AssetHydrator::class)->hydrateFields($previewItems, [
+            'goods_image' => 'goods_image_full_url',
+        ]);
+        foreach ($previewItems as &$item) {
+            $item['goods_image_url'] = $item['goods_image_full_url'] ?? '';
+            if (($item['goods_image_url'] ?? '') !== '') {
+                $item['goods_image'] = $item['goods_image_url'];
+            }
+        }
+        unset($item);
 
         return [
             'items'           => $previewItems,
@@ -940,6 +951,9 @@ class OrderService extends BaseService
             ->whereIn('order_id', $orderIds)
             ->select()
             ->toArray();
+        $rows = app()->make(AssetHydrator::class)->hydrateFields($rows, [
+            'goods_image' => 'goods_image_full_url',
+        ]);
 
         $map = [];
         foreach ($rows as $row) {
@@ -948,7 +962,6 @@ class OrderService extends BaseService
                 0,
                 (int) ($row['quantity'] ?? 0) - (int) ($row['refunded_quantity'] ?? 0)
             );
-            $row['goods_image_full_url'] = buildUploadUrl((string) ($row['goods_image'] ?? ''));
             $row['refundable_quantity'] = $refundableQuantity;
             $row['refundable_amount'] = $this->calcItemRefundableAmount(
                 $refundBases[$orderId] ?? null,

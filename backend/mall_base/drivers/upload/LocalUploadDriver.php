@@ -95,6 +95,29 @@ class LocalUploadDriver extends BaseUploadDriver
     }
 
     /**
+     * 下载文件到本地路径。
+     *
+     * @param string $objectName 存储对象名称
+     * @param string $targetPath 本地目标路径
+     * @return bool
+     */
+    public function download(string $objectName, string $targetPath): bool
+    {
+        $sourcePath = $this->getFullPath($objectName);
+        if (!is_file($sourcePath)) {
+            $this->setError('文件不存在');
+            return false;
+        }
+
+        $directory = dirname($targetPath);
+        if (!is_dir($directory)) {
+            mkdir($directory, 0755, true);
+        }
+
+        return copy($sourcePath, $targetPath);
+    }
+
+    /**
      * 删除文件
      *
      * @param string $objectName 存储对象名称

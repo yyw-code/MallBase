@@ -7,7 +7,15 @@ import type { GoodsTagApi } from '#/api/goods';
 
 import type { FileInfo } from '#/components/upload';
 
-import { computed, nextTick, onBeforeUnmount, reactive, ref, watch, type Ref } from 'vue';
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  reactive,
+  ref,
+  watch,
+  type Ref,
+} from 'vue';
 
 import Sortable from 'sortablejs';
 import { Modal, message } from 'ant-design-vue';
@@ -67,7 +75,11 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
     pic,
   });
 
-  const createAttr = (value = '', addPic: 0 | 1 = 0, detail: AttrDetail[] = [createAttrDetail()]): Attr => ({
+  const createAttr = (
+    value = '',
+    addPic: 0 | 1 = 0,
+    detail: AttrDetail[] = [createAttrDetail()],
+  ): Attr => ({
     id: createLocalId(),
     value,
     add_pic: addPic,
@@ -105,7 +117,9 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
   const loading = ref(false);
   const activeTab = ref('basic');
   const isFullscreen = ref(false);
-  const toggleFullscreen = () => { isFullscreen.value = !isFullscreen.value; };
+  const toggleFullscreen = () => {
+    isFullscreen.value = !isFullscreen.value;
+  };
   const isEdit = computed(() => !!editIdRef.value);
 
   /* ---------- 分类 / 品牌 / 标签 ---------- */
@@ -114,8 +128,14 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
   const freightTemplateOptions = ref<FreightTemplateApi.TemplateItem[]>([]);
   const tagOptions = ref<GoodsTagApi.TagItem[]>([]);
   const buildTree = (list: GoodsCategoryApi.CategoryItem[], pid = 0): any[] =>
-    list.filter((item) => item.pid === pid)
-      .map((item) => ({ title: item.name, value: item.id, key: item.id, children: buildTree(list, item.id) }));
+    list
+      .filter((item) => item.pid === pid)
+      .map((item) => ({
+        title: item.name,
+        value: item.id,
+        key: item.id,
+        children: buildTree(list, item.id),
+      }));
 
   /* ---------- 规格 attrs ---------- */
   const specType = ref<'single' | 'multi'>('single');
@@ -127,11 +147,50 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
     if (typeof pic === 'object') return pic.full_url || pic.url || '';
     return pic;
   };
-  const getPicUrl = (pic: FileInfo | string): string => {
-    if (!pic) return '';
-    if (typeof pic === 'object') return pic.url || '';
-    return pic;
+  const isAssetIdValue = (value: unknown): boolean =>
+    typeof value === 'number' ||
+    (typeof value === 'string' && /^\d+$/.test(value));
+
+  const toMediaSubmitValue = (
+    media: FileInfo | string | undefined,
+  ): GoodsApi.MediaValue | '' => {
+    if (!media) return '';
+    if (typeof media === 'object') {
+      if (media.asset_id && media.asset_id > 0) return media.asset_id;
+      if (isAssetIdValue(media.url)) return Number(media.url);
+      return media.url || '';
+    }
+    if (isAssetIdValue(media)) return Number(media);
+    return media;
   };
+
+  const toMediaFileInfo = (
+    value: unknown,
+    fullUrl?: string,
+  ): FileInfo | undefined => {
+    const mediaValue = toMediaSubmitValue(
+      value === undefined || value === null ? undefined : String(value),
+    );
+    if (mediaValue === '') return undefined;
+
+    const rawValue = String(mediaValue);
+    const nameSource = fullUrl || rawValue;
+    return {
+      url: rawValue,
+      asset_id: typeof mediaValue === 'number' ? mediaValue : undefined,
+      full_url: fullUrl || '',
+      name: fileNameFromValue(nameSource) || `asset-${rawValue}`,
+    };
+  };
+
+  const getPicUrl = (pic: FileInfo | string): GoodsApi.MediaValue | '' => {
+    if (!pic) return '';
+    return toMediaSubmitValue(pic);
+  };
+  const fileNameFromValue = (value: unknown) =>
+    String(value || '')
+      .split('/')
+      .pop() || '';
 
   const getSpecImageByRow = (row: SkuRow): FileInfo | string | undefined => {
     const attrWithPic = attrs.value.find((attr) => attr.add_pic === 1);
@@ -144,14 +203,17 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
       return undefined;
     }
 
-    return attrWithPic.detail.find((detail) => detail.value === detailValue)?.pic || undefined;
+    return (
+      attrWithPic.detail.find((detail) => detail.value === detailValue)?.pic ||
+      undefined
+    );
   };
 
   const getSkuPreviewImage = (row: SkuRow): FileInfo | string | undefined => {
     return row.image || getSpecImageByRow(row);
   };
 
-  const getSkuSubmitImage = (row: SkuRow): string => {
+  const getSkuSubmitImage = (row: SkuRow): GoodsApi.MediaValue | '' => {
     const image = row.image || getSpecImageByRow(row);
     return getPicUrl(image || '');
   };
@@ -162,13 +224,15 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
     market_price: formData.market_price,
     stock: formData.stock,
     sku_code: '',
-    image: typeof formData.main_image === 'object'
-      ? ((formData.main_image as FileInfo)?.url || '')
-      : (formData.main_image || ''),
+    image: toMediaSubmitValue(formData.main_image),
     status: formData.status ?? 1,
   });
 
-  const updateMatchedSkuImages = (specName: string, specValue: string, nextPic: FileInfo | string | undefined) => {
+  const updateMatchedSkuImages = (
+    specName: string,
+    specValue: string,
+    nextPic: FileInfo | string | undefined,
+  ) => {
     for (const row of skuRows.value) {
       if (row.detail[specName] === specValue) {
         row.image = nextPic;
@@ -176,7 +240,10 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
     }
   };
 
-  const confirmSpecImageSync = (matchedCount: number, overriddenCount: number) =>
+  const confirmSpecImageSync = (
+    matchedCount: number,
+    overriddenCount: number,
+  ) =>
     new Promise<boolean>((resolve) => {
       let settled = false;
       const finish = (result: boolean) => {
@@ -201,7 +268,11 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
       });
     });
 
-  const handleSpecValueImageChange = async (attrIdx: number, detIdx: number, nextPic?: FileInfo | string) => {
+  const handleSpecValueImageChange = async (
+    attrIdx: number,
+    detIdx: number,
+    nextPic?: FileInfo | string,
+  ) => {
     const attr = attrs.value[attrIdx];
     const detail = attr?.detail[detIdx];
     if (!attr || !detail) {
@@ -209,7 +280,9 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
     }
 
     const nextValue = nextPic || '';
-    const matchedRows = skuRows.value.filter((row) => row.detail[attr.value] === detail.value);
+    const matchedRows = skuRows.value.filter(
+      (row) => row.detail[attr.value] === detail.value,
+    );
     detail.pic = nextValue;
 
     if (!nextValue || matchedRows.length === 0) {
@@ -220,7 +293,10 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
     }
 
     const overriddenCount = matchedRows.filter((row) => !!row.image).length;
-    const confirmed = await confirmSpecImageSync(matchedRows.length, overriddenCount);
+    const confirmed = await confirmSpecImageSync(
+      matchedRows.length,
+      overriddenCount,
+    );
     if (confirmed) {
       updateMatchedSkuImages(attr.value, detail.value, nextValue);
       message.success('已同步替换命中 SKU 图片');
@@ -256,7 +332,11 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
     nextTick(() => initValueDragAt(attrIdx));
   };
   const toggleAddPic = (e: boolean | 0 | 1, idx: number) => {
-    if (e) { attrs.value.forEach((a, i) => { if (i !== idx) a.add_pic = 0; }); }
+    if (e) {
+      attrs.value.forEach((a, i) => {
+        if (i !== idx) a.add_pic = 0;
+      });
+    }
     generateSkuCombinations();
     nextTick(initValueDrag);
   };
@@ -274,7 +354,8 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
       handle: '.spec-drag-zone',
       draggable: '.spec-item',
       animation: 150,
-      filter: 'input,textarea,button,.spec-name-actions,.ant-checkbox-wrapper,.ant-input,.ant-input-affix-wrapper,.ant-input-number,.ant-select,.ant-select-selector',
+      filter:
+        'input,textarea,button,.spec-name-actions,.ant-checkbox-wrapper,.ant-input,.ant-input-affix-wrapper,.ant-input-number,.ant-select,.ant-select-selector',
       preventOnFilter: false,
       onEnd({ oldIndex, newIndex, item, from }) {
         if (oldIndex === newIndex) return;
@@ -318,7 +399,9 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
       },
     });
   };
-  const initValueDrag = () => { attrs.value.forEach((_, idx) => initValueDragAt(idx)); };
+  const initValueDrag = () => {
+    attrs.value.forEach((_, idx) => initValueDragAt(idx));
+  };
 
   // 当 specListRef 挂载时自动初始化拖拽（解决 v-else 条件渲染时序问题）
   watch(specListRef, (el) => {
@@ -339,7 +422,10 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
 
   /* ---------- SKU 表格 ---------- */
   const skuRows = ref<SkuRow[]>([]);
-  const multiSpecDraft = ref<{ attrs: Attr[]; skuRows: SkuRow[] }>({ attrs: [], skuRows: [] });
+  const multiSpecDraft = ref<{ attrs: Attr[]; skuRows: SkuRow[] }>({
+    attrs: [],
+    skuRows: [],
+  });
 
   const cloneAttrs = (source: Attr[]): Attr[] =>
     source.map((attr) => ({
@@ -373,14 +459,20 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
   };
 
   const restoreMultiSpecDraft = () => {
-    if (multiSpecDraft.value.attrs.length === 0 && multiSpecDraft.value.skuRows.length === 0) {
+    if (
+      multiSpecDraft.value.attrs.length === 0 &&
+      multiSpecDraft.value.skuRows.length === 0
+    ) {
       return;
     }
     attrs.value = cloneAttrs(multiSpecDraft.value.attrs);
     skuRows.value = cloneSkuRows(multiSpecDraft.value.skuRows);
   };
 
-  const inferSpecImagesFromSkus = (sourceSkus: Array<Record<string, any>>, targetAttrs: Attr[]) => {
+  const inferSpecImagesFromSkus = (
+    sourceSkus: Array<Record<string, any>>,
+    targetAttrs: Attr[],
+  ) => {
     let picAttrIndex = -1;
     let picMap: Record<string, FileInfo> = {};
 
@@ -392,17 +484,12 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
       for (const sku of sourceSkus) {
         const parts = String(sku.spec_values || '').split(',');
         const value = parts[attrIdx] || '';
-        const imageUrl = sku.image || '';
-        if (!value || !imageUrl) {
+        const nextImage = toMediaFileInfo(sku.image, sku.image_full_url);
+        if (!value || !nextImage) {
           continue;
         }
 
         hasImage = true;
-        const nextImage: FileInfo = {
-          url: imageUrl,
-          full_url: sku.image_full_url || imageUrl,
-          name: imageUrl.split('/').pop() || '',
-        };
         const existing = currentMap[value];
         if (existing && existing.url !== nextImage.url) {
           isConsistent = false;
@@ -424,7 +511,7 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
     targetAttrs.forEach((attr, attrIdx) => {
       attr.add_pic = attrIdx === picAttrIndex ? 1 : 0;
       attr.detail.forEach((detail) => {
-        detail.pic = attrIdx === picAttrIndex ? (picMap[detail.value] || '') : '';
+        detail.pic = attrIdx === picAttrIndex ? picMap[detail.value] || '' : '';
       });
     });
   };
@@ -457,7 +544,13 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
   );
   const skuColumns = computed(() => {
     const specCols = attrs.value.map((attr, idx) => {
-      const col: any = { title: attr.value || `规格${idx + 1}`, dataIndex: `_spec_${idx}`, width: 110, _isSpecCol: true, _attrIdx: idx };
+      const col: any = {
+        title: attr.value || `规格${idx + 1}`,
+        dataIndex: `_spec_${idx}`,
+        width: 110,
+        _isSpecCol: true,
+        _attrIdx: idx,
+      };
       if (idx === 0) {
         col.customCell = (_record: SkuRow, rowIdx: number) => {
           const dataIdx = rowIdx;
@@ -488,7 +581,8 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
       const key = rows[i]!.detail[attrs.value[0]!.value] ?? '';
       let len = 1;
       for (let j = i + 1; j < rows.length; j++) {
-        if ((rows[j]!.detail[attrs.value[0]!.value] ?? '') === key) len++; else break;
+        if ((rows[j]!.detail[attrs.value[0]!.value] ?? '') === key) len++;
+        else break;
       }
       map.set(`${i}_0`, len);
       for (let k = 1; k < len; k++) map.set(`${i + k}_0`, 0);
@@ -497,16 +591,25 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
     return map;
   });
   const generateSkuCombinations = () => {
-    const validAttrs = attrs.value.filter((a) => a.value && a.detail.some((d) => d.value));
-    if (validAttrs.length === 0) { skuRows.value = []; return; }
+    const validAttrs = attrs.value.filter(
+      (a) => a.value && a.detail.some((d) => d.value),
+    );
+    if (validAttrs.length === 0) {
+      skuRows.value = [];
+      return;
+    }
     const cartesian = (...arrays: any[][]): any[][] => {
       if (arrays.length === 0) return [[]];
       const [first, ...rest] = arrays;
       const restProduct = cartesian(...rest);
-      return first!.flatMap((item) => restProduct.map((product) => [item, ...product]));
+      return first!.flatMap((item) =>
+        restProduct.map((product) => [item, ...product]),
+      );
     };
     const valueArrays = validAttrs.map((attr) =>
-      attr.detail.filter((d) => d.value).map((d) => ({ attrName: attr.value, value: d.value })),
+      attr.detail
+        .filter((d) => d.value)
+        .map((d) => ({ attrName: attr.value, value: d.value })),
     );
     const combos = cartesian(...valueArrays);
     const existingMap = new Map(skuRows.value.map((r) => [r.spec_values, r]));
@@ -535,19 +638,47 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
       return;
     }
     for (const row of targets) {
-      if (batchData['__price__'] !== undefined && batchData['__price__'] !== null && batchData['__price__'] !== '') row.price = Number(batchData['__price__']);
-      if (batchData['__market_price__'] !== undefined && batchData['__market_price__'] !== null && batchData['__market_price__'] !== '') row.market_price = Number(batchData['__market_price__']);
-      if (batchData['__stock__'] !== undefined && batchData['__stock__'] !== null && batchData['__stock__'] !== '') row.stock = Number(batchData['__stock__']);
-      if (batchData['__sku_code__']) row.sku_code = String(batchData['__sku_code__']);
+      if (
+        batchData['__price__'] !== undefined &&
+        batchData['__price__'] !== null &&
+        batchData['__price__'] !== ''
+      )
+        row.price = Number(batchData['__price__']);
+      if (
+        batchData['__market_price__'] !== undefined &&
+        batchData['__market_price__'] !== null &&
+        batchData['__market_price__'] !== ''
+      )
+        row.market_price = Number(batchData['__market_price__']);
+      if (
+        batchData['__stock__'] !== undefined &&
+        batchData['__stock__'] !== null &&
+        batchData['__stock__'] !== ''
+      )
+        row.stock = Number(batchData['__stock__']);
+      if (batchData['__sku_code__'])
+        row.sku_code = String(batchData['__sku_code__']);
       if (batchData['__image__']) row.image = batchData['__image__'];
-      if (batchData['__is_show__'] !== undefined && batchData['__is_show__'] !== null && batchData['__is_show__'] !== '') {
+      if (
+        batchData['__is_show__'] !== undefined &&
+        batchData['__is_show__'] !== null &&
+        batchData['__is_show__'] !== ''
+      ) {
         row.is_show = Number(batchData['__is_show__']) as 0 | 1;
       }
     }
     message.success(`已批量修改 ${targets.length} 个 SKU`);
   };
-  const clearBatch = () => { Object.keys(batchData).forEach((k) => { batchData[k] = ''; }); };
-  const clearBatchFilters = () => { Object.keys(batchFilters).forEach((k) => { batchFilters[k] = undefined; }); };
+  const clearBatch = () => {
+    Object.keys(batchData).forEach((k) => {
+      batchData[k] = '';
+    });
+  };
+  const clearBatchFilters = () => {
+    Object.keys(batchFilters).forEach((k) => {
+      batchFilters[k] = undefined;
+    });
+  };
   const resetBatchEditor = () => {
     clearBatch();
     clearBatchFilters();
@@ -586,27 +717,39 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
     selectedSpecIds.value = [];
     selectedTemplateIds.value = [];
     try {
-      const [specs, templates] = await Promise.all([getAllGoodsSpecsApi(), getAllGoodsSpecTemplatesApi()]);
+      const [specs, templates] = await Promise.all([
+        getAllGoodsSpecsApi(),
+        getAllGoodsSpecTemplatesApi(),
+      ]);
       specLibList.value = specs;
       specTemplateList.value = templates;
-    } catch { message.error('加载规格库失败'); }
-    finally { specLibLoading.value = false; }
+    } catch {
+      message.error('加载规格库失败');
+    } finally {
+      specLibLoading.value = false;
+    }
   };
   const confirmSelectSpecs = () => {
     let added = 0;
     if (specImportTab.value === 'spec') {
-      const selected = specLibList.value.filter((s) => selectedSpecIds.value.includes(s.id));
+      const selected = specLibList.value.filter((s) =>
+        selectedSpecIds.value.includes(s.id),
+      );
       for (const spec of selected) {
         if (attrs.value.some((a) => a.value === spec.name)) continue;
-        const values = (spec.spec_values || spec.specValues || []).map((v) => createAttrDetail(v.value));
+        const values = (spec.spec_values || spec.specValues || []).map((v) =>
+          createAttrDetail(v.value),
+        );
         if (values.length === 0) values.push(createAttrDetail());
         attrs.value.push(createAttr(spec.name, 0, values));
         added++;
       }
     } else {
-      const selected = specTemplateList.value.filter((t) => selectedTemplateIds.value.includes(t.id));
+      const selected = specTemplateList.value.filter((t) =>
+        selectedTemplateIds.value.includes(t.id),
+      );
       for (const tpl of selected) {
-        for (const item of (tpl.detail || [])) {
+        for (const item of tpl.detail || []) {
           if (attrs.value.some((a) => a.value === item.spec_name)) continue;
           const values = (item.values || []).map((v) => createAttrDetail(v));
           if (values.length === 0) values.push(createAttrDetail());
@@ -615,17 +758,25 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
         }
       }
     }
-    if (added === 0) { message.info('所选规格已全部存在，未重复添加'); }
-    else {
+    if (added === 0) {
+      message.info('所选规格已全部存在，未重复添加');
+    } else {
       generateSkuCombinations();
-      nextTick(() => { initSpecDrag(); initValueDrag(); });
+      nextTick(() => {
+        initSpecDrag();
+        initValueDrag();
+      });
       message.success(`已导入 ${added} 个规格`);
     }
     specLibVisible.value = false;
   };
 
   /* ---------- 另存为模板 ---------- */
-  interface SaveTemplateItem { selected: boolean; name: string; values: string[] }
+  interface SaveTemplateItem {
+    selected: boolean;
+    name: string;
+    values: string[];
+  }
   const saveTemplateVisible = ref(false);
   const saveTemplateList = ref<SaveTemplateItem[]>([]);
   const saveTemplateLoading = ref(false);
@@ -634,21 +785,37 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
   const openSaveTemplate = () => {
     const list: SaveTemplateItem[] = attrs.value
       .filter((a) => a.value.trim())
-      .map((a) => ({ selected: true, name: a.value, values: a.detail.filter((d) => d.value.trim()).map((d) => d.value) }));
-    if (list.length === 0) { message.warning('请先添加并填写规格名称'); return; }
+      .map((a) => ({
+        selected: true,
+        name: a.value,
+        values: a.detail.filter((d) => d.value.trim()).map((d) => d.value),
+      }));
+    if (list.length === 0) {
+      message.warning('请先添加并填写规格名称');
+      return;
+    }
     saveTemplateList.value = list;
     saveTemplateName.value = '';
     saveTemplateVisible.value = true;
   };
   const handleSaveTemplate = async () => {
-    if (!saveTemplateName.value.trim()) { message.warning('请输入模板名称'); return; }
+    if (!saveTemplateName.value.trim()) {
+      message.warning('请输入模板名称');
+      return;
+    }
     const detail = saveTemplateList.value
       .filter((a) => a.selected && a.values.length > 0)
       .map((a) => ({ spec_name: a.name, values: a.values }));
-    if (detail.length === 0) { message.warning('请至少选择一个有规格值的规格'); return; }
+    if (detail.length === 0) {
+      message.warning('请至少选择一个有规格值的规格');
+      return;
+    }
     saveTemplateLoading.value = true;
     try {
-      await createGoodsSpecTemplateApi({ name: saveTemplateName.value.trim(), detail });
+      await createGoodsSpecTemplateApi({
+        name: saveTemplateName.value.trim(),
+        detail,
+      });
       message.success('模板保存成功，可在规格模板管理中查看');
       saveTemplateVisible.value = false;
     } catch (e: any) {
@@ -662,27 +829,52 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
   const loadOptions = async () => {
     try {
       const [categories, brands, tags] = await Promise.all([
-        getAllGoodsCategoriesApi(), getAllGoodsBrandsApi(), getAllGoodsTagsApi(),
+        getAllGoodsCategoriesApi(),
+        getAllGoodsBrandsApi(),
+        getAllGoodsTagsApi(),
       ]);
       categoryTreeData.value = buildTree(categories);
       brandOptions.value = brands;
       tagOptions.value = tags;
-    } catch { /* silent */ }
+    } catch {
+      /* silent */
+    }
     // 运费模板独立加载：其失败不应阻塞分类 / 品牌 / 标签等核心选项
     try {
-      const freightTemplates = await getFreightTemplateListApi({ status: 1, limit: 200 });
+      const freightTemplates = await getFreightTemplateListApi({
+        status: 1,
+        limit: 200,
+      });
       freightTemplateOptions.value = freightTemplates.list || [];
-    } catch { /* silent */ }
+    } catch {
+      /* silent */
+    }
   };
 
   /* ---------- 重置 ---------- */
   const resetForm = () => {
     formRef.value?.resetFields();
     Object.assign(formData, {
-      name: '', subtitle: '', category_id: undefined, brand_id: undefined,
-      freight_template_id: undefined, unit: '件',
-      price: 0, market_price: 0, stock: 0, main_image: undefined, main_video: undefined, images: [],
-      description: '', sort: 0, status: 1, is_on_sale: 0, is_recommend: 0, is_new: 0, is_hot: 0, tag_ids: [],
+      name: '',
+      subtitle: '',
+      category_id: undefined,
+      brand_id: undefined,
+      freight_template_id: undefined,
+      unit: '件',
+      price: 0,
+      market_price: 0,
+      stock: 0,
+      main_image: undefined,
+      main_video: undefined,
+      images: [],
+      description: '',
+      sort: 0,
+      status: 1,
+      is_on_sale: 0,
+      is_recommend: 0,
+      is_new: 0,
+      is_hot: 0,
+      tag_ids: [],
     });
     specType.value = 'single';
     attrs.value = [];
@@ -700,37 +892,38 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
       loading.value = true;
       const detail = await getGoodsInfoApi(id);
       Object.assign(formData, {
-        name: detail.name || '', subtitle: detail.subtitle || '',
-        category_id: detail.category_id || undefined, brand_id: detail.brand_id || undefined,
+        name: detail.name || '',
+        subtitle: detail.subtitle || '',
+        category_id: detail.category_id || undefined,
+        brand_id: detail.brand_id || undefined,
         freight_template_id: detail.freight_template_id ?? undefined,
-        unit: detail.unit || '件', price: detail.price || 0, market_price: detail.market_price || 0,
+        unit: detail.unit || '件',
+        price: detail.price || 0,
+        market_price: detail.market_price || 0,
         stock: detail.stock || 0,
-        main_image: detail.main_image
-          ? {
-              url: detail.main_image,
-              full_url: detail.main_image_full_url || detail.main_image,
-              name: detail.main_image.split('/').pop() || '',
-            }
-          : undefined,
-        main_video: detail.main_video
-          ? {
-              url: detail.main_video,
-              full_url: detail.main_video_full_url || detail.main_video,
-              name: detail.main_video.split('/').pop() || '',
-            }
-          : undefined,
-        images: (detail.images || []).map((img) => ({
-          url: img.url,
-          full_url: img.full_url || img.url,
-          name: img.url.split('/').pop() || '',
-        })),
-        description: detail.description || '', sort: detail.sort || 0, status: detail.status ?? 1,
-        is_on_sale: detail.is_on_sale ?? 0, is_recommend: detail.is_recommend ?? 0,
-        is_new: detail.is_new ?? 0, is_hot: detail.is_hot ?? 0,
+        main_image: toMediaFileInfo(
+          detail.main_image,
+          detail.main_image_full_url,
+        ),
+        main_video: toMediaFileInfo(
+          detail.main_video,
+          detail.main_video_full_url,
+        ),
+        images: (detail.images || [])
+          .map((img) => toMediaFileInfo(img.url, img.full_url))
+          .filter((img): img is FileInfo => !!img),
+        description: detail.description || '',
+        sort: detail.sort || 0,
+        status: detail.status ?? 1,
+        is_on_sale: detail.is_on_sale ?? 0,
+        is_recommend: detail.is_recommend ?? 0,
+        is_new: detail.is_new ?? 0,
+        is_hot: detail.is_hot ?? 0,
         tag_ids: (detail.tags || []).map((t) => t.id),
       });
       if ((detail.spec_type ?? SPEC_TYPE_SINGLE) === SPEC_TYPE_MULTI) {
         specType.value = 'multi';
+        const detailSkus = Array.isArray(detail.skus) ? detail.skus : [];
         let newAttrs: Attr[] = [];
         if (Array.isArray(detail.spec_meta) && detail.spec_meta.length > 0) {
           newAttrs = detail.spec_meta.map((item) =>
@@ -740,34 +933,37 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
               (item.values || []).map((value) =>
                 createAttrDetail(
                   value.value || '',
-                  value.pic
-                    ? {
-                        url: value.pic,
-                        full_url: value.pic_full_url || value.pic,
-                        name: value.pic.split('/').pop() || '',
-                      }
-                    : '',
+                  toMediaFileInfo(value.pic, value.pic_full_url) || '',
                 ),
               ),
             ),
           );
         } else {
-          const colCount = (detail.skus[0]!.spec_values || '').split(',').length;
+          const colCount = (detailSkus[0]?.spec_values || '')
+            .split(',')
+            .filter(Boolean).length;
           newAttrs = Array.from({ length: colCount }, (_, i) =>
             createAttr(`规格${i + 1}`, 0, []),
           );
-          const valueSetsByPos: Set<string>[] = Array.from({ length: colCount }, () => new Set());
-          for (const sku of detail.skus) {
-            (sku.spec_values || '').split(',').forEach((v, i) => { if (v) valueSetsByPos[i]?.add(v); });
+          const valueSetsByPos: Set<string>[] = Array.from(
+            { length: colCount },
+            () => new Set(),
+          );
+          for (const sku of detailSkus) {
+            (sku.spec_values || '').split(',').forEach((v, i) => {
+              if (v) valueSetsByPos[i]?.add(v);
+            });
           }
           for (let i = 0; i < colCount; i++) {
-            newAttrs[i]!.detail = [...(valueSetsByPos[i] || [])].map((v) => createAttrDetail(v));
+            newAttrs[i]!.detail = [...(valueSetsByPos[i] || [])].map((v) =>
+              createAttrDetail(v),
+            );
           }
-          inferSpecImagesFromSkus(detail.skus, newAttrs);
+          inferSpecImagesFromSkus(detailSkus, newAttrs);
         }
         attrs.value = newAttrs;
         generateSkuCombinations();
-        const skuMap = new Map(detail.skus.map((s) => [s.spec_values, s]));
+        const skuMap = new Map(detailSkus.map((s) => [s.spec_values, s]));
         for (const row of skuRows.value) {
           const sku = skuMap.get(row.spec_values);
           if (sku) {
@@ -776,26 +972,26 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
             row.stock = sku.stock;
             row.sku_code = sku.sku_code || '';
             row.is_show = Number(sku.status ?? 1) as 0 | 1;
-            row.image = sku.image
-              ? {
-                  url: sku.image,
-                  full_url: sku.image_full_url || sku.image,
-                  name: sku.image.split('/').pop() || '',
-                }
-              : undefined;
+            row.image = toMediaFileInfo(sku.image, sku.image_full_url);
           }
         }
         saveMultiSpecDraft();
       } else {
         specType.value = 'single';
-        const defaultSku = Array.isArray(detail.skus) ? detail.skus[0] : undefined;
+        const defaultSku = Array.isArray(detail.skus)
+          ? detail.skus[0]
+          : undefined;
         formData.price = defaultSku?.price ?? detail.price ?? 0;
-        formData.market_price = defaultSku?.market_price ?? detail.market_price ?? 0;
+        formData.market_price =
+          defaultSku?.market_price ?? detail.market_price ?? 0;
         formData.stock = defaultSku?.stock ?? detail.stock ?? 0;
         multiSpecDraft.value = { attrs: [], skuRows: [] };
       }
-    } catch { message.error('加载商品详情失败'); }
-    finally { loading.value = false; }
+    } catch {
+      message.error('加载商品详情失败');
+    } finally {
+      loading.value = false;
+    }
   };
 
   /* ---------- 提交 ---------- */
@@ -805,19 +1001,22 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
       loading.value = true;
       const submitData: any = {
         ...formData,
-        main_image: typeof formData.main_image === 'object' ? (formData.main_image as FileInfo)?.url || '' : formData.main_image || '',
-        main_video: typeof formData.main_video === 'object' ? (formData.main_video as FileInfo)?.url || '' : formData.main_video || '',
-        images: formData.images.map((img: FileInfo | string) => ({
-          url: typeof img === 'object' ? (img as FileInfo).url : img,
-        })),
+        main_image: toMediaSubmitValue(formData.main_image),
+        main_video: toMediaSubmitValue(formData.main_video),
+        images: formData.images
+          .map((img: FileInfo | string) => toMediaSubmitValue(img))
+          .filter((img) => img !== ''),
       };
       if (specType.value === 'multi' && skuRows.value.length > 0) {
         submitData.spec_type = SPEC_TYPE_MULTI;
         validateUniqueSkuCodes();
         submitData.spec_meta = buildSpecMetaPayload();
         submitData.skus = skuRows.value.map((sku) => ({
-          spec_values: sku.spec_values, price: sku.price, market_price: sku.market_price,
-          stock: sku.stock, sku_code: sku.sku_code || '',
+          spec_values: sku.spec_values,
+          price: sku.price,
+          market_price: sku.market_price,
+          stock: sku.stock,
+          sku_code: sku.sku_code || '',
           image: getSkuSubmitImage(sku),
           status: sku.is_show ?? 1,
         }));
@@ -826,12 +1025,19 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
         submitData.spec_meta = [];
         submitData.skus = [buildSingleSkuPayload()];
       }
-      if (isEdit.value) { await updateGoodsApi(editIdRef.value!, submitData); message.success('更新成功'); }
-      else { await createGoodsApi(submitData); message.success('创建成功'); }
+      if (isEdit.value) {
+        await updateGoodsApi(editIdRef.value!, submitData);
+        message.success('更新成功');
+      } else {
+        await createGoodsApi(submitData);
+        message.success('创建成功');
+      }
       onSuccess();
     } catch (error: any) {
       if (!error.errorFields) message.error(error.message || '操作失败');
-    } finally { loading.value = false; }
+    } finally {
+      loading.value = false;
+    }
   };
 
   const handleSpecTypeChange = (val: 'single' | 'multi') => {
@@ -852,19 +1058,65 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
   };
 
   return {
-    formData, rules, formRef, loading, activeTab, isFullscreen, isEdit,
-    toggleFullscreen, categoryTreeData, brandOptions, freightTemplateOptions, tagOptions,
-    specType, attrs, canAddPic, getPicPreviewUrl, getPicUrl,
+    formData,
+    rules,
+    formRef,
+    loading,
+    activeTab,
+    isFullscreen,
+    isEdit,
+    toggleFullscreen,
+    categoryTreeData,
+    brandOptions,
+    freightTemplateOptions,
+    tagOptions,
+    specType,
+    attrs,
+    canAddPic,
+    getPicPreviewUrl,
+    getPicUrl,
     getSkuPreviewImage,
-    handleAddSpec, handleRemoveSpec, addSpecValue, removeSpecValue, toggleAddPic,
+    handleAddSpec,
+    handleRemoveSpec,
+    addSpecValue,
+    removeSpecValue,
+    toggleAddPic,
     handleSpecValueImageChange,
-    specListRef, valueListRefs, initSpecDrag, initValueDrag,
-    skuRows, batchData, batchFilters, matchedSkuRows, tableData, skuColumns, spanMap,
-    generateSkuCombinations, applyBatch, clearBatch, clearBatchFilters, resetBatchEditor,
-    specLibVisible, specImportTab, specLibLoading, specLibList, selectedSpecIds,
-    specTemplateList, selectedTemplateIds, openSpecLib, confirmSelectSpecs,
-    saveTemplateVisible, saveTemplateList, saveTemplateLoading, saveTemplateName,
-    openSaveTemplate, handleSaveTemplate,
-    loadOptions, resetForm, loadEditData, handleSubmit, handleSpecTypeChange,
+    specListRef,
+    valueListRefs,
+    initSpecDrag,
+    initValueDrag,
+    skuRows,
+    batchData,
+    batchFilters,
+    matchedSkuRows,
+    tableData,
+    skuColumns,
+    spanMap,
+    generateSkuCombinations,
+    applyBatch,
+    clearBatch,
+    clearBatchFilters,
+    resetBatchEditor,
+    specLibVisible,
+    specImportTab,
+    specLibLoading,
+    specLibList,
+    selectedSpecIds,
+    specTemplateList,
+    selectedTemplateIds,
+    openSpecLib,
+    confirmSelectSpecs,
+    saveTemplateVisible,
+    saveTemplateList,
+    saveTemplateLoading,
+    saveTemplateName,
+    openSaveTemplate,
+    handleSaveTemplate,
+    loadOptions,
+    resetForm,
+    loadEditData,
+    handleSubmit,
+    handleSpecTypeChange,
   };
 }

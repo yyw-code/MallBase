@@ -10,6 +10,7 @@ use app\model\user\UserGroupRelation;
 use app\model\user\UserTag;
 use app\model\user\UserTagRelation;
 use app\model\user\UserWallet;
+use app\service\upload\AssetHydrator;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
 
@@ -30,18 +31,21 @@ class UserService extends BaseService
     public function getList(array $where = [], int $page = 1, int $limit = 15): array
     {
         $query = $this->buildListQuery($where);
-        $list = $query->order('id', 'desc')->page($page, $limit)->select();
+        $list = $query->order('id', 'desc')->page($page, $limit)->select()->toArray();
 
         // 计算总数（复用查询条件）
         $total = $this->buildListQuery($where)->count();
 
         // 批量获取分组和标签信息（避免 N+1 查询）
-        $userIds = array_column($list->toArray(), 'id');
+        $userIds = array_column($list, 'id');
         $groupMap = $this->batchGetUserGroups($userIds);
         $tagMap = $this->batchGetUserTags($userIds);
         $walletMap = $this->batchGetWallets($userIds);
 
-        $list = $list->toArray();
+        $list = app()->make(AssetHydrator::class)->hydrateFields($list, [
+            'avatar' => 'avatar_full_url',
+        ]);
+
         foreach ($list as &$user) {
             $user['groups'] = $groupMap[$user['id']] ?? [];
             $user['tags'] = $tagMap[$user['id']] ?? [];
@@ -221,6 +225,10 @@ class UserService extends BaseService
         }
 
         $result = $user->toArray();
+        $rows = app()->make(AssetHydrator::class)->hydrateFields([$result], [
+            'avatar' => 'avatar_full_url',
+        ]);
+        $result = $rows[0] ?? $result;
         $result['groups'] = $this->getUserGroups($id);
         $result['tags'] = $this->getUserTags($id);
 

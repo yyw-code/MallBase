@@ -10,6 +10,7 @@ use app\model\order\RefundOrder;
 use app\service\order\OrderSettingService;
 use app\service\order\RefundOrderStatusMachine;
 use app\service\order\RefundSnGenerator;
+use app\service\upload\AssetHydrator;
 use app\common\enum\OperatorType;
 use app\common\enum\OrderStatus;
 use app\common\enum\RefundOrderStatus;
@@ -243,7 +244,10 @@ class RefundService extends BaseService
             $itemModel = $this->model(OrderItem::class)->where('id', $orderItemId)->find();
             $item = $itemModel?->toArray();
             if ($item !== null) {
-                $item['goods_image_full_url'] = buildUploadUrl((string) ($item['goods_image'] ?? ''));
+                $hydrated = app()->make(AssetHydrator::class)->hydrateFields([$item], [
+                    'goods_image' => 'goods_image_full_url',
+                ]);
+                $item = $hydrated[0] ?? $item;
             }
             $data['order_item'] = $item;
         } else {
@@ -564,8 +568,10 @@ class RefundService extends BaseService
                 ->field('id, goods_id, sku_id, goods_name, goods_image, sku_spec, unit_price, quantity, refunded_quantity')
                 ->select()
                 ->toArray();
+            $rows = app()->make(AssetHydrator::class)->hydrateFields($rows, [
+                'goods_image' => 'goods_image_full_url',
+            ]);
             foreach ($rows as $row) {
-                $row['goods_image_full_url'] = buildUploadUrl((string) ($row['goods_image'] ?? ''));
                 $itemMap[(int) $row['id']]   = $row;
             }
         }

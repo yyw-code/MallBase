@@ -80,6 +80,16 @@ class DriverManager
     }
 
     /**
+     * 获取已注册驱动映射。
+     *
+     * @return array<string, string>
+     */
+    public static function getRegisteredDrivers(string $type): array
+    {
+        return self::$drivers[$type] ?? [];
+    }
+
+    /**
      * 设置默认驱动
      * 
      * @param string $type 驱动类型

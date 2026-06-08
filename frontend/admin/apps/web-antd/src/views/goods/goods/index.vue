@@ -96,8 +96,12 @@ const resetSearch = () => {
 };
 
 /* ---------------- 路由跳转 ---------------- */
-const handleCreate = () => { router.push('/goods/edit'); };
-const handleEdit = (record: GoodsApi.GoodsItem) => { router.push(`/goods/edit?id=${record.id}`); };
+const handleCreate = () => {
+  router.push('/goods/edit');
+};
+const handleEdit = (record: GoodsApi.GoodsItem) => {
+  router.push(`/goods/edit?id=${record.id}`);
+};
 
 /* ---------------- 状态切换 ---------------- */
 const handleStatusChange = async (
@@ -139,7 +143,7 @@ const columns = [
     customRender: ({ record }: { record: GoodsApi.GoodsItem }) => {
       if (!record.main_image) return '-';
       return h(Avatar, {
-        src: record.main_image_full_url || record.main_image,
+        src: record.main_image_full_url || String(record.main_image),
         size: 40,
         shape: 'square',
       });
@@ -197,7 +201,13 @@ onMounted(() => {
 <template>
   <div class="p-4">
     <div class="mb-4">
-      <a-button type="primary" @click="handleCreate" v-access:code="'SystemGoodsCreate'"> 新增商品 </a-button>
+      <a-button
+        type="primary"
+        @click="handleCreate"
+        v-access:code="'SystemGoodsCreate'"
+      >
+        新增商品
+      </a-button>
       <a-button class="ml-2" @click="() => loadData(searchParams.value)">
         刷新
       </a-button>
@@ -294,7 +304,12 @@ onMounted(() => {
       <template #bodyCell="{ column, record }">
         <template v-if="column.key === 'action'">
           <a-space>
-            <a-button type="link" size="small" @click="handleEdit(record)" v-access:code="'SystemGoodsUpdate'">
+            <a-button
+              type="link"
+              size="small"
+              @click="handleEdit(record)"
+              v-access:code="'SystemGoodsUpdate'"
+            >
               编辑
             </a-button>
             <a-button
@@ -310,6 +325,5 @@ onMounted(() => {
         </template>
       </template>
     </a-table>
-
   </div>
 </template>

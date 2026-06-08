@@ -6,6 +6,7 @@ namespace app\service\client;
 
 use app\common\enum\PayMethod;
 use app\service\SystemSettingService;
+use app\service\UploadService;
 use mall_base\base\BaseModel;
 use mall_base\base\BaseService;
 
@@ -57,10 +58,9 @@ class ConfigService extends BaseService
      */
     public function basic(): array
     {
-        $merged = [];
-        foreach (self::PUBLIC_GROUPS as $groupCode) {
-            $merged = array_merge($merged, getSystemSettingGroup($groupCode));
-        }
+        /** @var SystemSettingService $settingsService */
+        $settingsService = app()->make(SystemSettingService::class);
+        $merged = $settingsService->getSystemSettingGroups(self::PUBLIC_GROUPS);
 
         // SystemBasic 组走字段级白名单
         foreach (self::SYSTEM_BASIC_PUBLIC_FIELDS as $code) {
@@ -70,9 +70,7 @@ class ConfigService extends BaseService
             }
         }
 
-        $systemBasic = app()
-            ->make(SystemSettingService::class)
-            ->getSystemSettingGroupWithMeta('SystemBasic');
+        $systemBasic = $settingsService->getSystemSettingGroupWithMeta('SystemBasic');
         if (isset($systemBasic['admin_favicon'])) {
             $favicon = $systemBasic['admin_favicon'];
             $value = !empty($favicon['full_url']) ? $favicon['full_url'] : ($favicon['value'] ?? null);
@@ -81,9 +79,7 @@ class ConfigService extends BaseService
             }
         }
 
-        $wechatMini = app()
-            ->make(SystemSettingService::class)
-            ->getSystemSettingGroupWithMeta('WechatMiniProgram');
+        $wechatMini = $settingsService->getSystemSettingGroupWithMeta('WechatMiniProgram');
         foreach (self::WECHAT_MINI_PUBLIC_FIELDS as $code => $publicCode) {
             if (!isset($wechatMini[$code])) {
                 continue;
@@ -154,5 +150,15 @@ class ConfigService extends BaseService
             ];
         }
         return $list;
+    }
+
+    /**
+     * 获取客户端安全上传配置。
+     *
+     * @return array{max_size: float, max_count: int, accept_types: string[], tips: string[]}
+     */
+    public function uploadConfig(string $type): array
+    {
+        return app()->make(UploadService::class)->getClientUploadConfig($type);
     }
 }

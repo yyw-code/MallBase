@@ -16,6 +16,7 @@ use app\service\order\OrderStatusMachine;
 use app\service\order\RefundOrderStatusMachine;
 use app\service\order\WechatRefundAdapter;
 use app\service\order\dto\RefundPaymentContext;
+use app\service\upload\AssetHydrator;
 use app\common\enum\OperatorType;
 use app\common\enum\OrderStatus;
 use app\common\enum\PayMethod;
@@ -373,7 +374,10 @@ class RefundOrderAdminService extends BaseService
             $itemModel = $this->model(OrderItem::class)->where('id', $orderItemId)->find();
             $item = $itemModel?->toArray();
             if ($item !== null) {
-                $item['goods_image_full_url'] = buildUploadUrl((string) ($item['goods_image'] ?? ''));
+                $hydrated = app()->make(AssetHydrator::class)->hydrateFields([$item], [
+                    'goods_image' => 'goods_image_full_url',
+                ]);
+                $item = $hydrated[0] ?? $item;
             }
             $data['order_item'] = $item;
         } else {
@@ -387,7 +391,10 @@ class RefundOrderAdminService extends BaseService
             ->find();
         $user = $userModel?->toArray();
         if ($user !== null && !empty($user['avatar'])) {
-            $user['avatar_url'] = buildUploadUrl((string) $user['avatar']);
+            $hydratedUser = app()->make(AssetHydrator::class)->hydrateFields([$user], [
+                'avatar' => 'avatar_url',
+            ]);
+            $user = $hydratedUser[0] ?? $user;
         }
         $data['user'] = $user;
 
@@ -765,8 +772,10 @@ class RefundOrderAdminService extends BaseService
                 ->field('id, goods_name, goods_image, sku_spec, unit_price, quantity')
                 ->select()
                 ->toArray();
+            $rows = app()->make(AssetHydrator::class)->hydrateFields($rows, [
+                'goods_image' => 'goods_image_full_url',
+            ]);
             foreach ($rows as $row) {
-                $row['goods_image_full_url'] = buildUploadUrl((string) ($row['goods_image'] ?? ''));
                 $itemMap[(int) $row['id']]   = $row;
             }
         }

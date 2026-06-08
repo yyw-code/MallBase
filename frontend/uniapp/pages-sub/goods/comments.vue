@@ -78,6 +78,31 @@
             />
           </view>
 
+          <view
+            v-if="review.appendContent || review.appendImages.length > 0"
+            class="goods-comments__append"
+          >
+            <view class="goods-comments__append-header">
+              <text class="goods-comments__append-label">追评</text>
+              <text v-if="review.appendTimeText" class="goods-comments__append-time">
+                {{ review.appendTimeText }}
+              </text>
+            </view>
+            <text v-if="review.appendContent" class="goods-comments__append-content">
+              {{ review.appendContent }}
+            </text>
+            <view v-if="review.appendImages.length > 0" class="goods-comments__images">
+              <image
+                v-for="(img, idx) in review.appendImages"
+                :key="img + idx"
+                class="goods-comments__img"
+                :src="img"
+                mode="aspectFill"
+                @tap="previewImages(review.appendImages, idx)"
+              />
+            </view>
+          </view>
+
           <view v-if="review.replyContent" class="goods-comments__reply">
             <text class="goods-comments__reply-prefix">商家回复：</text>
             <text class="goods-comments__reply-text">{{ review.replyContent }}</text>
@@ -191,6 +216,9 @@ function normalizeReview(review) {
     rating: Math.max(1, Math.min(5, Number(review.rating || 5))),
     content: review.content || '',
     images: normalizeImages(review.images_full_urls || review.images),
+    appendContent: review.append_content || '',
+    appendImages: normalizeImages(review.append_images_full_urls || review.append_images),
+    appendTimeText: formatTime(review.append_time),
     replyContent: review.reply_content || '',
     createTimeText,
     skuSpecText,
@@ -360,6 +388,39 @@ function formatTime(input) {
   height: 168rpx;
   border-radius: $mb-radius-md;
   background: $mb-color-bg-secondary;
+}
+
+.goods-comments__append {
+  margin-top: $mb-spacing-md;
+  padding: $mb-spacing-md;
+  border-radius: $mb-radius-md;
+  background: $mb-color-bg-secondary;
+}
+
+.goods-comments__append-header {
+  display: flex;
+  align-items: center;
+  gap: $mb-spacing-sm;
+}
+
+.goods-comments__append-label {
+  font-size: $mb-font-sm;
+  font-weight: 700;
+  color: $mb-color-text-title;
+}
+
+.goods-comments__append-time {
+  font-size: $mb-font-xs;
+  color: $mb-color-text-tertiary;
+}
+
+.goods-comments__append-content {
+  display: block;
+  margin-top: $mb-spacing-sm;
+  font-size: $mb-font-sm;
+  color: $mb-color-text-secondary;
+  line-height: 1.6;
+  word-break: break-word;
 }
 
 .goods-comments__reply {

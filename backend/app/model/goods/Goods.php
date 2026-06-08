@@ -35,7 +35,8 @@ class Goods extends BaseModel
             }
 
             foreach ($group['values'] as &$item) {
-                $item['pic_full_url'] = buildUploadUrl($item['pic'] ?? '');
+                $pic = $item['pic'] ?? '';
+                $item['pic_full_url'] = is_scalar($pic) ? buildUploadUrl((string) $pic) : '';
             }
         }
 
@@ -59,14 +60,18 @@ class Goods extends BaseModel
 
         $images = [];
         foreach ($value as $image) {
-            $url = is_array($image) ? (string) ($image['url'] ?? '') : (string) $image;
-            if ($url === '') {
+            $raw = is_array($image) ? ($image['asset_id'] ?? $image['id'] ?? $image['url'] ?? '') : $image;
+            if (!is_scalar($raw)) {
+                continue;
+            }
+            $url = ctype_digit((string) $raw) ? (int) $raw : trim((string) $raw);
+            if ($url === '' || $url === 0) {
                 continue;
             }
 
             $images[] = [
                 'url' => $url,
-                'full_url' => buildUploadUrl($url),
+                'full_url' => is_int($url) ? '' : buildUploadUrl($url),
             ];
         }
 

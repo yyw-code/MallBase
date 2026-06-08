@@ -6,6 +6,7 @@ namespace app\service\client\goods;
 
 use app\model\goods\Goods;
 use app\model\goods\GoodsSku;
+use app\service\upload\AssetHydrator;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
 
@@ -61,6 +62,7 @@ class ClientGoodsService extends BaseService
             ->page($page, $pageSize)
             ->select()
             ->toArray();
+        $list = app()->make(AssetHydrator::class)->hydrateGoodsList($list);
 
         return compact('total', 'list');
     }
@@ -78,13 +80,6 @@ class ClientGoodsService extends BaseService
         }
 
         $data = $goods->toArray();
-        $firstImage = $data['images'][0] ?? [];
-        $firstImageUrl = is_array($firstImage) ? (string) ($firstImage['url'] ?? '') : (string) $firstImage;
-        if (empty($data['main_image']) && $firstImageUrl !== '') {
-            $data['main_image'] = $firstImageUrl;
-            $data['main_image_full_url'] = buildUploadUrl($firstImageUrl);
-        }
-
         // SKU 列表(只暴露上架的 SKU)
         $data['skus'] = $this->model(GoodsSku::class)
             ->where('goods_id', $goodsId)
@@ -94,7 +89,7 @@ class ClientGoodsService extends BaseService
             ->toArray();
         $data['guarantees'] = $this->goodsGuarantees();
 
-        return $data;
+        return app()->make(AssetHydrator::class)->hydrateGoodsDetail($data);
     }
 
     /**
@@ -105,13 +100,15 @@ class ClientGoodsService extends BaseService
     public function recommend(int $limit = 10): array
     {
         $limit = max(1, min($limit, 50));
-        return $this->saleableQuery()
+        $list = $this->saleableQuery()
             ->where('is_recommend', 1)
             ->order('sort', 'asc')
             ->order('id', 'desc')
             ->limit($limit)
             ->select()
             ->toArray();
+
+        return app()->make(AssetHydrator::class)->hydrateGoodsList($list);
     }
 
     /**

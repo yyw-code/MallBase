@@ -13,6 +13,7 @@ use app\service\order\OrderStatusMachine;
 use app\service\order\OrderSettingService;
 use app\service\order\StockService;
 use app\service\order\WechatPrepayCloseService;
+use app\service\upload\AssetHydrator;
 use app\common\enum\OperatorType;
 use app\common\enum\OrderStatus;
 use app\common\enum\RefundOrderStatus;
@@ -486,10 +487,12 @@ class OrderAdminService extends BaseService
             ->whereIn('order_id', $orderIds)
             ->select()
             ->toArray();
+        $rows = app()->make(AssetHydrator::class)->hydrateFields($rows, [
+            'goods_image' => 'goods_image_full_url',
+        ]);
 
         $map = [];
         foreach ($rows as $row) {
-            $row['goods_image_full_url'] = buildUploadUrl((string) ($row['goods_image'] ?? ''));
             $map[(int) $row['order_id']][] = $row;
         }
         return $map;

@@ -48,6 +48,7 @@ const rules = {
 const formRef = ref();
 
 const loading = ref(false);
+const fileNameFromValue = (value: unknown) => String(value || '').split('/').pop() || '';
 
 /* ---------------- 监听 visible 变化 ---------------- */
 watch(
@@ -62,9 +63,9 @@ watch(
           name: props.editData.name || '',
           logo: logoUrl
             ? {
-                url: logoUrl,
-                full_url: logoFullUrl,
-                name: logoUrl.split('/').pop() || '',
+                url: String(logoUrl),
+                full_url: logoFullUrl || String(logoUrl),
+                name: fileNameFromValue(logoUrl),
               }
             : undefined,
           description: props.editData.description || '',

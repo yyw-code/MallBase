@@ -91,7 +91,7 @@ CREATE TABLE `mb_order_item` (
   `goods_id` int(11) unsigned NOT NULL COMMENT '商品ID（SPU）',
   `sku_id` int(11) unsigned NOT NULL COMMENT 'SKU ID',
   `goods_name` varchar(200) NOT NULL COMMENT '商品名称快照',
-  `goods_image` varchar(255) DEFAULT NULL COMMENT '商品主图快照',
+  `goods_image` bigint(20) unsigned DEFAULT NULL COMMENT '商品主图素材ID快照',
   `sku_spec` varchar(500) DEFAULT NULL COMMENT 'SKU 规格文案快照（如：红色,XL）',
   `unit_price` decimal(10,2) NOT NULL DEFAULT 0.00 COMMENT '下单时单价快照',
   `quantity` int(11) unsigned NOT NULL DEFAULT 1 COMMENT '购买数量',

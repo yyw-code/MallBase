@@ -26,7 +26,12 @@ class UploadController extends BaseController
             return $this->error('请选择要上传的文件');
         }
 
-        $result = $this->service()->uploadClientImage($file);
+        $module = (string) $this->request->param('module', $this->request->param('type', 'client'));
+        $result = $this->service()->uploadClientImage(
+            $file,
+            $module !== '' ? $module : 'client',
+            (int)($this->request->user_id ?? 0)
+        );
 
         return $this->success($result, '上传成功');
     }

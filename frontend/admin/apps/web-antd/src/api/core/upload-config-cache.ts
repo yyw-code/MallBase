@@ -1,6 +1,6 @@
 import type { UploadApi } from './upload';
 
-import { getUploadConfigApi } from './upload';
+import { getUploadConfigApi, getUploadOptionsApi } from './upload';
 
 export type UploadType =
   | 'file'
@@ -20,6 +20,9 @@ const TTL_MS = 5 * 60 * 1000;
 
 const cache = new Map<UploadType, CacheEntry>();
 const inflight = new Map<UploadType, Promise<UploadApi.UploadRuleConfig>>();
+let optionsCache: null | { data: UploadApi.UploadOptions; fetchedAt: number } =
+  null;
+let optionsInflight: null | Promise<UploadApi.UploadOptions> = null;
 
 // ==================== 跨标签页广播 ====================
 
@@ -31,7 +34,9 @@ interface InvalidateMessage {
 }
 
 const broadcastChannel: BroadcastChannel | null =
-  typeof BroadcastChannel === 'undefined' ? null : new BroadcastChannel(CHANNEL_NAME);
+  typeof BroadcastChannel === 'undefined'
+    ? null
+    : new BroadcastChannel(CHANNEL_NAME);
 
 if (broadcastChannel) {
   broadcastChannel.addEventListener('message', (event: MessageEvent) => {
@@ -42,6 +47,7 @@ if (broadcastChannel) {
       cache.delete(data.type);
     } else {
       cache.clear();
+      optionsCache = null;
     }
   });
 }
@@ -105,6 +111,42 @@ export function invalidateUploadConfig(type?: UploadType): void {
     cache.delete(type);
   } else {
     cache.clear();
+    optionsCache = null;
   }
-  broadcastChannel?.postMessage({ kind: 'invalidate', type } satisfies InvalidateMessage);
+  broadcastChannel?.postMessage({
+    kind: 'invalidate',
+    type,
+  } satisfies InvalidateMessage);
+}
+
+/**
+ * 获取上传公共选项（带缓存 + 在途去重）。
+ */
+export async function getUploadOptionsCached(): Promise<UploadApi.UploadOptions> {
+  const now = Date.now();
+  if (optionsCache && now - optionsCache.fetchedAt < TTL_MS) {
+    return optionsCache.data;
+  }
+
+  if (optionsInflight) {
+    return optionsCache ? optionsCache.data : optionsInflight;
+  }
+
+  optionsInflight = getUploadOptionsApi()
+    .then((res) => {
+      optionsCache = { data: res, fetchedAt: Date.now() };
+      return res;
+    })
+    .finally(() => {
+      optionsInflight = null;
+    });
+
+  if (optionsCache) {
+    optionsInflight.catch(() => {
+      // 静默保留旧缓存
+    });
+    return optionsCache.data;
+  }
+
+  return optionsInflight;
 }

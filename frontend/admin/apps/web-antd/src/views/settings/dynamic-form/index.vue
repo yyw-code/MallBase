@@ -9,6 +9,7 @@ import { JsonViewer } from '@vben/common-ui';
 import { message, Spin } from 'ant-design-vue';
 
 import { getSettingConfigApi, saveSettingConfigApi } from '#/api/setting';
+import { invalidateUploadConfig } from '#/api/core/upload-config-cache';
 import RichTextEditor from '#/components/rich-text-editor/index.vue';
 import Upload from '#/components/upload/index.vue';
 
@@ -43,6 +44,7 @@ const apiBaseUrl = import.meta.env.VITE_GLOB_API_URL || '';
 /** 将相对路径转为完整 URL（兜底用，优先使用后端返回的 full_url） */
 const toFullUrl = (path: string) => {
   if (!path) return '';
+  if (/^\d+$/.test(path)) return '';
   if (path.startsWith('http://') || path.startsWith('https://')) return path;
   return `${apiBaseUrl}${path}`;
 };
@@ -276,6 +278,18 @@ const buildSubmitData = (items: SettingApi.SettingItem[]) => {
     );
   }
   return submitData;
+};
+
+const isUploadRelatedSetting = (item: SettingApi.SettingItem): boolean => {
+  const code = item.code || '';
+  return (
+    code === 'upload_driver' ||
+    code.startsWith('upload_') ||
+    code.startsWith('mime_') ||
+    code.startsWith('local_') ||
+    code.startsWith('oss_') ||
+    code.startsWith('cos_')
+  );
 };
 
 /** 获取字段的错误信息 */
@@ -681,6 +695,9 @@ const handleSave = async () => {
         groupCode.value,
         buildSubmitData(settings.value),
       );
+    }
+    if (currentSaveSettings.value.some(isUploadRelatedSetting)) {
+      invalidateUploadConfig();
     }
     message.success('保存成功');
   } catch (error: any) {
