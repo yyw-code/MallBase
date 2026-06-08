@@ -24,10 +24,9 @@ class UploadAssetAdminService extends BaseService
 
     protected function buildListQuery(array $where)
     {
-        return $this->model()
+        $query = $this->model()
             ->alias('a')
             ->leftJoin('mb_upload_asset_category c', 'c.id = a.category_id')
-            ->leftJoin('mb_upload_asset_location l', 'l.asset_id = a.id AND l.is_primary = 1 AND l.status = 1')
             ->when(($where['keyword'] ?? '') !== '', function ($q) use ($where) {
                 $keyword = trim((string) $where['keyword']);
                 $q->whereLike('a.name|a.original_name|a.hash', "%{$keyword}%");
@@ -47,9 +46,6 @@ class UploadAssetAdminService extends BaseService
                     $q->whereIn('a.ext', $exts);
                 }
             })
-            ->when(($where['driver'] ?? '') !== '', function ($q) use ($where) {
-                $q->where('l.driver', (string) $where['driver']);
-            })
             ->when(($where['module'] ?? '') !== '', function ($q) use ($where) {
                 $q->where('a.module', (string) $where['module']);
             })
@@ -62,6 +58,17 @@ class UploadAssetAdminService extends BaseService
             ->when(($where['status'] ?? '') !== '', function ($q) use ($where) {
                 $q->where('a.status', (int) $where['status']);
             });
+
+        if (($where['driver'] ?? '') !== '') {
+            $assetIds = $this->model(UploadAssetLocation::class)
+                ->where('driver', (string) $where['driver'])
+                ->where('status', UploadAssetLocation::STATUS_ENABLED)
+                ->column('asset_id');
+            $assetIds = array_values(array_unique(array_map('intval', $assetIds)));
+            $query->whereIn('a.id', $assetIds === [] ? [0] : $assetIds);
+        }
+
+        return $query;
     }
 
     /**
@@ -237,12 +244,6 @@ class UploadAssetAdminService extends BaseService
         return [
             'a.*',
             'c.name' => 'category_name',
-            'l.driver',
-            'l.path',
-            'l.url_prefix',
-            'l.bucket',
-            'l.region',
-            'l.endpoint',
         ];
     }
 
@@ -257,6 +258,14 @@ class UploadAssetAdminService extends BaseService
         }
 
         $assetIds = array_values(array_map(static fn(array $row): int => (int) ($row['id'] ?? 0), $list));
+        $primaryLocations = $this->model(UploadAssetLocation::class)
+            ->whereIn('asset_id', $assetIds)
+            ->where('is_primary', 1)
+            ->where('status', UploadAssetLocation::STATUS_ENABLED)
+            ->select()
+            ->toArray();
+        $primaryLocationsByAssetId = array_column($primaryLocations, null, 'asset_id');
+
         $usageRows = $this->model(UploadAssetUsage::class)
             ->whereIn('asset_id', $assetIds)
             ->field('asset_id, COUNT(*) AS usage_count')
@@ -267,7 +276,8 @@ class UploadAssetAdminService extends BaseService
         $resolver = app()->make(AssetResolver::class);
 
         foreach ($list as &$row) {
-            $row['full_url'] = $resolver->buildLocationUrl($row);
+            $location = $primaryLocationsByAssetId[(int) $row['id']] ?? [];
+            $row['full_url'] = $location === [] ? '' : $resolver->buildLocationUrl($location);
             $row['usage_count'] = (int) ($usageCounts[(int) $row['id']] ?? 0);
         }
         unset($row);

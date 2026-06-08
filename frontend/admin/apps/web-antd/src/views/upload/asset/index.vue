@@ -10,6 +10,7 @@ import { getUploadOptionsCached } from '#/api/core/upload-config-cache';
 import {
   deleteUploadAssetApi,
   getUploadAssetCategoryTreeApi,
+  getUploadAssetInfoApi,
   getUploadAssetListApi,
   purgeUploadAssetApi,
   restoreUploadAssetApi,
@@ -24,6 +25,9 @@ const categories = ref<UploadAssetApi.CategoryItem[]>([]);
 const assetTypeOptions = ref<{ label: string; value: string }[]>([]);
 const driverOptions = ref<{ label: string; value: string }[]>([]);
 const currentDriverLabel = ref('');
+const detailOpen = ref(false);
+const detailLoading = ref(false);
+const assetDetail = ref<null | UploadAssetApi.AssetDetail>(null);
 const pagination = reactive({ current: 1, pageSize: 20, total: 0 });
 const searchParams = reactive({
   keyword: '',
@@ -139,6 +143,17 @@ const handlePurge = (record: UploadAssetApi.AssetItem) =>
     purgeUploadAssetApi(record.id),
   );
 
+const openDetail = async (record: UploadAssetApi.AssetItem) => {
+  detailOpen.value = true;
+  detailLoading.value = true;
+  assetDetail.value = null;
+  try {
+    assetDetail.value = await getUploadAssetInfoApi(record.id);
+  } finally {
+    detailLoading.value = false;
+  }
+};
+
 const renderPreview = (record: UploadAssetApi.AssetItem) => {
   if (record.type === 'image' && record.full_url) {
     return h(Image, {
@@ -162,6 +177,50 @@ const formatDriver = (driver?: string) =>
   driver ||
   '-';
 
+const formatFileSize = (size?: number) => {
+  const bytes = Number(size || 0);
+  if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
+
+  const units = ['B', 'KB', 'MB', 'GB'];
+  let value = bytes;
+  let unitIndex = 0;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex++;
+  }
+
+  const displayValue =
+    unitIndex === 0 || value >= 10
+      ? Math.round(value)
+      : Number(value.toFixed(1));
+  return `${displayValue} ${units[unitIndex]}`;
+};
+
+const formatImageSize = (record?: null | UploadAssetApi.AssetItem) => {
+  const width = Number(record?.width || 0);
+  const height = Number(record?.height || 0);
+  return width > 0 && height > 0 ? `${width} × ${height}` : '-';
+};
+
+const formatHashShort = (hash?: string) => {
+  const value = String(hash || '');
+  return value === '' ? '-' : value.slice(0, 12);
+};
+
+const formatLocationStatus = (status?: number) =>
+  Number(status) === 1 ? '可用' : '不可用';
+
+const copyText = async (text?: string) => {
+  const value = String(text || '');
+  if (!value) return;
+  try {
+    await navigator.clipboard.writeText(value);
+    message.success('已复制');
+  } catch {
+    message.error('复制失败，请手动选择文本复制');
+  }
+};
+
 const columns = [
   {
     title: '预览',
@@ -172,9 +231,19 @@ const columns = [
   {
     title: '名称',
     dataIndex: 'original_name',
-    width: 220,
+    width: 240,
     ellipsis: true,
-    customRender: ({ record }: any) => record.original_name || record.name,
+    customRender: ({ record }: any) =>
+      h('div', { class: 'asset-name-cell' }, [
+        h(
+          'div',
+          { class: 'asset-name-cell__primary' },
+          record.original_name || record.name,
+        ),
+        record.name && record.name !== record.original_name
+          ? h('div', { class: 'asset-name-cell__secondary' }, record.name)
+          : null,
+      ]),
   },
   { title: '分类', dataIndex: 'category_name', width: 120 },
   {
@@ -184,17 +253,29 @@ const columns = [
     customRender: ({ text }: any) => formatAssetType(text),
   },
   {
-    title: '驱动',
-    dataIndex: 'driver',
+    title: '扩展名',
+    dataIndex: 'ext',
     width: 90,
-    customRender: ({ text }: any) => formatDriver(text),
+    customRender: ({ text }: any) => text || '-',
   },
   {
     title: '大小',
     dataIndex: 'size',
     width: 110,
-    customRender: ({ text }: any) =>
-      `${Math.round(Number(text || 0) / 1024)} KB`,
+    customRender: ({ text }: any) => formatFileSize(Number(text || 0)),
+  },
+  {
+    title: '尺寸',
+    key: 'dimension',
+    width: 120,
+    customRender: ({ record }: any) => formatImageSize(record),
+  },
+  {
+    title: 'Hash',
+    dataIndex: 'hash',
+    width: 140,
+    customRender: ({ record }: any) =>
+      h('span', { title: record.hash || '' }, formatHashShort(record.hash)),
   },
   { title: '引用', dataIndex: 'usage_count', width: 80 },
   {
@@ -207,9 +288,39 @@ const columns = [
       ),
   },
   { title: '创建时间', dataIndex: 'create_time', width: 170 },
-  { title: '操作', key: 'action', width: 210 },
+  { title: '操作', key: 'action', width: 250 },
 ];
-const tableScroll = { x: 1280 };
+const tableScroll = { x: 1450 };
+
+const locationColumns = [
+  {
+    title: '驱动',
+    dataIndex: 'driver',
+    width: 90,
+    customRender: ({ text }: any) => formatDriver(text),
+  },
+  { title: 'Bucket', dataIndex: 'bucket', width: 140, ellipsis: true },
+  { title: '对象路径', dataIndex: 'path', key: 'path', width: 320 },
+  { title: '区域', dataIndex: 'region', width: 110, ellipsis: true },
+  { title: 'Endpoint', dataIndex: 'endpoint', width: 180, ellipsis: true },
+  { title: 'ETag', dataIndex: 'etag', width: 160, ellipsis: true },
+  {
+    title: '大小',
+    dataIndex: 'size',
+    width: 100,
+    customRender: ({ text }: any) => formatFileSize(Number(text || 0)),
+  },
+  { title: '主位置', dataIndex: 'is_primary', key: 'is_primary', width: 90 },
+  { title: '状态', dataIndex: 'status', key: 'location_status', width: 90 },
+];
+
+const usageColumns = [
+  { title: '引用类型', dataIndex: 'owner_type', width: 140 },
+  { title: '业务ID', dataIndex: 'owner_id', width: 100 },
+  { title: '字段', dataIndex: 'field', width: 120 },
+  { title: '排序', dataIndex: 'sort', width: 80 },
+  { title: '创建时间', dataIndex: 'create_time', width: 170 },
+];
 
 onMounted(async () => {
   searchParams.status = routeStatus.value;
@@ -265,8 +376,9 @@ watch(
         type="primary"
         @click="loadData"
         v-access:code="'SystemUploadAssetList'"
-        >查询</a-button
       >
+        查询
+      </a-button>
       <a-button @click="resetSearch">重置</a-button>
     </div>
 
@@ -281,6 +393,14 @@ watch(
     >
       <template #bodyCell="{ column, record }">
         <template v-if="column.key === 'action'">
+          <a-button
+            type="link"
+            size="small"
+            @click="openDetail(record)"
+            v-access:code="'SystemUploadAssetInfo'"
+          >
+            详情
+          </a-button>
           <a-button
             v-if="record.status === 1"
             type="link"
@@ -312,6 +432,140 @@ watch(
         </template>
       </template>
     </a-table>
+
+    <a-drawer
+      v-model:open="detailOpen"
+      title="素材详情"
+      width="920px"
+      destroy-on-close
+    >
+      <a-spin :spinning="detailLoading">
+        <template v-if="assetDetail">
+          <div class="asset-detail">
+            <div class="asset-detail__section">
+              <div class="asset-detail__title">基础信息</div>
+              <a-descriptions bordered size="small" :column="2">
+                <a-descriptions-item label="素材ID">
+                  {{ assetDetail.id }}
+                </a-descriptions-item>
+                <a-descriptions-item label="状态">
+                  <a-tag :color="assetDetail.status === 1 ? 'green' : 'orange'">
+                    {{ assetDetail.status === 1 ? '正常' : '回收站' }}
+                  </a-tag>
+                </a-descriptions-item>
+                <a-descriptions-item label="原始文件名">
+                  {{ assetDetail.original_name || '-' }}
+                </a-descriptions-item>
+                <a-descriptions-item label="素材名称">
+                  {{ assetDetail.name || '-' }}
+                </a-descriptions-item>
+                <a-descriptions-item label="分类">
+                  {{ assetDetail.category_name || '-' }}
+                </a-descriptions-item>
+                <a-descriptions-item label="类型">
+                  {{ formatAssetType(assetDetail.type) }}
+                </a-descriptions-item>
+                <a-descriptions-item label="MIME">
+                  {{ assetDetail.mime || '-' }}
+                </a-descriptions-item>
+                <a-descriptions-item label="扩展名">
+                  {{ assetDetail.ext || '-' }}
+                </a-descriptions-item>
+                <a-descriptions-item label="文件大小">
+                  {{ formatFileSize(assetDetail.size) }}
+                </a-descriptions-item>
+                <a-descriptions-item label="图片尺寸">
+                  {{ formatImageSize(assetDetail) }}
+                </a-descriptions-item>
+                <a-descriptions-item label="上传模块">
+                  {{ assetDetail.module || '-' }}
+                </a-descriptions-item>
+                <a-descriptions-item label="上传者">
+                  {{ assetDetail.uploader_type || '-' }} /
+                  {{ assetDetail.uploader_id || 0 }}
+                </a-descriptions-item>
+                <a-descriptions-item label="可见性">
+                  {{ assetDetail.visibility || '-' }}
+                </a-descriptions-item>
+                <a-descriptions-item label="引用数">
+                  {{ assetDetail.usage_count || 0 }}
+                </a-descriptions-item>
+                <a-descriptions-item label="SHA256" :span="2">
+                  <span class="asset-detail__mono">{{
+                    assetDetail.hash || '-'
+                  }}</span>
+                  <a-button
+                    v-if="assetDetail.hash"
+                    type="link"
+                    size="small"
+                    @click="copyText(assetDetail.hash)"
+                  >
+                    复制
+                  </a-button>
+                </a-descriptions-item>
+                <a-descriptions-item label="创建时间">
+                  {{ assetDetail.create_time || '-' }}
+                </a-descriptions-item>
+                <a-descriptions-item label="更新时间">
+                  {{ assetDetail.update_time || '-' }}
+                </a-descriptions-item>
+              </a-descriptions>
+            </div>
+
+            <div class="asset-detail__section">
+              <div class="asset-detail__title">存储位置</div>
+              <a-table
+                row-key="id"
+                size="small"
+                :columns="locationColumns"
+                :data-source="assetDetail.locations || []"
+                :pagination="false"
+                :scroll="{ x: 1280 }"
+              >
+                <template #bodyCell="{ column, record }">
+                  <template v-if="column.key === 'path'">
+                    <div class="asset-detail__path" :title="record.path">
+                      {{ record.path || '-' }}
+                    </div>
+                    <a-button
+                      v-if="record.path"
+                      type="link"
+                      size="small"
+                      @click="copyText(record.path)"
+                    >
+                      复制路径
+                    </a-button>
+                  </template>
+                  <template v-else-if="column.key === 'is_primary'">
+                    <a-tag
+                      :color="record.is_primary === 1 ? 'blue' : 'default'"
+                    >
+                      {{ record.is_primary === 1 ? '主位置' : '备用' }}
+                    </a-tag>
+                  </template>
+                  <template v-else-if="column.key === 'location_status'">
+                    <a-tag :color="record.status === 1 ? 'green' : 'orange'">
+                      {{ formatLocationStatus(record.status) }}
+                    </a-tag>
+                  </template>
+                </template>
+              </a-table>
+            </div>
+
+            <div class="asset-detail__section">
+              <div class="asset-detail__title">引用关系</div>
+              <a-table
+                row-key="id"
+                size="small"
+                :columns="usageColumns"
+                :data-source="assetDetail.usage || []"
+                :pagination="false"
+              />
+            </div>
+          </div>
+        </template>
+      </a-spin>
+    </a-drawer>
   </div>
 </template>
 
@@ -337,5 +591,55 @@ watch(
   height: 32px;
   font-size: 13px;
   color: hsl(var(--muted-foreground));
+}
+
+.asset-name-cell {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.asset-name-cell__primary,
+.asset-name-cell__secondary {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.asset-name-cell__secondary {
+  font-size: 12px;
+  color: hsl(var(--muted-foreground));
+}
+
+.asset-detail {
+  display: grid;
+  gap: 18px;
+}
+
+.asset-detail__section {
+  display: grid;
+  gap: 10px;
+}
+
+.asset-detail__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+}
+
+.asset-detail__mono,
+.asset-detail__path {
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono',
+    'Courier New', monospace;
+}
+
+.asset-detail__path {
+  max-width: 300px;
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 </style>

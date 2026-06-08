@@ -7,6 +7,7 @@ use app\model\upload\UploadAsset;
 use app\model\upload\UploadAssetCategory;
 use app\model\upload\UploadAssetLocation;
 use app\model\upload\UploadAssetMigration;
+use app\model\upload\UploadAssetMigrationLog;
 use app\model\upload\UploadAssetUsage;
 use mall_base\base\BaseJob;
 use mall_base\drivers\DriverManager;
@@ -62,6 +63,7 @@ class UploadAssetMigrationJob extends BaseJob
 
         $migration = $this->findMigration($this->migrationId);
         $this->updateMigration($migration, ['status' => UploadAssetMigration::STATUS_PROCESSING]);
+        $this->clearMigrationLogs((int) $migration->id);
 
         try {
             $result = $migration->source_driver === 'legacy_local'
@@ -78,6 +80,7 @@ class UploadAssetMigrationJob extends BaseJob
                 'last_error' => mb_substr($result['last_error'], 0, 1000),
             ]);
         } catch (Throwable $e) {
+            $this->createTaskFailureLog($migration, $e->getMessage());
             $this->updateMigration($migration, [
                 'status' => UploadAssetMigration::STATUS_FAILED,
                 'fail_count' => max(1, (int) $migration->fail_count),
@@ -96,6 +99,7 @@ class UploadAssetMigrationJob extends BaseJob
         $options = is_array($migration->options) ? $migration->options : [];
         $batchSize = $this->batchSize($options);
         $limit = max(0, (int) ($options['limit'] ?? 0));
+        $deleteSource = $this->deleteSourceAfterSuccess($source, $options);
         $lastId = 0;
         $total = 0;
         $success = 0;
@@ -119,18 +123,37 @@ class UploadAssetMigrationJob extends BaseJob
             foreach ($rows as $row) {
                 $lastId = (int) $row['id'];
                 $total++;
+                $assetId = (int) $row['id'];
+                $path = trim((string) ($row['source_path'] ?? ''));
+                $sourceLocationId = (int) ($row['source_location_id'] ?? 0);
+                $startedAt = microtime(true);
+                $logId = $this->createMigrationLog([
+                    'migration_id' => (int) $migration->id,
+                    'asset_id' => $assetId,
+                    'source_driver' => $source,
+                    'target_driver' => $target,
+                    'source_path' => $path,
+                    'target_path' => $path,
+                    'stage' => 'start',
+                    'status' => UploadAssetMigrationLog::STATUS_PROCESSING,
+                    'delete_source' => $deleteSource ? 1 : 0,
+                    'source_deleted' => 0,
+                    'message' => '开始迁移',
+                    'error_message' => '',
+                    'duration_ms' => 0,
+                ]);
 
                 try {
-                    $assetId = (int) $row['id'];
-                    $path = trim((string) ($row['source_path'] ?? ''));
                     if ($path === '') {
                         throw new \RuntimeException('素材缺少源路径');
                     }
 
+                    $sourceDeleted = false;
+                    $message = '';
                     $existingTargetLocationId = $this->findLocationId($assetId, $target, $path);
                     if ($existingTargetLocationId > 0) {
                         $this->switchPrimaryLocation($assetId, $existingTargetLocationId);
-                        $success++;
+                        $message = '目标位置已存在，已切换主位置';
                     } else {
                         $tmpPath = $this->downloadToTemp($sourceDriver, $path);
                         try {
@@ -138,17 +161,45 @@ class UploadAssetMigrationJob extends BaseJob
                             $info = $targetDriver->getFileInfo($path) ?: $this->fileInfoFromLocal($path, $tmpPath, $targetDriver);
                             $locationId = $this->createLocation($assetId, $target, $path, $info, false);
                             $this->switchPrimaryLocation($assetId, $locationId);
-                            $success++;
+                            $message = '已复制到目标存储并切换主位置';
                         } finally {
                             if (isset($tmpPath) && is_file($tmpPath)) {
                                 @unlink($tmpPath);
                             }
                         }
                     }
+
+                    if ($deleteSource) {
+                        $this->deleteSourceLocation($sourceLocationId, $sourceDriver, $path);
+                        $sourceDeleted = true;
+                        $message .= '，已删除源文件';
+                    }
+
+                    $success++;
+                    $this->finishMigrationLog($logId, [
+                        'stage' => $deleteSource ? 'delete_source' : 'done',
+                        'status' => UploadAssetMigrationLog::STATUS_SUCCESS,
+                        'source_deleted' => $sourceDeleted ? 1 : 0,
+                        'message' => $message,
+                        'duration_ms' => $this->durationMs($startedAt),
+                    ]);
                 } catch (Throwable $e) {
                     $fail++;
-                    $lastError = sprintf('asset_id=%d: %s', (int) ($row['id'] ?? 0), $e->getMessage());
+                    $lastError = sprintf('asset_id=%d: %s', $assetId, $e->getMessage());
+                    $this->finishMigrationLog($logId, [
+                        'stage' => 'failed',
+                        'status' => UploadAssetMigrationLog::STATUS_FAILED,
+                        'error_message' => mb_substr($e->getMessage(), 0, 1000),
+                        'duration_ms' => $this->durationMs($startedAt),
+                    ]);
                 }
+
+                $this->updateMigration($migration, [
+                    'total' => $total,
+                    'success_count' => $success,
+                    'fail_count' => $fail,
+                    'last_error' => mb_substr($lastError, 0, 1000),
+                ]);
 
                 if ($limit > 0 && $total >= $limit) {
                     break 2;
@@ -171,7 +222,7 @@ class UploadAssetMigrationJob extends BaseJob
             ->join('upload_asset_location l', 'l.asset_id = a.id AND l.is_primary = 1 AND l.status = 1')
             ->where('a.status', UploadAsset::STATUS_NORMAL)
             ->where('l.driver', $source)
-            ->field('a.id,a.category_id,a.type,a.module,l.path AS source_path,l.size AS source_size');
+            ->field('a.id,a.category_id,a.type,a.module,l.id AS source_location_id,l.path AS source_path,l.size AS source_size');
 
         $assetIds = $this->intList($options['asset_ids'] ?? []);
         if ($assetIds !== []) {
@@ -184,6 +235,107 @@ class UploadAssetMigrationJob extends BaseJob
         }
 
         return $query;
+    }
+
+    /**
+     * @param array<string,mixed> $options
+     */
+    private function deleteSourceAfterSuccess(string $source, array $options): bool
+    {
+        return $source !== 'legacy_local' && !empty($options['delete_source_after_success']);
+    }
+
+    private function deleteSourceLocation(int $sourceLocationId, object $sourceDriver, string $path): void
+    {
+        if ($sourceLocationId <= 0) {
+            throw new \RuntimeException('源存储位置不存在');
+        }
+
+        if (!method_exists($sourceDriver, 'delete') || !$sourceDriver->delete($path)) {
+            $error = method_exists($sourceDriver, 'getError') ? (string) $sourceDriver->getError() : '';
+            throw new \RuntimeException('删除源文件失败' . ($error === '' ? '' : '：' . $error));
+        }
+
+        Db::name('upload_asset_location')->where('id', $sourceLocationId)->update([
+            'status' => UploadAssetLocation::STATUS_DISABLED,
+            'is_primary' => 0,
+            'meta' => json_encode([
+                'deleted_by_migration_id' => $this->migrationId,
+                'deleted_at' => date('Y-m-d H:i:s'),
+            ], JSON_UNESCAPED_UNICODE),
+        ]);
+    }
+
+    /**
+     * @param array<string,mixed> $data
+     */
+    private function createMigrationLog(array $data): int
+    {
+        return (int) Db::name('upload_asset_migration_log')->insertGetId([
+            'migration_id' => (int) ($data['migration_id'] ?? 0),
+            'asset_id' => (int) ($data['asset_id'] ?? 0),
+            'source_driver' => (string) ($data['source_driver'] ?? ''),
+            'target_driver' => (string) ($data['target_driver'] ?? ''),
+            'source_path' => (string) ($data['source_path'] ?? ''),
+            'target_path' => (string) ($data['target_path'] ?? ''),
+            'stage' => (string) ($data['stage'] ?? ''),
+            'status' => (int) ($data['status'] ?? UploadAssetMigrationLog::STATUS_PROCESSING),
+            'delete_source' => (int) ($data['delete_source'] ?? 0),
+            'source_deleted' => (int) ($data['source_deleted'] ?? 0),
+            'message' => mb_substr((string) ($data['message'] ?? ''), 0, 500),
+            'error_message' => mb_substr((string) ($data['error_message'] ?? ''), 0, 1000),
+            'duration_ms' => (int) ($data['duration_ms'] ?? 0),
+        ]);
+    }
+
+    /**
+     * @param array<string,mixed> $data
+     */
+    private function finishMigrationLog(int $id, array $data): void
+    {
+        if ($id <= 0) {
+            return;
+        }
+
+        $payload = [];
+        foreach (['stage', 'status', 'source_deleted', 'message', 'error_message', 'duration_ms'] as $field) {
+            if (array_key_exists($field, $data)) {
+                $payload[$field] = is_string($data[$field])
+                    ? mb_substr($data[$field], 0, $field === 'error_message' ? 1000 : 500)
+                    : $data[$field];
+            }
+        }
+        if ($payload !== []) {
+            Db::name('upload_asset_migration_log')->where('id', $id)->update($payload);
+        }
+    }
+
+    private function clearMigrationLogs(int $migrationId): void
+    {
+        Db::name('upload_asset_migration_log')->where('migration_id', $migrationId)->delete();
+    }
+
+    private function createTaskFailureLog(UploadAssetMigration $migration, string $error): void
+    {
+        try {
+            $this->createMigrationLog([
+                'migration_id' => (int) $migration->id,
+                'asset_id' => 0,
+                'source_driver' => (string) $migration->source_driver,
+                'target_driver' => (string) $migration->target_driver,
+                'stage' => 'task',
+                'status' => UploadAssetMigrationLog::STATUS_FAILED,
+                'message' => '任务执行失败',
+                'error_message' => $error,
+            ]);
+        } catch (Throwable) {
+            // 日志写入失败不能覆盖原始迁移错误。
+        }
+    }
+
+    private function durationMs(float $startedAt): int
+    {
+        return max(0, (int) round((microtime(true) - $startedAt) * 1000));
     }
 
     /**
@@ -248,6 +400,10 @@ class UploadAssetMigrationJob extends BaseJob
 
             foreach ($rows as $row) {
                 $lastId = (int) $row[$pk];
+                if (!$this->rowHasLegacyReference($row, $spec)) {
+                    continue;
+                }
+
                 $total++;
 
                 try {
@@ -306,7 +462,7 @@ class UploadAssetMigrationJob extends BaseJob
                         $this->syncUsage($ownerType, $lastId, (string) $field, $ids);
                     }
 
-                    if ($changed || $usageByField !== []) {
+                    if ($changed) {
                         $success++;
                     }
                 } catch (Throwable $e) {
@@ -326,6 +482,106 @@ class UploadAssetMigrationJob extends BaseJob
             'fail_count' => $fail,
             'last_error' => $lastError,
         ];
+    }
+
+    /**
+     * 旧数据迁移只统计仍然保存旧路径的记录；已回写为 asset_id 的记录不再计入迁移进度。
+     *
+     * @param array<string,mixed> $row
+     * @param array<string,mixed> $spec
+     */
+    private function rowHasLegacyReference(array $row, array $spec): bool
+    {
+        foreach (($spec['single'] ?? []) as $field) {
+            if ($this->hasLegacyValue($row[$field] ?? null)) {
+                return true;
+            }
+        }
+
+        foreach (($spec['multi'] ?? []) as $field) {
+            if ($this->hasLegacyListReference($row[$field] ?? null)) {
+                return true;
+            }
+        }
+
+        foreach (($spec['spec_meta'] ?? []) as $field) {
+            if ($this->hasLegacySpecMetaReference($row[$field] ?? null)) {
+                return true;
+            }
+        }
+
+        foreach (($spec['rich_text'] ?? []) as $field) {
+            if ($this->hasLegacyRichTextReference((string) ($row[$field] ?? ''))) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function hasLegacyListReference(mixed $value): bool
+    {
+        foreach ($this->decodeListValue($value) as $item) {
+            $raw = is_array($item) ? ($item['url'] ?? $item['path'] ?? '') : $item;
+            if ($this->hasLegacyValue($raw)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function hasLegacySpecMetaReference(mixed $value): bool
+    {
+        $meta = is_array($value) ? $value : json_decode((string) $value, true);
+        if (!is_array($meta)) {
+            return false;
+        }
+
+        foreach ($meta as $group) {
+            if (!is_array($group)) {
+                continue;
+            }
+            foreach (($group['values'] ?? []) as $specValue) {
+                if (is_array($specValue) && $this->hasLegacyValue($specValue['pic'] ?? null)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private function hasLegacyRichTextReference(string $html): bool
+    {
+        if ($html === '') {
+            return false;
+        }
+
+        if (!preg_match_all('/<(img|video)\b[^>]*>/i', $html, $matches)) {
+            return false;
+        }
+
+        foreach ($matches[0] as $tag) {
+            if (preg_match('/data-asset-id=["\']?(\d+)/i', $tag)) {
+                continue;
+            }
+            if (preg_match('/\bsrc=["\']([^"\']+)["\']/i', $tag, $srcMatch) && $this->hasLegacyValue($srcMatch[1])) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function hasLegacyValue(mixed $value): bool
+    {
+        if ($this->isAssetId($value)) {
+            return false;
+        }
+
+        $raw = trim(is_scalar($value) ? (string) $value : '');
+        return $raw !== '' && $this->normalizeLegacyLocalPath($raw) !== '';
     }
 
     /**

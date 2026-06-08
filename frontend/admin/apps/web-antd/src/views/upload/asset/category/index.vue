@@ -3,6 +3,8 @@ import type { UploadAssetApi } from '#/api/upload/asset';
 
 import { h, onMounted, reactive, ref } from 'vue';
 
+import { useAccess } from '@vben/access';
+
 import { message, Modal, Switch } from 'ant-design-vue';
 
 import {
@@ -13,6 +15,8 @@ import {
 } from '#/api/upload/asset';
 
 defineOptions({ name: 'UploadAssetCategoryManagement' });
+
+const { hasAccessByCodes } = useAccess();
 
 const loading = ref(false);
 const modalOpen = ref(false);
@@ -95,8 +99,26 @@ const handleDelete = (record: UploadAssetApi.CategoryItem) => {
   });
 };
 
+const toStatusValue = (checked: boolean | number | string) => (checked ? 1 : 0);
+
 const handleStatusChange = (checked: boolean | number | string) => {
-  formData.status = checked ? 1 : 0;
+  formData.status = toStatusValue(checked);
+};
+
+const handleRowStatusChange = async (
+  record: UploadAssetApi.CategoryItem,
+  checked: boolean | number | string,
+) => {
+  const nextStatus = toStatusValue(checked);
+  try {
+    await updateUploadAssetCategoryApi(record.id, {
+      status: nextStatus,
+    });
+    message.success('状态更新成功');
+    record.status = nextStatus;
+  } catch {
+    await loadData();
+  }
 };
 
 const columns = [
@@ -108,8 +130,18 @@ const columns = [
     title: '状态',
     dataIndex: 'status',
     width: 100,
-    customRender: ({ record }: any) =>
-      h(Switch, { checked: record.status === 1, disabled: true }),
+    customRender: ({ record }: { record: UploadAssetApi.CategoryItem }) => {
+      if (!hasAccessByCodes(['SystemUploadAssetCategoryUpdate'])) {
+        return record.status === 1 ? '启用' : '禁用';
+      }
+      return h(Switch, {
+        checked: record.status === 1,
+        checkedChildren: '启用',
+        unCheckedChildren: '禁用',
+        onChange: (checked: boolean | number | string) =>
+          handleRowStatusChange(record, checked),
+      });
+    },
   },
   { title: '操作', key: 'action', width: 180 },
 ];
@@ -121,7 +153,11 @@ onMounted(loadData);
 <template>
   <div class="category-page">
     <div class="category-toolbar">
-      <a-button type="primary" @click="openCreate" v-access:code="'SystemUploadAssetCategoryCreate'">
+      <a-button
+        type="primary"
+        @click="openCreate"
+        v-access:code="'SystemUploadAssetCategoryCreate'"
+      >
         新增分类
       </a-button>
     </div>
@@ -149,6 +185,8 @@ onMounted(loadData);
             type="link"
             danger
             size="small"
+            :disabled="record.is_system === 1"
+            :title="record.is_system === 1 ? '系统分类不能删除' : ''"
             @click="handleDelete(record)"
             v-access:code="'SystemUploadAssetCategoryDelete'"
           >
@@ -163,15 +201,32 @@ onMounted(loadData);
       :title="editingId ? '编辑分类' : '新增分类'"
       @ok="submit"
     >
-      <a-form ref="formRef" :model="formData" :label-col="{ style: { width: '100px' } }" class="pt-4">
-        <a-form-item label="名称" name="name" :rules="[{ required: true, message: '请输入名称' }]">
+      <a-form
+        ref="formRef"
+        :model="formData"
+        :label-col="{ style: { width: '100px' } }"
+        class="pt-4"
+      >
+        <a-form-item
+          label="名称"
+          name="name"
+          :rules="[{ required: true, message: '请输入名称' }]"
+        >
           <a-input v-model:value="formData.name" />
         </a-form-item>
-        <a-form-item label="编码" name="code" :rules="[{ required: true, message: '请输入编码' }]">
+        <a-form-item
+          label="编码"
+          name="code"
+          :rules="[{ required: true, message: '请输入编码' }]"
+        >
           <a-input v-model:value="formData.code" :disabled="!!editingId" />
         </a-form-item>
         <a-form-item label="排序" name="sort">
-          <a-input-number v-model:value="formData.sort" :min="0" class="category-number" />
+          <a-input-number
+            v-model:value="formData.sort"
+            :min="0"
+            class="category-number"
+          />
         </a-form-item>
         <a-form-item label="状态" name="status">
           <a-switch

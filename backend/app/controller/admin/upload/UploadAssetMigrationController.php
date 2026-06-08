@@ -42,6 +42,20 @@ class UploadAssetMigrationController extends BaseController
         return $this->success(null, '已重新入队');
     }
 
+    public function logs()
+    {
+        $id = (int) $this->request->param('id', 0);
+        if ($id <= 0) {
+            return $this->error('ID不能为空');
+        }
+
+        $where = $this->request->param(['status', 'keyword']);
+        $where['migration_id'] = $id;
+        [$page, $limit] = $this->getPagination(1, 20);
+
+        return $this->success($this->service()->getLogs($where, $page, $limit), '获取成功');
+    }
+
     public function cleanup()
     {
         $keepDays = (int) $this->request->param('keep_days', 30);

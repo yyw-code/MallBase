@@ -122,6 +122,33 @@ CREATE TABLE `mb_upload_asset_migration` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='素材迁移任务表';
 
 -- -----------------------------
+-- 素材迁移明细日志表
+-- -----------------------------
+DROP TABLE IF EXISTS `mb_upload_asset_migration_log`;
+CREATE TABLE `mb_upload_asset_migration_log` (
+  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT COMMENT '日志ID',
+  `migration_id` bigint(20) unsigned NOT NULL COMMENT '迁移任务ID',
+  `asset_id` bigint(20) unsigned NOT NULL DEFAULT 0 COMMENT '素材ID',
+  `source_driver` varchar(20) NOT NULL DEFAULT '' COMMENT '源驱动',
+  `target_driver` varchar(20) NOT NULL DEFAULT '' COMMENT '目标驱动',
+  `source_path` varchar(500) NOT NULL DEFAULT '' COMMENT '源对象路径',
+  `target_path` varchar(500) NOT NULL DEFAULT '' COMMENT '目标对象路径',
+  `stage` varchar(40) NOT NULL DEFAULT '' COMMENT '当前阶段',
+  `status` tinyint(1) NOT NULL DEFAULT 0 COMMENT '状态：0处理中 1成功 2失败',
+  `delete_source` tinyint(1) NOT NULL DEFAULT 0 COMMENT '是否要求删除源文件',
+  `source_deleted` tinyint(1) NOT NULL DEFAULT 0 COMMENT '源文件是否已删除',
+  `message` varchar(500) NOT NULL DEFAULT '' COMMENT '说明',
+  `error_message` varchar(1000) NOT NULL DEFAULT '' COMMENT '错误信息',
+  `duration_ms` int(11) unsigned NOT NULL DEFAULT 0 COMMENT '耗时毫秒',
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  KEY `idx_migration_status` (`migration_id`, `status`),
+  KEY `idx_asset` (`asset_id`),
+  KEY `idx_source_target` (`source_driver`, `target_driver`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='素材迁移明细日志表';
+
+-- -----------------------------
 -- 预置素材分类
 -- -----------------------------
 INSERT INTO `mb_upload_asset_category` (`id`, `pid`, `name`, `code`, `sort`, `is_system`, `status`) VALUES

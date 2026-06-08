@@ -5,9 +5,11 @@ namespace app\service\admin\upload;
 
 use app\job\UploadAssetMigrationJob;
 use app\model\upload\UploadAssetMigration;
+use app\model\upload\UploadAssetMigrationLog;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
-use mall_base\queue\JobQueue;
+use think\facade\Queue;
+use Throwable;
 
 /**
  * 后台素材迁移任务服务。
@@ -54,8 +56,9 @@ class UploadAssetMigrationAdminService extends BaseService
         $source = trim((string) ($data['source_driver'] ?? ''));
         $target = trim((string) ($data['target_driver'] ?? ''));
         $this->validateDrivers($source, $target);
+        $options = $this->normalizeOptions($source, $data['options'] ?? []);
 
-        $id = (int) $this->transaction(function () use ($data, $source, $target) {
+        $id = (int) $this->transaction(function () use ($data, $source, $target, $options) {
             $migration = $this->model();
             $migration->save([
                 'name' => trim((string) ($data['name'] ?? '')) ?: $this->defaultName($source, $target),
@@ -66,30 +69,45 @@ class UploadAssetMigrationAdminService extends BaseService
                 'success_count' => 0,
                 'fail_count' => 0,
                 'last_error' => '',
-                'options' => is_array($data['options'] ?? null) ? $data['options'] : [],
+                'options' => $options,
             ]);
 
             return (int) $migration->id;
         });
 
-        $this->dispatch($id);
+        $this->dispatchOrMarkFailed($id, false);
         return $id;
     }
 
     public function retry(int $id): bool
     {
         $migration = $this->findMigration($id);
-        if (!in_array((int) $migration->status, [UploadAssetMigration::STATUS_PENDING, UploadAssetMigration::STATUS_FAILED], true)) {
+        $canRetry = in_array((int) $migration->status, [UploadAssetMigration::STATUS_PENDING, UploadAssetMigration::STATUS_FAILED], true)
+            || $this->isStaleProcessing($migration);
+        if (!$canRetry) {
             throw new BusinessException('当前任务状态不能重试');
         }
 
         $migration->save([
             'status' => UploadAssetMigration::STATUS_PENDING,
+            'total' => 0,
+            'success_count' => 0,
+            'fail_count' => 0,
             'last_error' => '',
         ]);
-        $this->dispatch($id);
+        $this->dispatchOrMarkFailed($id, true);
 
         return true;
+    }
+
+    private function isStaleProcessing(UploadAssetMigration $migration): bool
+    {
+        if ((int) $migration->status !== UploadAssetMigration::STATUS_PROCESSING) {
+            return false;
+        }
+
+        $updateTime = strtotime((string) $migration->update_time);
+        return $updateTime > 0 && $updateTime <= time() - 600;
     }
 
     public function markProcessing(int $id): UploadAssetMigration
@@ -132,9 +150,89 @@ class UploadAssetMigrationAdminService extends BaseService
             ->delete();
     }
 
+    /**
+     * @return array{total:int,list:array<int,array<string,mixed>>}
+     */
+    public function getLogs(array $where, int $page, int $limit): array
+    {
+        $total = $this->buildLogQuery($where)->count();
+        $list = $this->buildLogQuery($where)
+            ->order('id', 'desc')
+            ->page($page, $limit)
+            ->select()
+            ->toArray();
+
+        return compact('total', 'list');
+    }
+
+    protected function buildLogQuery(array $where)
+    {
+        return $this->model(UploadAssetMigrationLog::class)
+            ->when(($where['migration_id'] ?? '') !== '', function ($q) use ($where) {
+                $q->where('migration_id', (int) $where['migration_id']);
+            })
+            ->when(($where['status'] ?? '') !== '', function ($q) use ($where) {
+                $q->where('status', (int) $where['status']);
+            })
+            ->when(($where['keyword'] ?? '') !== '', function ($q) use ($where) {
+                $keyword = trim((string) $where['keyword']);
+                $q->where(function ($subQuery) use ($keyword) {
+                    $subQuery->whereLike('source_path|target_path|message|error_message', "%{$keyword}%");
+                    if (ctype_digit($keyword)) {
+                        $subQuery->whereOr('asset_id', (int) $keyword);
+                    }
+                });
+            });
+    }
+
+    /**
+     * @param mixed $rawOptions
+     * @return array<string,mixed>
+     */
+    private function normalizeOptions(string $source, mixed $rawOptions): array
+    {
+        $options = is_array($rawOptions) ? $rawOptions : [];
+        $options['delete_source_after_success'] = $source !== 'legacy_local'
+            && !empty($options['delete_source_after_success']);
+
+        return $options;
+    }
+
+    private function dispatchOrMarkFailed(int $id, bool $throw): void
+    {
+        try {
+            $this->dispatch($id);
+        } catch (Throwable $e) {
+            $message = '迁移任务入队失败：' . $e->getMessage();
+            $this->markFailed($id, $message);
+            if ($throw) {
+                throw new BusinessException($message);
+            }
+        }
+    }
+
     private function dispatch(int $id): void
     {
-        JobQueue::push(UploadAssetMigrationJob::class, ['migration_id' => $id]);
+        $connection = $this->migrationQueueConnection();
+        Queue::connection($connection)->push(
+            UploadAssetMigrationJob::class,
+            ['migration_id' => $id],
+            UploadAssetMigrationJob::queueName()
+        );
+    }
+
+    private function migrationQueueConnection(): string
+    {
+        $connection = trim((string) env('UPLOAD_ASSET_MIGRATION_QUEUE_CONNECTION', ''));
+        if ($connection === '') {
+            $default = trim((string) config('queue.default', 'sync'));
+            $connection = $default === 'sync' ? 'redis' : $default;
+        }
+        if ($connection === 'sync') {
+            throw new BusinessException('素材迁移不能使用 sync 队列连接，请改用 redis 或 database 队列');
+        }
+
+        return $connection;
     }
 
     private function validateDrivers(string $source, string $target): void
@@ -152,7 +250,18 @@ class UploadAssetMigrationAdminService extends BaseService
 
     private function defaultName(string $source, string $target): string
     {
-        return strtoupper($source) . ' -> ' . strtoupper($target);
+        return $this->driverLabel($source) . ' -> ' . $this->driverLabel($target);
+    }
+
+    private function driverLabel(string $driver): string
+    {
+        return match ($driver) {
+            'legacy_local' => '历史图片路径',
+            'local' => '本地',
+            'oss' => '阿里云 OSS',
+            'cos' => '腾讯云 COS',
+            default => strtoupper($driver),
+        };
     }
 
     private function findMigration(int $id): UploadAssetMigration

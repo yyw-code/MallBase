@@ -60,7 +60,7 @@ return [
     'queue'      => [
         'enable'  => $isInstalled && $swooleQueueEnabled,
         'workers' => [
-            'default' => [
+            'default@redis' => [
                 'delay'      => 0,
                 'sleep'      => 3,
                 'tries'      => 3,
