@@ -1336,7 +1336,12 @@ class InstallService extends BaseService
             if ($sql === false || trim($sql) === '') {
                 continue;
             }
-            $pdo->exec($sql);
+
+            try {
+                $pdo->exec($sql);
+            } catch (\Throwable $e) {
+                throw new \RuntimeException(basename($file) . '：' . $e->getMessage(), 0, $e);
+            }
         }
     }
 
