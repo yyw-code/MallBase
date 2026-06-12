@@ -35,6 +35,22 @@ final class UniappOrderFrontendContractTest extends TestCase
 
         $this->assertStringContainsString('const ORDER_STATUS_PAID = 10', $source);
         $this->assertStringNotContainsString('const ORDER_STATUS_PAID = 2', $source);
+        $this->assertStringContainsString('orderStatus === ORDER_STATUS_PAID', $source);
+        $this->assertStringContainsString("status.value = 'success'", $source);
+        $this->assertStringContainsString("queryStatus === 'success' && !orderId.value", $source);
+        $this->assertStringContainsString('pollOrderStatus()', $source);
+    }
+
+    public function testWechatJsapiPayResultWaitsForBackendConfirmation(): void
+    {
+        $source = file_get_contents(__DIR__ . '/../../../../../frontend/uniapp/utils/payment.js');
+        $this->assertIsString($source);
+
+        $this->assertSame(
+            2,
+            substr_count($source, "return { status: 'pending', message: '正在确认支付结果' }")
+        );
+        $this->assertStringNotContainsString('JSAPI 已调起且 SDK 回调成功', $source);
     }
 
     public function testShippedOrderShowsRefundActionBeforeConfirmReceive(): void

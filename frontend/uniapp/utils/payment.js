@@ -92,14 +92,35 @@ function redirectMweb(mwebUrl) {
   // #endif
 }
 
+function normalizePayError(error) {
+  const errMsg = String(error?.errMsg || error?.err_msg || '')
+  const errDesc = String(error?.err_desc || error?.message || '')
+  const raw = (errDesc || errMsg).trim()
+  const lower = `${errMsg} ${errDesc}`.toLowerCase()
+
+  if (lower.includes('cancel')) {
+    return '支付已取消'
+  }
+
+  if (!raw) {
+    return '支付被取消'
+  }
+
+  if (raw === errMsg) {
+    return `支付调起失败：${raw}`
+  }
+
+  return `支付调起失败：${raw}`
+}
+
 /**
  * 发起支付（统一入口）
  *
  * @param {number|string} orderId 订单 ID（mb_order.id）
  * @param {number} [payMethod] 支付方式 code（1=微信，3=余额）。默认微信。
  * @returns {Promise<{status: 'success'|'pending'|'fail', message?: string}>}
- *   - success：余额支付已完成 / JSAPI 已调起且 SDK 回调成功
- *   - pending：MWEB 已跳转，无法在前端判断结果
+ *   - success：余额支付已由后端同步确认完成
+ *   - pending：JSAPI 控件返回 ok / MWEB 已跳转，最终结果等待后端订单状态确认
  *   - fail：调起失败 / 用户取消 / 当前环境不支持
  */
 export async function triggerPay(orderId, payMethod = PAY_METHOD_WECHAT) {
@@ -137,11 +158,11 @@ export async function triggerPay(orderId, payMethod = PAY_METHOD_WECHAT) {
   try {
     if (scene === 'mini') {
       await invokeMiniRequestPayment(payload)
-      return { status: 'success' }
+      return { status: 'pending', message: '正在确认支付结果' }
     }
     if (scene === 'offi') {
       await invokeOffiRequestPayment(payload)
-      return { status: 'success' }
+      return { status: 'pending', message: '正在确认支付结果' }
     }
     if (scene === 'h5') {
       const mwebUrl = payload.mweb_url || prepay?.mweb_url
@@ -154,7 +175,7 @@ export async function triggerPay(orderId, payMethod = PAY_METHOD_WECHAT) {
   } catch (e) {
     return {
       status: 'fail',
-      message: e?.errMsg || e?.err_msg || e?.message || '支付被取消',
+      message: normalizePayError(e),
     }
   }
 

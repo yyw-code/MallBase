@@ -180,11 +180,10 @@ class NotifyService extends BaseService
                     $paidLog->paid_at       = $successTime !== '' ? date('Y-m-d H:i:s', strtotime($successTime)) : date('Y-m-d H:i:s');
                     $paidLog->save();
                 } catch (Throwable $e) {
-                    // 唯一索引冲突 = 已处理过的回调，直接放行
-                    if ($this->isDuplicateKey($e)) {
-                        return;
+                    // 唯一索引冲突 = 已处理过的回调，仍继续幂等确认订单状态
+                    if (!$this->isDuplicateKey($e)) {
+                        throw $e;
                     }
-                    throw $e;
                 }
 
                 // 状态机转 PAID（OrderStatusMachine 内部对「已 PAID 重复流转」是幂等的）
@@ -282,7 +281,13 @@ class NotifyService extends BaseService
         } catch (Throwable $e) {
             Logger::instance()->critical('微信退款回调落库失败', [
                 'out_refund_no' => $outRefundNo,
+                'refund_status' => $refundStatus,
+                'refund_amount' => $refundAmount,
+                'success_time'  => $successTime,
+                'exception'     => get_class($e),
                 'error'         => $e->getMessage(),
+                'file'          => $e->getFile(),
+                'line'          => $e->getLine(),
             ]);
             return $this->respond(500, 'FAIL', '处理异常');
         }

@@ -7,6 +7,7 @@ const sn = ref('')
 const orderId = ref('')
 const status = ref('fail')
 const amount = ref('')
+const message = ref('')
 
 const isSuccess = computed(() => status.value === 'success')
 const isPending = computed(() => status.value === 'pending')
@@ -34,7 +35,7 @@ const resultMeta = computed(() => {
     type: 'fail',
     icon: '!',
     title: '支付未完成',
-    subtitle: '本次支付没有成功，你可以重新发起支付',
+    subtitle: message.value || '本次支付没有成功，你可以重新发起支付',
   }
 })
 
@@ -58,6 +59,7 @@ async function pollOrderStatus() {
     clearPoll()
     if (status.value === 'pending') {
       status.value = 'fail'
+      message.value = '支付结果尚未同步，请稍后查看订单'
     }
     return
   }
@@ -67,6 +69,7 @@ async function pollOrderStatus() {
     const orderStatus = Number(detail?.status ?? 0)
     if (orderStatus === ORDER_STATUS_PAID) {
       status.value = 'success'
+      message.value = ''
       clearPoll()
       return
     }
@@ -76,20 +79,30 @@ async function pollOrderStatus() {
   pollTimer = setTimeout(pollOrderStatus, POLL_INTERVAL_MS)
 }
 
+function normalizeInitialStatus(queryStatus) {
+  if (queryStatus === 'fail') {
+    return 'fail'
+  }
+  if (queryStatus === 'success' && !orderId.value) {
+    return 'success'
+  }
+  if (queryStatus === 'success' || queryStatus === 'pending') {
+    return 'pending'
+  }
+  return 'fail'
+}
+
 onLoad((query) => {
   sn.value = query?.sn || ''
   orderId.value = query?.order_id || ''
   const queryStatus = query?.status
-  status.value = queryStatus === 'success'
-    ? 'success'
-    : queryStatus === 'pending'
-      ? 'pending'
-      : 'fail'
+  status.value = normalizeInitialStatus(queryStatus)
   amount.value = query?.amount || ''
+  message.value = String(query?.message || '').trim().slice(0, 160)
 
-  // 兜底回调延迟 / 丢失：success 或 pending 都先轮询确认
-  if (status.value === 'success' || status.value === 'pending') {
-    pollTimer = setTimeout(pollOrderStatus, POLL_INTERVAL_MS)
+  // 兜底回调延迟 / 丢失：有订单号时立即轮询确认，避免前端回调先于支付通知落库。
+  if (orderId.value) {
+    pollOrderStatus()
   }
 })
 

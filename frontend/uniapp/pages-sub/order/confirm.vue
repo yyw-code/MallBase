@@ -151,8 +151,17 @@ function redirectToPayResult(sn, orderId, payResult) {
     : payResult.status === 'pending'
       ? 'pending'
       : 'fail'
+  const query = [
+    `sn=${encodeURIComponent(sn || '')}`,
+    `order_id=${encodeURIComponent(orderId || '')}`,
+    `status=${status}`,
+  ]
+  const message = String(payResult.message || '').trim()
+  if (message) {
+    query.push(`message=${encodeURIComponent(message.slice(0, 160))}`)
+  }
   uni.redirectTo({
-    url: `/pages-sub/order/pay-result?sn=${sn}&order_id=${orderId}&status=${status}`,
+    url: `/pages-sub/order/pay-result?${query.join('&')}`,
   })
 }
 

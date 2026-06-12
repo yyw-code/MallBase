@@ -12,7 +12,7 @@ use mall_base\base\BaseModel;
  *
  * 写入路径：
  *  - PrepayService 创建 PREPAY 记录
- *  - NotifyService 验签 + 解密成功后将匹配的 PREPAY 行改为 PAID 并填回字段
+ *  - NotifyService 验签 + 解密成功后追加 PAID 记录并推进订单状态
  *
  * 业务代码禁止跨此模型直接改 mb_order 状态，状态流转走 OrderStatusMachine。
  */
@@ -23,6 +23,8 @@ class PaymentLog extends BaseModel
     protected $autoWriteTimestamp = 'datetime';
     protected $createTime = 'create_time';
     protected $updateTime = 'update_time';
+    protected $json = ['raw_notify'];
+    protected $jsonAssoc = true;
 
     /** prepay 已下单待支付 */
     public const EVENT_PREPAY = 'PREPAY';
