@@ -477,6 +477,10 @@ async function handleSendCode(scene = 'login') {
 }
 
 async function onLoginSuccess(data) {
+  if (!data?.access_token || !data?.refresh_token) {
+    uni.showToast({ title: '登录结果异常，请重试', icon: 'none' })
+    throw new Error('登录结果缺少令牌')
+  }
   userStore.setToken(data.access_token, data.refresh_token)
   await userStore.fetchUserInfo()
   if (redirectUrl.value) {
@@ -736,6 +740,13 @@ async function handleOfficialBindMobile() {
 }
 
 // #ifdef H5
+function getWechatOfficialRedirectUri() {
+  const url = new URL(window.location.href)
+  url.searchParams.delete('code')
+  url.searchParams.delete('state')
+  return url.toString()
+}
+
 function handleWechatH5Callback() {
   if (!isWechatH5.value) return
   const url = new URL(window.location.href)
@@ -751,6 +762,7 @@ function handleWechatH5Callback() {
         wechatBindToken.value = data.bind_token || ''
         wechatBindStep.value = 'bind'
         wechatForcePhone.value = false
+        uni.showToast({ title: '请绑定手机号以完成登录', icon: 'none' })
       } else {
         return onLoginSuccess(data)
       }
@@ -768,7 +780,7 @@ async function handleWechatOfficialLogin() {
   if (isWechatH5.value) {
     loading.value = true
     try {
-      const redirectUri = window.location.href.split('?')[0]
+      const redirectUri = getWechatOfficialRedirectUri()
       const data = await getWechatOfficialOauthUrl(redirectUri, 'login')
       if (data.url) {
         window.location.href = data.url
