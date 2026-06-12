@@ -7,7 +7,6 @@ namespace app\cron\tasks;
 use app\cron\CronTaskInterface;
 use app\job\AutoReceiveOrdersJob;
 use app\job\CloseExpiredOrdersJob;
-use mall_base\log\Logger;
 use mall_base\queue\JobQueue;
 use Swoole\Timer;
 use think\facade\Cache;
@@ -20,7 +19,7 @@ class OrderMaintenanceCron implements CronTaskInterface
     private const LOCK_TTL = 55;
 
     public function __construct(
-        private readonly ?Sandbox $sandbox = null,
+        private readonly Sandbox $sandbox,
     ) {
     }
 
@@ -45,19 +44,9 @@ class OrderMaintenanceCron implements CronTaskInterface
 
     private function runInSandbox(callable $callback): void
     {
-        if ($this->sandbox instanceof Sandbox) {
-            $this->sandbox->run(function () use ($callback): void {
-                $callback();
-            });
-            return;
-        }
-
-        try {
+        $this->sandbox->run(function () use ($callback): void {
             $callback();
-        } catch (Throwable $e) {
-            Logger::instance('Cron', static::class)
-                ->exception($e, 'OrderMaintenanceCron dispatch failed');
-        }
+        });
     }
 
     private function acquireLock(): bool
