@@ -18,8 +18,6 @@ class WorkerBootListener
             $manager->runInSandbox($callback instanceof Closure ? $callback : Closure::fromCallable($callback));
         };
 
-        $runInSandbox(function () use ($workerId, $runInSandbox): void {
-            app()->make(CronManager::class)->boot($workerId, $runInSandbox);
-        });
+        app()->make(CronManager::class)->boot($workerId, $runInSandbox);
     }
 }
