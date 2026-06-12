@@ -108,6 +108,32 @@ class PayNotifyController
                 'has_timestamp_header' => $this->hasHeader($headers, 'Wechatpay-Timestamp'),
             ])
             ->info('微信回调入口收到请求');
+
+        $this->logRawNotifyPayload($type, $headers, $rawBody);
+    }
+
+    /**
+     * @param array<string, string> $headers
+     */
+    private function logRawNotifyPayload(string $type, array $headers, string $rawBody): void
+    {
+        $wechatHeaders = [];
+        foreach ($headers as $name => $value) {
+            $lowerName = strtolower((string) $name);
+            if (str_starts_with($lowerName, 'wechatpay-') || in_array($lowerName, ['content-type', 'user-agent'], true)) {
+                $wechatHeaders[(string) $name] = (string) $value;
+            }
+        }
+
+        Logger::instance('WechatNotifyRaw', static::class)
+            ->withData([
+                'type'        => $type,
+                'headers'     => $wechatHeaders,
+                'raw_body'    => $rawBody,
+                'body_base64' => base64_encode($rawBody),
+                'body_sha256' => hash('sha256', $rawBody),
+            ])
+            ->info('微信回调原始数据');
     }
 
     /**
