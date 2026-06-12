@@ -9,6 +9,7 @@ use app\model\order\Order;
 use app\model\order\PaymentLog;
 use app\service\admin\order\RefundOrderAdminService;
 use app\service\client\order\OrderService;
+use EasyWeChat\Kernel\Message as EasyWechatMessage;
 use EasyWeChat\Pay\Application as PayApplication;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
@@ -100,7 +101,7 @@ class NotifyService extends BaseService
             return $this->respond(500, 'FAIL', '报文解密失败');
         }
 
-        $attributes = $message->getOriginalAttributes() ?: [];
+        $attributes = $this->decryptedAttributes($message);
         // 解密后明文字段
         $outTradeNo    = (string) ($attributes['out_trade_no']    ?? '');
         $transactionId = (string) ($attributes['transaction_id']  ?? '');
@@ -266,7 +267,7 @@ class NotifyService extends BaseService
             return $this->respond(500, 'FAIL', '报文解密失败');
         }
 
-        $attributes = $message->getOriginalAttributes() ?: [];
+        $attributes = $this->decryptedAttributes($message);
         $outRefundNo = (string) ($attributes['out_refund_no'] ?? '');
         $refundStatus = (string) ($attributes['refund_status'] ?? $attributes['status'] ?? '');
         $refundAmount = (int) ($attributes['amount']['refund'] ?? $attributes['amount']['payer_refund'] ?? 0);
@@ -399,6 +400,17 @@ class NotifyService extends BaseService
     {
         $value = $request->getHeaderLine($name);
         return $value;
+    }
+
+    /**
+     * EasyWeChat Pay\Message::getOriginalAttributes() 返回微信 V3 外层事件包
+     * （resource/ciphertext），业务字段必须从 SDK 解密后的 attributes 读取。
+     *
+     * @return array<string, mixed>
+     */
+    private function decryptedAttributes(EasyWechatMessage $message): array
+    {
+        return $message->toArray();
     }
 
     /**
