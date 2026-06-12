@@ -29,6 +29,7 @@ class PayNotifyController
             $request = request();
             $headers = $this->collectHeaders($request);
             $rawBody = (string) $request->getContent();
+            $this->logNotifyEntry('pay', $headers, $rawBody);
 
             /** @var NotifyService $service */
             $service = app()->make(NotifyService::class);
@@ -36,7 +37,9 @@ class PayNotifyController
 
             return $this->respond((int) $result['status'], (array) $result['body']);
         } catch (Throwable $e) {
-            Logger::instance()->critical('微信支付回调主控异常', ['error' => $e->getMessage()]);
+            Logger::instance('WechatNotify', static::class)
+                ->withData($this->exceptionData($e))
+                ->critical('微信支付回调主控异常');
             return $this->respond(500, ['code' => 'FAIL', 'message' => '服务异常']);
         }
     }
@@ -50,6 +53,7 @@ class PayNotifyController
             $request = request();
             $headers = $this->collectHeaders($request);
             $rawBody = (string) $request->getContent();
+            $this->logNotifyEntry('refund', $headers, $rawBody);
 
             /** @var NotifyService $service */
             $service = app()->make(NotifyService::class);
@@ -57,7 +61,9 @@ class PayNotifyController
 
             return $this->respond((int) $result['status'], (array) $result['body']);
         } catch (Throwable $e) {
-            Logger::instance()->critical('微信退款回调主控异常', ['error' => $e->getMessage()]);
+            Logger::instance('WechatNotify', static::class)
+                ->withData($this->exceptionData($e))
+                ->critical('微信退款回调主控异常');
             return $this->respond(500, ['code' => 'FAIL', 'message' => '服务异常']);
         }
     }
@@ -77,6 +83,58 @@ class PayNotifyController
             }
         }
         return $headers;
+    }
+
+    /**
+     * @param array<string, string> $headers
+     */
+    private function logNotifyEntry(string $type, array $headers, string $rawBody): void
+    {
+        $headerNames = array_keys($headers);
+        $wechatHeaderNames = array_values(array_filter(
+            $headerNames,
+            static fn (string $name): bool => str_starts_with(strtolower($name), 'wechatpay-'),
+        ));
+
+        Logger::instance('WechatNotify', static::class)
+            ->withData([
+                'type'                 => $type,
+                'body_length'          => strlen($rawBody),
+                'header_count'         => count($headerNames),
+                'wechat_header_names'  => $wechatHeaderNames,
+                'has_signature_header' => $this->hasHeader($headers, 'Wechatpay-Signature'),
+                'has_serial_header'    => $this->hasHeader($headers, 'Wechatpay-Serial'),
+                'has_nonce_header'     => $this->hasHeader($headers, 'Wechatpay-Nonce'),
+                'has_timestamp_header' => $this->hasHeader($headers, 'Wechatpay-Timestamp'),
+            ])
+            ->info('微信回调入口收到请求');
+    }
+
+    /**
+     * @param array<string, string> $headers
+     */
+    private function hasHeader(array $headers, string $name): bool
+    {
+        $target = strtolower($name);
+        foreach ($headers as $headerName => $_) {
+            if (strtolower((string) $headerName) === $target) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function exceptionData(Throwable $e): array
+    {
+        return [
+            'exception' => get_class($e),
+            'error'     => $e->getMessage(),
+            'file'      => $e->getFile(),
+            'line'      => $e->getLine(),
+        ];
     }
 
     /**

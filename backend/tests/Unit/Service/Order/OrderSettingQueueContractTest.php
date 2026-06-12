@@ -61,8 +61,9 @@ final class OrderSettingQueueContractTest extends TestCase
         $this->assertIsString($cronConfig);
         $this->assertIsString($cronTask);
         $this->assertStringContainsString('OrderMaintenanceCron::class', $cronConfig);
-        $this->assertStringContainsString('Queue::push(CloseExpiredOrdersJob::class', $cronTask);
-        $this->assertStringContainsString('Queue::push(AutoReceiveOrdersJob::class', $cronTask);
+        $this->assertStringContainsString('JobQueue::push(CloseExpiredOrdersJob::class', $cronTask);
+        $this->assertStringContainsString('JobQueue::push(AutoReceiveOrdersJob::class', $cronTask);
+        $this->assertStringContainsString('runInSandbox', $cronTask);
         $this->assertStringContainsString('setnx', $cronTask);
     }
 

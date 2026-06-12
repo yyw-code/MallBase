@@ -70,6 +70,9 @@ class NotifyService extends BaseService
         try {
             $app = $this->factory->build();
         } catch (BusinessException $e) {
+            Logger::instance()
+                ->withData(['error' => $e->getMessage()])
+                ->critical('微信支付回调配置缺失');
             $this->fireAlert(self::EVENT_VERIFY_FAILED, ['reason' => 'config_missing', 'message' => $e->getMessage()]);
             return $this->respond(500, 'FAIL', '支付配置缺失');
         }
@@ -106,6 +109,16 @@ class NotifyService extends BaseService
         $amountTotal   = (int)    ($attributes['amount']['total'] ?? 0);
         $successTime   = (string) ($attributes['success_time']    ?? '');
 
+        Logger::instance()
+            ->withData([
+                'out_trade_no'   => $outTradeNo,
+                'transaction_id' => $transactionId,
+                'trade_state'    => $tradeState,
+                'amount_total'   => $amountTotal,
+                'success_time'   => $successTime,
+            ])
+            ->info('微信支付回调报文已解密');
+
         // Step 3: Redis nonce 防重放
         $nonce = $this->headerValue($psrRequest, 'Wechatpay-Nonce');
         if ($nonce !== '' && !$this->markNonce($nonce)) {
@@ -121,6 +134,13 @@ class NotifyService extends BaseService
         }
 
         if ($outTradeNo === '') {
+            Logger::instance()
+                ->withData([
+                    'transaction_id' => $transactionId,
+                    'trade_state'    => $tradeState,
+                    'amount_total'   => $amountTotal,
+                ])
+                ->critical('微信支付回调缺少 out_trade_no');
             return $this->respond(500, 'FAIL', 'out_trade_no 缺失');
         }
 
@@ -224,6 +244,9 @@ class NotifyService extends BaseService
         try {
             $app = $this->factory->build();
         } catch (BusinessException $e) {
+            Logger::instance()
+                ->withData(['error' => $e->getMessage()])
+                ->critical('微信退款回调配置缺失');
             $this->fireAlert(self::EVENT_VERIFY_FAILED, ['reason' => 'config_missing', 'message' => $e->getMessage()]);
             return $this->respond(500, 'FAIL', '支付配置缺失');
         }
@@ -249,6 +272,15 @@ class NotifyService extends BaseService
         $refundAmount = (int) ($attributes['amount']['refund'] ?? $attributes['amount']['payer_refund'] ?? 0);
         $successTime = (string) ($attributes['success_time'] ?? '');
 
+        Logger::instance()
+            ->withData([
+                'out_refund_no' => $outRefundNo,
+                'refund_status' => $refundStatus,
+                'refund_amount' => $refundAmount,
+                'success_time'  => $successTime,
+            ])
+            ->info('微信退款回调报文已解密');
+
         $nonce = $this->headerValue($psrRequest, 'Wechatpay-Nonce');
         if ($nonce !== '' && !$this->markNonce($nonce)) {
             Logger::instance()->critical('微信退款回调被识别为重放攻击', [
@@ -263,6 +295,12 @@ class NotifyService extends BaseService
         }
 
         if ($outRefundNo === '') {
+            Logger::instance()
+                ->withData([
+                    'refund_status' => $refundStatus,
+                    'refund_amount' => $refundAmount,
+                ])
+                ->critical('微信退款回调缺少 out_refund_no');
             return $this->respond(500, 'FAIL', 'out_refund_no 缺失');
         }
 

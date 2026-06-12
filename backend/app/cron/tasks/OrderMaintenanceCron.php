@@ -7,9 +7,11 @@ namespace app\cron\tasks;
 use app\cron\CronTaskInterface;
 use app\job\AutoReceiveOrdersJob;
 use app\job\CloseExpiredOrdersJob;
+use mall_base\log\Logger;
 use mall_base\queue\JobQueue;
 use Swoole\Timer;
 use think\facade\Cache;
+use think\swoole\Sandbox;
 use Throwable;
 
 class OrderMaintenanceCron implements CronTaskInterface
@@ -17,16 +19,45 @@ class OrderMaintenanceCron implements CronTaskInterface
     private const LOCK_KEY = 'cron:order-maintenance:dispatch';
     private const LOCK_TTL = 55;
 
+    public function __construct(
+        private readonly ?Sandbox $sandbox = null,
+    ) {
+    }
+
     public function register(): void
     {
         Timer::tick(60000, function (): void {
-            if (!$this->acquireLock()) {
-                return;
-            }
-
-            JobQueue::push(CloseExpiredOrdersJob::class, ['limit' => 500]);
-            JobQueue::push(AutoReceiveOrdersJob::class, ['limit' => 500]);
+            $this->runInSandbox(function (): void {
+                $this->dispatchJobs();
+            });
         });
+    }
+
+    private function dispatchJobs(): void
+    {
+        if (!$this->acquireLock()) {
+            return;
+        }
+
+        JobQueue::push(CloseExpiredOrdersJob::class, ['limit' => 500]);
+        JobQueue::push(AutoReceiveOrdersJob::class, ['limit' => 500]);
+    }
+
+    private function runInSandbox(callable $callback): void
+    {
+        if ($this->sandbox instanceof Sandbox) {
+            $this->sandbox->run(function () use ($callback): void {
+                $callback();
+            });
+            return;
+        }
+
+        try {
+            $callback();
+        } catch (Throwable $e) {
+            Logger::instance('Cron', static::class)
+                ->exception($e, 'OrderMaintenanceCron dispatch failed');
+        }
     }
 
     private function acquireLock(): bool
