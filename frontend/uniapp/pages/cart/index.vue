@@ -11,7 +11,10 @@ const loading = computed(() => cartStore.loading)
 const allSelected = computed(() => cartStore.allSelected)
 const selectedCount = computed(() => cartStore.selectedCount)
 const totalPrice = computed(() => cartStore.totalPrice)
-const isEmpty = computed(() => !loading.value && list.value.length === 0)
+const loggedIn = ref(isLoggedIn())
+const isGuest = computed(() => !loggedIn.value && !loading.value)
+const isEmpty = computed(() => loggedIn.value && !loading.value && list.value.length === 0)
+const hasCartItems = computed(() => !loading.value && list.value.length > 0)
 
 /** Valid (purchasable) items */
 const validItems = computed(() => list.value.filter((i) => !i.is_invalid))
@@ -28,10 +31,16 @@ function toggleEditMode() {
 
 // ---------- lifecycle ----------
 
-onShow(() => {
-  if (isLoggedIn()) {
-    cartStore.fetchList()
+onShow(async () => {
+  loggedIn.value = isLoggedIn()
+  if (!loggedIn.value) {
+    cartStore.list = []
+    cartStore.loading = false
+    return
   }
+
+  await cartStore.fetchList()
+  loggedIn.value = isLoggedIn()
 })
 
 // ---------- selection ----------
@@ -122,6 +131,12 @@ function goShopping() {
   uni.switchTab({ url: '/pages/index/index' })
 }
 
+function goLogin() {
+  uni.navigateTo({
+    url: `/pages-sub/user/login?redirect=${encodeURIComponent('/pages/cart/index')}`,
+  })
+}
+
 function goCheckout() {
   if (selectedCount.value === 0) return
   uni.navigateTo({ url: '/pages-sub/order/confirm?source=cart' })
@@ -138,9 +153,19 @@ function goGoodsDetail(item) {
     <!-- ========== Navbar ========== -->
     <mb-navbar title="购物车" :back="false" :accent-line="false" />
 
+    <!-- ========== Guest State ========== -->
+    <mb-empty-state
+      v-if="isGuest"
+      icon=""
+      text="请先登录后查看购物车"
+      actionText="去登录"
+      paddingTop="360rpx"
+      @action="goLogin"
+    />
+
     <!-- ========== Empty State ========== -->
     <mb-empty-state
-      v-if="isEmpty"
+      v-else-if="isEmpty"
       icon=""
       text="购物车是空的"
       actionText="去逛逛"
@@ -162,7 +187,7 @@ function goGoodsDetail(item) {
     </view>
 
     <!-- ========== Cart List ========== -->
-    <view v-if="!isEmpty && !loading" class="cart-list">
+    <view v-if="hasCartItems" class="cart-list">
       <!-- Valid items -->
       <view
         v-for="item in validItems"
@@ -277,7 +302,7 @@ function goGoodsDetail(item) {
     </view>
 
     <!-- ========== Bottom Bar ========== -->
-    <view v-if="!isEmpty" class="bottom-bar">
+    <view v-if="hasCartItems" class="bottom-bar">
       <view class="bottom-bar__inner">
         <!-- Select all -->
         <view class="bottom-bar__select-all" @tap="onToggleAll">
@@ -610,6 +635,12 @@ function goGoodsDetail(item) {
   background-color: $mb-color-bg;
   border-top: 1rpx solid $mb-color-divider;
 }
+
+/* #ifdef H5 */
+.bottom-bar {
+  bottom: var(--window-bottom, 0);
+}
+/* #endif */
 
 .bottom-bar__inner {
   display: flex;

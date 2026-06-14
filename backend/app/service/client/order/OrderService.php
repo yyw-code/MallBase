@@ -361,18 +361,12 @@ class OrderService extends BaseService
      *
      * 条件同源：先统计 total 再查 list，使用同一 builder 克隆
      *
-     * @param array{status?:int|null} $filter
+     * @param array{status?:int|null, sn?:string|null} $filter
      * @return array{total:int, list:array<int, array<string, mixed>>}
      */
     public function list(int $userId, array $filter = [], int $page = 1, int $pageSize = 10): array
     {
-        $query = $this->model()
-            ->where('user_id', $userId)
-            ->whereNull('delete_time');
-
-        if (isset($filter['status']) && $filter['status'] !== null && $filter['status'] !== '') {
-            $query->where('status', (int) $filter['status']);
-        }
+        $query = $this->buildListQuery($userId, $filter);
 
         $total = (clone $query)->count();
         $list = $query
@@ -393,6 +387,27 @@ class OrderService extends BaseService
         unset($row);
 
         return compact('total', 'list');
+    }
+
+    /**
+     * @param array{status?:int|null, sn?:string|null} $filter
+     */
+    private function buildListQuery(int $userId, array $filter = [])
+    {
+        $query = $this->model()
+            ->where('user_id', $userId)
+            ->whereNull('delete_time');
+
+        if (isset($filter['status']) && $filter['status'] !== null && $filter['status'] !== '') {
+            $query->where('status', (int) $filter['status']);
+        }
+
+        $sn = trim((string) ($filter['sn'] ?? ''));
+        if ($sn !== '') {
+            $query->where('sn', $sn);
+        }
+
+        return $query;
     }
 
     /**
@@ -479,16 +494,19 @@ class OrderService extends BaseService
             // 3. 落订单项快照
             $itemModel = app()->make(OrderItem::class);
             foreach ($items as $item) {
+                $subtotal = bcmul($item['unit_price'], (string) $item['quantity'], 2);
                 $itemModel->newInstance()->save([
-                    'order_id'    => (int) $order->id,
-                    'goods_id'    => $item['goods_id'],
-                    'sku_id'      => $item['sku_id'],
-                    'goods_name'  => mb_substr($item['goods_name'], 0, 200),
-                    'goods_image' => $item['goods_image'],
-                    'sku_spec'    => mb_substr($item['sku_spec'], 0, 500),
-                    'unit_price'  => $item['unit_price'],
-                    'quantity'    => $item['quantity'],
-                    'subtotal'    => bcmul($item['unit_price'], (string) $item['quantity'], 2),
+                    'order_id'        => (int) $order->id,
+                    'goods_id'        => $item['goods_id'],
+                    'sku_id'          => $item['sku_id'],
+                    'goods_name'      => mb_substr($item['goods_name'], 0, 200),
+                    'goods_image'     => $item['goods_image'],
+                    'sku_spec'        => mb_substr($item['sku_spec'], 0, 500),
+                    'unit_price'      => $item['unit_price'],
+                    'quantity'        => $item['quantity'],
+                    'subtotal'        => $subtotal,
+                    'discount_amount' => '0.00',
+                    'pay_amount'      => $subtotal,
                 ]);
             }
 
@@ -954,6 +972,10 @@ class OrderService extends BaseService
         $rows = app()->make(AssetHydrator::class)->hydrateFields($rows, [
             'goods_image' => 'goods_image_full_url',
         ]);
+        $itemOccupiedCents = $this->refundOccupiedCentsByOrderItemIds(array_map(
+            static fn(array $row): int => (int) ($row['id'] ?? 0),
+            $rows
+        ));
 
         $map = [];
         foreach ($rows as $row) {
@@ -966,7 +988,8 @@ class OrderService extends BaseService
             $row['refundable_amount'] = $this->calcItemRefundableAmount(
                 $refundBases[$orderId] ?? null,
                 $row,
-                $refundableQuantity
+                $refundableQuantity,
+                $itemOccupiedCents[(int) ($row['id'] ?? 0)] ?? 0
             );
             $map[$orderId][] = $row;
         }
@@ -975,7 +998,7 @@ class OrderService extends BaseService
 
     /**
      * @param array<int, int> $orderIds
-     * @return array<int, array{total_cents:int, goods_paid_cents:int, remaining_cents:int}>
+     * @return array<int, array{goods_paid_cents:int, remaining_cents:int}>
      */
     private function refundBasesByOrderIds(array $orderIds): array
     {
@@ -996,7 +1019,6 @@ class OrderService extends BaseService
             $payCents = $this->decimalToCents((string) ($row['pay_amount'] ?? '0.00'));
             $goodsPaidCents = min(max(0, $totalCents - $discountCents), $payCents);
             $bases[$orderId] = [
-                'total_cents' => $totalCents,
                 'goods_paid_cents' => $goodsPaidCents,
                 'remaining_cents' => $goodsPaidCents,
             ];
@@ -1030,34 +1052,74 @@ class OrderService extends BaseService
     }
 
     /**
-     * @param array{total_cents:int, goods_paid_cents:int, remaining_cents:int}|null $basis
+     * @param array{goods_paid_cents:int, remaining_cents:int}|null $basis
      * @param array<string, mixed> $item
      */
-    private function calcItemRefundableAmount(?array $basis, array $item, int $quantity): string
+    private function calcItemRefundableAmount(?array $basis, array $item, int $quantity, int $itemOccupiedCents): string
     {
         if ($basis === null || $quantity <= 0) {
             return '0.00';
         }
 
-        $totalCents = (int) ($basis['total_cents'] ?? 0);
         $goodsPaidCents = (int) ($basis['goods_paid_cents'] ?? 0);
         $remainingCents = (int) ($basis['remaining_cents'] ?? 0);
-        if ($totalCents <= 0 || $goodsPaidCents <= 0 || $remainingCents <= 0) {
+        if ($goodsPaidCents <= 0 || $remainingCents <= 0) {
             return '0.00';
         }
 
-        $unitPriceCents = $this->decimalToCents((string) ($item['unit_price'] ?? '0.00'));
-        $requestSubtotalCents = $unitPriceCents * $quantity;
-        if ($requestSubtotalCents <= 0) {
+        $itemPaidCents = $this->decimalToCents((string) ($item['pay_amount'] ?? '0.00'));
+        $itemQuantity = (int) ($item['quantity'] ?? 0);
+        if ($itemPaidCents <= 0 || $itemQuantity <= 0) {
             return '0.00';
         }
 
-        $refundCents = intdiv($goodsPaidCents * $requestSubtotalCents, $totalCents);
-        if ($refundCents <= 0) {
-            $refundCents = min($requestSubtotalCents, $goodsPaidCents);
+        $itemRemainingCents = max(0, $itemPaidCents - $itemOccupiedCents);
+        if ($itemRemainingCents <= 0) {
+            return '0.00';
         }
 
-        return $this->centsToDecimal(min($refundCents, $remainingCents));
+        $remainingQuantity = max(0, $itemQuantity - (int) ($item['refunded_quantity'] ?? 0));
+        if ($quantity >= $remainingQuantity) {
+            $refundCents = $itemRemainingCents;
+        } else {
+            $refundCents = intdiv($itemPaidCents * $quantity, $itemQuantity);
+            if ($refundCents <= 0) {
+                $refundCents = min($itemRemainingCents, 1);
+            }
+        }
+
+        return $this->centsToDecimal(min($refundCents, $itemRemainingCents, $remainingCents));
+    }
+
+    /**
+     * @param array<int, int> $orderItemIds
+     * @return array<int, int>
+     */
+    private function refundOccupiedCentsByOrderItemIds(array $orderItemIds): array
+    {
+        $orderItemIds = array_values(array_unique(array_filter(array_map('intval', $orderItemIds))));
+        if ($orderItemIds === []) {
+            return [];
+        }
+
+        $rows = $this->model(RefundOrder::class)
+            ->whereIn('order_item_id', $orderItemIds)
+            ->whereIn('status', $this->refundOccupiedStatuses())
+            ->whereNull('delete_time')
+            ->field('order_item_id, refund_amount')
+            ->select()
+            ->toArray();
+
+        $map = [];
+        foreach ($rows as $row) {
+            $orderItemId = (int) ($row['order_item_id'] ?? 0);
+            if ($orderItemId <= 0) {
+                continue;
+            }
+            $map[$orderItemId] = ($map[$orderItemId] ?? 0)
+                + $this->decimalToCents((string) ($row['refund_amount'] ?? '0.00'));
+        }
+        return $map;
     }
 
     /**

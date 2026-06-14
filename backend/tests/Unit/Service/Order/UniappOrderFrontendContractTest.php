@@ -41,6 +41,28 @@ final class UniappOrderFrontendContractTest extends TestCase
         $this->assertStringContainsString('pollOrderStatus()', $source);
     }
 
+    public function testPayResultResolvesOrderIdBySnForRetryPay(): void
+    {
+        $payResultSource = file_get_contents(__DIR__ . '/../../../../../frontend/uniapp/pages-sub/order/pay-result.vue');
+        $controllerSource = file_get_contents(__DIR__ . '/../../../../../backend/app/controller/client/order/OrderController.php');
+        $serviceSource = file_get_contents(__DIR__ . '/../../../../../backend/app/service/client/order/OrderService.php');
+
+        $this->assertIsString($payResultSource);
+        $this->assertIsString($controllerSource);
+        $this->assertIsString($serviceSource);
+
+        $this->assertStringContainsString('getOrderDetail, getOrderList', $payResultSource);
+        $this->assertStringContainsString('resolveOrderBySn', $payResultSource);
+        $this->assertStringContainsString("getOrderList({ sn: sn.value, page: 1, limit: 1 })", $payResultSource);
+        $this->assertStringContainsString('ensureOrderId', $payResultSource);
+        $this->assertStringContainsString('订单信息缺失，请查看订单', $payResultSource);
+
+        $this->assertStringContainsString("'sn'     => \$this->request->param('sn', null)", $controllerSource);
+        $this->assertStringContainsString("trim((string) (\$filter['sn'] ?? ''))", $serviceSource);
+        $this->assertStringContainsString("->where('sn', \$sn)", $serviceSource);
+        $this->assertStringContainsString('compact(\'total\', \'list\')', $serviceSource);
+    }
+
     public function testWechatJsapiPayResultWaitsForBackendConfirmation(): void
     {
         $source = file_get_contents(__DIR__ . '/../../../../../frontend/uniapp/utils/payment.js');

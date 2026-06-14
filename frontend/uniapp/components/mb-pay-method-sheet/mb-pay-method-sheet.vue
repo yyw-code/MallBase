@@ -60,6 +60,7 @@
 
 <script setup>
 import { computed, ref, watch, nextTick } from 'vue'
+import { formatPrice } from '@/utils/price'
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -75,7 +76,7 @@ const selected = ref(null)
 const selectedMethod = computed(() => props.methods.find((m) => m.code === selected.value))
 const confirmText = computed(() => {
   if (!selected.value) return '请选择支付方式'
-  if (props.amount) return `立即支付 ¥${Number(props.amount).toFixed(2)}`
+  if (props.amount) return `立即支付 ¥${formatPrice(props.amount)}`
   return '立即支付'
 })
 
@@ -136,7 +137,7 @@ function iconGlyph(icon) {
 
 function methodDesc(method) {
   if (method.disabled_reason) return method.disabled_reason
-  if (method.balance_amount !== undefined) return `可用余额 ¥${Number(method.balance_amount || 0).toFixed(2)}`
+  if (method.balance_amount !== undefined) return `可用余额 ¥${formatPrice(method.balance_amount || 0)}`
   if (method.desc) return method.desc
   if (method.icon === 'wechat') return '微信安全支付'
   if (method.icon === 'alipay') return '支付宝支付'

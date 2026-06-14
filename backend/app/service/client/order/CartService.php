@@ -175,7 +175,7 @@ class CartService extends BaseService
                 'goods_image' => $goods['main_image'] ?? '',
                 'sku_image'   => $sku['image'] ?? '',
                 'sku_spec'    => $sku['spec_values'] ?? '',
-                'unit_price'  => $sku !== null ? (float) $sku['price'] : 0.0,
+                'unit_price'  => $sku !== null ? (string) $sku['price'] : '0.00',
                 'stock'       => $sku !== null ? (int) $sku['stock'] : 0,
                 'is_invalid'  => $invalid,
                 'is_short_of_stock' => !$invalid && $stockShortage,

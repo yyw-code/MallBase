@@ -17,7 +17,7 @@ use ReflectionClass;
  *
  * 覆盖（全部在 DB 访问之前生效的分支）：
  *  - apply 前置守卫：userId / orderItemId / quantity / type / reason
- *  - calcRefundAmount    退款金额 bcmath 2 位精度
+     *  - calcRefundAmount    按订单项实付快照计算退款金额
  *  - assertQuantityLimit 申请数量上限校验
  *  - assertOrderRefundable  主订单状态白名单校验
  *  - assertUserId        登录校验
@@ -165,7 +165,7 @@ final class RefundServiceTest extends TestCase
     public function testCalcRefundAmountSingleItem(): void
     {
         $order = $this->validRefundOrder('25.00', '0.00', '25.00');
-        $item = ['unit_price' => '12.50'];
+        $item = ['pay_amount' => '25.00', 'quantity' => 2, 'refunded_quantity' => 0];
         $result = $this->invokePrivate('calcRefundAmount', [$order, $item, 2]);
         $this->assertSame('25.00', $result);
     }
@@ -173,24 +173,32 @@ final class RefundServiceTest extends TestCase
     public function testCalcRefundAmountUsesPaidAmountAfterAdminDiscount(): void
     {
         $order = $this->validRefundOrder('899.00', '898.00', '1.00');
-        $item = ['unit_price' => '899.00'];
+        $item = ['pay_amount' => '1.00', 'quantity' => 1, 'refunded_quantity' => 0];
         $result = $this->invokePrivate('calcRefundAmount', [$order, $item, 1]);
         $this->assertSame('1.00', $result);
     }
 
-    public function testCalcRefundAmountAllocatesPaidAmountByItemSubtotal(): void
+    public function testCalcRefundAmountUsesOrderItemPaySnapshot(): void
     {
         $order = $this->validRefundOrder('100.00', '20.00', '80.00');
-        $item = ['unit_price' => '30.00'];
+        $item = ['pay_amount' => '18.00', 'quantity' => 1, 'refunded_quantity' => 0];
         $result = $this->invokePrivate('calcRefundAmount', [$order, $item, 1]);
-        $this->assertSame('24.00', $result);
+        $this->assertSame('18.00', $result);
+    }
+
+    public function testCalcRefundAmountSplitsItemPayByQuantity(): void
+    {
+        $order = $this->validRefundOrder('3.00', '2.00', '1.00');
+        $item = ['pay_amount' => '1.00', 'quantity' => 3, 'refunded_quantity' => 0];
+        $result = $this->invokePrivate('calcRefundAmount', [$order, $item, 1]);
+        $this->assertSame('0.33', $result);
     }
 
     public function testCalcRefundAmountBcmathPrecision(): void
     {
         // 0.10 × 3 = 0.30（float 下可能出现 0.30000000000000004）
         $order = $this->validRefundOrder('0.30', '0.00', '0.30');
-        $item = ['unit_price' => '0.10'];
+        $item = ['pay_amount' => '0.30', 'quantity' => 3, 'refunded_quantity' => 0];
         $result = $this->invokePrivate('calcRefundAmount', [$order, $item, 3]);
         $this->assertSame('0.30', $result);
     }
@@ -201,7 +209,7 @@ final class RefundServiceTest extends TestCase
         $this->expectExceptionMessage('订单可退金额不足');
 
         $order = $this->validRefundOrder('100.00', '100.00', '0.00');
-        $item = ['unit_price' => '100.00'];
+        $item = ['pay_amount' => '0.00', 'quantity' => 1, 'refunded_quantity' => 0];
         $this->invokePrivate('calcRefundAmount', [$order, $item, 1]);
     }
 

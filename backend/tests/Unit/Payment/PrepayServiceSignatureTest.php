@@ -73,6 +73,18 @@ final class PrepayServiceSignatureTest extends TestCase
         $this->assertParamType($params[2], 'int');
     }
 
+    public function testYuanToCentsUsesStringDecimalPrecision(): void
+    {
+        $ref = new ReflectionClass(\app\service\client\payment\PrepayService::class);
+        $service = $ref->newInstanceWithoutConstructor();
+        $method = $ref->getMethod('yuanToCents');
+        $method->setAccessible(true);
+
+        $this->assertSame(1, $method->invoke($service, '0.01'));
+        $this->assertSame(30, $method->invoke($service, '0.30'));
+        $this->assertSame(123456, $method->invoke($service, '1234.56'));
+    }
+
     private function assertParamType(\ReflectionParameter $param, string $expected): void
     {
         $type = $param->getType();

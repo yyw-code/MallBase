@@ -421,45 +421,79 @@ class RefundService extends BaseService
     }
 
     /**
-     * 退款金额 = 下单快照单价 × 申请数量
-     *
-     * MVP 不做优惠分摊；真实渠道结算时再细化
+     * 退款金额按订单项实付快照计算，并受整单剩余可退金额封顶。
      *
      * @param array<string, mixed> $item
      */
     private function calcRefundAmount(array $order, array $item, int $quantity): string
     {
-        $orderGoodsTotalCents = $this->decimalToCents((string) ($order['total_amount'] ?? '0.00'));
-        if ($orderGoodsTotalCents <= 0) {
-            throw new BusinessException('订单商品金额不合法');
-        }
-
-        $discountCents = $this->decimalToCents((string) ($order['discount_amount'] ?? '0.00'));
-        $payCents = $this->decimalToCents((string) ($order['pay_amount'] ?? '0.00'));
-        $goodsPaidCents = max(0, $orderGoodsTotalCents - $discountCents);
-        $goodsPaidCents = min($goodsPaidCents, $payCents);
+        $goodsPaidCents = $this->orderGoodsPaidCents($order);
         if ($goodsPaidCents <= 0) {
             throw new BusinessException('订单可退金额不足');
         }
 
-        $unitPriceCents = $this->decimalToCents((string) ($item['unit_price'] ?? '0.00'));
-        $requestSubtotalCents = $unitPriceCents * $quantity;
-        if ($requestSubtotalCents <= 0) {
+        $itemPaidCents = $this->decimalToCents((string) ($item['pay_amount'] ?? '0.00'));
+        $itemQuantity = (int) ($item['quantity'] ?? 0);
+        if ($itemPaidCents <= 0 || $itemQuantity <= 0) {
             throw new BusinessException('退款金额不合法');
         }
 
-        $baseRefundCents = intdiv($goodsPaidCents * $requestSubtotalCents, $orderGoodsTotalCents);
-        if ($baseRefundCents <= 0) {
-            $baseRefundCents = min($requestSubtotalCents, $goodsPaidCents);
+        $itemOccupiedCents = $this->itemRefundOccupiedCents((int) ($item['id'] ?? 0));
+        $itemRemainingCents = max(0, $itemPaidCents - $itemOccupiedCents);
+        if ($itemRemainingCents <= 0) {
+            throw new BusinessException('订单可退金额不足');
+        }
+
+        $remainingQuantity = max(0, $itemQuantity - (int) ($item['refunded_quantity'] ?? 0));
+        if ($quantity >= $remainingQuantity) {
+            $baseRefundCents = $itemRemainingCents;
+        } else {
+            $baseRefundCents = intdiv($itemPaidCents * $quantity, $itemQuantity);
+            if ($baseRefundCents <= 0) {
+                $baseRefundCents = min($itemRemainingCents, 1);
+            }
         }
 
         $remainingCents = $this->remainingRefundableCents((int) ($order['id'] ?? 0), $goodsPaidCents);
-        $refundCents = min($baseRefundCents, $remainingCents);
+        $refundCents = min($baseRefundCents, $itemRemainingCents, $remainingCents);
         if ($refundCents <= 0) {
             throw new BusinessException('订单可退金额不足');
         }
 
         return $this->centsToDecimal($refundCents);
+    }
+
+    private function orderGoodsPaidCents(array $order): int
+    {
+        $totalCents = $this->decimalToCents((string) ($order['total_amount'] ?? '0.00'));
+        if ($totalCents <= 0) {
+            throw new BusinessException('订单商品金额不合法');
+        }
+
+        $discountCents = $this->decimalToCents((string) ($order['discount_amount'] ?? '0.00'));
+        $payCents = $this->decimalToCents((string) ($order['pay_amount'] ?? '0.00'));
+        return min(max(0, $totalCents - $discountCents), $payCents);
+    }
+
+    private function itemRefundOccupiedCents(int $orderItemId): int
+    {
+        if ($orderItemId <= 0) {
+            return 0;
+        }
+
+        $rows = $this->model()
+            ->where('order_item_id', $orderItemId)
+            ->whereIn('status', $this->refundOccupiedStatuses())
+            ->whereNull('delete_time')
+            ->field('refund_amount')
+            ->select()
+            ->toArray();
+
+        $occupiedCents = 0;
+        foreach ($rows as $row) {
+            $occupiedCents += $this->decimalToCents((string) ($row['refund_amount'] ?? '0.00'));
+        }
+        return $occupiedCents;
     }
 
     private function remainingRefundableCents(int $orderId, int $goodsPaidCents): int

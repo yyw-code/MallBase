@@ -14,6 +14,8 @@ export namespace OrderApi {
     unit_price: string;
     quantity: number;
     subtotal: string;
+    discount_amount: string;
+    pay_amount: string;
     shipped_quantity: number;
     refunded_quantity: number;
     returned_quantity: number;
@@ -101,11 +103,22 @@ export namespace OrderApi {
   }
 
   /** 改价参数 */
+  export type AdjustMode = 'item_discount' | 'pay_percent';
+
+  export interface AdjustPriceItem {
+    order_item_id: number;
+    discount_amount: number | string;
+  }
+
   export interface AdjustPriceParams {
     /** 运费（≥0），数字或字符串均可，后端 bcmath 重算 */
     freight_amount: number | string;
-    /** 优惠（允许负数=加价） */
-    discount_amount: number | string;
+    /** 改价方式 */
+    adjust_mode: AdjustMode;
+    /** 逐商品优惠明细 */
+    items?: AdjustPriceItem[];
+    /** 整单实付比例，0-100，最多两位小数 */
+    pay_percent?: number | string;
     /** 调整原因（可选，≤255） */
     reason?: string;
   }

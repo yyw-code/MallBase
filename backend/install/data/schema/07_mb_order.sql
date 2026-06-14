@@ -96,6 +96,8 @@ CREATE TABLE `mb_order_item` (
   `unit_price` decimal(10,2) NOT NULL DEFAULT 0.00 COMMENT '下单时单价快照',
   `quantity` int(11) unsigned NOT NULL DEFAULT 1 COMMENT '购买数量',
   `subtotal` decimal(10,2) NOT NULL DEFAULT 0.00 COMMENT '小计金额（unit_price * quantity）',
+  `discount_amount` decimal(10,2) NOT NULL DEFAULT 0.00 COMMENT '订单项优惠金额',
+  `pay_amount` decimal(10,2) NOT NULL DEFAULT 0.00 COMMENT '订单项实付金额（subtotal - discount）',
   `shipped_quantity` int(11) unsigned NOT NULL DEFAULT 0 COMMENT '已发货数量（拆单发货用）',
   `refunded_quantity` int(11) unsigned NOT NULL DEFAULT 0 COMMENT '已退款数量（拆单退款聚合）',
   `returned_quantity` int(11) unsigned NOT NULL DEFAULT 0 COMMENT '已退货数量（拆单退货聚合）',

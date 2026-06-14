@@ -78,6 +78,8 @@ const itemColumns = [
   { title: '单价', dataIndex: 'unit_price', width: 90 },
   { title: '数量', dataIndex: 'quantity', width: 70 },
   { title: '小计', dataIndex: 'subtotal', width: 100 },
+  { title: '优惠', dataIndex: 'discount_amount', width: 100 },
+  { title: '实付', dataIndex: 'pay_amount', width: 100 },
   { title: '已发货', dataIndex: 'shipped_quantity', width: 80 },
   { title: '已退款', dataIndex: 'refunded_quantity', width: 80 },
   { title: '已退货', dataIndex: 'returned_quantity', width: 80 },
@@ -105,7 +107,9 @@ const itemColumns = [
             {{ detail.sn }}
           </a-descriptions-item>
           <a-descriptions-item label="状态">
-            <a-tag>{{ detail.status_text || statusLabel(detail.status) }}</a-tag>
+            <a-tag>{{
+              detail.status_text || statusLabel(detail.status)
+            }}</a-tag>
             <a-tag
               v-if="detail.after_sale_tag_text"
               color="orange"
@@ -148,9 +152,8 @@ const itemColumns = [
               · {{ detail.receiver_phone }}
             </span>
             <div v-if="detail.receiver_province" class="text-gray-500">
-              {{ detail.receiver_province }}{{ detail.receiver_city }}{{
-                detail.receiver_district
-              }}{{ detail.receiver_address }}
+              {{ detail.receiver_province }}{{ detail.receiver_city
+              }}{{ detail.receiver_district }}{{ detail.receiver_address }}
             </div>
           </a-descriptions-item>
           <a-descriptions-item label="买家备注" :span="2">
@@ -189,7 +192,7 @@ const itemColumns = [
           :pagination="false"
           size="small"
           row-key="id"
-          :scroll="{ x: 900 }"
+          :scroll="{ x: 1100 }"
         >
           <template #bodyCell="{ column, record }">
             <template v-if="column.dataIndex === 'goods_name'">

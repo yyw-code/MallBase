@@ -213,6 +213,7 @@ import { ref, computed, onUnmounted } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { getOrderDetail, cancelOrder, confirmReceive } from '@/api/order/order'
 import { usePayFlow } from '@/utils/usePayFlow'
+import { multiplyPrice, sumPrices } from '@/utils/price'
 import config from '@/config/index'
 
 const {
@@ -347,11 +348,8 @@ const fullAddress = computed(() => {
 })
 
 const goodsTotal = computed(() => {
-  if (!orderItems.value.length) return 0
-  return orderItems.value.reduce(
-    (sum, item) => sum + Number(item.unit_price) * Number(item.quantity),
-    0,
-  )
+  if (!orderItems.value.length) return '0.00'
+  return sumPrices(orderItems.value.map((item) => multiplyPrice(item.unit_price, item.quantity)))
 })
 
 const actions = computed(() => {

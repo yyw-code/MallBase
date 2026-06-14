@@ -1,16 +1,29 @@
 <script setup>
 import { ref, computed, onUnmounted } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
-import { getOrderDetail } from '@/api/order/order'
+import { getOrderDetail, getOrderList } from '@/api/order/order'
+import { usePayFlow } from '@/utils/usePayFlow'
 
 const sn = ref('')
 const orderId = ref('')
 const status = ref('fail')
 const amount = ref('')
 const message = ref('')
+const retrying = ref(false)
+const resolvingOrder = ref(false)
+
+const {
+  sheetVisible,
+  methods: payMethods,
+  loading: payLoading,
+  startPay,
+  invokePay,
+  closeSheet,
+} = usePayFlow()
 
 const isSuccess = computed(() => status.value === 'success')
 const isPending = computed(() => status.value === 'pending')
+const retryPayText = computed(() => (retrying.value || resolvingOrder.value || payLoading.value ? '处理中...' : '重新支付'))
 
 const resultMeta = computed(() => {
   if (isSuccess.value) {
@@ -46,12 +59,74 @@ const ORDER_STATUS_PAID = 10 // 与后端 OrderStatus::PAID 保持一致
 
 let pollTimer = null
 let pollCount = 0
+let resolveOrderPromise = null
 
 function clearPoll() {
   if (pollTimer) {
     clearTimeout(pollTimer)
     pollTimer = null
   }
+}
+
+function normalizePayStatus(payStatus) {
+  if (payStatus === 'fail') {
+    return 'fail'
+  }
+  if (payStatus === 'success' && !orderId.value) {
+    return 'success'
+  }
+  if (payStatus === 'success' || payStatus === 'pending') {
+    return 'pending'
+  }
+  return 'fail'
+}
+
+function applyPayResult(payResult) {
+  if (!payResult) return
+  status.value = normalizePayStatus(payResult.status)
+  message.value = String(payResult.message || '').trim().slice(0, 160)
+  pollCount = 0
+  clearPoll()
+  if (orderId.value) {
+    pollOrderStatus()
+  }
+}
+
+async function resolveOrderBySn() {
+  if (orderId.value) return true
+  if (!sn.value) return false
+  if (resolveOrderPromise) return await resolveOrderPromise
+
+  resolvingOrder.value = true
+  resolveOrderPromise = (async () => {
+    const data = await getOrderList({ sn: sn.value, page: 1, limit: 1 })
+    const order = Array.isArray(data?.list) ? data.list[0] : null
+    if (!order?.id) return false
+
+    orderId.value = String(order.id)
+    if (!amount.value) {
+      amount.value = order.pay_amount || order.total_amount || ''
+    }
+    return true
+  })()
+
+  try {
+    return await resolveOrderPromise
+  } catch {
+    return false
+  } finally {
+    resolveOrderPromise = null
+    resolvingOrder.value = false
+  }
+}
+
+async function ensureOrderId() {
+  if (orderId.value) return true
+  const resolved = await resolveOrderBySn()
+  if (!resolved) {
+    uni.showToast({ title: '订单信息缺失，请查看订单', icon: 'none' })
+  }
+  return resolved
 }
 
 async function pollOrderStatus() {
@@ -66,6 +141,9 @@ async function pollOrderStatus() {
   pollCount += 1
   try {
     const detail = await getOrderDetail(orderId.value)
+    if (!amount.value) {
+      amount.value = detail?.pay_amount || detail?.total_amount || ''
+    }
     const orderStatus = Number(detail?.status ?? 0)
     if (orderStatus === ORDER_STATUS_PAID) {
       status.value = 'success'
@@ -103,6 +181,10 @@ onLoad((query) => {
   // 兜底回调延迟 / 丢失：有订单号时立即轮询确认，避免前端回调先于支付通知落库。
   if (orderId.value) {
     pollOrderStatus()
+  } else if (sn.value) {
+    resolveOrderBySn().then((resolved) => {
+      if (resolved) pollOrderStatus()
+    })
   }
 })
 
@@ -110,7 +192,8 @@ onUnmounted(() => {
   clearPoll()
 })
 
-function goOrderDetail() {
+async function goOrderDetail() {
+  if (!(await ensureOrderId())) return
   uni.redirectTo({ url: `/pages-sub/order/detail?id=${orderId.value}` })
 }
 
@@ -118,8 +201,22 @@ function goHome() {
   uni.switchTab({ url: '/pages/index/index' })
 }
 
-function goRetryPay() {
-  uni.navigateBack()
+async function goRetryPay() {
+  if (retrying.value || resolvingOrder.value) return
+
+  retrying.value = true
+  try {
+    if (!(await ensureOrderId())) return
+    const payResult = await startPay(orderId.value)
+    if (payResult) applyPayResult(payResult)
+  } finally {
+    retrying.value = false
+  }
+}
+
+async function onPayMethodSelect(code) {
+  const payResult = await invokePay(code)
+  if (payResult) applyPayResult(payResult)
 }
 </script>
 
@@ -168,7 +265,7 @@ function goRetryPay() {
         </template>
         <template v-else>
           <view class="result__btn result__btn--primary" @tap="goRetryPay">
-            <text class="result__btn-text result__btn-text--primary">重新支付</text>
+            <text class="result__btn-text result__btn-text--primary">{{ retryPayText }}</text>
           </view>
           <view class="result__btn result__btn--outline" @tap="goOrderDetail">
             <text class="result__btn-text result__btn-text--outline">查看订单</text>
@@ -176,6 +273,15 @@ function goRetryPay() {
         </template>
       </view>
     </view>
+
+    <mb-pay-method-sheet
+      :visible="sheetVisible"
+      :methods="payMethods"
+      :loading="payLoading"
+      :amount="amount"
+      @select="onPayMethodSelect"
+      @close="closeSheet"
+    />
   </view>
 </template>
 

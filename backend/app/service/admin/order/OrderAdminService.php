@@ -34,6 +34,9 @@ class OrderAdminService extends BaseService
 {
     protected string $modelClass = Order::class;
 
+    public const ADJUST_MODE_ITEM_DISCOUNT = 'item_discount';
+    public const ADJUST_MODE_PAY_PERCENT = 'pay_percent';
+
     /**
      * 发货（PAID → SHIPPED）
      *
@@ -77,35 +80,50 @@ class OrderAdminService extends BaseService
      * 订单改价（仅 PENDING_PAY）
      *
      * 业务规则：
-     *  - 运费 ≥ 0；优惠允许负数（视为加价）
-     *  - 应付金额由后端权威重算：pay_amount = total + freight - discount，且必须 > 0
+     *  - 运费 ≥ 0；优惠按订单项落快照，支持逐商品优惠或整单实付比例
+     *  - 应付金额由后端权威重算：pay_amount = sum(item.pay_amount) + freight，且必须 > 0
      *  - 事务内同步将旧 PREPAY 流水改为 SUPERSEDED，避免 PrepayService::findReusablePrepay
      *    用过期金额的 prepay_id 拉起支付
      *  - 仅写入 OrderLog 做审计，不触发状态机（同状态自环）
      *
      * @param int         $orderId
      * @param string      $freight  非负金额字符串
-     * @param string      $discount 任意金额字符串（负数=加价）
+     * @param string      $adjustMode item_discount=逐商品优惠，pay_percent=整单实付比例
      * @param int         $adminId
+     * @param array<int, array<string, mixed>> $itemDiscounts
      * @param string|null $reason
      */
     public function adjustPrice(
         int $orderId,
         string $freight,
-        string $discount,
+        string $adjustMode,
         int $adminId,
+        array $itemDiscounts = [],
+        ?string $payPercent = null,
         ?string $reason = null
     ): void {
         $order = $this->findOrder($orderId);
         if ((int) $order->status !== OrderStatus::PENDING_PAY) {
             throw new BusinessException('仅待支付订单允许改价');
         }
-        if (bccomp($freight, '0', 2) < 0) {
+
+        if (str_starts_with(trim($freight), '-')) {
             throw new BusinessException('运费不能为负');
         }
+        $freightCents = $this->moneyToCents($freight, '运费');
+        $freight = $this->centsToDecimal($freightCents);
+        $items = $this->loadAdjustableOrderItems((int) $order->id);
+        $itemAdjustments = $this->buildItemAdjustments($items, $adjustMode, $itemDiscounts, $payPercent);
 
-        $newPay = bcsub(bcadd((string) $order->total_amount, $freight, 2), $discount, 2);
-        if (bccomp($newPay, '0', 2) !== 1) {
+        $discountCents = 0;
+        $goodsPayCents = 0;
+        foreach ($itemAdjustments as $item) {
+            $discountCents += $item['discount_cents'];
+            $goodsPayCents += $item['pay_cents'];
+        }
+        $newDiscount = $this->centsToDecimal($discountCents);
+        $newPay = $this->centsToDecimal($goodsPayCents + $freightCents);
+        if (($goodsPayCents + $freightCents) <= 0) {
             throw new BusinessException('改价后应付金额必须大于 0');
         }
 
@@ -113,18 +131,22 @@ class OrderAdminService extends BaseService
         $oldPay      = (string) $order->pay_amount;
         $oldFreight  = (string) $order->freight_amount;
         $oldDiscount = (string) $order->discount_amount;
+        $modeText     = $adjustMode === self::ADJUST_MODE_PAY_PERCENT
+            ? '整单实付' . $this->formatPercent($this->percentToBasisPoints($payPercent)) . '%'
+            : '商品优惠';
         $ip          = $this->requestIp();
         $remarkPart  = $reason !== null && $reason !== ''
             ? '; 原因:' . mb_substr($reason, 0, 200)
             : '';
         $remark = sprintf(
-            '改价: 应付 %s→%s,运费 %s→%s,优惠 %s→%s%s',
+            '改价: 应付 %s→%s,运费 %s→%s,优惠 %s→%s,方式:%s%s',
             $oldPay,
             $newPay,
             $oldFreight,
             $freight,
             $oldDiscount,
-            $discount,
+            $newDiscount,
+            $modeText,
             $remarkPart
         );
         $prepayClose = $this->prepayCloseService();
@@ -132,14 +154,35 @@ class OrderAdminService extends BaseService
         $prepayClose->closeLogs($prepayLogs);
         $prepayLogIds = $prepayClose->idsOf($prepayLogs);
 
-        $this->transaction(function () use ($order, $freight, $discount, $newPay, $adminId, $remark, $ip, $prepayLogIds): void {
+        $this->transaction(function () use (
+            $order,
+            $freight,
+            $newDiscount,
+            $newPay,
+            $itemAdjustments,
+            $adminId,
+            $remark,
+            $ip,
+            $prepayLogIds
+        ): void {
             // 1) 写订单金额
             $order->freight_amount  = $freight;
-            $order->discount_amount = $discount;
+            $order->discount_amount = $newDiscount;
             $order->pay_amount      = $newPay;
             $order->save();
 
-            // 2) 顶替旧 prepay 流水，避免复用过期金额
+            // 2) 写订单项优惠/实付快照，后续退款按订单项口径计算
+            foreach ($itemAdjustments as $item) {
+                $this->model(OrderItem::class)
+                    ->where('id', $item['id'])
+                    ->where('order_id', (int) $order->id)
+                    ->update([
+                        'discount_amount' => $item['discount_amount'],
+                        'pay_amount'      => $item['pay_amount'],
+                    ]);
+            }
+
+            // 3) 顶替旧 prepay 流水，避免复用过期金额
             $this->model(PaymentLog::class)
                 ->where('order_id', (int) $order->id)
                 ->where('event_type', PaymentLog::EVENT_PREPAY)
@@ -150,7 +193,7 @@ class OrderAdminService extends BaseService
                     ->update(['event_type' => PaymentLog::EVENT_SUPERSEDED]);
             }
 
-            // 3) 审计日志（同状态自环，仅记录改价动作）
+            // 4) 审计日志（同状态自环，仅记录改价动作）
             $this->model(OrderLog::class)->save([
                 'order_id'      => (int) $order->id,
                 'from_status'   => OrderStatus::PENDING_PAY,
@@ -161,6 +204,199 @@ class OrderAdminService extends BaseService
                 'ip'            => $ip !== '' ? $ip : null,
             ]);
         });
+    }
+
+    /**
+     * @return array<int, array{id:int, goods_name:string, subtotal:string, subtotal_cents:int}>
+     */
+    protected function loadAdjustableOrderItems(int $orderId): array
+    {
+        $rows = $this->model(OrderItem::class)
+            ->where('order_id', $orderId)
+            ->field('id, goods_name, subtotal')
+            ->order('id', 'asc')
+            ->select()
+            ->toArray();
+        if ($rows === []) {
+            throw new BusinessException('订单商品不存在');
+        }
+
+        $items = [];
+        foreach ($rows as $row) {
+            $subtotalCents = $this->moneyToCents((string) ($row['subtotal'] ?? '0.00'), '商品小计');
+            if ($subtotalCents <= 0) {
+                throw new BusinessException('订单商品金额不合法');
+            }
+            $items[] = [
+                'id' => (int) ($row['id'] ?? 0),
+                'goods_name' => (string) ($row['goods_name'] ?? ''),
+                'subtotal' => $this->centsToDecimal($subtotalCents),
+                'subtotal_cents' => $subtotalCents,
+            ];
+        }
+        return $items;
+    }
+
+    /**
+     * @param array<int, array{id:int, goods_name:string, subtotal:string, subtotal_cents:int}> $items
+     * @param array<int, array<string, mixed>> $itemDiscounts
+     * @return array<int, array{id:int, discount_amount:string, pay_amount:string, discount_cents:int, pay_cents:int}>
+     */
+    private function buildItemAdjustments(array $items, string $adjustMode, array $itemDiscounts, ?string $payPercent): array
+    {
+        return match ($adjustMode) {
+            self::ADJUST_MODE_ITEM_DISCOUNT => $this->buildItemDiscountAdjustments($items, $itemDiscounts),
+            self::ADJUST_MODE_PAY_PERCENT => $this->buildPercentAdjustments($items, $payPercent),
+            default => throw new BusinessException('改价方式不合法'),
+        };
+    }
+
+    /**
+     * @param array<int, array{id:int, goods_name:string, subtotal:string, subtotal_cents:int}> $items
+     * @param array<int, array<string, mixed>> $itemDiscounts
+     * @return array<int, array{id:int, discount_amount:string, pay_amount:string, discount_cents:int, pay_cents:int}>
+     */
+    private function buildItemDiscountAdjustments(array $items, array $itemDiscounts): array
+    {
+        $knownIds = [];
+        foreach ($items as $item) {
+            $knownIds[$item['id']] = true;
+        }
+
+        $discountMap = [];
+        foreach ($itemDiscounts as $row) {
+            $itemId = (int) ($row['order_item_id'] ?? $row['id'] ?? 0);
+            if ($itemId <= 0) {
+                throw new BusinessException('商品优惠明细不合法');
+            }
+            if (!isset($knownIds[$itemId])) {
+                throw new BusinessException('商品优惠明细不属于该订单');
+            }
+            if (isset($discountMap[$itemId])) {
+                throw new BusinessException('商品优惠明细重复');
+            }
+            $discountMap[$itemId] = $this->moneyToCents((string) ($row['discount_amount'] ?? '0'), '商品优惠');
+        }
+
+        $adjustments = [];
+        foreach ($items as $item) {
+            $discountCents = $discountMap[$item['id']] ?? 0;
+            if ($discountCents > $item['subtotal_cents']) {
+                throw new BusinessException('商品优惠不能超过商品小计');
+            }
+            $payCents = $item['subtotal_cents'] - $discountCents;
+            $adjustments[] = [
+                'id' => $item['id'],
+                'discount_amount' => $this->centsToDecimal($discountCents),
+                'pay_amount' => $this->centsToDecimal($payCents),
+                'discount_cents' => $discountCents,
+                'pay_cents' => $payCents,
+            ];
+        }
+
+        return $adjustments;
+    }
+
+    /**
+     * @param array<int, array{id:int, goods_name:string, subtotal:string, subtotal_cents:int}> $items
+     * @return array<int, array{id:int, discount_amount:string, pay_amount:string, discount_cents:int, pay_cents:int}>
+     */
+    private function buildPercentAdjustments(array $items, ?string $payPercent): array
+    {
+        $basisPoints = $this->percentToBasisPoints($payPercent);
+        $totalCents = array_sum(array_map(
+            static fn(array $item): int => (int) $item['subtotal_cents'],
+            $items
+        ));
+        if ($totalCents <= 0) {
+            throw new BusinessException('订单商品金额不合法');
+        }
+
+        $targetPayCents = intdiv($totalCents * $basisPoints, 10000);
+        $allocations = [];
+        $allocatedCents = 0;
+        foreach ($items as $item) {
+            $numerator = $item['subtotal_cents'] * $basisPoints;
+            $payCents = intdiv($numerator, 10000);
+            $allocatedCents += $payCents;
+            $allocations[] = [
+                'id' => $item['id'],
+                'subtotal_cents' => $item['subtotal_cents'],
+                'pay_cents' => $payCents,
+                'remainder' => $numerator % 10000,
+            ];
+        }
+
+        usort($allocations, static function (array $left, array $right): int {
+            $byRemainder = $right['remainder'] <=> $left['remainder'];
+            if ($byRemainder !== 0) {
+                return $byRemainder;
+            }
+            return $left['id'] <=> $right['id'];
+        });
+
+        $leftover = $targetPayCents - $allocatedCents;
+        foreach ($allocations as &$allocation) {
+            if ($leftover <= 0) {
+                break;
+            }
+            if ($allocation['pay_cents'] >= $allocation['subtotal_cents']) {
+                continue;
+            }
+            $allocation['pay_cents']++;
+            $leftover--;
+        }
+        unset($allocation);
+
+        usort($allocations, static fn(array $left, array $right): int => $left['id'] <=> $right['id']);
+
+        $adjustments = [];
+        foreach ($allocations as $allocation) {
+            $discountCents = $allocation['subtotal_cents'] - $allocation['pay_cents'];
+            $adjustments[] = [
+                'id' => $allocation['id'],
+                'discount_amount' => $this->centsToDecimal($discountCents),
+                'pay_amount' => $this->centsToDecimal($allocation['pay_cents']),
+                'discount_cents' => $discountCents,
+                'pay_cents' => $allocation['pay_cents'],
+            ];
+        }
+
+        return $adjustments;
+    }
+
+    private function moneyToCents(string $amount, string $label): int
+    {
+        $amount = trim($amount);
+        if ($amount === '' || !preg_match('/^\d+(\.\d{1,2})?$/', $amount)) {
+            throw new BusinessException($label . '金额格式不正确');
+        }
+        [$integer, $decimal] = array_pad(explode('.', $amount, 2), 2, '');
+        return ((int) $integer * 100) + (int) str_pad(substr($decimal, 0, 2), 2, '0');
+    }
+
+    private function centsToDecimal(int $cents): string
+    {
+        return sprintf('%d.%02d', intdiv($cents, 100), $cents % 100);
+    }
+
+    private function percentToBasisPoints(?string $percent): int
+    {
+        $percent = trim((string) $percent);
+        if ($percent === '' || !preg_match('/^\d+(\.\d{1,2})?$/', $percent)) {
+            throw new BusinessException('整单实付比例格式不正确');
+        }
+        [$integer, $decimal] = array_pad(explode('.', $percent, 2), 2, '');
+        $basisPoints = ((int) $integer * 100) + (int) str_pad(substr($decimal, 0, 2), 2, '0');
+        if ($basisPoints > 10000) {
+            throw new BusinessException('整单实付比例不能超过 100%');
+        }
+        return $basisPoints;
+    }
+
+    private function formatPercent(int $basisPoints): string
+    {
+        return sprintf('%d.%02d', intdiv($basisPoints, 100), $basisPoints % 100);
     }
 
     protected function prepayCloseService(): WechatPrepayCloseService

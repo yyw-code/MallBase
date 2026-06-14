@@ -57,7 +57,7 @@
       <text class="delivery-card__label">配送方式</text>
       <view class="delivery-card__right">
         <text class="delivery-card__value">
-          {{ !previewResult || displayFreight > 0 ? '快递配送' : '快递配送（免运费）' }}
+          {{ !previewResult || hasFreight ? '快递配送' : '快递配送（免运费）' }}
         </text>
       </view>
     </view>
@@ -84,7 +84,7 @@
       <view class="summary-row">
         <text class="summary-row__label">运费</text>
         <text v-if="!previewResult" class="summary-row__free">待计算</text>
-        <text v-else-if="displayFreight === 0" class="summary-row__free">免运费</text>
+        <text v-else-if="isFreeFreight" class="summary-row__free">免运费</text>
         <mb-price v-else :value="displayFreight" size="sm" color="var(--color-text)" />
       </view>
       <view class="summary-divider" />
@@ -133,6 +133,7 @@ import { useCartStore } from '@/store/cart'
 import { getAddressList } from '@/api/user/address'
 import { createOrder, previewOrder } from '@/api/order/order'
 import { usePayFlow } from '@/utils/usePayFlow'
+import { isPositivePrice, isZeroPrice, multiplyPrice, normalizePrice, sumPrices } from '@/utils/price'
 
 const {
   sheetVisible,
@@ -218,7 +219,7 @@ onLoad((query) => {
         goods_name: skuInfo.goods_name || '',
         goods_image: skuInfo.goods_image || '',
         sku_spec: skuInfo.sku_spec || '',
-        unit_price: Number(skuInfo.unit_price) || 0,
+        unit_price: normalizePrice(skuInfo.unit_price),
         quantity: quantity.value,
       }]
     }
@@ -282,22 +283,21 @@ const fullAddress = computed(() => {
 })
 
 const goodsTotal = computed(() => {
-  return orderItems.value.reduce(
-    (sum, item) => sum + Number(item.unit_price) * item.quantity,
-    0,
-  )
+  return sumPrices(orderItems.value.map((item) => multiplyPrice(item.unit_price, item.quantity)))
 })
 
 // 金额一律以后端试算结果为准，未返回前用本地求和兜底首屏渲染
 const displayGoodsTotal = computed(() =>
-  previewResult.value ? Number(previewResult.value.total_amount) : goodsTotal.value,
+  previewResult.value ? normalizePrice(previewResult.value.total_amount) : goodsTotal.value,
 )
 const displayFreight = computed(() =>
-  previewResult.value ? Number(previewResult.value.freight_amount) : 0,
+  previewResult.value ? normalizePrice(previewResult.value.freight_amount) : '0.00',
 )
 const displayPayTotal = computed(() =>
-  previewResult.value ? Number(previewResult.value.pay_amount) : goodsTotal.value,
+  previewResult.value ? normalizePrice(previewResult.value.pay_amount) : goodsTotal.value,
 )
+const hasFreight = computed(() => isPositivePrice(displayFreight.value))
+const isFreeFreight = computed(() => previewResult.value && isZeroPrice(displayFreight.value))
 
 /**
  * 调用后端订单试算，获取含运费的权威金额
