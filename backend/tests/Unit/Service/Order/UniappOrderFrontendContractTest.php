@@ -103,6 +103,10 @@ final class UniappOrderFrontendContractTest extends TestCase
         $this->assertStringContainsString('hasRefundableItem', $source);
         $this->assertStringContainsString('has_active_refund', $source);
         $this->assertStringContainsString('activeRefundOrderItemIds', $source);
+        $this->assertStringContainsString('latestRefundInfoByOrderItemIds', $source);
+        $this->assertStringContainsString('afterSaleItemSnapshotMap', $source);
+        $this->assertStringContainsString('total_refund_amount', $source);
+        $this->assertStringContainsString("'items' => []", $source);
         $this->assertStringContainsString('calcItemRefundableAmount', $source);
         $this->assertStringContainsString('refundOccupiedStatuses', $source);
         $this->assertStringContainsString('订单存在进行中的售后申请，暂不能确认收货', $source);
@@ -182,6 +186,35 @@ final class UniappOrderFrontendContractTest extends TestCase
         $this->assertStringContainsString('has_active_refund', $sheetSource);
         $this->assertStringContainsString('isRefundItemSelectable', $sheetSource);
         $this->assertStringContainsString('售后处理中', $sheetSource);
+    }
+
+    public function testOrderDetailShowsRefundedGoodsSummaryAndLinksRefundListByOrder(): void
+    {
+        $detailSource = file_get_contents(__DIR__ . '/../../../../../frontend/uniapp/pages-sub/order/detail.vue');
+        $refundListSource = file_get_contents(__DIR__ . '/../../../../../frontend/uniapp/pages-sub/refund/list.vue');
+        $controllerSource = file_get_contents(__DIR__ . '/../../../../../backend/app/controller/client/order/RefundOrderController.php');
+        $serviceSource = file_get_contents(__DIR__ . '/../../../../../backend/app/service/client/order/RefundService.php');
+        $validateSource = file_get_contents(__DIR__ . '/../../../../../backend/app/validate/client/order/RefundValidate.php');
+
+        $this->assertIsString($detailSource);
+        $this->assertIsString($refundListSource);
+        $this->assertIsString($controllerSource);
+        $this->assertIsString($serviceSource);
+        $this->assertIsString($validateSource);
+
+        $this->assertStringContainsString('afterSalePreviewItems', $detailSource);
+        $this->assertStringContainsString('afterSaleMoreCount', $detailSource);
+        $this->assertStringContainsString('after-sale-card__images', $detailSource);
+        $this->assertStringContainsString('after-sale-card__more', $detailSource);
+        $this->assertStringContainsString('goods-item__after-sale', $detailSource);
+        $this->assertStringContainsString('/pages-sub/refund/list?order_id=', $detailSource);
+
+        $this->assertStringContainsString('filterOrderId', $refundListSource);
+        $this->assertStringContainsString('params.order_id = filterOrderId.value', $refundListSource);
+        $this->assertStringContainsString("'order_id'   => \$this->request->param('order_id', null)", $controllerSource);
+        $this->assertStringContainsString("->where('order_id', (int) \$filter['order_id'])", $serviceSource);
+        $this->assertStringContainsString("'order_id'      => 'integer|gt:0'", $validateSource);
+        $this->assertStringContainsString("['status', 'order_id', 'start_time', 'end_time']", $validateSource);
     }
 
     public function testRefundBatchApplyApiContract(): void

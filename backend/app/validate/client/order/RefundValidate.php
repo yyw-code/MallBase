@@ -32,6 +32,7 @@ class RefundValidate extends Validate
         'return_company' => 'max:50',
         'return_tracking_no' => 'max:64',
         'status'        => 'integer',
+        'order_id'      => 'integer|gt:0',
         'start_time'    => 'date',
         'end_time'      => 'date',
     ];
@@ -55,7 +56,7 @@ class RefundValidate extends Validate
         'apply' => ['order_item_id', 'quantity', 'type', 'receive_status', 'reason', 'remark'],
         'batchApply' => ['items', 'type', 'receive_status', 'reason', 'remark'],
         'return' => ['return_company', 'return_tracking_no'],
-        'list'  => ['status', 'start_time', 'end_time'],
+        'list'  => ['status', 'order_id', 'start_time', 'end_time'],
     ];
 
     /**
@@ -89,7 +90,7 @@ class RefundValidate extends Validate
             static fn(array $o): string => (string) $o['value'],
             RefundOrderStatus::options(),
         );
-        return $this->only(['status', 'start_time', 'end_time'])
+        return $this->only(['status', 'order_id', 'start_time', 'end_time'])
             ->append('status', 'in:' . implode(',', $statuses));
     }
 }

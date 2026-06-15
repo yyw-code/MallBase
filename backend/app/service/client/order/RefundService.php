@@ -303,7 +303,7 @@ class RefundService extends BaseService
      *
      * 条件同源：先 count 再 select，builder 通过 clone 复用
      *
-     * @param array{status?:int|null, start_time?:string|null, end_time?:string|null} $filter
+     * @param array{status?:int|null, order_id?:int|null, start_time?:string|null, end_time?:string|null} $filter
      * @return array{total:int, list:array<int, array<string, mixed>>}
      */
     public function list(int $userId, array $filter = [], int $page = 1, int $pageSize = 10): array
@@ -316,6 +316,9 @@ class RefundService extends BaseService
 
         if (isset($filter['status']) && $filter['status'] !== null && $filter['status'] !== '') {
             $query->where('status', (int) $filter['status']);
+        }
+        if (isset($filter['order_id']) && $filter['order_id'] !== null && $filter['order_id'] !== '') {
+            $query->where('order_id', (int) $filter['order_id']);
         }
         if (!empty($filter['start_time'])) {
             $query->where('create_time', '>=', (string) $filter['start_time']);

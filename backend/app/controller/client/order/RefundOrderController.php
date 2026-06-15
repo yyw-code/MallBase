@@ -114,6 +114,7 @@ class RefundOrderController extends BaseController
      *
      * query:
      *  - status: int?         指定状态筛选
+     *  - order_id: int?       指定订单筛选
      *  - start_time / end_time: datetime?  创建时间区间
      *  - page / limit: pagination
      */
@@ -124,6 +125,7 @@ class RefundOrderController extends BaseController
 
         $filter = [
             'status'     => $this->request->param('status', null),
+            'order_id'   => $this->request->param('order_id', null),
             'start_time' => $this->request->param('start_time', null),
             'end_time'   => $this->request->param('end_time', null),
         ];

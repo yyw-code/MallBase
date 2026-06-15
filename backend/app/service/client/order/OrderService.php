@@ -895,21 +895,28 @@ class OrderService extends BaseService
             ->whereIn('order_id', $orderIds)
             ->whereNull('delete_time')
             ->order('id', 'desc')
-            ->field('id, sn, order_id, type, receive_status, status, refund_amount, intercept_status, create_time, reviewed_at, refunded_at, canceled_at')
+            ->field('id, sn, order_id, order_item_id, type, receive_status, status, quantity, refund_amount, intercept_status, create_time, reviewed_at, refunded_at, canceled_at')
             ->select()
             ->toArray();
 
+        $itemMap = $this->afterSaleItemSnapshotMap($rows);
         $map = [];
         foreach ($rows as $row) {
             $orderId = (int) ($row['order_id'] ?? 0);
-            if ($orderId > 0 && !isset($map[$orderId])) {
-                $status = (int) ($row['status'] ?? 0);
-                $type = (int) ($row['type'] ?? 0);
-                $receiveStatus = (int) ($row['receive_status'] ?? 0);
-                $interceptStatus = (string) ($row['intercept_status'] ?? '');
+            if ($orderId <= 0) {
+                continue;
+            }
+
+            $status = (int) ($row['status'] ?? 0);
+            $type = (int) ($row['type'] ?? 0);
+            $receiveStatus = (int) ($row['receive_status'] ?? 0);
+            $interceptStatus = (string) ($row['intercept_status'] ?? '');
+            $orderItemId = (int) ($row['order_item_id'] ?? 0);
+            if (!isset($map[$orderId])) {
                 $map[$orderId] = [
                     'id' => (int) ($row['id'] ?? 0),
                     'sn' => (string) ($row['sn'] ?? ''),
+                    'order_item_id' => $orderItemId,
                     'type' => $type,
                     'type_text' => RefundOrderStatus::typeTextOf($type),
                     'receive_status' => $receiveStatus,
@@ -923,10 +930,70 @@ class OrderService extends BaseService
                     'reviewed_at' => (string) ($row['reviewed_at'] ?? ''),
                     'refunded_at' => (string) ($row['refunded_at'] ?? ''),
                     'canceled_at' => (string) ($row['canceled_at'] ?? ''),
+                    'total' => 0,
+                    'total_refund_amount' => '0.00',
+                    'items' => [],
                 ];
             }
+
+            $item = $itemMap[$orderItemId] ?? [];
+            $map[$orderId]['total']++;
+            $map[$orderId]['total_refund_amount'] = $this->centsToDecimal(
+                $this->decimalToCents((string) ($map[$orderId]['total_refund_amount'] ?? '0.00'))
+                + $this->decimalToCents((string) ($row['refund_amount'] ?? '0.00'))
+            );
+            $map[$orderId]['items'][] = [
+                'id' => (int) ($row['id'] ?? 0),
+                'sn' => (string) ($row['sn'] ?? ''),
+                'order_item_id' => $orderItemId,
+                'goods_name' => (string) ($item['goods_name'] ?? ''),
+                'goods_image' => (string) ($item['goods_image'] ?? ''),
+                'goods_image_full_url' => (string) ($item['goods_image_full_url'] ?? ''),
+                'sku_spec' => (string) ($item['sku_spec'] ?? ''),
+                'quantity' => (int) ($row['quantity'] ?? 0),
+                'type' => $type,
+                'type_text' => RefundOrderStatus::typeTextOf($type),
+                'receive_status' => $receiveStatus,
+                'receive_status_text' => RefundOrderStatus::receiveTextOf($receiveStatus),
+                'status' => $status,
+                'status_text' => RefundOrderStatus::textOf($status),
+                'refund_amount' => (string) ($row['refund_amount'] ?? '0.00'),
+            ];
         }
 
+        return $map;
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $refundRows
+     * @return array<int, array<string, mixed>>
+     */
+    private function afterSaleItemSnapshotMap(array $refundRows): array
+    {
+        $orderItemIds = array_values(array_unique(array_filter(array_map(
+            static fn(array $row): int => (int) ($row['order_item_id'] ?? 0),
+            $refundRows
+        ))));
+        if ($orderItemIds === []) {
+            return [];
+        }
+
+        $rows = $this->model(OrderItem::class)
+            ->whereIn('id', $orderItemIds)
+            ->field('id, goods_name, goods_image, sku_spec')
+            ->select()
+            ->toArray();
+        $rows = app()->make(AssetHydrator::class)->hydrateFields($rows, [
+            'goods_image' => 'goods_image_full_url',
+        ]);
+
+        $map = [];
+        foreach ($rows as $row) {
+            $id = (int) ($row['id'] ?? 0);
+            if ($id > 0) {
+                $map[$id] = $row;
+            }
+        }
         return $map;
     }
 
@@ -997,6 +1064,7 @@ class OrderService extends BaseService
         );
         $itemOccupiedCents = $this->refundOccupiedCentsByOrderItemIds($orderItemIds);
         $activeRefundItemIds = $this->activeRefundOrderItemIds($orderItemIds);
+        $itemAfterSaleInfo = $this->latestRefundInfoByOrderItemIds($orderItemIds);
 
         $map = [];
         foreach ($rows as $row) {
@@ -1007,6 +1075,8 @@ class OrderService extends BaseService
                 (int) ($row['quantity'] ?? 0) - (int) ($row['refunded_quantity'] ?? 0)
             );
             $row['has_active_refund'] = isset($activeRefundItemIds[$orderItemId]);
+            $row['after_sale'] = $itemAfterSaleInfo[$orderItemId] ?? null;
+            $row['after_sale_status_text'] = (string) ($row['after_sale']['status_text'] ?? '');
             $row['refundable_quantity'] = $refundableQuantity;
             $row['refundable_amount'] = $this->calcItemRefundableAmount(
                 $refundBases[$orderId] ?? null,
@@ -1015,6 +1085,49 @@ class OrderService extends BaseService
                 $itemOccupiedCents[$orderItemId] ?? 0
             );
             $map[$orderId][] = $row;
+        }
+        return $map;
+    }
+
+    /**
+     * @param array<int, int> $orderItemIds
+     * @return array<int, array<string, mixed>>
+     */
+    private function latestRefundInfoByOrderItemIds(array $orderItemIds): array
+    {
+        $orderItemIds = array_values(array_unique(array_filter(array_map('intval', $orderItemIds))));
+        if ($orderItemIds === []) {
+            return [];
+        }
+
+        $rows = $this->model(RefundOrder::class)
+            ->whereIn('order_item_id', $orderItemIds)
+            ->whereNull('delete_time')
+            ->order('id', 'desc')
+            ->field('id, order_item_id, type, receive_status, status, quantity, refund_amount')
+            ->select()
+            ->toArray();
+
+        $map = [];
+        foreach ($rows as $row) {
+            $orderItemId = (int) ($row['order_item_id'] ?? 0);
+            if ($orderItemId <= 0 || isset($map[$orderItemId])) {
+                continue;
+            }
+            $status = (int) ($row['status'] ?? 0);
+            $type = (int) ($row['type'] ?? 0);
+            $receiveStatus = (int) ($row['receive_status'] ?? 0);
+            $map[$orderItemId] = [
+                'id' => (int) ($row['id'] ?? 0),
+                'type' => $type,
+                'type_text' => RefundOrderStatus::typeTextOf($type),
+                'receive_status' => $receiveStatus,
+                'receive_status_text' => RefundOrderStatus::receiveTextOf($receiveStatus),
+                'status' => $status,
+                'status_text' => RefundOrderStatus::textOf($status),
+                'quantity' => (int) ($row['quantity'] ?? 0),
+                'refund_amount' => (string) ($row['refund_amount'] ?? '0.00'),
+            ];
         }
         return $map;
     }
