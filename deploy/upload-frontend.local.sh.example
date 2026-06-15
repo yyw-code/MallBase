@@ -35,3 +35,13 @@ REMOTE_ROOT="/www/wwwroot/example.com/mall-base"
 
 # 可选：设为 "1" 时保留服务器目标目录里的多余旧文件，默认会先清空再解压
 KEEP_EXTRA="0"
+
+# 可选：设为 "1" 时远端 mkdir/rm/tar 使用 sudo -n。
+# 适用于 1Panel / root 创建的站点目录，SSH 用户对旧文件没有删除权限的情况。
+# 远端用户需要具备免密 sudo 权限，否则脚本会直接报错退出。
+REMOTE_SUDO="0"
+
+# 可选：解压后把远端目录 chown -R 到指定 owner[:group]。
+# 例如希望后续不用 sudo 也能发布，可设置为 "ubuntu:ubuntu"；
+# 希望 nginx/php-fpm 组可读写，可按实际服务器用户组设置。
+REMOTE_CHOWN=""

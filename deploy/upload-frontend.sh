@@ -16,6 +16,8 @@ REMOTE_ROOT=""              # 服务器项目根目录，脚本自动拼成 back
 REMOTE_ADMIN_DIR=""         # 直接指定服务器上的后台最终目录；与 REMOTE_ROOT 二选一（命令行 --remote-dir）
 REMOTE_CLIENT_DIR=""        # 直接指定服务器上的 H5 最终目录；留空时默认取后台目录同级的 client（命令行 --client-dir）
 KEEP_EXTRA="0"              # "1" 时保留服务器目标目录里的多余旧文件，默认 "0" 先清空再解压（命令行 --keep-extra）
+REMOTE_SUDO="0"             # "1" 时远端 mkdir/rm/tar 使用 sudo -n，适合目标目录非 SSH 用户所有（命令行 --sudo）
+REMOTE_CHOWN=""             # 可选，解压后 chown -R 到指定 owner[:group]，例如 ubuntu:www-data（命令行 --remote-chown）
 
 # 本地配置文件：用于保存真实的 SSH 主机、私钥、远程目录等信息，不入库。
 # 可通过环境变量 MALLBASE_UPLOAD_CONFIG 指定其它路径。
@@ -41,6 +43,8 @@ usage() {
   --identity     可选，SSH 私钥文件路径，例如 ~/.ssh/id_ed25519
   --password     可选，SSH 登录密码（需要本机安装 sshpass）；会出现在进程列表，建议改用 upload-frontend.local.sh 里的 SSH_PASSWORD
   --keep-extra   可选，保留服务器目标目录中多余旧文件；默认会先清空目标目录再解压
+  --sudo         可选，远端 mkdir/rm/tar 使用 sudo -n；目标目录非 SSH 用户所有时使用
+  --remote-chown 可选，解压后把远端目录 chown -R 到 owner[:group]，通常与 --sudo 搭配
 
 说明：
   1. 本地源目录固定为 backend/public/admin
@@ -50,7 +54,7 @@ usage() {
   5. 默认行为是覆盖服务器目标目录内容，避免旧静态资源残留
   6. 认证方式：默认走 SSH 默认认证（含已加载的私钥）；--identity 指定私钥；设置 SSH_PASSWORD / --password 则用密码登录（需 sshpass）
   7. 可在 deploy/upload-frontend.local.sh 里预先设置 SSH_HOST、SSH_PORT、SSH_IDENTITY、SSH_PASSWORD、
-     REMOTE_ROOT / REMOTE_ADMIN_DIR / REMOTE_CLIENT_DIR、KEEP_EXTRA，命令行参数会覆盖该文件中的值；
+     REMOTE_ROOT / REMOTE_ADMIN_DIR / REMOTE_CLIENT_DIR、KEEP_EXTRA、REMOTE_SUDO、REMOTE_CHOWN，命令行参数会覆盖该文件中的值；
      复制 deploy/upload-frontend.local.sh.example 即可，该文件已被 git 忽略
 EOF
 }
@@ -88,6 +92,14 @@ while [ "$#" -gt 0 ]; do
         --keep-extra)
             KEEP_EXTRA="1"
             shift
+            ;;
+        --sudo)
+            REMOTE_SUDO="1"
+            shift
+            ;;
+        --remote-chown)
+            REMOTE_CHOWN=${2:-}
+            shift 2
             ;;
         -h|--help)
             usage
@@ -174,6 +186,27 @@ if [ -n "$SSH_PASSWORD" ] && ! command -v sshpass >/dev/null 2>&1; then
     exit 1
 fi
 
+tar_supports_option() {
+    option=$1
+    probe_dir=$(mktemp -d "${TMPDIR:-/tmp}/mallbase-tar-probe.XXXXXX")
+    probe_tar="${TMPDIR:-/tmp}/mallbase-tar-probe-$$.tar"
+    printf 'x' > "$probe_dir/probe"
+    if tar "$option" -C "$probe_dir" -cf "$probe_tar" . >/dev/null 2>&1; then
+        rm -rf "$probe_dir" "$probe_tar"
+        return 0
+    fi
+    rm -rf "$probe_dir" "$probe_tar"
+    return 1
+}
+
+TAR_EXTRA_ARGS=""
+if tar_supports_option --no-xattrs; then
+    TAR_EXTRA_ARGS="$TAR_EXTRA_ARGS --no-xattrs"
+fi
+if tar_supports_option --no-mac-metadata; then
+    TAR_EXTRA_ARGS="$TAR_EXTRA_ARGS --no-mac-metadata"
+fi
+
 TIMESTAMP=$(date +%Y%m%d%H%M%S)
 ADMIN_ARCHIVE_NAME="mallbase-public-admin-${TIMESTAMP}.tar.gz"
 CLIENT_ARCHIVE_NAME="mallbase-public-client-${TIMESTAMP}.tar.gz"
@@ -215,11 +248,14 @@ echo ">>> [upload-frontend] 打包后台资源"
 
 # COPYFILE_DISABLE=1：macOS 上的 tar 默认会把扩展属性/资源叉打包成 ._* 文件，
 # 解包到服务器后会留下一堆 ._xxx 垃圾文件；这里关掉，并再排除一次 ._*、.DS_Store。
-COPYFILE_DISABLE=1 tar -C "$ADMIN_SOURCE_DIR" --exclude='._*' --exclude='.DS_Store' -czf "$LOCAL_ADMIN_ARCHIVE" .
+# TAR_EXTRA_ARGS：尽量关闭 xattrs / macOS metadata，避免远端 tar 输出 LIBARCHIVE.xattr... 警告。
+# shellcheck disable=SC2086
+COPYFILE_DISABLE=1 tar $TAR_EXTRA_ARGS -C "$ADMIN_SOURCE_DIR" --exclude='._*' --exclude='.DS_Store' -czf "$LOCAL_ADMIN_ARCHIVE" .
 
 if [ "$UPLOAD_CLIENT" = "1" ]; then
     echo ">>> [upload-frontend] 打包 H5 资源"
-    COPYFILE_DISABLE=1 tar -C "$CLIENT_SOURCE_DIR" --exclude='._*' --exclude='.DS_Store' -czf "$LOCAL_CLIENT_ARCHIVE" .
+    # shellcheck disable=SC2086
+    COPYFILE_DISABLE=1 tar $TAR_EXTRA_ARGS -C "$CLIENT_SOURCE_DIR" --exclude='._*' --exclude='.DS_Store' -czf "$LOCAL_CLIENT_ARCHIVE" .
 fi
 
 echo ">>> [upload-frontend] 上传后台归档文件"
@@ -234,23 +270,42 @@ fi
 
 REMOTE_SHELL=$(cat <<EOF
 set -eu
-mkdir -p '$REMOTE_ADMIN_DIR'
-if [ '$KEEP_EXTRA' != '1' ]; then
-    find '$REMOTE_ADMIN_DIR' -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+SUDO_CMD=""
+if [ '$REMOTE_SUDO' = '1' ]; then
+    if ! command -v sudo >/dev/null 2>&1; then
+        echo "远端缺少 sudo，无法使用 --sudo"
+        exit 1
+    fi
+    if ! sudo -n true >/dev/null 2>&1; then
+        echo "远端 sudo 需要密码或当前用户无免密 sudo 权限"
+        exit 1
+    fi
+    SUDO_CMD="sudo -n"
 fi
-tar -xzf '$REMOTE_ADMIN_ARCHIVE' -C '$REMOTE_ADMIN_DIR'
-rm -f '$REMOTE_ADMIN_ARCHIVE'
+
+\$SUDO_CMD mkdir -p '$REMOTE_ADMIN_DIR'
+if [ '$KEEP_EXTRA' != '1' ]; then
+    \$SUDO_CMD find '$REMOTE_ADMIN_DIR' -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+fi
+\$SUDO_CMD tar --no-same-owner -xzf '$REMOTE_ADMIN_ARCHIVE' -C '$REMOTE_ADMIN_DIR'
+\$SUDO_CMD rm -f '$REMOTE_ADMIN_ARCHIVE'
+if [ -n '$REMOTE_CHOWN' ]; then
+    \$SUDO_CMD chown -R '$REMOTE_CHOWN' '$REMOTE_ADMIN_DIR'
+fi
 EOF
 )
 
 if [ "$UPLOAD_CLIENT" = "1" ]; then
     REMOTE_SHELL="$REMOTE_SHELL
-mkdir -p '$REMOTE_CLIENT_DIR'
+\$SUDO_CMD mkdir -p '$REMOTE_CLIENT_DIR'
 if [ '$KEEP_EXTRA' != '1' ]; then
-    find '$REMOTE_CLIENT_DIR' -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+    \$SUDO_CMD find '$REMOTE_CLIENT_DIR' -mindepth 1 -maxdepth 1 -exec rm -rf {} +
 fi
-tar -xzf '$REMOTE_CLIENT_ARCHIVE' -C '$REMOTE_CLIENT_DIR'
-rm -f '$REMOTE_CLIENT_ARCHIVE'"
+\$SUDO_CMD tar --no-same-owner -xzf '$REMOTE_CLIENT_ARCHIVE' -C '$REMOTE_CLIENT_DIR'
+\$SUDO_CMD rm -f '$REMOTE_CLIENT_ARCHIVE'
+if [ -n '$REMOTE_CHOWN' ]; then
+    \$SUDO_CMD chown -R '$REMOTE_CHOWN' '$REMOTE_CLIENT_DIR'
+fi"
 fi
 
 echo ">>> [upload-frontend] 解压到服务器目录"
