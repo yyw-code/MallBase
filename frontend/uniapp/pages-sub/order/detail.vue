@@ -205,6 +205,14 @@
       @select="onPayMethodSelect"
       @close="closeSheet"
     />
+
+    <!-- 售后商品选择 -->
+    <mb-refund-item-sheet
+      :visible="refundSheetVisible"
+      :items="refundSheetItems"
+      @confirm="onRefundItemsConfirm"
+      @close="closeRefundSheet"
+    />
   </view>
 </template>
 
@@ -264,6 +272,8 @@ const loading = ref(true)
 const order = ref(null)
 const orderId = ref('')
 const nowTs = ref(Date.now())
+const refundSheetVisible = ref(false)
+const refundSheetItems = ref([])
 let countdownTimer = null
 let expiredRefreshed = false
 
@@ -423,23 +433,10 @@ function getOrderItemId(item) {
   return item?.id || item?.order_item_id || ''
 }
 
-function getRefundItemLabel(item) {
-  const name = item?.goods_name || item?.name || '商品'
-  const spec = getItemSpec(item)
-  return spec ? `${name} ${spec}` : name
-}
-
 function getRefundableQuantity(item) {
   const explicit = Number(item?.refundable_quantity)
   if (Number.isFinite(explicit)) return Math.max(0, explicit)
   return Math.max(0, Number(item?.quantity || 0) - Number(item?.refunded_quantity || 0))
-}
-
-function getRefundableAmount(item) {
-  const amount = item?.refundable_amount
-  return amount !== undefined && amount !== null && amount !== ''
-    ? String(amount)
-    : ''
 }
 
 function getExpireAtTs(source) {
@@ -496,31 +493,41 @@ function goRefundDetail() {
   uni.navigateTo({ url: `/pages-sub/refund/detail?id=${id}` })
 }
 
-function navigateToRefund(item, receiveStatus = 'not_received', type = 0) {
-  const orderItemId = getOrderItemId(item)
-  if (!orderItemId) {
+function navigateToRefund(selections) {
+  const selectedItems = (Array.isArray(selections) ? selections : [])
+    .map((row) => {
+      const item = row?.item || row
+      const orderItemId = row?.order_item_id || getOrderItemId(item)
+      const quantity = Math.max(1, Number(row?.quantity || 1))
+      return orderItemId ? { order_item_id: orderItemId, quantity } : null
+    })
+    .filter(Boolean)
+
+  if (selectedItems.length === 0) {
     uni.showToast({ title: '请选择要申请售后的商品', icon: 'none' })
     return
   }
-  const refundableQuantity = getRefundableQuantity(item)
-  if (refundableQuantity <= 0) {
-    uni.showToast({ title: '该商品暂无可退数量', icon: 'none' })
-    return
-  }
-  const refundableAmount = getRefundableAmount(item)
+
   const query = [
     `order_id=${order.value.id}`,
-    `order_item_id=${orderItemId}`,
-    `receive_status=${receiveStatus}`,
-    `type=${type}`,
-    item?.goods_name ? `goods_name=${encodeURIComponent(item.goods_name)}` : '',
-    getOrderItemImage(item) ? `goods_image=${encodeURIComponent(getOrderItemImage(item))}` : '',
-    getItemSpec(item) ? `sku_spec_text=${encodeURIComponent(getItemSpec(item))}` : '',
-    item?.unit_price ? `price=${encodeURIComponent(item.unit_price)}` : '',
-    `quantity=${encodeURIComponent(refundableQuantity)}`,
-    refundableAmount ? `refundable_amount=${encodeURIComponent(refundableAmount)}` : '',
+    `selected_items=${encodeURIComponent(JSON.stringify(selectedItems))}`,
   ].filter(Boolean).join('&')
   uni.navigateTo({ url: `/pages-sub/refund/apply?${query}` })
+}
+
+function openRefundSheet(items) {
+  refundSheetItems.value = items
+  refundSheetVisible.value = true
+}
+
+function closeRefundSheet() {
+  refundSheetVisible.value = false
+  refundSheetItems.value = []
+}
+
+function onRefundItemsConfirm(selections) {
+  closeRefundSheet()
+  navigateToRefund(selections)
 }
 
 function maskPhone(phone) {
@@ -602,42 +609,8 @@ async function handleAction(key) {
       uni.showToast({ title: '请选择要申请售后的商品', icon: 'none' })
       return
     }
-    const chooseItem = (item) => {
-      if (Number(order.value.status) === 20) {
-        chooseReceiveStatus(item)
-        return
-      }
-      navigateToRefund(item, Number(order.value.status) >= 30 ? 'received' : 'not_received', 0)
-    }
-    if (items.length === 1) {
-      chooseItem(items[0])
-      return
-    }
-    uni.showActionSheet({
-      itemList: items.map(getRefundItemLabel),
-      success(res) {
-        chooseItem(items[res.tapIndex])
-      },
-    })
+    openRefundSheet(items)
   }
-}
-
-function chooseReceiveStatus(item) {
-  uni.showActionSheet({
-    itemList: ['未收到货', '已收到货'],
-    success(res) {
-      if (res.tapIndex === 0) {
-        navigateToRefund(item, 'not_received', 0)
-        return
-      }
-      uni.showActionSheet({
-        itemList: ['仅退款', '退货退款'],
-        success(typeRes) {
-          navigateToRefund(item, 'received', typeRes.tapIndex === 1 ? 1 : 0)
-        },
-      })
-    },
-  })
 }
 
 function startCountdownTimer() {

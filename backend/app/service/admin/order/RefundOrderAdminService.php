@@ -458,6 +458,19 @@ class RefundOrderAdminService extends BaseService
         array $expectedStatuses,
         string $statusErrorMessage
     ): void {
+        $amountCents = $this->decimalToCents((string) $refund->refund_amount);
+        if ($amountCents <= 0) {
+            $this->completeZeroAmountRefund(
+                $refund,
+                $adminId,
+                $adminRemark,
+                $defaultRemark,
+                $expectedStatuses,
+                $statusErrorMessage,
+            );
+            return;
+        }
+
         $payMethod = (int) ($orderModel->pay_method ?? 0);
         if ($payMethod === PayMethod::BALANCE) {
             $this->executeBalanceRefund(
@@ -486,7 +499,7 @@ class RefundOrderAdminService extends BaseService
         $context = new RefundPaymentContext(
             transactionId: $transactionId,
             outRefundNo: (string) $refund->sn,
-            refundAmountCents: $this->decimalToCents((string) $refund->refund_amount),
+            refundAmountCents: $amountCents,
             totalAmountCents: $this->decimalToCents((string) $orderModel->pay_amount),
             reason: RefundReason::textOf((string) ($refund->reason ?? '')),
         );
@@ -540,6 +553,76 @@ class RefundOrderAdminService extends BaseService
 
             $this->closeOrderIfFullyRefunded(
                 orderId: (int) $refund->order_id,
+                operatorType: OperatorType::ADMIN,
+                operatorId: $adminId,
+            );
+        });
+    }
+
+    private function completeZeroAmountRefund(
+        RefundOrder $refund,
+        int $adminId,
+        string $adminRemark,
+        string $defaultRemark,
+        array $expectedStatuses,
+        string $statusErrorMessage
+    ): void {
+        $refundId = (int) $refund->id;
+        $orderItemId = (int) ($refund->order_item_id ?? 0);
+        $quantity = (int) ($refund->quantity ?? 0);
+
+        /** @var RefundOrderStatusMachine $machine */
+        $machine = app()->make(RefundOrderStatusMachine::class);
+
+        $this->transaction(function () use (
+            $refundId,
+            $orderItemId,
+            $quantity,
+            $adminId,
+            $adminRemark,
+            $defaultRemark,
+            $expectedStatuses,
+            $statusErrorMessage,
+            $machine
+        ): void {
+            /** @var RefundOrder|null $lockedRefund */
+            $lockedRefund = $this->model()
+                ->where('id', $refundId)
+                ->whereNull('delete_time')
+                ->lock(true)
+                ->find();
+            if ($lockedRefund === null) {
+                throw new BusinessException('售后单不存在');
+            }
+            if (!in_array((int) $lockedRefund->status, $expectedStatuses, true)) {
+                throw new BusinessException($statusErrorMessage);
+            }
+
+            if ((int) $lockedRefund->type === RefundOrderStatus::TYPE_RETURN_REFUND
+                && trim((string) ($lockedRefund->return_received_at ?? '')) === '') {
+                $lockedRefund->return_received_at = date('Y-m-d H:i:s');
+                $lockedRefund->save();
+            }
+
+            $machine->transit(
+                refund: $lockedRefund,
+                toStatus: RefundOrderStatus::COMPLETED,
+                operatorType: OperatorType::ADMIN,
+                operatorId: $adminId,
+                remark: $adminRemark !== '' ? $adminRemark : $defaultRemark,
+            );
+
+            $affected = $this->model(OrderItem::class)
+                ->where('id', $orderItemId)
+                ->whereRaw('refunded_quantity + ? <= quantity', [$quantity])
+                ->inc('refunded_quantity', $quantity)
+                ->update();
+            if ($affected === 0) {
+                throw new BusinessException('退款数量超出限制或已被其他申请占用');
+            }
+
+            $this->closeOrderIfFullyRefunded(
+                orderId: (int) $lockedRefund->order_id,
                 operatorType: OperatorType::ADMIN,
                 operatorId: $adminId,
             );

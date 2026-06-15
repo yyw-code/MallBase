@@ -1,17 +1,16 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
-import { applyRefund, getRefundReasonOptions } from '@/api/order/refund'
+import { applyRefundBatch, getRefundReasonOptions } from '@/api/order/refund'
 import { getOrderDetail } from '@/api/order/order'
 
 const orderId = ref('')
-const orderItemId = ref('')
-const goodsName = ref('')
-const goodsImage = ref('')
-const skuSpecText = ref('')
-const price = ref(0)
-const quantity = ref(1)
+const selectedItemInputs = ref([])
+const refundItems = ref([])
 const refundableAmount = ref('')
+const refundableLoading = ref(false)
+const refundableLoaded = ref(false)
+const orderStatus = ref(null)
 const receiveStatus = ref('not_received')
 const refundType = ref(0)
 
@@ -26,15 +25,7 @@ const MAX_DESC_LENGTH = 200
 
 onLoad((query) => {
   orderId.value = query?.order_id || ''
-  orderItemId.value = query?.order_item_id || ''
-  goodsName.value = decodeURIComponent(query?.goods_name || '')
-  goodsImage.value = decodeURIComponent(query?.goods_image || '')
-  skuSpecText.value = decodeURIComponent(query?.sku_spec_text || '')
-  price.value = Number(query?.price) || 0
-  quantity.value = Number(query?.quantity) || 1
-  refundableAmount.value = normalizeAmount(query?.refundable_amount || '')
-  receiveStatus.value = query?.receive_status || 'not_received'
-  refundType.value = Number(query?.type) === 1 ? 1 : 0
+  selectedItemInputs.value = parseSelectedItems(query)
   fetchReasonOptions()
   fetchRefundableInfo()
 })
@@ -49,46 +40,119 @@ async function fetchReasonOptions() {
 }
 
 async function fetchRefundableInfo() {
-  if (!orderId.value || !orderItemId.value) return
+  if (!orderId.value || selectedItemInputs.value.length === 0) return
+  refundableLoading.value = true
   try {
     const detail = await getOrderDetail(orderId.value)
+    orderStatus.value = Number(detail?.status)
     const items = Array.isArray(detail?.items)
       ? detail.items
       : Array.isArray(detail?.order_items)
         ? detail.order_items
         : []
-    const item = items.find((row) => String(row?.id || row?.order_item_id || '') === String(orderItemId.value))
-    if (!item) return
+    const itemMap = {}
+    items.forEach((row) => {
+      const id = getOrderItemId(row)
+      if (id) itemMap[String(id)] = row
+    })
 
-    goodsName.value = item.goods_name || item.name || goodsName.value
-    goodsImage.value = normalizeImageUrl(
-      item.goods_image_full_url
-        || item.goods_image_url
-        || item.goods_image
-        || goodsImage.value,
-    )
-    skuSpecText.value = item.sku_spec_text || item.sku_spec || item.spec_text || skuSpecText.value
-    price.value = Number(item.unit_price) || price.value
+    const nextItems = []
+    for (const input of selectedItemInputs.value) {
+      const item = itemMap[String(input.order_item_id)]
+      if (!item) continue
 
-    const serverQuantity = Number(item.refundable_quantity)
-    if (Number.isFinite(serverQuantity) && serverQuantity > 0) {
-      quantity.value = serverQuantity
+      const refundableQuantity = getRefundableQuantity(item)
+      if (refundableQuantity <= 0) continue
+
+      nextItems.push({
+        order_item_id: getOrderItemId(item),
+        goods_name: item.goods_name || item.name || '商品',
+        goods_image: normalizeImageUrl(
+          item.goods_image_full_url
+            || item.goods_image_url
+            || item.goods_image
+            || '',
+        ),
+        sku_spec_text: item.sku_spec_text || item.sku_spec || item.spec_text || '',
+        price: Number(item.unit_price) || 0,
+        quantity: Math.min(refundableQuantity, Math.max(1, Number(input.quantity || 1))),
+        refundable_quantity: refundableQuantity,
+        refundable_amount: normalizeAmount(item.refundable_amount || ''),
+      })
     }
 
-    const serverAmount = normalizeAmount(item.refundable_amount || '')
-    if (serverAmount) {
-      refundableAmount.value = serverAmount
+    if (nextItems.length === 0) {
+      uni.showToast({ title: '售后商品信息不存在或暂无可退数量', icon: 'none' })
+      return
     }
+
+    refundItems.value = nextItems
+    refundableAmount.value = exactBackendAmount(nextItems)
+    initRefundScenario()
+    refundableLoaded.value = true
   } catch {
-    // 旧入口兜底：继续使用 query 参数展示，不阻断用户填写。
+    refundableLoaded.value = false
+    uni.showToast({ title: '退款金额获取失败，请稍后重试', icon: 'none' })
+  } finally {
+    refundableLoading.value = false
   }
 }
 
-const refundAmount = computed(() => {
-  if (refundableAmount.value) return refundableAmount.value
-  const total = price.value * quantity.value
-  return total.toFixed(2)
+const receiveStatusOptions = computed(() => {
+  if (orderStatus.value === 10) {
+    return [{ label: '未收到货', value: 'not_received' }]
+  }
+  if (orderStatus.value === 30 || orderStatus.value === 40) {
+    return [{ label: '已收到货', value: 'received' }]
+  }
+  return [
+    { label: '未收到货', value: 'not_received' },
+    { label: '已收到货', value: 'received' },
+  ]
 })
+
+const refundTypeOptions = computed(() => {
+  if (receiveStatus.value !== 'received') {
+    return [{ label: '仅退款', value: 0 }]
+  }
+  return [
+    { label: '仅退款', value: 0 },
+    { label: '退货退款', value: 1 },
+  ]
+})
+
+const refundAmountText = computed(() => {
+  if (refundableLoading.value) return '计算中'
+  if (!refundableLoaded.value) return '以提交后计算为准'
+  return refundableAmount.value || '提交后计算'
+})
+
+const showRefundAmountSymbol = computed(() => Boolean(refundableAmount.value) && !refundableLoading.value)
+
+const selectedGoodsCount = computed(() => refundItems.value.length)
+
+const selectedQuantityTotal = computed(() =>
+  refundItems.value.reduce((sum, item) => sum + Number(item.quantity || 0), 0),
+)
+
+function initRefundScenario() {
+  const firstReceive = receiveStatusOptions.value[0]?.value || 'not_received'
+  receiveStatus.value = firstReceive
+  refundType.value = refundTypeOptions.value[0]?.value || 0
+}
+
+function setReceiveStatus(value) {
+  if (!receiveStatusOptions.value.some((item) => item.value === value)) return
+  receiveStatus.value = value
+  if (!refundTypeOptions.value.some((item) => item.value === refundType.value)) {
+    refundType.value = refundTypeOptions.value[0]?.value || 0
+  }
+}
+
+function setRefundType(value) {
+  if (!refundTypeOptions.value.some((item) => item.value === value)) return
+  refundType.value = value
+}
 
 const selectedReasonLabel = computed(() => {
   const option = reasonOptions.value.find((item) => {
@@ -98,6 +162,44 @@ const selectedReasonLabel = computed(() => {
   if (!option) return ''
   return typeof option === 'string' ? option : option.label || option.name || option.value || ''
 })
+
+function parseSelectedItems(query) {
+  const raw = query?.selected_items || ''
+  if (raw) {
+    try {
+      const decoded = decodeURIComponent(String(raw))
+      const rows = JSON.parse(decoded)
+      if (Array.isArray(rows)) {
+        const parsed = rows
+          .map((row) => ({
+            order_item_id: row?.order_item_id || row?.id || '',
+            quantity: Math.max(1, Number(row?.quantity || 1)),
+          }))
+          .filter((row) => row.order_item_id)
+        if (parsed.length > 0) return parsed
+      }
+    } catch {
+      // fallback below
+    }
+  }
+
+  const fallbackId = query?.order_item_id || ''
+  if (!fallbackId) return []
+  return [{
+    order_item_id: fallbackId,
+    quantity: Math.max(1, Number(query?.quantity || 1)),
+  }]
+}
+
+function getOrderItemId(item) {
+  return item?.id || item?.order_item_id || ''
+}
+
+function getRefundableQuantity(item) {
+  const explicit = Number(item?.refundable_quantity)
+  if (Number.isFinite(explicit)) return Math.max(0, explicit)
+  return Math.max(0, Number(item?.quantity || 0) - Number(item?.refunded_quantity || 0))
+}
 
 function formatPrice(val) {
   const num = Number(val)
@@ -109,6 +211,29 @@ function normalizeAmount(val) {
   const decoded = decodeURIComponent(String(val || ''))
   if (!/^\d+(\.\d{1,2})?$/.test(decoded)) return ''
   return Number(decoded).toFixed(2)
+}
+
+function exactBackendAmount(items) {
+  let cents = 0
+  for (const item of items) {
+    if (Number(item.quantity) !== Number(item.refundable_quantity)) return ''
+    const amountCents = decimalToCents(item.refundable_amount)
+    if (amountCents === null) return ''
+    cents += amountCents
+  }
+  return centsToDecimal(cents)
+}
+
+function decimalToCents(amount) {
+  const value = String(amount || '').trim()
+  if (!/^\d+(\.\d{1,2})?$/.test(value)) return null
+  const [yuan, cent = '0'] = value.split('.')
+  return Number(yuan) * 100 + Number(cent.padEnd(2, '0').slice(0, 2))
+}
+
+function centsToDecimal(cents) {
+  const value = Math.max(0, Number(cents || 0))
+  return `${Math.floor(value / 100)}.${String(value % 100).padStart(2, '0')}`
 }
 
 function normalizeImageUrl(url) {
@@ -165,7 +290,7 @@ function onPreviewImage(idx) {
 }
 
 async function onSubmit() {
-  if (!orderItemId.value) {
+  if (refundItems.value.length === 0) {
     uni.showToast({ title: '请选择要申请售后的商品', icon: 'none' })
     return
   }
@@ -173,13 +298,19 @@ async function onSubmit() {
     uni.showToast({ title: '请选择退款原因', icon: 'none' })
     return
   }
+  if (refundableLoading.value || !refundableLoaded.value) {
+    uni.showToast({ title: '退款信息加载中，请稍后', icon: 'none' })
+    return
+  }
   if (submitting.value) return
   submitting.value = true
 
   try {
-    await applyRefund({
-      order_item_id: orderItemId.value,
-      quantity: quantity.value,
+    await applyRefundBatch({
+      items: refundItems.value.map((item) => ({
+        order_item_id: item.order_item_id,
+        quantity: item.quantity,
+      })),
       type: refundType.value,
       receive_status: receiveStatus.value === 'received' ? 1 : 0,
       reason: selectedReason.value,
@@ -203,38 +334,64 @@ async function onSubmit() {
 
     <!-- Product info card -->
     <view class="product-card">
-      <image
-        v-if="goodsImage"
-        class="product-card__image"
-        :src="goodsImage"
-        mode="aspectFill"
-      />
-      <view v-else class="product-card__image product-card__image--placeholder">
-        <view class="product-card__placeholder-box" />
+      <view class="product-card__header">
+        <text class="product-card__title">售后商品</text>
+        <text class="product-card__summary">已选 {{ selectedGoodsCount }} 种，共 {{ selectedQuantityTotal }} 件</text>
       </view>
-      <view class="product-card__info">
-        <text class="product-card__name">{{ goodsName || '商品' }}</text>
-        <text v-if="skuSpecText" class="product-card__spec">{{ skuSpecText }}</text>
-        <view class="product-card__bottom">
-          <text class="product-card__price">{{ '¥' }}{{ formatPrice(price) }}</text>
-          <text class="product-card__qty">{{ '×' }}{{ quantity }}</text>
+      <view
+        v-for="item in refundItems"
+        :key="item.order_item_id"
+        class="product-card__item"
+      >
+        <image
+          v-if="item.goods_image"
+          class="product-card__image"
+          :src="item.goods_image"
+          mode="aspectFill"
+        />
+        <view v-else class="product-card__image product-card__image--placeholder">
+          <view class="product-card__placeholder-box" />
+        </view>
+        <view class="product-card__info">
+          <text class="product-card__name">{{ item.goods_name || '商品' }}</text>
+          <text v-if="item.sku_spec_text" class="product-card__spec">{{ item.sku_spec_text }}</text>
+          <view class="product-card__bottom">
+            <text class="product-card__price">{{ '¥' }}{{ formatPrice(item.price) }}</text>
+            <text class="product-card__qty">{{ '×' }}{{ item.quantity }}</text>
+          </view>
         </view>
       </view>
     </view>
 
     <!-- Form fields -->
     <view class="form-section">
-      <view class="form-item">
+      <view class="form-item form-item--column">
         <text class="form-item__label">收货状态</text>
-        <text class="form-item__value">
-          {{ receiveStatus === 'received' ? '已收到货' : '未收到货' }}
-        </text>
+        <view class="option-grid">
+          <view
+            v-for="item in receiveStatusOptions"
+            :key="item.value"
+            class="option-grid__item"
+            :class="{ 'option-grid__item--active': receiveStatus === item.value }"
+            @tap="setReceiveStatus(item.value)"
+          >
+            <text class="option-grid__text">{{ item.label }}</text>
+          </view>
+        </view>
       </view>
-      <view class="form-item">
+      <view class="form-item form-item--column">
         <text class="form-item__label">售后类型</text>
-        <text class="form-item__value">
-          {{ refundType === 1 ? '退货退款' : '仅退款' }}
-        </text>
+        <view class="option-grid">
+          <view
+            v-for="item in refundTypeOptions"
+            :key="item.value"
+            class="option-grid__item"
+            :class="{ 'option-grid__item--active': refundType === item.value }"
+            @tap="setRefundType(item.value)"
+          >
+            <text class="option-grid__text">{{ item.label }}</text>
+          </view>
+        </view>
       </view>
       <!-- Reason picker -->
       <view class="form-item" @tap="onPickReason">
@@ -295,10 +452,16 @@ async function onSubmit() {
 
     <!-- Refund amount display -->
     <view class="amount-card">
-      <text class="amount-card__label">预计退款金额</text>
+      <view>
+        <text class="amount-card__label">预计退款金额</text>
+        <text class="amount-card__hint">以后端实时计算为准</text>
+      </view>
       <view class="amount-card__value-wrap">
-        <text class="amount-card__symbol">{{ '¥' }}</text>
-        <text class="amount-card__value">{{ refundAmount }}</text>
+        <text v-if="showRefundAmountSymbol" class="amount-card__symbol">{{ '¥' }}</text>
+        <text
+          class="amount-card__value"
+          :class="{ 'amount-card__value--pending': !showRefundAmountSymbol }"
+        >{{ refundAmountText }}</text>
       </view>
     </view>
 
@@ -326,8 +489,6 @@ async function onSubmit() {
 
 // ---- Product card ----
 .product-card {
-  display: flex;
-  gap: $mb-spacing-md;
   padding: $mb-spacing-lg;
   margin: $mb-spacing-sm 0 0;
   background: $mb-color-bg;
@@ -335,6 +496,38 @@ async function onSubmit() {
   border: 1rpx solid $mb-color-divider;
   margin-left: 0;
   margin-right: 0;
+}
+
+.product-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: $mb-spacing-md;
+  margin-bottom: $mb-spacing-md;
+}
+
+.product-card__title {
+  font-size: $mb-font-md;
+  font-weight: 700;
+  color: $mb-color-text-title;
+}
+
+.product-card__summary {
+  flex-shrink: 0;
+  font-size: $mb-font-sm;
+  color: $mb-color-text-secondary;
+}
+
+.product-card__item {
+  display: flex;
+  gap: $mb-spacing-md;
+  padding: $mb-spacing-md 0;
+  border-top: 1rpx solid $mb-color-divider;
+}
+
+.product-card__header + .product-card__item {
+  border-top: 0;
+  padding-top: 0;
 }
 
 .product-card__image {
@@ -475,6 +668,44 @@ async function onSubmit() {
   font-weight: 300;
 }
 
+// ---- Option buttons ----
+.option-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: $mb-spacing-md;
+  width: 100%;
+}
+
+.option-grid__item {
+  height: 76rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: $mb-radius-md;
+  border: 1rpx solid $mb-color-border;
+  background: $mb-color-bg;
+  transition: opacity 0.15s;
+
+  &:active {
+    opacity: 0.82;
+  }
+}
+
+.option-grid__item--active {
+  border-color: rgba(13, 80, 213, 0.45);
+  background: rgba(13, 80, 213, 0.08);
+}
+
+.option-grid__text {
+  font-size: $mb-font-md;
+  font-weight: 600;
+  color: $mb-color-text-secondary;
+}
+
+.option-grid__item--active .option-grid__text {
+  color: $mb-color-primary;
+}
+
 // ---- Textarea ----
 .form-textarea {
   width: 100%;
@@ -567,8 +798,16 @@ async function onSubmit() {
 }
 
 .amount-card__label {
+  display: block;
   font-size: $mb-font-md;
   color: $mb-color-text-secondary;
+}
+
+.amount-card__hint {
+  display: block;
+  margin-top: 6rpx;
+  font-size: $mb-font-xs;
+  color: $mb-color-text-tertiary;
 }
 
 .amount-card__value-wrap {
@@ -588,6 +827,12 @@ async function onSubmit() {
   font-weight: 700;
   color: $mb-color-text-title;
   line-height: 1.2;
+}
+
+.amount-card__value--pending {
+  font-size: $mb-font-sm;
+  font-weight: 500;
+  color: $mb-color-text-tertiary;
 }
 
 // ---- Submit button ----

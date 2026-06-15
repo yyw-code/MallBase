@@ -135,6 +135,44 @@ final class RefundServiceTest extends TestCase
         $this->service->apply(1, $payload);
     }
 
+    public function testApplyBatchRejectsZeroUserId(): void
+    {
+        $this->expectException(BusinessException::class);
+        $this->expectExceptionMessage('用户未登录');
+
+        $this->service->applyBatch(0, $this->validBatchApplyPayload());
+    }
+
+    public function testApplyBatchRejectsEmptyItems(): void
+    {
+        $this->expectException(BusinessException::class);
+        $this->expectExceptionMessage('请选择要申请售后的商品');
+
+        $payload = $this->validBatchApplyPayload();
+        $payload['items'] = [];
+        $this->service->applyBatch(1, $payload);
+    }
+
+    public function testApplyBatchRejectsInvalidQuantity(): void
+    {
+        $this->expectException(BusinessException::class);
+        $this->expectExceptionMessage('申请数量必须大于 0');
+
+        $payload = $this->validBatchApplyPayload();
+        $payload['items'][0]['quantity'] = 0;
+        $this->service->applyBatch(1, $payload);
+    }
+
+    public function testApplyBatchRejectsDuplicateItems(): void
+    {
+        $this->expectException(BusinessException::class);
+        $this->expectExceptionMessage('同一订单商品不能重复选择');
+
+        $payload = $this->validBatchApplyPayload();
+        $payload['items'][] = ['order_item_id' => 1, 'quantity' => 1];
+        $this->service->applyBatch(1, $payload);
+    }
+
     /**
      * 所有 RefundReason 枚举值都应通过 reason 校验
      *
@@ -203,14 +241,20 @@ final class RefundServiceTest extends TestCase
         $this->assertSame('0.30', $result);
     }
 
-    public function testCalcRefundAmountRejectsZeroPaidAmount(): void
+    public function testCalcRefundAmountAllowsZeroOrderPaidAmount(): void
     {
-        $this->expectException(BusinessException::class);
-        $this->expectExceptionMessage('订单可退金额不足');
-
         $order = $this->validRefundOrder('100.00', '100.00', '0.00');
         $item = ['pay_amount' => '0.00', 'quantity' => 1, 'refunded_quantity' => 0];
-        $this->invokePrivate('calcRefundAmount', [$order, $item, 1]);
+        $result = $this->invokePrivate('calcRefundAmount', [$order, $item, 1]);
+        $this->assertSame('0.00', $result);
+    }
+
+    public function testCalcRefundAmountAllowsZeroItemPaidAmount(): void
+    {
+        $order = $this->validRefundOrder('100.00', '99.99', '0.01');
+        $item = ['pay_amount' => '0.00', 'quantity' => 1, 'refunded_quantity' => 0];
+        $result = $this->invokePrivate('calcRefundAmount', [$order, $item, 1]);
+        $this->assertSame('0.00', $result);
     }
 
     // ====================== assertQuantityLimit ======================
@@ -447,6 +491,22 @@ final class RefundServiceTest extends TestCase
             'type'          => RefundOrderStatus::TYPE_REFUND_ONLY,
             'reason'        => RefundReason::QUALITY_ISSUE,
             'remark'        => '测试备注',
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function validBatchApplyPayload(): array
+    {
+        return [
+            'items' => [
+                ['order_item_id' => 1, 'quantity' => 1],
+            ],
+            'type' => RefundOrderStatus::TYPE_REFUND_ONLY,
+            'receive_status' => RefundOrderStatus::RECEIVE_NOT_RECEIVED,
+            'reason' => RefundReason::QUALITY_ISSUE,
+            'remark' => '测试备注',
         ];
     }
 

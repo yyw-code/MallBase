@@ -133,6 +133,125 @@ class RefundService extends BaseService
     }
 
     /**
+     * 买家批量发起售后申请
+     *
+     * 批量只聚合请求与事务边界，仍保持“一条订单明细一张售后单”。
+     *
+     * @param int                  $userId
+     * @param array<string, mixed> $payload 请求参数：items / type / receive_status / reason / remark
+     *
+     * @return array{total:int, list:array<int, array{id:int, sn:string, status:int, refund_amount:string}>}
+     */
+    public function applyBatch(int $userId, array $payload): array
+    {
+        $this->assertUserId($userId);
+
+        $items = $this->normalizeBatchItems($payload['items'] ?? null);
+        $type = (int) ($payload['type'] ?? RefundOrderStatus::TYPE_REFUND_ONLY);
+        $receiveStatus = (int) ($payload['receive_status'] ?? RefundOrderStatus::RECEIVE_NOT_RECEIVED);
+        $reason = (string) ($payload['reason'] ?? '');
+        $remark = isset($payload['remark']) && $payload['remark'] !== ''
+            ? mb_substr((string) $payload['remark'], 0, 255)
+            : null;
+
+        if (!in_array($type, [RefundOrderStatus::TYPE_REFUND_ONLY, RefundOrderStatus::TYPE_RETURN_REFUND], true)) {
+            throw new BusinessException('售后类型不合法');
+        }
+        if (!in_array($receiveStatus, [RefundOrderStatus::RECEIVE_NOT_RECEIVED, RefundOrderStatus::RECEIVE_RECEIVED], true)) {
+            throw new BusinessException('收货状态不合法');
+        }
+        if (!RefundReason::isValid($reason)) {
+            throw new BusinessException('售后原因不合法');
+        }
+
+        $prepared = [];
+        $batchOrderId = null;
+        $remainingCentsByOrder = [];
+
+        foreach ($items as $row) {
+            $orderItemId = $row['order_item_id'];
+            $quantity = $row['quantity'];
+
+            [$order, $item] = $this->assertOwnedOrderItem($userId, $orderItemId);
+            $orderId = (int) ($order['id'] ?? 0);
+            if ($batchOrderId === null) {
+                $batchOrderId = $orderId;
+            } elseif ($batchOrderId !== $orderId) {
+                throw new BusinessException('售后商品必须属于同一订单');
+            }
+
+            $this->assertOrderRefundable($order);
+            $this->assertRefundScenario($order, $type, $receiveStatus);
+            $this->assertQuantityLimit($item, $quantity);
+            $this->assertNoActiveRefund($orderItemId);
+
+            if (!isset($remainingCentsByOrder[$orderId])) {
+                $remainingCentsByOrder[$orderId] = $this->remainingRefundableCents(
+                    $orderId,
+                    $this->orderGoodsPaidCents($order),
+                );
+            }
+
+            $refundCents = $this->decimalToCents($this->calcRefundAmount($order, $item, $quantity));
+            $refundCents = min($refundCents, $remainingCentsByOrder[$orderId]);
+            $remainingCentsByOrder[$orderId] = max(0, $remainingCentsByOrder[$orderId] - $refundCents);
+
+            $prepared[] = [
+                'order_id'      => $orderId,
+                'order_item_id' => $orderItemId,
+                'quantity'      => $quantity,
+                'refund_amount' => $this->centsToDecimal($refundCents),
+                'intercept_status' => $this->defaultInterceptStatus((int) $order['status'], $type, $receiveStatus),
+            ];
+        }
+
+        /** @var RefundSnGenerator $snGen */
+        $snGen = app()->make(RefundSnGenerator::class);
+        foreach ($prepared as &$row) {
+            $row['sn'] = $snGen->next();
+        }
+        unset($row);
+
+        /** @var array<int, RefundOrder> $refunds */
+        $refunds = $this->transaction(function () use (
+            $prepared, $userId, $type, $receiveStatus, $reason, $remark
+        ) {
+            $rows = [];
+            foreach ($prepared as $row) {
+                /** @var RefundOrder $refund */
+                $refund = $this->model()->create([
+                    'sn'            => $row['sn'],
+                    'order_id'      => $row['order_id'],
+                    'order_item_id' => $row['order_item_id'],
+                    'user_id'       => $userId,
+                    'type'          => $type,
+                    'receive_status'=> $receiveStatus,
+                    'status'        => RefundOrderStatus::PENDING,
+                    'quantity'      => $row['quantity'],
+                    'refund_amount' => $row['refund_amount'],
+                    'reason'        => $reason,
+                    'remark'        => $remark,
+                    'intercept_status' => $row['intercept_status'],
+                ]);
+                $rows[] = $refund;
+            }
+            return $rows;
+        });
+
+        $list = array_map(static fn(RefundOrder $refund): array => [
+            'id'            => (int) $refund->id,
+            'sn'            => (string) $refund->sn,
+            'status'        => (int) $refund->status,
+            'refund_amount' => (string) $refund->refund_amount,
+        ], $refunds);
+
+        return [
+            'total' => count($list),
+            'list'  => $list,
+        ];
+    }
+
+    /**
      * 买家取消（撤销）售后申请（仅 PENDING 可撤销）
      */
     public function cancel(int $userId, int $refundId): void
@@ -262,6 +381,48 @@ class RefundService extends BaseService
     }
 
     // ---------------- 内部：校验 / 装配 ----------------
+
+    /**
+     * @param mixed $items
+     * @return array<int, array{order_item_id:int, quantity:int}>
+     */
+    private function normalizeBatchItems(mixed $items): array
+    {
+        if (!is_array($items) || $items === []) {
+            throw new BusinessException('请选择要申请售后的商品');
+        }
+        if (count($items) > 50) {
+            throw new BusinessException('单次最多选择 50 个售后商品');
+        }
+
+        $seen = [];
+        $normalized = [];
+        foreach ($items as $row) {
+            if (!is_array($row)) {
+                throw new BusinessException('售后商品参数不合法');
+            }
+
+            $orderItemId = (int) ($row['order_item_id'] ?? $row['id'] ?? 0);
+            $quantity = (int) ($row['quantity'] ?? 0);
+            if ($orderItemId <= 0) {
+                throw new BusinessException('订单项参数不合法');
+            }
+            if ($quantity <= 0) {
+                throw new BusinessException('申请数量必须大于 0');
+            }
+            if (isset($seen[$orderItemId])) {
+                throw new BusinessException('同一订单商品不能重复选择');
+            }
+
+            $seen[$orderItemId] = true;
+            $normalized[] = [
+                'order_item_id' => $orderItemId,
+                'quantity' => $quantity,
+            ];
+        }
+
+        return $normalized;
+    }
 
     /**
      * 校验订单项归属并返回 [订单, 订单项]
@@ -429,19 +590,22 @@ class RefundService extends BaseService
     {
         $goodsPaidCents = $this->orderGoodsPaidCents($order);
         if ($goodsPaidCents <= 0) {
-            throw new BusinessException('订单可退金额不足');
+            return '0.00';
         }
 
         $itemPaidCents = $this->decimalToCents((string) ($item['pay_amount'] ?? '0.00'));
         $itemQuantity = (int) ($item['quantity'] ?? 0);
-        if ($itemPaidCents <= 0 || $itemQuantity <= 0) {
+        if ($itemQuantity <= 0) {
             throw new BusinessException('退款金额不合法');
+        }
+        if ($itemPaidCents <= 0) {
+            return '0.00';
         }
 
         $itemOccupiedCents = $this->itemRefundOccupiedCents((int) ($item['id'] ?? 0));
         $itemRemainingCents = max(0, $itemPaidCents - $itemOccupiedCents);
         if ($itemRemainingCents <= 0) {
-            throw new BusinessException('订单可退金额不足');
+            return '0.00';
         }
 
         $remainingQuantity = max(0, $itemQuantity - (int) ($item['refunded_quantity'] ?? 0));
@@ -457,7 +621,7 @@ class RefundService extends BaseService
         $remainingCents = $this->remainingRefundableCents((int) ($order['id'] ?? 0), $goodsPaidCents);
         $refundCents = min($baseRefundCents, $itemRemainingCents, $remainingCents);
         if ($refundCents <= 0) {
-            throw new BusinessException('订单可退金额不足');
+            return '0.00';
         }
 
         return $this->centsToDecimal($refundCents);

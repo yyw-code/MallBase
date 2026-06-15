@@ -53,6 +53,34 @@ class RefundOrderController extends BaseController
     }
 
     /**
+     * 批量申请售后
+     *
+     * body:
+     *  - items: array<int, array{order_item_id:int, quantity:int}>
+     *  - type: int            0 仅退款 / 1 退货退款
+     *  - receive_status: int  0 未收到货 / 1 已收到货
+     *  - reason: string       RefundReason 枚举值
+     *  - remark: string       可选 ≤ 255
+     */
+    public function batchApply()
+    {
+        $userId = (int) ($this->request->user_id ?? 0);
+        $data = $this->request->param(['items', 'type', 'receive_status', 'reason', 'remark']);
+        $this->validate($data, RefundValidate::class . '.batchApply');
+
+        $payload = [
+            'items'         => is_array($data['items'] ?? null) ? $data['items'] : [],
+            'type'          => isset($data['type']) ? (int) $data['type'] : RefundOrderStatus::TYPE_REFUND_ONLY,
+            'receive_status'=> isset($data['receive_status']) ? (int) $data['receive_status'] : RefundOrderStatus::RECEIVE_NOT_RECEIVED,
+            'reason'        => (string) ($data['reason'] ?? ''),
+            'remark'        => isset($data['remark']) && $data['remark'] !== '' ? (string) $data['remark'] : null,
+        ];
+
+        $result = $this->service()->applyBatch($userId, $payload);
+        return $this->success($result, '申请成功');
+    }
+
+    /**
      * 撤销售后申请（仅 PENDING 可撤销）
      */
     public function cancel($id)

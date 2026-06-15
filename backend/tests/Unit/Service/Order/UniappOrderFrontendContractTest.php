@@ -21,7 +21,6 @@ final class UniappOrderFrontendContractTest extends TestCase
             $this->assertStringContainsString('isPendingPayExpired', $source);
             $this->assertStringContainsString('can_refund', $source);
             $this->assertStringContainsString('after_sale_tag_text', $source);
-            $this->assertStringContainsString('refundable_amount', $source);
             $this->assertStringContainsString('refundable_quantity', $source);
             $this->assertStringContainsString('已有进行中的售后申请', $source);
             $this->assertStringContainsString('订单已超过售后申请期限', $source);
@@ -131,7 +130,61 @@ final class UniappOrderFrontendContractTest extends TestCase
         $this->assertStringContainsString('refundable_amount', $source);
         $this->assertStringContainsString('getOrderDetail', $source);
         $this->assertStringContainsString('fetchRefundableInfo', $source);
-        $this->assertStringContainsString('if (refundableAmount.value) return refundableAmount.value', $source);
+        $this->assertStringContainsString('selectedItemInputs', $source);
+        $this->assertStringContainsString('exactBackendAmount', $source);
+        $this->assertStringContainsString('applyRefundBatch', $source);
+        $this->assertStringContainsString('以后端实时计算为准', $source);
+        $this->assertStringNotContainsString("query?.refundable_amount", $source);
+        $this->assertStringNotContainsString('price.value * quantity.value', $source);
+    }
+
+    public function testOrderRefundEntryUsesItemSheetInsteadOfSystemActionSheet(): void
+    {
+        $listSource = file_get_contents(__DIR__ . '/../../../../../frontend/uniapp/pages/order/index.vue');
+        $detailSource = file_get_contents(__DIR__ . '/../../../../../frontend/uniapp/pages-sub/order/detail.vue');
+        $sheetSource = file_get_contents(__DIR__ . '/../../../../../frontend/uniapp/components/mb-refund-item-sheet/mb-refund-item-sheet.vue');
+
+        $this->assertIsString($listSource);
+        $this->assertIsString($detailSource);
+        $this->assertIsString($sheetSource);
+
+        foreach ([$listSource, $detailSource] as $source) {
+            $this->assertStringContainsString('mb-refund-item-sheet', $source);
+            $this->assertStringContainsString('openRefundSheet', $source);
+            $this->assertStringContainsString('@confirm="onRefundItemsConfirm"', $source);
+            $this->assertStringContainsString('selected_items=', $source);
+            $this->assertStringNotContainsString('uni.showActionSheet', $source);
+            $this->assertStringNotContainsString('receive_status=', $source);
+            $this->assertStringNotContainsString('refundable_amount=', $source);
+        }
+
+        $this->assertStringContainsString('选择售后商品', $sheetSource);
+        $this->assertStringContainsString('勾选商品并选择申请数量', $sheetSource);
+        $this->assertStringContainsString('mb-refund-sheet__stepper', $sheetSource);
+        $this->assertStringContainsString('全选可退', $sheetSource);
+    }
+
+    public function testRefundBatchApplyApiContract(): void
+    {
+        $apiSource = file_get_contents(__DIR__ . '/../../../../../frontend/uniapp/api/order/refund.js');
+        $routeSource = file_get_contents(__DIR__ . '/../../../../../backend/route/api/client/refund.php');
+        $controllerSource = file_get_contents(__DIR__ . '/../../../../../backend/app/controller/client/order/RefundOrderController.php');
+        $serviceSource = file_get_contents(__DIR__ . '/../../../../../backend/app/service/client/order/RefundService.php');
+        $validateSource = file_get_contents(__DIR__ . '/../../../../../backend/app/validate/client/order/RefundValidate.php');
+
+        $this->assertIsString($apiSource);
+        $this->assertIsString($routeSource);
+        $this->assertIsString($controllerSource);
+        $this->assertIsString($serviceSource);
+        $this->assertIsString($validateSource);
+
+        $this->assertStringContainsString('applyRefundBatch', $apiSource);
+        $this->assertStringContainsString('/client/api/refund/batchApply', $apiSource);
+        $this->assertStringContainsString("Route::post('batchApply', 'batchApply')", $routeSource);
+        $this->assertStringContainsString('public function batchApply()', $controllerSource);
+        $this->assertStringContainsString('applyBatch', $serviceSource);
+        $this->assertStringContainsString('normalizeBatchItems', $serviceSource);
+        $this->assertStringContainsString('sceneBatchApply', $validateSource);
     }
 
     public function testRefundFrontendExplainsLogisticsExceptionAsMerchantProcessing(): void
