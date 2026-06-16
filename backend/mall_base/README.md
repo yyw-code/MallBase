@@ -921,7 +921,6 @@ use mall_base\drivers\DriverManager;
 // 注册驱动
 DriverManager::register('sms', [
     'aliyun' => \app\driver\sms\AliyunSmsDriver::class,
-    'tencent' => \app\driver\sms\TencentSmsDriver::class,
 ]);
 
 // 设置默认驱动

@@ -16,7 +16,6 @@ use mall_base\base\BaseDriver;
  * // 注册短信驱动
  * \mall_base\DriverManager::register('sms', [
  *     'aliyun' => \mall_base\drivers\sms\AliyunSmsDriver::class,
- *     'tencent' => \mall_base\drivers\sms\TencentSmsDriver::class,
  * ]);
  * 
  * // 设置默认驱动
@@ -57,30 +56,6 @@ abstract class BaseSmsDriver extends BaseDriver
      * @return bool
      */
     abstract public function sendNotice(string $phone, array $params): bool;
-
-    /**
-     * 是否支持平台侧验证码校验(PNVS 等平台自管验证码生命周期)
-     *
-     * 返回 true 时 SmsService 不会自动生成码和存缓存,
-     * verifyCode() 也会委托给驱动而非走本地缓存校验
-     */
-    public function supportsCodeVerification(): bool
-    {
-        return false;
-    }
-
-    /**
-     * 平台侧校验验证码(仅 supportsCodeVerification()=true 时调用)
-     *
-     * @param string $phone 手机号
-     * @param string $code  用户输入的验证码
-     * @return bool 校验是否通过
-     */
-    public function verifyCode(string $phone, string $code): bool
-    {
-        $this->setError('当前驱动不支持平台侧验证码校验');
-        return false;
-    }
 
     /**
      * 验证手机号格式

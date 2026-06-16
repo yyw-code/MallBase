@@ -33,7 +33,7 @@ class ProviderController extends BaseController
 
     public function create()
     {
-        $data = $this->request->param(['name', 'driver', 'access_key_id', 'access_key_secret', 'region', 'scheme_name', 'is_default', 'status', 'remark', 'sort']);
+        $data = $this->request->param(['name', 'driver', 'access_key_id', 'access_key_secret', 'region', 'is_default', 'status', 'remark', 'sort']);
         $this->validate($data, SmsProviderValidate::class . '.create');
         $id = $this->service()->create($data);
         return $this->success(['id' => $id], '创建成功');
@@ -41,7 +41,7 @@ class ProviderController extends BaseController
 
     public function update($id)
     {
-        $data = $this->request->param(['name', 'driver', 'access_key_id', 'access_key_secret', 'region', 'scheme_name', 'is_default', 'status', 'remark', 'sort']);
+        $data = $this->request->param(['name', 'driver', 'access_key_id', 'access_key_secret', 'region', 'is_default', 'status', 'remark', 'sort']);
         $this->validate($data, SmsProviderValidate::class . '.update');
         $this->service()->update((int) $id, $data);
         return $this->success(null, '更新成功');

@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "a19d9682a7b162b831f667f15d801e92",
+    "content-hash": "55499df406f7095e1545932e37000754",
     "packages": [
         {
             "name": "adbario/php-dot-notation",
@@ -204,47 +204,6 @@
                 "source": "https://github.com/aliyun/tea-php"
             },
             "time": "2025-12-15T10:15:24+00:00"
-        },
-        {
-            "name": "alibabacloud/dypnsapi-20170525",
-            "version": "2.0.0",
-            "source": {
-                "type": "git",
-                "url": "https://github.com/alibabacloud-sdk-php/dypnsapi-20170525.git",
-                "reference": "11b9f02779d2a24726886c186fe959192bb9926d"
-            },
-            "dist": {
-                "type": "zip",
-                "url": "https://api.github.com/repos/alibabacloud-sdk-php/dypnsapi-20170525/zipball/11b9f02779d2a24726886c186fe959192bb9926d",
-                "reference": "11b9f02779d2a24726886c186fe959192bb9926d",
-                "shasum": ""
-            },
-            "require": {
-                "alibabacloud/darabonba": "^1.0.0",
-                "alibabacloud/openapi-core": "^1.0.0",
-                "php": ">5.5"
-            },
-            "type": "library",
-            "autoload": {
-                "psr-4": {
-                    "AlibabaCloud\\SDK\\Dypnsapi\\V20170525\\": "src"
-                }
-            },
-            "notification-url": "https://packagist.org/downloads/",
-            "license": [
-                "Apache-2.0"
-            ],
-            "authors": [
-                {
-                    "name": "Alibaba Cloud SDK",
-                    "email": "sdk-team@alibabacloud.com"
-                }
-            ],
-            "description": "Alibaba Cloud Dypnsapi (20170525) SDK Library for PHP",
-            "support": {
-                "source": "https://github.com/alibabacloud-sdk-php/dypnsapi-20170525/tree/2.0.0"
-            },
-            "time": "2025-09-28T01:52:04+00:00"
         },
         {
             "name": "alibabacloud/dysmsapi-20170525",

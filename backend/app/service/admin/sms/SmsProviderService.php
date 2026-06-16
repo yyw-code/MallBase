@@ -120,11 +120,6 @@ class SmsProviderService extends BaseService
             throw new BusinessException('服务商不存在');
         }
 
-        // PNVS 驱动不实现 SmsTemplateManagerInterface,走单独的探测逻辑
-        if ((string) $provider->driver === SmsProvider::DRIVER_ALIYUN_PNVS) {
-            return $this->testPnvsConnection($provider);
-        }
-
         try {
             $manager = SmsDriverFactory::manager($provider);
             // 用不存在的签名探测,若返回 OK 或"签名不存在/非法"等业务错误,说明凭证可用
@@ -151,36 +146,11 @@ class SmsProviderService extends BaseService
     }
 
     /**
-     * PNVS 连通性探测:用无效手机号触发 API,凭证错误会在此暴露
-     */
-    private function testPnvsConnection(SmsProvider $provider): array
-    {
-        try {
-            $driver = SmsDriverFactory::driver($provider);
-            $driver->sendCode('00000000000', 'test', '');
-            return ['ok' => true, 'message' => '凭证可用'];
-        } catch (\Throwable $e) {
-            $message = $e->getMessage();
-            $credentialErrors = [
-                'InvalidAccessKeyId',
-                'SignatureDoesNotMatch',
-                'Forbidden.RAM',
-            ];
-            foreach ($credentialErrors as $keyword) {
-                if (str_contains($message, $keyword)) {
-                    return ['ok' => false, 'message' => $message];
-                }
-            }
-            return ['ok' => true, 'message' => '凭证可用(探测正常)'];
-        }
-    }
-
-    /**
      * 入参清洗 + 凭证加密
      */
     private function normalize(array $data, bool $isCreate): array
     {
-        $allowed = ['name', 'driver', 'access_key_id', 'access_key_secret', 'region', 'scheme_name', 'is_default', 'status', 'remark', 'sort'];
+        $allowed = ['name', 'driver', 'access_key_id', 'access_key_secret', 'region', 'is_default', 'status', 'remark', 'sort'];
         $payload = array_intersect_key($data, array_flip($allowed));
 
         $payload['region'] = $payload['region'] ?? 'cn-hangzhou';

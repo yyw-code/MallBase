@@ -10,7 +10,7 @@ use mall_base\exception\SmsException;
  * 短信模板/签名远端管理契约
  *
  * 实现方需要把"创建/修改/删除/查询模板与签名"封装成本地接口,
- * 屏蔽阿里云/腾讯云 SDK 的细节差异。
+ * 屏蔽具体短信平台 SDK 的细节差异。
  *
  * 异常约定:
  *  - 全部抛出 SmsException(包含远端 code/message),不返回 false。

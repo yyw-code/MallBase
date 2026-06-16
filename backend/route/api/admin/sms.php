@@ -46,20 +46,11 @@ Route::group('sms/sign', function () {
     Route::get('info/:id', 'info')->name('SmsSignInfo')->option([
         '_alias' => '详情', '_desc' => '签名详情', '_auth' => true,
     ]);
-    Route::post('create', 'create')->name('SmsSignCreate')->option([
-        '_alias' => '创建', '_desc' => '提交签名审核(带资质文件)', '_auth' => true, '_type' => Permission::TYPE_BUTTON,
-    ]);
     Route::post('import', 'import')->name('SmsSignImport')->option([
-        '_alias' => '导入', '_desc' => '从阿里云导入已审核签名', '_auth' => true, '_type' => Permission::TYPE_BUTTON,
+        '_alias' => '导入', '_desc' => '本地登记短信签名', '_auth' => true, '_type' => Permission::TYPE_BUTTON,
     ]);
     Route::delete('delete/:id', 'delete')->name('SmsSignDelete')->option([
-        '_alias' => '删除', '_desc' => '删除签名(同时撤回远端)', '_auth' => true, '_type' => Permission::TYPE_BUTTON,
-    ]);
-    Route::post('syncStatus/:id', 'syncStatus')->name('SmsSignSyncStatus')->option([
-        '_alias' => '同步状态', '_desc' => '拉取阿里云审核状态', '_auth' => true, '_type' => Permission::TYPE_BUTTON,
-    ]);
-    Route::post('syncAll', 'syncAll')->name('SmsSignSyncAll')->option([
-        '_alias' => '批量同步', '_desc' => '同步指定服务商下所有签名状态', '_auth' => true, '_type' => Permission::TYPE_BUTTON,
+        '_alias' => '删除', '_desc' => '删除本地签名', '_auth' => true, '_type' => Permission::TYPE_BUTTON,
     ]);
 })->prefix('admin.sms.SignController/')
   ->option([
@@ -84,9 +75,6 @@ Route::group('sms/template', function () {
     ]);
     Route::post('create', 'create')->name('SmsTemplateCreate')->option([
         '_alias' => '创建', '_desc' => '提交模板审核', '_auth' => true, '_type' => Permission::TYPE_BUTTON,
-    ]);
-    Route::post('import', 'import')->name('SmsTemplateImport')->option([
-        '_alias' => '导入', '_desc' => '从阿里云导入已审核模板', '_auth' => true, '_type' => Permission::TYPE_BUTTON,
     ]);
     Route::put('update/:id', 'update')->name('SmsTemplateUpdate')->option([
         '_alias' => '更新', '_desc' => '修改模板(自动触发重新审核)', '_auth' => true, '_type' => Permission::TYPE_BUTTON,
@@ -126,6 +114,12 @@ Route::group('sms/scene', function () {
     ]);
     Route::post('bind', 'bind')->name('SmsSceneBind')->option([
         '_alias' => '绑定', '_desc' => '为场景指定服务商/模板/签名', '_auth' => true, '_type' => Permission::TYPE_BUTTON,
+    ]);
+    Route::post('saveDraft', 'saveDraft')->name('SmsSceneSaveDraft')->option([
+        '_alias' => '保存草稿', '_desc' => '保存场景侧模板草稿内容', '_auth' => true, '_type' => Permission::TYPE_BUTTON,
+    ]);
+    Route::post('createTemplateAndBind', 'createTemplateAndBind')->name('SmsSceneCreateTemplateAndBind')->option([
+        '_alias' => '创建模板并绑定', '_desc' => '根据场景模板草稿创建模板并绑定场景', '_auth' => true, '_type' => Permission::TYPE_BUTTON,
     ]);
     Route::post('unbind', 'unbind')->name('SmsSceneUnbind')->option([
         '_alias' => '取消绑定', '_desc' => '解除场景绑定', '_auth' => true, '_type' => Permission::TYPE_BUTTON,

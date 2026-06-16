@@ -68,8 +68,8 @@ class SmsTemplateService extends BaseService
     /**
      * 校验并返回模板要关联的签名 ID
      *
-     * 远端管理驱动(普通阿里云)要求模板必须关联一个本服务商下的签名:
-     * Aliyun CreateSmsTemplate/UpdateSmsTemplate 强制要求 RelatedSignName。
+     * 模板建议关联一个本服务商下的签名:
+     * 提交阿里云时 CreateSmsTemplate/UpdateSmsTemplate 需要 RelatedSignName。
      * 签名缺失或跨服务商时抛 BusinessException。
      */
     private function resolveSignId(int $providerId, int $signId): int
@@ -84,89 +84,136 @@ class SmsTemplateService extends BaseService
         return $signId;
     }
 
-    /**
-     * 创建本地记录 + 派发远端同步任务
-     *
-     * 流程分支:
-     *  - 支持远端管理的驱动(普通阿里云短信):本地行先落库为 submitting,Aliyun AddSmsTemplate
-     *    通过 SmsTemplateSyncJob 异步派发。失败时 Job 把 audit_status 回退为 local_only 并写
-     *    audit_reason,用户可在列表手动「同步」重试。
-     *  - 不支持远端管理的驱动(PNVS,模板由阿里云预置):
-     *      template_code 必填(用户在控制台「赠送模板配置」查到),
-     *      同一服务商下不可重复,直接入库为 local_only
-     */
-    public function create(array $data): int
+    private function resolveSignName(int $signId): string
     {
-        $provider = $this->model(SmsProvider::class)->find($data['provider_id']);
+        $signName = (string) $this->model(SmsSign::class)
+            ->where('id', $signId)
+            ->value('sign_name');
+        if ($signName === '') {
+            throw new BusinessException('关联签名不存在');
+        }
+        return $signName;
+    }
+
+    private function shouldSubmitToPlatform(array $data, bool $default = true): bool
+    {
+        if (!array_key_exists('submit_to_platform', $data)) {
+            return $default;
+        }
+
+        return in_array($data['submit_to_platform'], [true, 1, '1', 'true', 'on'], true);
+    }
+
+    private function ensureTemplateCodeUnique(int $providerId, string $templateCode, int $excludeId = 0): void
+    {
+        $query = $this->model()
+            ->where('provider_id', $providerId)
+            ->where('template_code', $templateCode);
+        if ($excludeId > 0) {
+            $query->where('id', '<>', $excludeId);
+        }
+        if ($query->find() !== null) {
+            throw new BusinessException("模板编码 [{$templateCode}] 已存在于当前服务商");
+        }
+    }
+
+    /**
+     * 校验并构造模板创建数据。仅返回可落库 payload,不执行数据库写入。
+     *
+     * @return array<string, mixed>
+     */
+    public function prepareCreatePayload(array $data, bool $defaultSubmitToPlatform = true): array
+    {
+        $providerId = (int) ($data['provider_id'] ?? 0);
+        $provider = $this->model(SmsProvider::class)->find($providerId);
         if ($provider === null) {
             throw new BusinessException('服务商不存在');
         }
 
+        $templateName = trim((string) ($data['template_name'] ?? ''));
+        if ($templateName === '') {
+            throw new BusinessException('模板名称必填');
+        }
+
+        $templateContent = (string) ($data['template_content'] ?? '');
+        if (trim($templateContent) === '') {
+            throw new BusinessException('模板内容必填');
+        }
+
+        $signId = $this->resolveSignId($providerId, (int) ($data['sign_id'] ?? 0));
+        $remark = trim((string) ($data['remark'] ?? ''));
+        if ($remark === '') {
+            $remark = $templateName;
+        }
+
         $payload = [
-            'provider_id' => (int) $data['provider_id'],
-            // PNVS 模板无签名概念,保持 NULL;远端管理驱动在下方分支校验并写入
-            'sign_id' => null,
-            'template_name' => trim($data['template_name']),
+            'provider_id' => $providerId,
+            'sign_id' => $signId,
+            'template_name' => $templateName,
             'template_type' => (int) ($data['template_type'] ?? 0),
-            'template_content' => (string) ($data['template_content'] ?? ''),
-            'remark' => $data['remark'] ?? null,
-            // NULL 表示尚未分配远端编码;唯一键 uk_provider_template_code 对 NULL 不判重,
-            // 同一服务商下允许多条 submitting 模板并存
+            'template_content' => $templateContent,
+            'remark' => $remark,
             'template_code' => null,
             'audit_status' => SmsTemplate::AUDIT_LOCAL_ONLY,
             'audit_reason' => null,
+            'last_synced_at' => null,
         ];
 
-        if (!SmsDriverFactory::supportsRemoteSignManagement($provider)) {
-            // PNVS 等无远端模板管理 API 的驱动:
-            //  - template_code 必填且同服务商下唯一
-            //  - template_content 必填(用于场景绑定时校验占位符 ⊆ 场景白名单)
-            $templateCode = trim((string) ($data['template_code'] ?? ''));
-            if ($templateCode === '') {
-                throw new BusinessException('PNVS 模板编码必填,请在号码认证控制台查看赠送模板编码后输入');
+        if ($this->shouldSubmitToPlatform($data, $defaultSubmitToPlatform)) {
+            if (!SmsDriverFactory::supportsRemoteSignManagement($provider)) {
+                throw new BusinessException('当前服务商不支持提交平台审核');
             }
-            if ($payload['template_content'] === '') {
-                throw new BusinessException('PNVS 模板内容必填,请抄录阿里云控制台显示的模板原文,系统据此校验场景参数是否匹配');
-            }
-            $exists = $this->model()
-                ->where('provider_id', $payload['provider_id'])
-                ->where('template_code', $templateCode)
-                ->find();
-            if ($exists !== null) {
-                throw new BusinessException("模板编码 [{$templateCode}] 已存在于当前服务商,请勿重复录入");
-            }
-            $payload['template_code'] = $templateCode;
-            $payload['audit_reason'] = 'PNVS 系统赠送模板,无需远端审核';
-
-            $row = $this->model();
-            $row->save($payload);
-            return (int) $row->id;
+            $this->resolveSignName($signId);
+            $payload['audit_status'] = SmsTemplate::AUDIT_SUBMITTING;
+            $payload['audit_reason'] = '已提交平台同步队列';
+            return $payload;
         }
 
-        if ($payload['template_content'] === '') {
-            throw new BusinessException('模板内容必填');
+        $templateCode = trim((string) ($data['template_code'] ?? ''));
+        if ($templateCode === '') {
+            throw new BusinessException('本地登记模板需填写平台模板编码');
         }
-        // 阿里云新接口 CreateSmsTemplate 强制要求 RelatedSignName,
-        // 由用户在表单显式选择签名,异步 Job 据 sign_id 反查签名名称
-        $payload['sign_id'] = $this->resolveSignId(
-            $payload['provider_id'],
-            (int) ($data['sign_id'] ?? 0),
-        );
-        // remark 兜底:Aliyun AddSmsTemplate 要求 Remark 非空,空值时用模板名补
-        $remark = trim((string) ($payload['remark'] ?? ''));
-        if ($remark === '') {
-            $remark = $payload['template_name'];
-        }
-        $payload['remark'] = $remark;
-        $payload['audit_status'] = SmsTemplate::AUDIT_SUBMITTING;
-        $payload['audit_reason'] = null;
+        $this->ensureTemplateCodeUnique($providerId, $templateCode);
+
+        $payload['template_code'] = $templateCode;
+        $payload['audit_status'] = SmsTemplate::AUDIT_LOCAL_ONLY;
+        $payload['audit_reason'] = '本地登记模板,未提交平台审核';
+        return $payload;
+    }
+
+    /**
+     * 创建短信模板。
+     *
+     * submit_to_platform=1 时本地先保存为 submitting,再派发队列提交平台;
+     * submit_to_platform=0 时仅本地登记平台模板编码。
+     */
+    public function create(array $data): int
+    {
+        $payload = $this->prepareCreatePayload($data);
 
         $row = $this->model();
         $row->save($payload);
-
-        JobQueue::push(SmsTemplateSyncJob::class, ['templateId' => (int) $row->id]);
-
+        $this->dispatchSyncIfSubmitting((int) $row->id, (string) $payload['audit_status']);
         return (int) $row->id;
+    }
+
+    public function dispatchSyncIfSubmitting(int $templateId, string $auditStatus): void
+    {
+        if ($templateId <= 0 || $auditStatus !== SmsTemplate::AUDIT_SUBMITTING) {
+            return;
+        }
+
+        try {
+            JobQueue::push(SmsTemplateSyncJob::class, ['templateId' => $templateId]);
+        } catch (Throwable $e) {
+            $this->model()
+                ->where('id', $templateId)
+                ->update([
+                    'audit_status' => SmsTemplate::AUDIT_LOCAL_ONLY,
+                    'audit_reason' => '平台同步队列派发失败:' . $e->getMessage(),
+                    'last_synced_at' => date('Y-m-d H:i:s'),
+                ]);
+        }
     }
 
     public function update(int $id, array $data): void
@@ -179,43 +226,23 @@ class SmsTemplateService extends BaseService
         if ($provider === null) {
             throw new BusinessException('服务商不存在');
         }
+        $templateName = trim((string) ($data['template_name'] ?? ''));
+        if ($templateName === '') {
+            throw new BusinessException('模板名称必填');
+        }
+        $templateContent = (string) ($data['template_content'] ?? $row->template_content);
+        if (trim($templateContent) === '') {
+            throw new BusinessException('模板内容必填');
+        }
 
         $newData = [
-            'template_name' => trim($data['template_name']),
+            'template_name' => $templateName,
             'template_type' => (int) ($data['template_type'] ?? $row->template_type),
-            'template_content' => (string) ($data['template_content'] ?? $row->template_content),
+            'template_content' => $templateContent,
             'remark' => $data['remark'] ?? null,
         ];
 
-        if (!SmsDriverFactory::supportsRemoteSignManagement($provider)) {
-            // PNVS:模板由阿里云预置,本地只维护引用信息;
-            // template_code 可更新但需同服务商下唯一;
-            // template_content 必填(发送时按其占位符构造 templateParam)
-            $newCode = isset($data['template_code']) ? trim((string) $data['template_code']) : (string) $row->template_code;
-            if ($newCode === '') {
-                throw new BusinessException('PNVS 模板编码必填');
-            }
-            if ($newData['template_content'] === '') {
-                throw new BusinessException('PNVS 模板内容必填,请抄录阿里云控制台显示的模板原文');
-            }
-            if ($newCode !== (string) $row->template_code) {
-                $dup = $this->model()
-                    ->where('provider_id', $row->provider_id)
-                    ->where('template_code', $newCode)
-                    ->where('id', '<>', $row->id)
-                    ->find();
-                if ($dup !== null) {
-                    throw new BusinessException("模板编码 [{$newCode}] 已存在于当前服务商,请勿重复录入");
-                }
-            }
-            $newData['template_code'] = $newCode;
-            $newData['audit_status'] = SmsTemplate::AUDIT_LOCAL_ONLY;
-            $newData['audit_reason'] = 'PNVS 系统赠送模板,无需远端审核';
-            $row->save($newData);
-            return;
-        }
-
-        // 远端管理驱动:模板必须关联签名;用户未传 sign_id 时沿用原值
+        // 模板必须关联签名;用户未传 sign_id 时沿用原值
         $signId = $this->resolveSignId(
             (int) $row->provider_id,
             (int) ($data['sign_id'] ?? $row->sign_id ?? 0),
@@ -229,30 +256,29 @@ class SmsTemplateService extends BaseService
         }
         $newData['remark'] = $remark;
 
-        // 已提交远端的模板才调修改接口;local_only / 失败重试(template_code 为 NULL)走"重新创建"路径
-        if ((string) $row->template_code !== '') {
-            try {
-                $manager = SmsDriverFactory::manager($provider);
-                // 阿里云新接口 UpdateSmsTemplate 必填 RelatedSignName,取用户所选签名
-                $newData['related_sign_name'] = (string) $this->model(SmsSign::class)
-                    ->where('id', $signId)
-                    ->value('sign_name');
-                $manager->modifyTemplate((string) $row->template_code, $newData);
-                $newData['audit_status'] = SmsTemplate::AUDIT_PENDING;
-                $newData['audit_reason'] = null;
-                $newData['last_synced_at'] = date('Y-m-d H:i:s');
-            } catch (Throwable $e) {
-                $newData['audit_reason'] = $e->getMessage();
+        if (!$this->shouldSubmitToPlatform($data, (string) $row->audit_status !== SmsTemplate::AUDIT_LOCAL_ONLY)) {
+            $templateCode = trim((string) ($data['template_code'] ?? $row->template_code));
+            if ($templateCode === '') {
+                throw new BusinessException('本地登记模板需填写平台模板编码');
             }
+            $this->ensureTemplateCodeUnique((int) $row->provider_id, $templateCode, (int) $row->id);
+
+            $newData['template_code'] = $templateCode;
+            $newData['audit_status'] = SmsTemplate::AUDIT_LOCAL_ONLY;
+            $newData['audit_reason'] = '本地登记模板,未提交平台审核';
             $row->save($newData);
             return;
         }
 
-        // template_code 为空 → 走异步派发,避免在 HTTP 请求里阻塞
+        if (!SmsDriverFactory::supportsRemoteSignManagement($provider)) {
+            throw new BusinessException('当前服务商不支持提交平台审核');
+        }
+
+        $this->resolveSignName($signId);
         $newData['audit_status'] = SmsTemplate::AUDIT_SUBMITTING;
-        $newData['audit_reason'] = null;
+        $newData['audit_reason'] = '已提交平台同步队列';
         $row->save($newData);
-        JobQueue::push(SmsTemplateSyncJob::class, ['templateId' => (int) $row->id]);
+        $this->dispatchSyncIfSubmitting((int) $row->id, SmsTemplate::AUDIT_SUBMITTING);
     }
 
     public function delete(int $id): void
@@ -262,7 +288,7 @@ class SmsTemplateService extends BaseService
             throw new BusinessException('模板不存在');
         }
 
-        if ((string) $row->template_code !== '') {
+        if ((string) $row->template_code !== '' && (string) $row->audit_status !== SmsTemplate::AUDIT_LOCAL_ONLY) {
             $provider = $this->model(SmsProvider::class)->find($row->provider_id);
             if ($provider !== null && SmsDriverFactory::supportsRemoteSignManagement($provider)) {
                 try {
@@ -278,54 +304,9 @@ class SmsTemplateService extends BaseService
     }
 
     /**
-     * 从阿里云导入已经存在并审核通过的模板(只查询,不调 AddSmsTemplate)
-     *
-     * 适用场景:
-     *  - 你在阿里云控制台已经申请并审核通过的模板,想接入 mallbase
-     *  - 旧线上数据迁移
-     *
-     * PNVS 服务商不支持导入:其模板由平台预置无 QuerySmsTemplate API,请走 create() 本地登记
-     */
-    public function importFromRemote(int $providerId, string $templateCode): int
-    {
-        $provider = $this->model(SmsProvider::class)->find($providerId);
-        if ($provider === null) {
-            throw new BusinessException('服务商不存在');
-        }
-        if (!SmsDriverFactory::supportsRemoteSignManagement($provider)) {
-            throw new BusinessException('PNVS 服务商不支持导入,请使用「新增模板」在本地登记');
-        }
-
-        $exists = $this->model()
-            ->where('provider_id', $providerId)
-            ->where('template_code', $templateCode)
-            ->find();
-        if ($exists !== null) {
-            throw new BusinessException("模板编码 [{$templateCode}] 已存在本地,请直接点击同步状态");
-        }
-
-        $manager = SmsDriverFactory::manager($provider);
-        $remote = $manager->queryTemplate($templateCode);
-
-        $row = $this->model();
-        $row->save([
-            'provider_id' => $providerId,
-            'template_name' => $remote['template_name'] ?: $templateCode,
-            'template_code' => $templateCode,
-            'template_type' => $remote['template_type'],
-            'template_content' => $remote['template_content'] ?: '(远端未返回内容)',
-            'remark' => '从阿里云导入',
-            'audit_status' => $remote['audit_status'],
-            'audit_reason' => $remote['audit_reason'] ?? null,
-            'last_synced_at' => date('Y-m-d H:i:s'),
-        ]);
-        return (int) $row->id;
-    }
-
-    /**
      * 单条同步:派发 SmsTemplateSyncJob 异步处理。
      *
-     * 入参校验仍在本方法做(模板存在、服务商存在、非 PNVS),失败抛 BusinessException
+     * 入参校验仍在本方法做(模板存在、服务商存在、支持远端管理),失败抛 BusinessException
      * 让控制器走标准失败响应;校验通过即 enqueue,真实远端调用由 Job 在后台完成。
      *
      * template_code 为空也允许重试(对应"首次提交失败 → local_only"的场景)。
@@ -343,7 +324,7 @@ class SmsTemplateService extends BaseService
             throw new BusinessException('服务商不存在');
         }
         if (!SmsDriverFactory::supportsRemoteSignManagement($provider)) {
-            throw new BusinessException('PNVS 模板为系统赠送,无需同步');
+            throw new BusinessException('当前服务商不支持同步模板状态');
         }
 
         JobQueue::push(SmsTemplateSyncJob::class, ['templateId' => (int) $row->id]);
@@ -353,7 +334,7 @@ class SmsTemplateService extends BaseService
     /**
      * 按 provider 批量派发同步任务。
      *
-     * 仅对非 PNVS 的服务商执行;不再过滤 template_code(允许把 submitting/local_only
+     * 不再过滤 template_code(允许把 submitting/local_only
      * 的失败行一并重试)。
      *
      * @return array{dispatched:int}
@@ -365,7 +346,7 @@ class SmsTemplateService extends BaseService
             throw new BusinessException('服务商不存在');
         }
         if (!SmsDriverFactory::supportsRemoteSignManagement($provider)) {
-            throw new BusinessException('PNVS 服务商无需同步');
+            throw new BusinessException('当前服务商不支持同步模板状态');
         }
         $rows = $this->model()->where('provider_id', $providerId)->select();
         $dispatched = 0;
@@ -381,7 +362,7 @@ class SmsTemplateService extends BaseService
      *
      * 与 syncAll 的区别:
      *  - syncAll 按 provider 整体扫
-     *  - syncBatch 严格按入参 id 数组执行,非法 id 计入 invalid;非 PNVS / 不存在的行计入 skipped
+     *  - syncBatch 严格按入参 id 数组执行,非法 id 计入 invalid;不支持同步 / 不存在的行计入 skipped
      *
      * @param array<int> $ids
      * @return array{dispatched:int, invalid:int, skipped:int}
@@ -414,23 +395,21 @@ class SmsTemplateService extends BaseService
     }
 
     /**
-     * 按内置场景批量创建模板(仅支持远端管理的驱动,如普通阿里云)
+     * 按内置场景批量创建模板。
      *
-     * 复用 create() 完成单条创建:本地行立即落库为 submitting,远端 AddSmsTemplate
-     * 由 SmsTemplateSyncJob 异步执行。created/failed 仅反映"本地落库"是否成功;
-     * 阿里云结果用户需稍后刷新列表查看 audit_status 与「审核备注」。
+     * 复用 create() 完成单条创建;可选择本地登记或提交平台。
      *
-     * @param array<int,array{scene_code:string,template_name:string,template_content:string,template_type?:int,remark?:string}> $items
+     * @param array<int,array{scene_code:string,template_name:string,template_content:string,template_type?:int,remark?:string,template_code?:string}> $items
      * @return array{created:int,failed:int,results:array<int,array{scene_code:string,scene_name:string,success:bool,message:string,template_id:int}>}
      */
-    public function createByScenes(int $providerId, int $signId, array $items): array
+    public function createByScenes(int $providerId, int $signId, array $items, bool $submitToPlatform = true): array
     {
         $provider = $this->model(SmsProvider::class)->find($providerId);
         if ($provider === null) {
             throw new BusinessException('服务商不存在');
         }
-        if (!SmsDriverFactory::supportsRemoteSignManagement($provider)) {
-            throw new BusinessException('该方式仅支持阿里云普通短信驱动,PNVS 模板请使用手动创建');
+        if ($submitToPlatform && !SmsDriverFactory::supportsRemoteSignManagement($provider)) {
+            throw new BusinessException('该方式仅支持阿里云短信服务商');
         }
         if (empty($items)) {
             throw new BusinessException('请至少选择一个场景');
@@ -460,10 +439,12 @@ class SmsTemplateService extends BaseService
                         'template_name' => (string) ($item['template_name'] ?? ''),
                         'template_content' => (string) ($item['template_content'] ?? ''),
                         'template_type' => (int) ($item['template_type'] ?? 0),
+                        'template_code' => (string) ($item['template_code'] ?? ''),
                         'remark' => $remark,
+                        'submit_to_platform' => $submitToPlatform ? 1 : 0,
                     ]);
                     $ok = true;
-                    $message = '已加入后台同步队列';
+                    $message = $submitToPlatform ? '已加入平台同步队列' : '已本地登记';
                 } catch (Throwable $e) {
                     $message = $e->getMessage();
                 }

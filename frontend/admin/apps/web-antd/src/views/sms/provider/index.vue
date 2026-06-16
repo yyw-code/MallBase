@@ -7,7 +7,7 @@ import { useAccess } from '@vben/access';
 
 import { message } from 'ant-design-vue';
 
-import { isPnvsDriver, SMS_DRIVER } from '#/api/sms/constants';
+import { SMS_DRIVER } from '#/api/sms/constants';
 import {
   createSmsProviderApi,
   deleteSmsProviderApi,
@@ -22,14 +22,7 @@ defineOptions({ name: 'SmsProvider' });
 
 const { hasAccessByCodes } = useAccess();
 
-const driverOptions = [
-  { label: '阿里云短信', value: SMS_DRIVER.ALIYUN },
-  { label: '阿里云短信认证(PNVS)', value: SMS_DRIVER.ALIYUN_PNVS },
-  { label: '腾讯云短信', value: SMS_DRIVER.TENCENT },
-  { label: '模拟（开发用）', value: SMS_DRIVER.MOCK },
-];
-
-const isPnvs = computed(() => isPnvsDriver(formData.value.driver));
+const driverOptions = [{ label: '阿里云短信', value: SMS_DRIVER.ALIYUN }];
 
 const searchParams = ref<SmsProviderApi.ListParams>({
   keyword: '',
@@ -66,7 +59,6 @@ const handleCreate = () => {
     access_key_id: '',
     access_key_secret: '',
     region: 'cn-hangzhou',
-    scheme_name: '',
     is_default: 0,
     status: 1,
     remark: '',
@@ -112,7 +104,12 @@ const columns = [
   { title: 'ID', dataIndex: 'id', width: 80 },
   { title: '名称', dataIndex: 'name', width: 160 },
   { title: '驱动', dataIndex: 'driver', width: 120 },
-  { title: 'AccessKeyId', dataIndex: 'access_key_id', width: 220, ellipsis: true },
+  {
+    title: 'AccessKeyId',
+    dataIndex: 'access_key_id',
+    width: 220,
+    ellipsis: true,
+  },
   { title: '区域', dataIndex: 'region', width: 120 },
   { title: '默认', dataIndex: 'is_default', width: 80 },
   { title: '状态', dataIndex: 'status', width: 80 },
@@ -267,7 +264,10 @@ if (hasAccessByCodes(['SmsProviderList'])) {
           name="name"
           :rules="[{ required: true, message: '请输入名称' }]"
         >
-          <a-input v-model:value="formData.name" placeholder="如：阿里云短信-生产" />
+          <a-input
+            v-model:value="formData.name"
+            placeholder="如：阿里云短信-生产"
+          />
         </a-form-item>
         <a-form-item
           label="驱动"
@@ -281,7 +281,10 @@ if (hasAccessByCodes(['SmsProviderList'])) {
           />
         </a-form-item>
         <a-form-item label="AccessKeyId" name="access_key_id">
-          <a-input v-model:value="formData.access_key_id" placeholder="LTAI..." />
+          <a-input
+            v-model:value="formData.access_key_id"
+            placeholder="LTAI..."
+          />
         </a-form-item>
         <a-form-item label="AccessKeySecret">
           <a-input-password
@@ -296,9 +299,6 @@ if (hasAccessByCodes(['SmsProviderList'])) {
         </a-form-item>
         <a-form-item label="区域" name="region">
           <a-input v-model:value="formData.region" placeholder="cn-hangzhou" />
-        </a-form-item>
-        <a-form-item v-if="isPnvs" label="认证方案" name="scheme_name">
-          <a-input v-model:value="formData.scheme_name" placeholder="可选，PNVS 控制台创建的方案名称" />
         </a-form-item>
         <a-form-item label="设为默认">
           <a-radio-group v-model:value="formData.is_default">

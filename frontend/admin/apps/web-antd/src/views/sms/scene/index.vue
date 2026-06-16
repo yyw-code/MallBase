@@ -1,6 +1,6 @@
 <script lang="ts" setup>
-import type { SmsSceneApi } from '#/api/sms/scene';
 import type { SmsProviderApi } from '#/api/sms/provider';
+import type { SmsSceneApi } from '#/api/sms/scene';
 import type { SmsSignApi } from '#/api/sms/sign';
 import type { SmsTemplateApi } from '#/api/sms/template';
 
@@ -10,15 +10,12 @@ import { useAccess } from '@vben/access';
 
 import { message } from 'ant-design-vue';
 
-import {
-  extractPlaceholders,
-  isPnvsDriver,
-  SMS_AUDIT_STATUS,
-} from '#/api/sms/constants';
+import { extractPlaceholders, SMS_AUDIT_STATUS } from '#/api/sms/constants';
 import { getSmsProviderListApi } from '#/api/sms/provider';
 import {
   bindSmsSceneApi,
   getSmsSceneListApi,
+  saveSmsSceneDraftApi,
   unbindSmsSceneApi,
 } from '#/api/sms/scene';
 import { getSmsSignListApi } from '#/api/sms/sign';
@@ -28,7 +25,20 @@ defineOptions({ name: 'SmsScene' });
 
 const { hasAccessByCodes } = useAccess();
 
+interface SceneFormState {
+  scene_code: string;
+  provider_id?: number;
+  template_id?: number;
+  sign_id?: number;
+  status: number;
+  draft_template_name: string;
+  draft_template_content: string;
+  draft_template_type: number;
+  draft_template_remark: string;
+}
+
 const loading = ref(false);
+const submitting = ref(false);
 const tableData = ref<SmsSceneApi.SceneItem[]>([]);
 
 const providers = ref<SmsProviderApi.ProviderItem[]>([]);
@@ -36,7 +46,8 @@ const signs = ref<SmsSignApi.SignItem[]>([]);
 const templates = ref<SmsTemplateApi.TemplateItem[]>([]);
 
 const modalVisible = ref(false);
-const editingScene = ref<SmsSceneApi.SceneItem | null>(null);
+const editingScene = ref<null | SmsSceneApi.SceneItem>(null);
+
 const searchParams = ref<SmsSceneApi.ListParams>({
   keyword: '',
   provider_id: undefined,
@@ -49,47 +60,60 @@ const pagination = reactive({
   showTotal: (total: number) => `共 ${total} 条`,
   total: 0,
 });
+
 const statusOptions = [
   { label: '启用', value: 1 },
   { label: '禁用', value: 0 },
 ];
-const formData = ref<SmsSceneApi.BindParams>({
+
+const templateTypeOptions = [
+  { label: '验证码', value: 0 },
+  { label: '通知', value: 1 },
+  { label: '推广', value: 2 },
+  { label: '国际/港澳台', value: 3 },
+];
+
+const auditStatusMeta: Record<string, { color: string; label: string }> = {
+  [SMS_AUDIT_STATUS.LOCAL_ONLY]: { color: 'default', label: '仅本地' },
+  [SMS_AUDIT_STATUS.PASSED]: { color: 'green', label: '已通过' },
+  [SMS_AUDIT_STATUS.PENDING]: { color: 'gold', label: '审核中' },
+  [SMS_AUDIT_STATUS.REJECTED]: { color: 'red', label: '已驳回' },
+  [SMS_AUDIT_STATUS.SUBMITTING]: { color: 'processing', label: '提交中' },
+};
+
+const formData = ref<SceneFormState>({
   scene_code: '',
-  provider_id: 0,
-  template_id: 0,
-  sign_id: 0,
+  provider_id: undefined,
+  template_id: undefined,
+  sign_id: undefined,
   status: 1,
+  draft_template_name: '',
+  draft_template_content: '',
+  draft_template_type: 0,
+  draft_template_remark: '',
 });
 
-const selectedProvider = computed(() =>
-  providers.value.find((p) => p.id === formData.value.provider_id),
-);
-
-const isPnvs = computed(() => isPnvsDriver(selectedProvider.value?.driver));
-
-// PNVS 接受 PASSED 或 LOCAL_ONLY(系统赠送签名/模板本地登记后即为 LOCAL_ONLY);
-// 普通驱动仅接受 PASSED
-const allowedStatuses = computed(() =>
-  isPnvs.value
-    ? [SMS_AUDIT_STATUS.PASSED, SMS_AUDIT_STATUS.LOCAL_ONLY]
-    : [SMS_AUDIT_STATUS.PASSED],
+const providerOptions = computed(() =>
+  providers.value.map((p) => ({ label: p.name, value: p.id })),
 );
 
 const filteredTemplates = computed(() =>
-  templates.value.filter(
-    (t) =>
-      t.provider_id === formData.value.provider_id &&
-      allowedStatuses.value.includes(t.audit_status as never),
-  ),
+  templates.value.filter((t) => t.provider_id === formData.value.provider_id),
 );
 
-// 当前场景可用的占位符集合(后端按场景下发,缺省回退到默认验证码占位符)
+const filteredSigns = computed(() =>
+  signs.value.filter((s) => s.provider_id === formData.value.provider_id),
+);
+
 const sceneAvailableParams = computed<string[]>(() => {
   const params = editingScene.value?.available_params;
-  return params && params.length > 0 ? params : ['code', 'min'];
+  return params && params.length > 0 ? params : ['code'];
 });
 
-// 取模板占位符:优先用后端派生字段,缺省时从模板内容兜底解析
+const draftPlaceholders = computed<string[]>(() =>
+  extractPlaceholders(formData.value.draft_template_content),
+);
+
 const getTemplatePlaceholders = (
   template: SmsTemplateApi.TemplateItem,
 ): string[] => {
@@ -98,7 +122,18 @@ const getTemplatePlaceholders = (
     : extractPlaceholders(template.template_content);
 };
 
-// 判断模板占位符是否被当前场景全部支持,返回不被支持的占位符列表
+const formatPlaceholder = (name: string) => `$${`{${name}}`}`;
+
+const auditLabel = (status?: null | string): string => {
+  if (!status) return '未知';
+  return auditStatusMeta[status]?.label || status;
+};
+
+const auditColor = (status?: null | string): string => {
+  if (!status) return 'default';
+  return auditStatusMeta[status]?.color || 'default';
+};
+
 const getUnsupportedPlaceholders = (
   template: SmsTemplateApi.TemplateItem,
 ): string[] => {
@@ -108,28 +143,47 @@ const getUnsupportedPlaceholders = (
   );
 };
 
-// 模板下拉选项:在 provider + 审核状态过滤基础上,对占位符不兼容的模板标灰禁用
 const templateOptions = computed(() =>
-  filteredTemplates.value.map((t) => {
-    const unsupported = getUnsupportedPlaceholders(t);
-    const baseLabel = `${t.template_name} (${t.template_code})`;
-    if (unsupported.length === 0) {
-      return { label: baseLabel, value: t.id, disabled: false };
+  filteredTemplates.value.map((template) => {
+    const unsupported = getUnsupportedPlaceholders(template);
+    const missingCode = !template.template_code;
+    const status = auditLabel(template.audit_status);
+    const code = template.template_code || '未填编码';
+    const baseLabel = `${template.template_name} (${code},${status})`;
+
+    if (missingCode) {
+      return {
+        disabled: true,
+        label: `${baseLabel} - 需先填写模板编码`,
+        value: template.id,
+      };
     }
-    const reason = unsupported.map((name) => `\${${name}}`).join('、');
+
+    if (unsupported.length === 0) {
+      return { disabled: false, label: baseLabel, value: template.id };
+    }
+
+    const reason = unsupported
+      .map((name) => formatPlaceholder(name))
+      .join('、');
     return {
-      label: `${baseLabel} — 含场景不支持的占位符 ${reason}`,
-      value: t.id,
       disabled: true,
+      label: `${baseLabel} - 含场景不支持的变量 ${reason}`,
+      value: template.id,
     };
   }),
 );
 
-const filteredSigns = computed(() =>
-  signs.value.filter(
-    (s) =>
-      s.provider_id === formData.value.provider_id &&
-      allowedStatuses.value.includes(s.audit_status as never),
+const signOptions = computed(() =>
+  filteredSigns.value.map((sign) => ({
+    label: sign.sign_name,
+    value: sign.id,
+  })),
+);
+
+const selectedTemplate = computed(() =>
+  templates.value.find(
+    (template) => template.id === formData.value.template_id,
   ),
 );
 
@@ -185,43 +239,99 @@ const openBindModal = (row: SmsSceneApi.SceneItem) => {
   editingScene.value = row;
   formData.value = {
     scene_code: row.scene_code,
-    provider_id: row.provider_id || providers.value[0]?.id || 0,
-    template_id: row.template_id || 0,
-    sign_id: row.sign_id || 0,
+    provider_id: row.provider_id || undefined,
+    template_id: row.template_id || undefined,
+    sign_id: row.sign_id || undefined,
     status: row.status ?? 1,
+    draft_template_name: row.draft_template_name,
+    draft_template_content: row.draft_template_content,
+    draft_template_type: row.draft_template_type,
+    draft_template_remark: row.draft_template_remark,
   };
-  // 回填的模板若与当前场景占位符不兼容,清空并提示重选
+
   if (formData.value.template_id) {
     const bound = templates.value.find(
-      (t) => t.id === formData.value.template_id,
+      (template) => template.id === formData.value.template_id,
     );
     if (bound && getUnsupportedPlaceholders(bound).length > 0) {
-      formData.value.template_id = 0;
-      message.warning('原绑定模板与当前场景占位符不兼容,请重新选择模板');
+      formData.value.template_id = undefined;
+      message.warning('原绑定模板与当前场景变量不兼容,请重新选择模板');
     }
   }
   modalVisible.value = true;
 };
 
 const handleProviderChange = () => {
-  // 切换服务商后清空模板/签名,强制重新选择
-  formData.value.template_id = 0;
-  formData.value.sign_id = 0;
+  formData.value.template_id = undefined;
+  formData.value.sign_id = undefined;
 };
 
-const handleSubmit = async () => {
+const assertDraftForm = (): boolean => {
+  if (!formData.value.draft_template_name?.trim()) {
+    message.error('请输入场景模板名称');
+    return false;
+  }
+  if (!formData.value.draft_template_content?.trim()) {
+    message.error('请输入场景模板内容');
+    return false;
+  }
+  return true;
+};
+
+const handleSaveDraft = async () => {
+  if (!assertDraftForm()) return;
+
+  submitting.value = true;
+  try {
+    await saveSmsSceneDraftApi({
+      scene_code: formData.value.scene_code,
+      draft_template_name: formData.value.draft_template_name,
+      draft_template_content: formData.value.draft_template_content,
+      draft_template_type: formData.value.draft_template_type,
+      draft_template_remark: formData.value.draft_template_remark,
+    });
+    message.success('草稿已保存');
+    modalVisible.value = false;
+    loadAll();
+  } finally {
+    submitting.value = false;
+  }
+};
+
+const handleBind = async () => {
+  if (!assertDraftForm()) return;
   if (!formData.value.provider_id) {
     message.error('请选择服务商');
     return;
   }
-  if (!formData.value.template_id || !formData.value.sign_id) {
-    message.error('请完整选择模板与签名');
+  if (!formData.value.sign_id) {
+    message.error('请选择签名');
     return;
   }
-  await bindSmsSceneApi(formData.value);
-  message.success('绑定成功');
-  modalVisible.value = false;
-  loadAll();
+  if (!formData.value.template_id) {
+    message.error('请选择已有模板');
+    return;
+  }
+
+  submitting.value = true;
+  try {
+    await bindSmsSceneApi({
+      scene_code: formData.value.scene_code,
+      provider_id: formData.value.provider_id,
+      template_id: formData.value.template_id,
+      sign_id: formData.value.sign_id,
+      status: formData.value.status,
+      draft_template_name: formData.value.draft_template_name,
+      draft_template_content: formData.value.draft_template_content,
+      draft_template_type: formData.value.draft_template_type,
+      draft_template_remark: formData.value.draft_template_remark,
+    });
+    message.success('绑定成功');
+    modalVisible.value = false;
+    loadAll();
+  } finally {
+    submitting.value = false;
+  }
 };
 
 const handleUnbind = async (row: SmsSceneApi.SceneItem) => {
@@ -232,14 +342,21 @@ const handleUnbind = async (row: SmsSceneApi.SceneItem) => {
 
 const columns = [
   { title: 'ID', dataIndex: 'id', width: 80 },
-  { title: '场景', dataIndex: 'scene_name', width: 180 },
-  { title: '场景编码', dataIndex: 'scene_code', width: 200 },
-  { title: '服务商', dataIndex: 'provider_name', width: 160 },
-  { title: '模板', dataIndex: 'template_name', width: 200 },
+  { title: '场景', dataIndex: 'scene_name', width: 160 },
+  { title: '场景编码', dataIndex: 'scene_code', width: 190 },
+  { title: '服务商', dataIndex: 'provider_name', width: 150 },
+  { title: '绑定模板', dataIndex: 'template_name', width: 210 },
+  { title: '模板编码', dataIndex: 'template_code', width: 180 },
   { title: '签名', dataIndex: 'sign_name', width: 160 },
+  {
+    title: '场景模板草稿',
+    dataIndex: 'draft_template_content',
+    ellipsis: true,
+    width: 300,
+  },
   { title: '状态', dataIndex: 'status', width: 100 },
   { title: '更新时间', dataIndex: 'update_time', width: 180 },
-  { title: '操作', key: 'action', width: 200 },
+  { title: '操作', key: 'action', width: 210 },
 ];
 
 if (hasAccessByCodes(['SmsSceneList'])) {
@@ -253,7 +370,7 @@ if (hasAccessByCodes(['SmsSceneList'])) {
       <a-alert
         type="info"
         show-icon
-        message="把内置场景与服务商绑定后即可发送短信验证码。传统短信驱动需要绑定已审核通过的模板和签名；PNVS 驱动签名和模板可选，如不配置则使用平台默认值。"
+        message="场景页用于维护每个业务场景的模板草稿,并绑定已有模板与签名。创建模板请到模板管理中操作。"
       />
     </div>
 
@@ -263,16 +380,16 @@ if (hasAccessByCodes(['SmsSceneList'])) {
           v-model:value="searchParams.provider_id"
           placeholder="全部"
           allow-clear
-          :options="providers.map((p) => ({ label: p.name, value: p.id }))"
+          :options="providerOptions"
           style="width: 180px"
         />
       </a-form-item>
       <a-form-item label="关键词">
         <a-input
           v-model:value="searchParams.keyword"
-          placeholder="场景/编码/模板/签名"
+          placeholder="场景/编码/模板/签名/草稿"
           allow-clear
-          style="width: 220px"
+          style="width: 240px"
           @press-enter="handleSearch"
         />
       </a-form-item>
@@ -296,7 +413,7 @@ if (hasAccessByCodes(['SmsSceneList'])) {
       :data-source="tableData"
       :loading="loading"
       :pagination="pagination"
-      :scroll="{ x: 1460 }"
+      :scroll="{ x: 1900 }"
       row-key="scene_code"
       @change="handleTableChange"
       v-access:code="'SmsSceneList'"
@@ -305,17 +422,36 @@ if (hasAccessByCodes(['SmsSceneList'])) {
         <template v-if="column.dataIndex === 'id'">
           <span>{{ record.id || '-' }}</span>
         </template>
-        <template
-          v-if="
-            ['provider_name', 'template_name', 'sign_name'].includes(
-              column.dataIndex,
-            )
-          "
-        >
-          <span v-if="record[column.dataIndex]">{{
-            record[column.dataIndex]
-          }}</span>
+        <template v-if="column.dataIndex === 'provider_name'">
+          <span v-if="record.provider_name">{{ record.provider_name }}</span>
           <a-tag v-else color="default">未绑定</a-tag>
+        </template>
+        <template v-if="column.dataIndex === 'template_name'">
+          <template v-if="record.template_name">
+            <span>{{ record.template_name }}</span>
+            <a-tag
+              class="ml-1"
+              :color="auditColor(record.template_audit_status)"
+            >
+              {{ auditLabel(record.template_audit_status) }}
+            </a-tag>
+          </template>
+          <a-tag v-else color="default">未绑定</a-tag>
+        </template>
+        <template v-if="column.dataIndex === 'template_code'">
+          <span v-if="record.template_code">{{ record.template_code }}</span>
+          <a-tag v-else color="default">未填写</a-tag>
+        </template>
+        <template v-if="column.dataIndex === 'sign_name'">
+          <span v-if="record.sign_name">{{ record.sign_name }}</span>
+          <a-tag v-else color="default">未绑定</a-tag>
+        </template>
+        <template v-if="column.dataIndex === 'draft_template_content'">
+          <a-tooltip :title="record.draft_template_content">
+            <span class="text-xs">
+              {{ record.draft_template_content || '-' }}
+            </span>
+          </a-tooltip>
         </template>
         <template v-if="column.dataIndex === 'status'">
           <a-tag :color="record.status === 1 ? 'green' : 'default'">
@@ -336,7 +472,7 @@ if (hasAccessByCodes(['SmsSceneList'])) {
               @click="openBindModal(record)"
               v-access:code="'SmsSceneBind'"
             >
-              {{ record.provider_id ? '修改绑定' : '绑定' }}
+              {{ record.provider_id ? '配置' : '配置场景' }}
             </a-button>
             <a-button
               v-if="record.provider_id"
@@ -355,73 +491,131 @@ if (hasAccessByCodes(['SmsSceneList'])) {
 
     <a-modal
       v-model:open="modalVisible"
-      :title="`绑定场景:${editingScene?.scene_name || ''}`"
-      width="560px"
-      @ok="handleSubmit"
+      :title="`配置场景:${editingScene?.scene_name || ''}`"
+      width="760px"
+      :confirm-loading="submitting"
     >
-      <a-form :label-col="{ span: 6 }" :wrapper-col="{ span: 16 }">
+      <a-form
+        class="pt-4"
+        :label-col="{ style: { width: '112px' } }"
+        :wrapper-col="{ flex: 1 }"
+      >
         <a-form-item label="场景">
           <a-input :value="editingScene?.scene_name" disabled />
         </a-form-item>
         <a-form-item label="服务商" required>
           <a-select
             v-model:value="formData.provider_id"
-            :options="providers.map((p) => ({ label: p.name, value: p.id }))"
+            placeholder="请选择服务商"
+            allow-clear
+            :options="providerOptions"
             @change="handleProviderChange"
           />
         </a-form-item>
-        <a-form-item label="模板" :required="!isPnvs">
-          <a-select
-            v-model:value="formData.template_id"
-            placeholder="仅可选已审核通过的模板"
-            :options="templateOptions"
-            :disabled="filteredTemplates.length === 0"
-          />
-          <div
-            v-if="filteredTemplates.length === 0 && formData.provider_id"
-            class="mt-1 text-xs text-gray-500"
-          >
-            当前服务商下没有已审核通过的模板,请先到模板管理创建并等待审核
-          </div>
-          <div v-else class="mt-1 text-xs text-gray-500">
-            只能选占位符为
-            {{ sceneAvailableParams.map((p) => '${' + p + '}').join('、') }}
-            的模板;标灰项含当前场景无法提供的参数
-          </div>
-        </a-form-item>
-        <a-form-item label="签名" :required="!isPnvs">
+        <a-form-item label="签名" required>
           <a-select
             v-model:value="formData.sign_id"
-            placeholder="仅可选已审核通过的签名"
-            :options="
-              filteredSigns.map((s) => ({
-                label: s.sign_name,
-                value: s.id,
-              }))
+            placeholder="请选择签名"
+            allow-clear
+            :options="signOptions"
+            :disabled="!formData.provider_id"
+            :not-found-content="
+              formData.provider_id ? '当前服务商下暂无签名' : '请先选择服务商'
             "
-            :disabled="filteredSigns.length === 0"
           />
-          <div
-            v-if="filteredSigns.length === 0 && formData.provider_id"
-            class="mt-1 text-xs text-gray-500"
-          >
-            当前服务商下没有已审核通过的签名
-          </div>
         </a-form-item>
-        <a-alert
-          v-if="isPnvs"
-          type="warning"
-          show-icon
-          message="PNVS 签名和模板为可选项。如不配置将使用平台默认签名和模板；如您的账号要求传入签名，请在此处选择已配置的签名。"
-          class="mb-4"
-        />
         <a-form-item label="状态">
           <a-radio-group v-model:value="formData.status">
             <a-radio :value="1">启用</a-radio>
             <a-radio :value="0">禁用</a-radio>
           </a-radio-group>
         </a-form-item>
+        <a-form-item label="草稿名称" required>
+          <a-input
+            v-model:value="formData.draft_template_name"
+            placeholder="如:登录验证码"
+          />
+        </a-form-item>
+        <a-form-item label="模板类型">
+          <a-select
+            v-model:value="formData.draft_template_type"
+            :options="templateTypeOptions"
+          />
+        </a-form-item>
+        <a-form-item label="草稿内容" required>
+          <a-textarea
+            v-model:value="formData.draft_template_content"
+            :rows="4"
+            placeholder="使用 ${code} 变量"
+          />
+          <div class="mt-2">
+            <span class="mr-2 text-xs text-gray-500">可用变量</span>
+            <a-tag
+              v-for="name in sceneAvailableParams"
+              :key="name"
+              color="blue"
+            >
+              {{ formatPlaceholder(name) }}
+            </a-tag>
+          </div>
+          <div v-if="draftPlaceholders.length > 0" class="mt-1">
+            <span class="mr-2 text-xs text-gray-500">已识别</span>
+            <a-tag v-for="name in draftPlaceholders" :key="name">
+              {{ formatPlaceholder(name) }}
+            </a-tag>
+          </div>
+        </a-form-item>
+        <a-form-item label="申请说明">
+          <a-textarea
+            v-model:value="formData.draft_template_remark"
+            :rows="2"
+            placeholder="提交阿里云时作为模板申请说明"
+          />
+        </a-form-item>
+        <a-form-item label="已有模板" required>
+          <a-select
+            v-model:value="formData.template_id"
+            placeholder="请选择模板"
+            allow-clear
+            :options="templateOptions"
+            :disabled="!formData.provider_id || filteredTemplates.length === 0"
+            :not-found-content="
+              formData.provider_id ? '当前服务商下暂无模板' : '请先选择服务商'
+            "
+          />
+          <div class="mt-1 text-xs text-gray-500">
+            模板必须有平台模板编码,且变量必须包含在当前场景可用变量内。
+          </div>
+          <a-alert
+            v-if="
+              selectedTemplate &&
+              selectedTemplate.audit_status !== SMS_AUDIT_STATUS.PASSED
+            "
+            type="warning"
+            show-icon
+            class="mt-2"
+            :message="`当前模板状态为${auditLabel(selectedTemplate.audit_status)},可以绑定,发送结果以平台返回为准。`"
+          />
+        </a-form-item>
       </a-form>
+      <template #footer>
+        <a-button @click="modalVisible = false">取消</a-button>
+        <a-button
+          :loading="submitting"
+          @click="handleSaveDraft"
+          v-access:code="'SmsSceneBind'"
+        >
+          保存草稿
+        </a-button>
+        <a-button
+          type="primary"
+          :loading="submitting"
+          @click="handleBind"
+          v-access:code="'SmsSceneBind'"
+        >
+          绑定模板
+        </a-button>
+      </template>
     </a-modal>
   </div>
 </template>

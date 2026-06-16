@@ -22,12 +22,6 @@ class SmsProvider extends BaseModel
     /** 驱动:阿里云短信(企业版) */
     public const DRIVER_ALIYUN = 'aliyun';
 
-    /** 驱动:阿里云号码认证服务(PNVS 短信认证) */
-    public const DRIVER_ALIYUN_PNVS = 'aliyun_pnvs';
-
-    /** 驱动:腾讯云短信(本期不实现) */
-    public const DRIVER_TENCENT = 'tencent';
-
     /** 驱动:Mock(开发/测试) */
     public const DRIVER_MOCK = 'mock';
 

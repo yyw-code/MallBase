@@ -37,7 +37,6 @@ use Swoole\Coroutine as Co;
  * // 配置驱动映射
  * DriverManager::register('sms', [
  *     'aliyun' => \mall_base\drivers\sms\AliyunSmsDriver::class,
- *     'tencent' => \mall_base\drivers\sms\TencentSmsDriver::class,
  * ]);
  * 
  * // 获取驱动实例

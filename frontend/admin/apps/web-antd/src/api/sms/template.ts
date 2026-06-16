@@ -11,7 +11,7 @@ export namespace SmsTemplateApi {
   export interface TemplateItem {
     id: number;
     provider_id: number;
-    /** 关联签名ID;阿里云模板必填,PNVS 模板为 null */
+    /** 关联签名ID */
     sign_id: null | number;
     template_name: string;
     /** 远端模板编码;本地新建/提交中尚未分配时为 null */
@@ -38,19 +38,16 @@ export namespace SmsTemplateApi {
 
   export interface SaveParams {
     provider_id: number;
-    /** 关联签名ID;阿里云模板必填,PNVS 模板可不传 */
+    /** 关联签名ID */
     sign_id?: number;
     template_name: string;
     template_type: number;
     template_content?: string;
-    /** PNVS 模板必填:阿里云控制台「赠送模板配置」中的 SMS_xxx;普通模板由后端从远端写回 */
+    /** 阿里云返回的 SMS_xxx;普通新增时由后端从远端写回 */
     template_code?: string;
+    /** 1=提交平台申请,0=仅本地登记平台模板编码 */
+    submit_to_platform?: 0 | 1;
     remark?: string;
-  }
-
-  export interface ImportParams {
-    provider_id: number;
-    template_code: string;
   }
 
   export interface CreateByScenesItem {
@@ -58,6 +55,7 @@ export namespace SmsTemplateApi {
     template_name: string;
     template_content: string;
     template_type: number;
+    template_code?: string;
     remark?: string;
   }
 
@@ -65,6 +63,8 @@ export namespace SmsTemplateApi {
     provider_id: number;
     /** 整批模板共用的关联签名ID */
     sign_id: number;
+    /** 1=提交平台申请,0=仅本地登记平台模板编码 */
+    submit_to_platform?: 0 | 1;
     items: CreateByScenesItem[];
   }
 
@@ -94,7 +94,9 @@ export namespace SmsTemplateApi {
   }
 }
 
-export async function getSmsTemplateListApi(params?: SmsTemplateApi.ListParams) {
+export async function getSmsTemplateListApi(
+  params?: SmsTemplateApi.ListParams,
+) {
   return requestClient.get<{
     list: SmsTemplateApi.TemplateItem[];
     total: number;
@@ -109,10 +111,6 @@ export async function getSmsTemplateInfoApi(id: number) {
 
 export async function createSmsTemplateApi(data: SmsTemplateApi.SaveParams) {
   return requestClient.post<{ id: number }>('/sms/template/create', data);
-}
-
-export async function importSmsTemplateApi(data: SmsTemplateApi.ImportParams) {
-  return requestClient.post<{ id: number }>('/sms/template/import', data);
 }
 
 export async function createSmsTemplateByScenesApi(

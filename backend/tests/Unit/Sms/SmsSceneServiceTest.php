@@ -41,6 +41,42 @@ final class SmsSceneServiceTest extends TestCase
         $this->assertSame(1, $result['total']);
         $this->assertSame('login', $result['list'][0]['scene_code']);
     }
+
+    public function testListFiltersDraftTemplateContent(): void
+    {
+        $service = new TestableSmsSceneService([
+            [
+                'id' => 1,
+                'scene_code' => 'login',
+                'scene_name' => '登录验证码',
+                'provider_id' => 1,
+                'provider_name' => '阿里云',
+                'template_name' => '登录模板',
+                'sign_name' => '商城',
+                'status' => 1,
+                'draft_template_name' => '登录草稿',
+                'draft_template_content' => '您的登录验证码是 ${code}',
+            ],
+            [
+                'id' => 2,
+                'scene_code' => 'register',
+                'scene_name' => '注册验证码',
+                'provider_id' => 1,
+                'provider_name' => '阿里云',
+                'template_name' => '注册模板',
+                'sign_name' => '商城',
+                'status' => 1,
+                'draft_template_name' => '注册草稿',
+                'draft_template_content' => '您的注册验证码是 ${code}',
+            ],
+        ]);
+
+        $result = $service->getList(['keyword' => '您的注册'], 1, 10);
+
+        $this->assertSame(1, $result['total']);
+        $this->assertSame('register', $result['list'][0]['scene_code']);
+    }
+
 }
 
 /**
