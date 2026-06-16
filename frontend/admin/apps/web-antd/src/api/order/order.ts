@@ -56,7 +56,10 @@ export namespace OrderApi {
     receiver_city?: string;
     receiver_district?: string;
     receiver_address?: string;
+    logistics_platform?: string;
+    logistics_company_id?: number;
     logistics_company?: string;
+    logistics_company_code?: string;
     logistics_sn?: string;
     buyer_remark?: string;
     admin_remark?: string;
@@ -93,6 +96,9 @@ export namespace OrderApi {
 
   /** 发货参数 */
   export interface ShipParams {
+    logistics_platform: string;
+    logistics_company_id: number;
+    logistics_company_code: string;
     logistics_company: string;
     logistics_sn: string;
   }
@@ -154,7 +160,7 @@ export async function getOrderDetailApi(id: number) {
 }
 
 /**
- * 订单发货（PAID → SHIPPED）
+ * 订单发货或修改已发货订单物流信息
  */
 export async function shipOrderApi(id: number, data: OrderApi.ShipParams) {
   return requestClient.post(`/order/ship/${id}`, data);
@@ -174,7 +180,7 @@ export async function adjustOrderPriceApi(
   id: number,
   data: OrderApi.AdjustPriceParams,
 ) {
-  return requestClient.post<void>(`/order/adjustPrice/${id}`, data);
+  return requestClient.post(`/order/adjustPrice/${id}`, data);
 }
 
 /**

@@ -4,6 +4,7 @@ declare (strict_types = 1);
 namespace app;
 
 use mall_base\drivers\DriverManager;
+use mall_base\drivers\logistics\KdniaoLogisticsDriver;
 use mall_base\drivers\sms\AliyunPnvsDriver;
 use mall_base\drivers\sms\AliyunSmsDriver;
 use mall_base\drivers\sms\MockSmsDriver;
@@ -36,6 +37,12 @@ class AppService extends Service
             'aliyun_pnvs' => AliyunPnvsDriver::class,
         ]);
         DriverManager::setDefault('sms', 'mock');
+
+        // 注册物流查询驱动
+        DriverManager::register('logistics', [
+            'kdniao' => KdniaoLogisticsDriver::class,
+        ]);
+        DriverManager::setDefault('logistics', 'kdniao');
     }
 
     public function boot()

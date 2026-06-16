@@ -55,7 +55,10 @@ CREATE TABLE `mb_order` (
   `receiver_city` varchar(50) NOT NULL DEFAULT '' COMMENT '市',
   `receiver_district` varchar(50) NOT NULL DEFAULT '' COMMENT '区/县',
   `receiver_address` varchar(255) NOT NULL COMMENT '详细地址',
-  `logistics_company` varchar(50) DEFAULT NULL COMMENT '物流公司',
+  `logistics_platform` varchar(32) DEFAULT NULL COMMENT '物流平台',
+  `logistics_company_id` int(11) unsigned NOT NULL DEFAULT 0 COMMENT '物流公司ID',
+  `logistics_company_code` varchar(64) DEFAULT NULL COMMENT '物流公司编码',
+  `logistics_company` varchar(100) DEFAULT NULL COMMENT '物流公司',
   `logistics_sn` varchar(64) DEFAULT NULL COMMENT '物流单号',
   `buyer_remark` varchar(255) DEFAULT NULL COMMENT '买家备注',
   `admin_remark` varchar(255) DEFAULT NULL COMMENT '商家备注',
@@ -75,6 +78,8 @@ CREATE TABLE `mb_order` (
   KEY `idx_expire_at` (`expire_at`),
   KEY `idx_paid_at` (`paid_at`),
   KEY `idx_shipped_at` (`shipped_at`),
+  KEY `idx_logistics_platform_company` (`logistics_platform`, `logistics_company_id`),
+  KEY `idx_logistics_company_code` (`logistics_company_code`),
   KEY `idx_logistics_sn` (`logistics_sn`),
   KEY `idx_delete_time` (`delete_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='订单主表';

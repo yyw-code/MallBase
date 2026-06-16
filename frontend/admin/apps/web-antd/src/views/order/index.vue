@@ -118,8 +118,8 @@ const shipModalOpen = ref(false);
 const shipTargetOrder = ref<null | OrderApi.OrderRecord>(null);
 
 const openShip = (record: OrderApi.OrderRecord) => {
-  if (record.status !== 10) {
-    message.warning('仅已支付订单可发货');
+  if (![10, 20].includes(record.status)) {
+    message.warning('仅已支付或已发货订单可维护物流信息');
     return;
   }
   shipTargetOrder.value = record;
@@ -194,7 +194,9 @@ const columns = [
     width: 100,
     customRender: ({ record }: { record: OrderApi.OrderRecord }) =>
       record.pay_method_text ||
-      (record.pay_method == null ? '—' : payMethodMap.value[record.pay_method]),
+      (record.pay_method === null || record.pay_method === undefined
+        ? '—'
+        : payMethodMap.value[record.pay_method]),
   },
   { title: '收件人', dataIndex: 'receiver_name', width: 110, ellipsis: true },
   { title: '运单号', dataIndex: 'logistics_sn', width: 160, ellipsis: true },
@@ -306,13 +308,13 @@ onMounted(() => {
               详情
             </a-button>
             <a-button
-              v-if="record.status === 10"
+              v-if="[10, 20].includes(record.status)"
               type="link"
               size="small"
               v-access:code="'SystemOrderShip'"
               @click="openShip(record)"
             >
-              发货
+              {{ record.status === 10 ? '发货' : '修改物流' }}
             </a-button>
             <a-button
               v-if="record.status === 0"

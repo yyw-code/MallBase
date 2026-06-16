@@ -9,7 +9,7 @@ Route::group('order', function () {
     Route::get('list', 'list')->name('SystemOrderList')->option(['_alias' => '订单列表', '_desc' => '获取订单列表', '_auth' => true]);
     Route::get('detail/:id', 'detail')->name('SystemOrderDetail')->option(['_alias' => '订单详情', '_desc' => '获取订单详情', '_auth' => true]);
     Route::get('statusOptions', 'statusOptions')->name('SystemOrderStatusOptions')->option(['_alias' => '订单枚举', '_desc' => '获取订单状态/支付方式下拉项', '_auth' => true]);
-    Route::post('ship/:id', 'ship')->name('SystemOrderShip')->option(['_alias' => '订单发货', '_desc' => '后台发货（PAID→SHIPPED）', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
+    Route::post('ship/:id', 'ship')->name('SystemOrderShip')->option(['_alias' => '发货/修改物流', '_desc' => '后台发货或修改已发货订单物流信息', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::post('close/:id', 'close')->name('SystemOrderClose')->option(['_alias' => '关闭订单', '_desc' => '后台关闭订单（同步回滚库存）', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::post('adjustPrice/:id', 'adjustPrice')->name('SystemOrderAdjustPrice')->option(['_alias' => '订单改价', '_desc' => '调整运费/优惠并重算应付金额（仅待支付订单）', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
 })->prefix('admin.order.OrderController/')

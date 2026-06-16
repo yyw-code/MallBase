@@ -255,6 +255,21 @@ return [
                     'affix_tab' => 0,
                     'no_basic_layout' => 0,
                     'remark' => '服务商 / 签名 / 模板 / 场景绑定 / 频控设置',
+                ],
+                [
+                    'name' => '物流管理',
+                    'code' => 'SystemLogistics',
+                    'type' => 1,
+                    'path' => '/logistics',
+                    'icon' => 'lucide:truck',
+                    'component' => null,
+                    'redirect' => '/logistics/platform',
+                    'sort' => 20,
+                    'status' => 1,
+                    'is_show' => 1,
+                    'affix_tab' => 0,
+                    'no_basic_layout' => 0,
+                    'remark' => '物流平台与公司目录',
                 ]
             ]
         ],

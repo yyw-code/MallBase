@@ -49,7 +49,7 @@ class OrderController extends BaseController
     }
 
     /**
-     * 发货（PAID → SHIPPED）
+     * 发货或修改已发货订单物流信息。
      */
     public function ship($id)
     {
@@ -57,15 +57,24 @@ class OrderController extends BaseController
         if ($adminId <= 0) {
             throw new BusinessException('管理员身份无效');
         }
-        $data = $this->request->param(['logistics_company', 'logistics_sn']);
+        $data = $this->request->param([
+            'logistics_platform',
+            'logistics_company_id',
+            'logistics_company_code',
+            'logistics_company',
+            'logistics_sn',
+        ]);
 
-        $this->service()->ship(
+        $message = $this->service()->ship(
             orderId: (int) $id,
+            logisticsPlatform: (string) ($data['logistics_platform'] ?? ''),
+            logisticsCompanyId: (int) ($data['logistics_company_id'] ?? 0),
+            logisticsCompanyCode: (string) ($data['logistics_company_code'] ?? ''),
             logisticsCompany: (string) ($data['logistics_company'] ?? ''),
             logisticsSn: (string) ($data['logistics_sn'] ?? ''),
             adminId: $adminId,
         );
-        return $this->success(null, '发货成功');
+        return $this->success(null, $message);
     }
 
     /**
@@ -129,4 +138,5 @@ class OrderController extends BaseController
             'pay_method' => PayMethod::options(),
         ], '获取成功');
     }
+
 }

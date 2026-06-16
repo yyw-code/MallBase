@@ -13,6 +13,7 @@ use app\service\order\OrderStatusMachine;
 use app\service\order\OrderSettingService;
 use app\service\order\StockService;
 use app\service\order\WechatPrepayCloseService;
+use app\service\logistics\LogisticsService;
 use app\service\upload\AssetHydrator;
 use app\common\enum\OperatorType;
 use app\common\enum\OrderStatus;
@@ -38,42 +39,85 @@ class OrderAdminService extends BaseService
     public const ADJUST_MODE_PAY_PERCENT = 'pay_percent';
 
     /**
-     * 发货（PAID → SHIPPED）
+     * 发货或修改物流信息。
+     *
+     * 已支付订单：写入物流信息并流转为已发货。
+     * 已发货订单：仅更新物流信息和本地轨迹快照，不重复流转状态。
      *
      * @param int    $orderId
+     * @param string $logisticsPlatform
+     * @param int    $logisticsCompanyId
+     * @param string $logisticsCompanyCode
      * @param string $logisticsCompany
      * @param string $logisticsSn
      * @param int    $adminId
      */
-    public function ship(int $orderId, string $logisticsCompany, string $logisticsSn, int $adminId): void
-    {
-        $company = trim($logisticsCompany);
-        $sn      = trim($logisticsSn);
-        if ($company === '' || $sn === '') {
+    public function ship(
+        int $orderId,
+        string $logisticsPlatform,
+        int $logisticsCompanyId,
+        string $logisticsCompanyCode,
+        string $logisticsCompany,
+        string $logisticsSn,
+        int $adminId
+    ): string {
+        $platform    = trim($logisticsPlatform);
+        $companyCode = trim($logisticsCompanyCode);
+        $companyName = trim($logisticsCompany);
+        $sn          = trim($logisticsSn);
+        if (($logisticsCompanyId <= 0 && $companyCode === '' && $companyName === '') || $sn === '') {
             throw new BusinessException('物流公司和运单号必填');
         }
 
         $order = $this->findOrder($orderId);
-        if ((int) $order->status !== OrderStatus::PAID) {
-            throw new BusinessException('仅已支付订单允许发货');
+        $status = (int) $order->status;
+        if (!in_array($status, [OrderStatus::PAID, OrderStatus::SHIPPED], true)) {
+            throw new BusinessException('仅已支付或已发货订单允许维护物流信息');
         }
+
+        /** @var LogisticsService $logisticsService */
+        $logisticsService = app()->make(LogisticsService::class);
+        $company = $logisticsService->resolveCompany($platform, $logisticsCompanyId, $companyCode, $companyName);
+        $oldLogistics = trim(sprintf('%s %s', (string) ($order->logistics_company ?? ''), (string) ($order->logistics_sn ?? '')));
+        $ip = $this->requestIp();
 
         /** @var OrderStatusMachine $machine */
         $machine = app()->make(OrderStatusMachine::class);
 
-        $this->transaction(function () use ($order, $company, $sn, $machine, $adminId): void {
-            $order->logistics_company = mb_substr($company, 0, 100);
-            $order->logistics_sn      = mb_substr($sn, 0, 100);
+        $this->transaction(function () use ($order, $status, $company, $sn, $machine, $adminId, $logisticsService, $oldLogistics, $ip): void {
+            $order->logistics_platform     = mb_substr($company['platform'], 0, 32);
+            $order->logistics_company_id   = (int) $company['company_id'];
+            $order->logistics_company_code = mb_substr($company['code'], 0, 64);
+            $order->logistics_company      = mb_substr($company['name'], 0, 100);
+            $order->logistics_sn           = mb_substr($sn, 0, 64);
             $order->save();
+
+            $logisticsService->syncOrderShipment($order);
+
+            if ($status === OrderStatus::SHIPPED) {
+                $newLogistics = trim(sprintf('%s %s', $company['name'], $sn));
+                $this->model(OrderLog::class)->save([
+                    'order_id'      => (int) $order->id,
+                    'from_status'   => OrderStatus::SHIPPED,
+                    'to_status'     => OrderStatus::SHIPPED,
+                    'operator_type' => OperatorType::ADMIN,
+                    'operator_id'   => $adminId,
+                    'remark'        => mb_substr(sprintf('修改物流：%s -> %s', $oldLogistics !== '' ? $oldLogistics : '空', $newLogistics), 0, 255),
+                    'ip'            => $ip !== '' ? $ip : null,
+                ]);
+                return;
+            }
 
             $machine->transit(
                 order: $order,
                 toStatus: OrderStatus::SHIPPED,
                 operatorType: OperatorType::ADMIN,
                 operatorId: $adminId,
-                remark: sprintf('发货：%s %s', $company, $sn),
+                remark: sprintf('发货：%s %s', $company['name'], $sn),
             );
         });
+
+        return $status === OrderStatus::SHIPPED ? '物流信息已更新' : '发货成功';
     }
 
     /**
