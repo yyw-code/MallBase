@@ -412,160 +412,171 @@ if (hasAccessByCodes(['SmsTemplateList'])) {
 
 <template>
   <div class="p-4">
-    <div class="mb-4">
-      <a-tooltip title="新增本地模板记录,可选择仅本地登记或提交阿里云">
-        <a-button
-          type="primary"
-          @click="handleCreate"
-          v-access:code="'SmsTemplateCreate'"
-        >
-          新增模板
+    <div class="mb-3 flex items-center justify-between gap-4">
+      <h2 class="m-0 text-lg font-semibold">短信模板</h2>
+      <div class="flex flex-wrap justify-end gap-2">
+        <a-tooltip title="新增本地模板记录,可选择仅本地登记或提交阿里云">
+          <a-button
+            type="primary"
+            @click="handleCreate"
+            v-access:code="'SmsTemplateCreate'"
+          >
+            新增模板
+          </a-button>
+        </a-tooltip>
+        <a-tooltip title="查询阿里云最新审核状态并回写本地">
+          <a-button @click="handleSyncAll" v-access:code="'SmsTemplateSyncAll'">
+            批量同步状态
+          </a-button>
+        </a-tooltip>
+        <a-tooltip title="同步当前勾选的模板状态">
+          <a-button
+            :disabled="selectedRowKeys.length === 0"
+            @click="handleSyncBatch"
+            v-access:code="'SmsTemplateSyncBatch'"
+          >
+            批量同步选中{{
+              selectedRowKeys.length > 0 ? `（${selectedRowKeys.length}）` : ''
+            }}
+          </a-button>
+        </a-tooltip>
+        <a-button @click="refresh" v-access:code="'SmsTemplateList'">
+          刷新
         </a-button>
-      </a-tooltip>
-      <a-tooltip title="查询阿里云最新审核状态并回写本地">
-        <a-button
-          class="ml-2"
-          @click="handleSyncAll"
-          v-access:code="'SmsTemplateSyncAll'"
-        >
-          批量同步状态
-        </a-button>
-      </a-tooltip>
-      <a-tooltip title="同步当前勾选的模板状态">
-        <a-button
-          class="ml-2"
-          :disabled="selectedRowKeys.length === 0"
-          @click="handleSyncBatch"
-          v-access:code="'SmsTemplateSyncBatch'"
-        >
-          批量同步选中{{
-            selectedRowKeys.length > 0 ? `（${selectedRowKeys.length}）` : ''
-          }}
-        </a-button>
-      </a-tooltip>
-      <a-button class="ml-2" @click="refresh" v-access:code="'SmsTemplateList'">
-        刷新
-      </a-button>
+      </div>
     </div>
 
-    <a-form layout="inline" class="mb-4" v-access:code="'SmsTemplateList'">
-      <a-form-item label="服务商">
-        <a-select
-          v-model:value="searchParams.provider_id"
-          placeholder="全部"
-          allow-clear
-          :options="providerOptions"
-          style="width: 180px"
-        />
-      </a-form-item>
-      <a-form-item label="关键词">
-        <a-input
-          v-model:value="searchParams.keyword"
-          placeholder="模板名称/编码"
-          allow-clear
-          style="width: 200px"
-        />
-      </a-form-item>
-      <a-form-item label="审核">
-        <a-select
-          v-model:value="searchParams.audit_status"
-          placeholder="全部"
-          allow-clear
-          :options="
-            auditStatusOptions.map((o) => ({ label: o.label, value: o.value }))
-          "
-          style="width: 140px"
-        />
-      </a-form-item>
-      <a-form-item>
-        <a-button
-          type="primary"
-          @click="
-            () => {
-              pagination.current = 1;
-              loadData(searchParams);
-            }
-          "
-        >
-          搜索
-        </a-button>
-        <a-button class="ml-2" @click="resetSearch">重置</a-button>
-      </a-form-item>
-    </a-form>
-
-    <a-table
-      :columns="columns"
-      :data-source="tableData"
-      :loading="loading"
-      :pagination="pagination"
-      :row-selection="rowSelection"
-      :scroll="{ x: 1660 }"
-      row-key="id"
-      @change="handleTableChange"
-      v-access:code="'SmsTemplateList'"
-    >
-      <template #bodyCell="{ column, record }">
-        <template v-if="column.dataIndex === 'provider_id'">
-          {{ providerName(record.provider_id) }}
-        </template>
-        <template v-if="column.dataIndex === 'template_type'">
-          {{ templateTypeLabel(record.template_type) }}
-        </template>
-        <template v-if="column.dataIndex === 'audit_status'">
-          <a-tag :color="auditStatusTag(record.audit_status)?.color">
-            {{
-              auditStatusTag(record.audit_status)?.label || record.audit_status
-            }}
-          </a-tag>
-        </template>
-        <template v-if="column.dataIndex === 'template_code'">
-          <span v-if="record.template_code">{{ record.template_code }}</span>
-          <a-tag v-else color="default">未填写</a-tag>
-        </template>
-        <template v-if="column.dataIndex === 'template_content'">
-          <a-tooltip :title="record.template_content">
-            <span class="text-xs">{{ record.template_content || '-' }}</span>
-          </a-tooltip>
-        </template>
-        <template v-if="column.dataIndex === 'audit_reason'">
-          <div
-            class="whitespace-pre-wrap break-all text-xs leading-relaxed"
-            style="max-height: 120px; overflow-y: auto"
-          >
-            {{ record.audit_reason || '-' }}
+    <div class="mb-3 rounded-lg border bg-[hsl(var(--card))] p-4">
+      <a-form
+        class="grid grid-cols-1 gap-x-4 gap-y-3 md:grid-cols-3 xl:grid-cols-6"
+        v-access:code="'SmsTemplateList'"
+      >
+        <a-form-item label="服务商" class="mb-0">
+          <a-select
+            v-model:value="searchParams.provider_id"
+            placeholder="全部"
+            allow-clear
+            :options="providerOptions"
+            class="w-full"
+          />
+        </a-form-item>
+        <a-form-item label="关键词" class="mb-0">
+          <a-input
+            v-model:value="searchParams.keyword"
+            placeholder="模板名称/编码"
+            allow-clear
+            class="w-full"
+          />
+        </a-form-item>
+        <a-form-item label="审核" class="mb-0">
+          <a-select
+            class="w-full"
+            v-model:value="searchParams.audit_status"
+            placeholder="全部"
+            allow-clear
+            :options="
+              auditStatusOptions.map((o) => ({
+                label: o.label,
+                value: o.value,
+              }))
+            "
+          />
+        </a-form-item>
+        <a-form-item class="mb-0 md:col-span-3 xl:col-span-6">
+          <div class="flex justify-end gap-2">
+            <a-button
+              type="primary"
+              @click="
+                () => {
+                  pagination.current = 1;
+                  loadData(searchParams);
+                }
+              "
+            >
+              搜索
+            </a-button>
+            <a-button @click="resetSearch">重置</a-button>
           </div>
+        </a-form-item>
+      </a-form>
+    </div>
+
+    <div class="overflow-hidden rounded-lg border bg-[hsl(var(--card))]">
+      <a-table
+        :columns="columns"
+        :data-source="tableData"
+        :loading="loading"
+        :pagination="pagination"
+        :row-selection="rowSelection"
+        :scroll="{ x: 1660 }"
+        row-key="id"
+        @change="handleTableChange"
+        v-access:code="'SmsTemplateList'"
+      >
+        <template #bodyCell="{ column, record }">
+          <template v-if="column.dataIndex === 'provider_id'">
+            {{ providerName(record.provider_id) }}
+          </template>
+          <template v-if="column.dataIndex === 'template_type'">
+            {{ templateTypeLabel(record.template_type) }}
+          </template>
+          <template v-if="column.dataIndex === 'audit_status'">
+            <a-tag :color="auditStatusTag(record.audit_status)?.color">
+              {{
+                auditStatusTag(record.audit_status)?.label ||
+                record.audit_status
+              }}
+            </a-tag>
+          </template>
+          <template v-if="column.dataIndex === 'template_code'">
+            <span v-if="record.template_code">{{ record.template_code }}</span>
+            <a-tag v-else color="default">未填写</a-tag>
+          </template>
+          <template v-if="column.dataIndex === 'template_content'">
+            <a-tooltip :title="record.template_content">
+              <span class="text-xs">{{ record.template_content || '-' }}</span>
+            </a-tooltip>
+          </template>
+          <template v-if="column.dataIndex === 'audit_reason'">
+            <div
+              class="whitespace-pre-wrap break-all text-xs leading-relaxed"
+              style="max-height: 120px; overflow-y: auto"
+            >
+              {{ record.audit_reason || '-' }}
+            </div>
+          </template>
+          <template v-if="column.key === 'action'">
+            <a-space>
+              <a-button
+                type="link"
+                size="small"
+                @click="handleSync(record)"
+                v-access:code="'SmsTemplateSyncStatus'"
+              >
+                同步
+              </a-button>
+              <a-button
+                type="link"
+                size="small"
+                @click="handleEdit(record)"
+                v-access:code="'SmsTemplateUpdate'"
+              >
+                编辑
+              </a-button>
+              <a-button
+                type="link"
+                danger
+                size="small"
+                @click="handleDelete(record, 'template_name')"
+                v-access:code="'SmsTemplateDelete'"
+              >
+                删除
+              </a-button>
+            </a-space>
+          </template>
         </template>
-        <template v-if="column.key === 'action'">
-          <a-space>
-            <a-button
-              type="link"
-              size="small"
-              @click="handleSync(record)"
-              v-access:code="'SmsTemplateSyncStatus'"
-            >
-              同步
-            </a-button>
-            <a-button
-              type="link"
-              size="small"
-              @click="handleEdit(record)"
-              v-access:code="'SmsTemplateUpdate'"
-            >
-              编辑
-            </a-button>
-            <a-button
-              type="link"
-              danger
-              size="small"
-              @click="handleDelete(record, 'template_name')"
-              v-access:code="'SmsTemplateDelete'"
-            >
-              删除
-            </a-button>
-          </a-space>
-        </template>
-      </template>
-    </a-table>
+      </a-table>
+    </div>
 
     <a-drawer
       v-model:open="modalVisible"

@@ -129,7 +129,7 @@ const handleReply = (record: GoodsCommentApi.CommentItem) => {
     async onOk() {
       if (!replyContent.trim()) {
         message.warning('请输入回复内容');
-        return Promise.reject();
+        throw new Error('请输入回复内容');
       }
       try {
         await replyGoodsCommentApi(record.id, replyContent.trim());
@@ -138,7 +138,7 @@ const handleReply = (record: GoodsCommentApi.CommentItem) => {
       } catch (error: any) {
         console.error('回复失败:', error);
         message.error(error.message || '回复失败');
-        return Promise.reject();
+        throw error;
       }
     },
   });
@@ -226,96 +226,105 @@ onMounted(() => {
 
 <template>
   <div class="p-4">
-    <div class="mb-4">
-      <a-button class="ml-2" @click="() => loadData(searchParams)">
-        刷新
-      </a-button>
+    <div class="mb-3 flex items-center justify-between gap-4">
+      <h2 class="m-0 text-lg font-semibold">商品评论</h2>
+      <div class="flex flex-wrap justify-end gap-2">
+        <a-button @click="() => loadData(searchParams)"> 刷新 </a-button>
+      </div>
     </div>
 
     <!-- 搜索表单 -->
-    <a-form layout="inline" class="mb-4">
-      <a-form-item label="商品ID">
-        <a-input-number
-          v-model:value="searchParams.goods_id"
-          placeholder="请输入商品ID"
-          :min="1"
-          allow-clear
-          style="width: 150px"
-        />
-      </a-form-item>
-      <a-form-item label="评分">
-        <a-select
-          v-model:value="searchParams.rating"
-          placeholder="请选择"
-          allow-clear
-          style="width: 120px"
-        >
-          <a-select-option :value="5">5星</a-select-option>
-          <a-select-option :value="4">4星</a-select-option>
-          <a-select-option :value="3">3星</a-select-option>
-          <a-select-option :value="2">2星</a-select-option>
-          <a-select-option :value="1">1星</a-select-option>
-        </a-select>
-      </a-form-item>
-      <a-form-item label="状态">
-        <a-select
-          v-model:value="searchParams.status"
-          placeholder="请选择"
-          allow-clear
-          style="width: 120px"
-        >
-          <a-select-option :value="1">显示</a-select-option>
-          <a-select-option :value="0">隐藏</a-select-option>
-        </a-select>
-      </a-form-item>
-      <a-form-item>
-        <a-button
-          type="primary"
-          @click="
-            () => {
-              pagination.current = 1;
-              loadData(searchParams);
-            }
-          "
-        >
-          搜索
-        </a-button>
-        <a-button class="ml-2" @click="resetSearch"> 重置 </a-button>
-      </a-form-item>
-    </a-form>
+    <div class="mb-3 rounded-lg border bg-[hsl(var(--card))] p-4">
+      <a-form
+        class="grid grid-cols-1 gap-x-4 gap-y-3 md:grid-cols-3 xl:grid-cols-6"
+      >
+        <a-form-item label="商品ID" class="mb-0">
+          <a-input-number
+            v-model:value="searchParams.goods_id"
+            placeholder="请输入商品ID"
+            :min="1"
+            allow-clear
+            class="w-full"
+          />
+        </a-form-item>
+        <a-form-item label="评分" class="mb-0">
+          <a-select
+            v-model:value="searchParams.rating"
+            placeholder="请选择"
+            allow-clear
+            class="w-full"
+          >
+            <a-select-option :value="5"> 5星 </a-select-option>
+            <a-select-option :value="4"> 4星 </a-select-option>
+            <a-select-option :value="3"> 3星 </a-select-option>
+            <a-select-option :value="2"> 2星 </a-select-option>
+            <a-select-option :value="1"> 1星 </a-select-option>
+          </a-select>
+        </a-form-item>
+        <a-form-item label="状态" class="mb-0">
+          <a-select
+            v-model:value="searchParams.status"
+            placeholder="请选择"
+            allow-clear
+            class="w-full"
+          >
+            <a-select-option :value="1"> 显示 </a-select-option>
+            <a-select-option :value="0"> 隐藏 </a-select-option>
+          </a-select>
+        </a-form-item>
+        <a-form-item class="mb-0 md:col-span-3 xl:col-span-6">
+          <div class="flex justify-end gap-2">
+            <a-button
+              type="primary"
+              @click="
+                () => {
+                  pagination.current = 1;
+                  loadData(searchParams);
+                }
+              "
+            >
+              搜索
+            </a-button>
+            <a-button @click="resetSearch"> 重置 </a-button>
+          </div>
+        </a-form-item>
+      </a-form>
+    </div>
 
-    <a-table
-      :columns="columns"
-      :data-source="tableData"
-      :loading="loading"
-      :pagination="pagination"
-      :scroll="{ x: 1500 }"
-      row-key="id"
-      @change="handleTableChange"
-    >
-      <template #bodyCell="{ column, record }">
-        <template v-if="column.key === 'action'">
-          <a-space>
-            <a-button
-              type="link"
-              size="small"
-              @click="handleReply(record)"
-              v-access:code="'SystemGoodsCommentReply'"
-            >
-              回复
-            </a-button>
-            <a-button
-              type="link"
-              danger
-              size="small"
-              @click="handleDelete(record)"
-              v-access:code="'SystemGoodsCommentDelete'"
-            >
-              删除
-            </a-button>
-          </a-space>
+    <div class="overflow-hidden rounded-lg border bg-[hsl(var(--card))]">
+      <a-table
+        :columns="columns"
+        :data-source="tableData"
+        :loading="loading"
+        :pagination="pagination"
+        :scroll="{ x: 1500 }"
+        row-key="id"
+        @change="handleTableChange"
+      >
+        <template #bodyCell="{ column, record }">
+          <template v-if="column.key === 'action'">
+            <a-space>
+              <a-button
+                type="link"
+                size="small"
+                @click="handleReply(record)"
+                v-access:code="'SystemGoodsCommentReply'"
+              >
+                回复
+              </a-button>
+              <a-button
+                type="link"
+                danger
+                size="small"
+                @click="handleDelete(record)"
+                v-access:code="'SystemGoodsCommentDelete'"
+              >
+                删除
+              </a-button>
+            </a-space>
+          </template>
         </template>
-      </template>
-    </a-table>
+      </a-table>
+    </div>
   </div>
 </template>

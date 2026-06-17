@@ -16,6 +16,7 @@ use app\service\order\OrderStatusMachine;
 use app\service\order\RefundOrderStatusMachine;
 use app\service\order\WechatRefundAdapter;
 use app\service\order\dto\RefundPaymentContext;
+use app\service\admin\support\CsvExportService;
 use app\service\upload\AssetHydrator;
 use app\common\enum\OperatorType;
 use app\common\enum\OrderStatus;
@@ -39,6 +40,7 @@ use mall_base\exception\BusinessException;
 class RefundOrderAdminService extends BaseService
 {
     protected string $modelClass = RefundOrder::class;
+    private const EXPORT_LIMIT = 5000;
 
     /**
      * 审核同意（PENDING → REFUNDING / COMPLETED，发起退款处理）
@@ -297,45 +299,7 @@ class RefundOrderAdminService extends BaseService
      */
     public function adminList(array $filter = [], int $page = 1, int $pageSize = 15): array
     {
-        $query = $this->model()->whereNull('delete_time');
-
-        if (!empty($filter['sn'])) {
-            $query->where('sn', 'like', '%' . trim((string) $filter['sn']) . '%');
-        }
-        if (isset($filter['status']) && $filter['status'] !== null && $filter['status'] !== '') {
-            $query->where('status', (int) $filter['status']);
-        }
-        if (isset($filter['type']) && $filter['type'] !== null && $filter['type'] !== '') {
-            $query->where('type', (int) $filter['type']);
-        }
-        if (!empty($filter['created_start'])) {
-            $query->where('create_time', '>=', (string) $filter['created_start']);
-        }
-        if (!empty($filter['created_end'])) {
-            $query->where('create_time', '<=', (string) $filter['created_end']);
-        }
-        if (!empty($filter['reviewed_start'])) {
-            $query->where('reviewed_at', '>=', (string) $filter['reviewed_start']);
-        }
-        if (!empty($filter['reviewed_end'])) {
-            $query->where('reviewed_at', '<=', (string) $filter['reviewed_end']);
-        }
-
-        // 按订单号筛选需要子查询
-        if (!empty($filter['order_sn'])) {
-            $orderIds = $this->model(Order::class)
-                ->where('sn', 'like', '%' . trim((string) $filter['order_sn']) . '%')
-                ->column('id');
-            $query->whereIn('order_id', $orderIds ?: [0]);
-        }
-
-        // 按买家手机筛选需要 join user 表
-        if (!empty($filter['user_phone'])) {
-            $userIds = $this->model(User::class)
-                ->where('mobile', 'like', '%' . trim((string) $filter['user_phone']) . '%')
-                ->column('id');
-            $query->whereIn('user_id', $userIds ?: [0]);
-        }
+        $query = $this->buildAdminListQuery($filter);
 
         $total = (clone $query)->count();
         $list  = $query
@@ -347,6 +311,72 @@ class RefundOrderAdminService extends BaseService
         $this->hydrateListRelations($list);
 
         return compact('total', 'list');
+    }
+
+    /**
+     * @param array{sn?:string, order_sn?:string, status?:int|null, type?:int|null, user_phone?:string, created_start?:string, created_end?:string, reviewed_start?:string, reviewed_end?:string} $filter
+     * @return array{total:int,tabs:array<int,array{key:string,label:string,count:int}>}
+     */
+    public function adminStats(array $filter = []): array
+    {
+        $baseFilter = $filter;
+        unset($baseFilter['status']);
+
+        $total = (int) $this->buildAdminListQuery($baseFilter)->count();
+        $tabs = [[
+            'key' => 'all',
+            'label' => '全部',
+            'count' => $total,
+        ]];
+
+        foreach (RefundOrderStatus::options() as $option) {
+            $statusFilter = $baseFilter;
+            $statusFilter['status'] = $option['value'];
+            $tabs[] = [
+                'key' => (string) $option['value'],
+                'label' => (string) $option['label'],
+                'count' => (int) $this->buildAdminListQuery($statusFilter)->count(),
+            ];
+        }
+
+        return compact('total', 'tabs');
+    }
+
+    /**
+     * @param array{sn?:string, order_sn?:string, status?:int|null, type?:int|null, user_phone?:string, created_start?:string, created_end?:string, reviewed_start?:string, reviewed_end?:string} $filter
+     */
+    public function exportCsv(array $filter = []): string
+    {
+        $rows = $this->buildAdminListQuery($filter)
+            ->order('id', 'desc')
+            ->limit(self::EXPORT_LIMIT)
+            ->select()
+            ->toArray();
+        $this->hydrateListRelations($rows);
+
+        foreach ($rows as &$row) {
+            $row['status_text'] = $row['status_text'] ?? RefundOrderStatus::textOf((int) ($row['status'] ?? 0));
+            $row['type_text'] = $row['type_text'] ?? RefundOrderStatus::typeTextOf((int) ($row['type'] ?? 0));
+            $row['order_sn'] = $row['order']['sn'] ?? '';
+            $row['user_phone'] = $row['user']['phone'] ?? '';
+            $row['goods_name'] = $row['order_item']['goods_name'] ?? '';
+        }
+        unset($row);
+
+        return app()->make(CsvExportService::class)->make([
+            'id' => 'ID',
+            'sn' => '售后单号',
+            'order_sn' => '订单号',
+            'user_phone' => '买家手机',
+            'goods_name' => '商品',
+            'quantity' => '数量',
+            'refund_amount' => '退款金额',
+            'type_text' => '类型',
+            'status_text' => '状态',
+            'reason' => '原因',
+            'create_time' => '申请时间',
+            'reviewed_at' => '审核时间',
+        ], $rows);
     }
 
     /**
@@ -416,6 +446,52 @@ class RefundOrderAdminService extends BaseService
     }
 
     // ---------------- 内部 ----------------
+
+    /**
+     * @param array{sn?:string, order_sn?:string, status?:int|null, type?:int|null, user_phone?:string, created_start?:string, created_end?:string, reviewed_start?:string, reviewed_end?:string} $filter
+     */
+    private function buildAdminListQuery(array $filter)
+    {
+        $query = $this->model()->whereNull('delete_time');
+
+        if (!empty($filter['sn'])) {
+            $query->where('sn', 'like', '%' . trim((string) $filter['sn']) . '%');
+        }
+        if (isset($filter['status']) && $filter['status'] !== null && $filter['status'] !== '') {
+            $query->where('status', (int) $filter['status']);
+        }
+        if (isset($filter['type']) && $filter['type'] !== null && $filter['type'] !== '') {
+            $query->where('type', (int) $filter['type']);
+        }
+        if (!empty($filter['created_start'])) {
+            $query->where('create_time', '>=', (string) $filter['created_start']);
+        }
+        if (!empty($filter['created_end'])) {
+            $query->where('create_time', '<=', (string) $filter['created_end']);
+        }
+        if (!empty($filter['reviewed_start'])) {
+            $query->where('reviewed_at', '>=', (string) $filter['reviewed_start']);
+        }
+        if (!empty($filter['reviewed_end'])) {
+            $query->where('reviewed_at', '<=', (string) $filter['reviewed_end']);
+        }
+
+        if (!empty($filter['order_sn'])) {
+            $orderIds = $this->model(Order::class)
+                ->where('sn', 'like', '%' . trim((string) $filter['order_sn']) . '%')
+                ->column('id');
+            $query->whereIn('order_id', $orderIds ?: [0]);
+        }
+
+        if (!empty($filter['user_phone'])) {
+            $userIds = $this->model(User::class)
+                ->where('mobile', 'like', '%' . trim((string) $filter['user_phone']) . '%')
+                ->column('id');
+            $query->whereIn('user_id', $userIds ?: [0]);
+        }
+
+        return $query;
+    }
 
     private function findRefund(int $refundId): RefundOrder
     {

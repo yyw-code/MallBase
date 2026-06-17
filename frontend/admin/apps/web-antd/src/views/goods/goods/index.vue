@@ -2,22 +2,26 @@
 import type { GoodsApi } from '#/api/goods';
 
 import { h, onMounted, ref } from 'vue';
-
 import { useRouter } from 'vue-router';
 
 import { useAccess } from '@vben/access';
 
-import { Avatar, message, Switch } from 'ant-design-vue';
+import { Avatar, message, Modal, Switch } from 'ant-design-vue';
 
 import {
   deleteGoodsApi,
+  exportGoodsCsvApi,
   getAllGoodsBrandsApi,
   getAllGoodsCategoriesApi,
   getGoodsListApi,
+  getGoodsStatsApi,
+  purgeGoodsApi,
+  restoreGoodsApi,
   updateGoodsOnSaleApi,
   updateGoodsStatusApi,
 } from '#/api/goods';
 import { useTableCrud } from '#/composables/useTableCrud';
+import { downloadBlob } from '#/utils/download';
 
 defineOptions({ name: 'GoodsManagement' });
 
@@ -25,7 +29,7 @@ const router = useRouter();
 const { hasAccessByCodes } = useAccess();
 
 /* ---------------- 表格 CRUD ---------------- */
-const { tableData, loading, pagination, loadData, handleDelete } = useTableCrud<
+const { tableData, loading, pagination, loadData } = useTableCrud<
   GoodsApi.GoodsItem,
   GoodsApi.ListParams
 >(
@@ -43,7 +47,12 @@ const searchParams = ref({
   brand_id: undefined as number | undefined,
   is_on_sale: undefined as number | undefined,
   status: undefined as number | undefined,
+  view: 'all' as GoodsApi.ListView,
 });
+const activeViewTab = ref<GoodsApi.ListView>('all');
+const statsTabs = ref<GoodsApi.StatsTab[]>([]);
+
+const buildQuery = (): GoodsApi.ListParams => ({ ...searchParams.value });
 
 /* ---------------- 分类树数据 ---------------- */
 const categoryTreeData = ref<any[]>([]);
@@ -90,9 +99,51 @@ const resetSearch = () => {
     brand_id: undefined,
     is_on_sale: undefined,
     status: undefined,
+    view: 'all',
   };
+  activeViewTab.value = 'all';
   pagination.current = 1;
-  loadData(searchParams.value);
+  refreshData();
+};
+
+const submitSearch = () => {
+  pagination.current = 1;
+  refreshData();
+};
+
+const loadStats = async () => {
+  const res = await getGoodsStatsApi(buildQuery());
+  statsTabs.value = res?.tabs ?? [];
+};
+
+const refreshData = async () => {
+  await Promise.all([loadData(buildQuery()), loadStats()]);
+};
+
+const handleViewTabChange = (key: string) => {
+  const view = key as GoodsApi.ListView;
+  activeViewTab.value = view;
+  searchParams.value.view = view;
+  pagination.current = 1;
+  refreshData();
+};
+
+const handleExport = async () => {
+  try {
+    const blob = await exportGoodsCsvApi(buildQuery());
+    downloadBlob(blob, 'goods.csv');
+  } catch (error: any) {
+    message.error(error?.message || '导出失败');
+  }
+};
+
+const handleTableChange = (newPagination: {
+  current?: number;
+  pageSize?: number;
+}) => {
+  pagination.current = newPagination.current ?? pagination.current;
+  pagination.pageSize = newPagination.pageSize ?? pagination.pageSize;
+  loadData(buildQuery());
 };
 
 /* ---------------- 路由跳转 ---------------- */
@@ -106,31 +157,69 @@ const handleEdit = (record: GoodsApi.GoodsItem) => {
 /* ---------------- 状态切换 ---------------- */
 const handleStatusChange = async (
   record: GoodsApi.GoodsItem,
-  checked: boolean,
+  checked: boolean | number | string,
 ) => {
   try {
-    await updateGoodsStatusApi(record.id, checked ? 1 : 0);
+    await updateGoodsStatusApi(record.id, checked === true ? 1 : 0);
     message.success('状态更新成功');
-    await loadData(searchParams.value);
+    await refreshData();
   } catch (error: any) {
     message.error(error?.message || '状态更新失败');
-    await loadData(searchParams.value);
+    await refreshData();
   }
 };
 
 /* ---------------- 上架状态切换 ---------------- */
 const handleOnSaleChange = async (
   record: GoodsApi.GoodsItem,
-  checked: boolean,
+  checked: boolean | number | string,
 ) => {
   try {
-    await updateGoodsOnSaleApi(record.id, checked ? 1 : 0);
-    message.success(checked ? '上架成功' : '下架成功');
-    await loadData(searchParams.value);
+    await updateGoodsOnSaleApi(record.id, checked === true ? 1 : 0);
+    message.success(checked === true ? '上架成功' : '下架成功');
+    await refreshData();
   } catch (error: any) {
-    message.error(error?.message || (checked ? '上架失败' : '下架失败'));
-    await loadData(searchParams.value);
+    message.error(
+      error?.message || (checked === true ? '上架失败' : '下架失败'),
+    );
+    await refreshData();
   }
+};
+
+const handleMoveToRecycle = (record: GoodsApi.GoodsItem) => {
+  Modal.confirm({
+    title: '删除商品',
+    content: `确认将商品「${record.name}」移入回收站？`,
+    okText: '确认删除',
+    okButtonProps: { danger: true },
+    cancelText: '取消',
+    onOk: async () => {
+      await deleteGoodsApi(record.id);
+      message.success('商品已移入回收站');
+      await refreshData();
+    },
+  });
+};
+
+const handleRestore = async (record: GoodsApi.GoodsItem) => {
+  await restoreGoodsApi(record.id);
+  message.success('商品已恢复');
+  await refreshData();
+};
+
+const handlePurge = (record: GoodsApi.GoodsItem) => {
+  Modal.confirm({
+    title: '永久删除商品',
+    content: `确认永久删除商品「${record.name}」？该操作不可恢复。`,
+    okText: '永久删除',
+    okButtonProps: { danger: true },
+    cancelText: '取消',
+    onOk: async () => {
+      await purgeGoodsApi(record.id);
+      message.success('商品已永久删除');
+      await refreshData();
+    },
+  });
 };
 
 /* ---------------- 表格列 ---------------- */
@@ -162,11 +251,15 @@ const columns = [
       if (!hasAccessByCodes(['SystemGoodsUpdateOnSale'])) {
         return record.is_on_sale === 1 ? '上架' : '下架';
       }
+      if (activeViewTab.value === 'recycle') {
+        return record.is_on_sale === 1 ? '上架' : '下架';
+      }
       return h(Switch, {
         checked: record.is_on_sale === 1,
         checkedChildren: '上架',
         unCheckedChildren: '下架',
-        onChange: (checked: boolean) => handleOnSaleChange(record, checked),
+        onChange: (checked: boolean | number | string) =>
+          handleOnSaleChange(record, checked),
       });
     },
   },
@@ -178,11 +271,15 @@ const columns = [
       if (!hasAccessByCodes(['SystemGoodsUpdateStatus'])) {
         return record.status === 1 ? '启用' : '禁用';
       }
+      if (activeViewTab.value === 'recycle') {
+        return record.status === 1 ? '启用' : '禁用';
+      }
       return h(Switch, {
         checked: record.status === 1,
         checkedChildren: '启用',
         unCheckedChildren: '禁用',
-        onChange: (checked: boolean) => handleStatusChange(record, checked),
+        onChange: (checked: boolean | number | string) =>
+          handleStatusChange(record, checked),
       });
     },
   },
@@ -192,138 +289,214 @@ const columns = [
 
 /* ---------------- 初始化 ---------------- */
 onMounted(() => {
-  loadData(searchParams.value);
+  refreshData();
   loadCategories();
   loadBrands();
 });
 </script>
 
 <template>
-  <div class="p-4">
-    <div class="mb-4">
-      <a-button
-        type="primary"
-        @click="handleCreate"
-        v-access:code="'SystemGoodsCreate'"
-      >
-        新增商品
-      </a-button>
-      <a-button class="ml-2" @click="() => loadData(searchParams.value)">
-        刷新
-      </a-button>
+  <div class="goods-page p-4">
+    <div class="goods-header">
+      <div>
+        <h2 class="goods-title">商品列表</h2>
+      </div>
+      <div class="goods-header-actions">
+        <a-button
+          type="primary"
+          @click="handleCreate"
+          v-access:code="'SystemGoodsCreate'"
+        >
+          新增商品
+        </a-button>
+        <a-button @click="refreshData">刷新</a-button>
+        <a-button v-access:code="'SystemGoodsExport'" @click="handleExport">
+          导出
+        </a-button>
+      </div>
     </div>
 
     <!-- 搜索表单 -->
-    <a-form layout="inline" class="mb-4">
-      <a-form-item label="关键词">
-        <a-input
-          v-model:value="searchParams.keyword"
-          placeholder="商品名称/关键词"
-          allow-clear
-          style="width: 180px"
-        />
-      </a-form-item>
-      <a-form-item label="分类">
-        <a-tree-select
-          v-model:value="searchParams.category_id"
-          :tree-data="categoryTreeData"
-          placeholder="请选择分类"
-          allow-clear
-          style="width: 180px"
-        />
-      </a-form-item>
-      <a-form-item label="品牌">
-        <a-select
-          v-model:value="searchParams.brand_id"
-          placeholder="请选择品牌"
-          allow-clear
-          style="width: 150px"
+    <div class="goods-filter-panel">
+      <a-form>
+        <div
+          class="grid grid-cols-1 gap-x-4 gap-y-3 md:grid-cols-3 xl:grid-cols-6"
         >
-          <a-select-option
-            v-for="brand in brandOptions"
-            :key="brand.value"
-            :value="brand.value"
-          >
-            {{ brand.label }}
-          </a-select-option>
-        </a-select>
-      </a-form-item>
-      <a-form-item label="上架状态">
-        <a-select
-          v-model:value="searchParams.is_on_sale"
-          placeholder="请选择"
-          allow-clear
-          style="width: 120px"
-        >
-          <a-select-option :value="1">已上架</a-select-option>
-          <a-select-option :value="0">已下架</a-select-option>
-        </a-select>
-      </a-form-item>
-      <a-form-item label="状态">
-        <a-select
-          v-model:value="searchParams.status"
-          placeholder="请选择"
-          allow-clear
-          style="width: 120px"
-        >
-          <a-select-option :value="1">启用</a-select-option>
-          <a-select-option :value="0">禁用</a-select-option>
-        </a-select>
-      </a-form-item>
-      <a-form-item>
-        <a-button
-          type="primary"
-          @click="
-            () => {
-              pagination.current = 1;
-              loadData(searchParams.value);
-            }
-          "
-        >
-          搜索
-        </a-button>
-        <a-button class="ml-2" @click="resetSearch"> 重置 </a-button>
-      </a-form-item>
-    </a-form>
+          <div>
+            <a-form-item class="mb-0" label="关键词">
+              <a-input
+                v-model:value="searchParams.keyword"
+                placeholder="商品名称/关键词"
+                allow-clear
+                class="w-full"
+                @press-enter="submitSearch"
+              />
+            </a-form-item>
+          </div>
+          <div>
+            <a-form-item class="mb-0" label="分类">
+              <a-tree-select
+                v-model:value="searchParams.category_id"
+                :tree-data="categoryTreeData"
+                placeholder="请选择分类"
+                allow-clear
+                class="w-full"
+              />
+            </a-form-item>
+          </div>
+          <div>
+            <a-form-item class="mb-0" label="品牌">
+              <a-select
+                v-model:value="searchParams.brand_id"
+                placeholder="请选择品牌"
+                allow-clear
+                class="w-full"
+              >
+                <a-select-option
+                  v-for="brand in brandOptions"
+                  :key="brand.value"
+                  :value="brand.value"
+                >
+                  {{ brand.label }}
+                </a-select-option>
+              </a-select>
+            </a-form-item>
+          </div>
+        </div>
+        <div class="mt-3 flex justify-end gap-2">
+          <a-button type="primary" @click="submitSearch">搜索</a-button>
+          <a-button @click="resetSearch">重置</a-button>
+        </div>
+      </a-form>
+    </div>
 
-    <a-table
-      :columns="columns"
-      :data-source="tableData"
-      :loading="loading"
-      :pagination="pagination"
-      :scroll="{ x: 1500 }"
-      row-key="id"
-      @change="
-        (newPagination) => {
-          pagination.current = newPagination.current;
-          pagination.pageSize = newPagination.pageSize;
-          loadData(searchParams.value);
-        }
-      "
-    >
-      <template #bodyCell="{ column, record }">
-        <template v-if="column.key === 'action'">
-          <a-space>
-            <a-button
-              type="link"
-              size="small"
-              @click="handleEdit(record)"
-              v-access:code="'SystemGoodsUpdate'"
-            >
-              编辑
-            </a-button>
-            <a-button
-              type="link"
-              danger
-              size="small"
-              @click="handleDelete(record, 'name')"
-              v-access:code="'SystemGoodsDelete'"
-            >
-              删除
-            </a-button>
-          </a-space>
+    <div class="goods-table-panel">
+      <a-tabs
+        :active-key="activeViewTab"
+        class="goods-status-tabs"
+        size="small"
+        @change="handleViewTabChange"
+      >
+        <a-tab-pane v-for="tab in statsTabs" :key="tab.key">
+          <template #tab>
+            <span>{{ tab.label }} {{ tab.count }}</span>
+          </template>
+        </a-tab-pane>
+      </a-tabs>
+
+      <a-table
+        :columns="columns"
+        :data-source="tableData"
+        :loading="loading"
+        :pagination="pagination"
+        :scroll="{ x: 1500 }"
+        row-key="id"
+        @change="handleTableChange"
+      >
+        <template #bodyCell="{ column, record }">
+          <template v-if="column.key === 'action'">
+            <a-space v-if="activeViewTab !== 'recycle'">
+              <a-button
+                type="link"
+                size="small"
+                @click="handleEdit(record)"
+                v-access:code="'SystemGoodsUpdate'"
+              >
+                编辑
+              </a-button>
+              <a-button
+                type="link"
+                danger
+                size="small"
+                @click="handleMoveToRecycle(record)"
+                v-access:code="'SystemGoodsDelete'"
+              >
+                删除
+              </a-button>
+            </a-space>
+            <a-space v-else>
+              <a-button
+                type="link"
+                size="small"
+                @click="handleRestore(record)"
+                v-access:code="'SystemGoodsRestore'"
+              >
+                恢复
+              </a-button>
+              <a-button
+                type="link"
+                danger
+                size="small"
+                @click="handlePurge(record)"
+                v-access:code="'SystemGoodsPurge'"
+              >
+                永久删除
+              </a-button>
+            </a-space>
+          </template>
         </template>
-      </template>
-    </a-table>
+      </a-table>
+    </div>
   </div>
 </template>
+
+<style scoped>
+.goods-page {
+  min-height: 100%;
+}
+
+.goods-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.goods-title {
+  margin: 0;
+  color: hsl(var(--foreground));
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 32px;
+}
+
+.goods-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.goods-filter-panel,
+.goods-table-panel {
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+}
+
+.goods-filter-panel {
+  padding: 16px;
+  margin-bottom: 12px;
+}
+
+.goods-table-panel {
+  overflow: hidden;
+}
+
+.goods-status-tabs {
+  padding: 0 16px;
+  margin-bottom: 0;
+}
+
+.goods-status-tabs :deep(.ant-tabs-nav) {
+  margin-bottom: 0;
+}
+
+.goods-status-tabs :deep(.ant-tabs-tab) {
+  padding: 14px 0 12px;
+}
+
+.goods-table-panel :deep(.ant-table-wrapper) {
+  border-top: 1px solid hsl(var(--border));
+}
+</style>

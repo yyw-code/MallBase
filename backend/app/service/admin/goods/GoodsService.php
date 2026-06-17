@@ -10,6 +10,7 @@ use app\model\goods\GoodsSku;
 use app\model\goods\GoodsTag;
 use app\model\goods\GoodsTagRelation;
 use app\model\setting\FreightTemplate;
+use app\service\admin\support\CsvExportService;
 use app\service\upload\AssetHydrator;
 use app\service\upload\AssetIdNormalizer;
 use app\service\upload\AssetService;
@@ -23,6 +24,7 @@ use mall_base\exception\BusinessException;
 class GoodsService extends BaseService
 {
     private const DEFAULT_SINGLE_SKU_SPEC_VALUES = '';
+    private const EXPORT_LIMIT = 5000;
 
     /**
      * 默认 Model 类名
@@ -34,7 +36,23 @@ class GoodsService extends BaseService
      */
     protected function buildListQuery(array $where)
     {
-        return $this->model()
+        $query = $this->model();
+        $view = (string) ($where['view'] ?? 'all');
+
+        if ($view === 'recycle') {
+            $query->whereNotNull('delete_time');
+        } else {
+            $query->whereNull('delete_time');
+            if ($view === 'on_sale') {
+                $query->where('status', 1)->where('is_on_sale', 1);
+            } elseif ($view === 'off_sale') {
+                $query->where('status', 1)->where('is_on_sale', 0);
+            } elseif ($view === 'disabled') {
+                $query->where('status', 0);
+            }
+        }
+
+        return $query
             ->when(!empty($where['keyword']), function ($q) use ($where) {
                 $q->whereLike('name|subtitle', "%{$where['keyword']}%");
             })
@@ -67,38 +85,107 @@ class GoodsService extends BaseService
         $total = $this->buildListQuery($where)->count();
 
         $listArray = $list->toArray();
-        if (!empty($listArray)) {
-            // 批量获取分类名
-            $categoryIds = array_unique(array_column($listArray, 'category_id'));
-            $categories = $this->model(GoodsCategory::class)
-                ->whereIn('id', $categoryIds)
-                ->column('name', 'id');
-
-            // 批量获取品牌名
-            $brandIds = array_filter(array_unique(array_column($listArray, 'brand_id')));
-            $brands = !empty($brandIds)
-                ? $this->model(GoodsBrand::class)->whereIn('id', $brandIds)->column('name', 'id')
-                : [];
-
-            $goodsIds = array_column($listArray, 'id');
-            $tagMap = $this->batchGetGoodsTags($goodsIds);
-
-            foreach ($listArray as &$item) {
-                $firstImageValue = $this->getFirstImageValue($item['images'] ?? []);
-                if (empty($item['main_image']) && $firstImageValue !== '') {
-                    $item['main_image'] = $firstImageValue;
-                }
-                $item['category_name'] = $categories[$item['category_id']] ?? '';
-                $item['brand_name'] = $brands[$item['brand_id']] ?? '';
-                $item['tags'] = $tagMap[$item['id']] ?? [];
-            }
-            unset($item);
-
-            $listArray = app()->make(AssetHydrator::class)->hydrateGoodsList($listArray);
-        }
+        $listArray = $this->appendListDerivedFields($listArray);
 
         $list = $listArray;
         return compact('total', 'list');
+    }
+
+    /**
+     * @return array{total:int,tabs:array<int,array{key:string,label:string,count:int}>}
+     */
+    public function stats(array $where): array
+    {
+        $baseWhere = $where;
+        unset($baseWhere['view'], $baseWhere['status'], $baseWhere['is_on_sale']);
+
+        $tabs = [];
+        $views = [
+            'all' => '全部',
+            'on_sale' => '出售中',
+            'off_sale' => '已下架',
+            'disabled' => '已禁用',
+            'recycle' => '回收站',
+        ];
+
+        foreach ($views as $key => $label) {
+            $viewWhere = $baseWhere;
+            $viewWhere['view'] = $key;
+            $tabs[] = [
+                'key' => $key,
+                'label' => $label,
+                'count' => (int) $this->buildListQuery($viewWhere)->count(),
+            ];
+        }
+
+        $total = (int) ($tabs[0]['count'] ?? 0);
+        return compact('total', 'tabs');
+    }
+
+    public function exportCsv(array $where): string
+    {
+        $rows = $this->buildListQuery($where)
+            ->order('id', 'desc')
+            ->limit(self::EXPORT_LIMIT)
+            ->select()
+            ->toArray();
+        $rows = $this->appendListDerivedFields($rows);
+
+        foreach ($rows as &$row) {
+            $row['is_on_sale_text'] = (int) ($row['is_on_sale'] ?? 0) === 1 ? '上架' : '下架';
+            $row['status_text'] = (int) ($row['status'] ?? 0) === 1 ? '启用' : '禁用';
+        }
+        unset($row);
+
+        return app()->make(CsvExportService::class)->make([
+            'id' => 'ID',
+            'name' => '商品名称',
+            'category_name' => '分类',
+            'brand_name' => '品牌',
+            'price' => '价格',
+            'stock' => '库存',
+            'sales' => '销量',
+            'is_on_sale_text' => '上架状态',
+            'status_text' => '状态',
+            'create_time' => '创建时间',
+        ], $rows);
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $listArray
+     * @return array<int, array<string, mixed>>
+     */
+    private function appendListDerivedFields(array $listArray): array
+    {
+        if (empty($listArray)) {
+            return [];
+        }
+
+        $categoryIds = array_unique(array_column($listArray, 'category_id'));
+        $categories = $this->model(GoodsCategory::class)
+            ->whereIn('id', $categoryIds)
+            ->column('name', 'id');
+
+        $brandIds = array_filter(array_unique(array_column($listArray, 'brand_id')));
+        $brands = !empty($brandIds)
+            ? $this->model(GoodsBrand::class)->whereIn('id', $brandIds)->column('name', 'id')
+            : [];
+
+        $goodsIds = array_column($listArray, 'id');
+        $tagMap = $this->batchGetGoodsTags($goodsIds);
+
+        foreach ($listArray as &$item) {
+            $firstImageValue = $this->getFirstImageValue($item['images'] ?? []);
+            if (empty($item['main_image']) && $firstImageValue !== '') {
+                $item['main_image'] = $firstImageValue;
+            }
+            $item['category_name'] = $categories[$item['category_id']] ?? '';
+            $item['brand_name'] = $brands[$item['brand_id']] ?? '';
+            $item['tags'] = $tagMap[$item['id']] ?? [];
+        }
+        unset($item);
+
+        return app()->make(AssetHydrator::class)->hydrateGoodsList($listArray);
     }
 
     /**
@@ -110,7 +197,7 @@ class GoodsService extends BaseService
      */
     public function getInfo(int $id): array
     {
-        $goods = $this->model()->find($id);
+        $goods = $this->model()->where('id', $id)->whereNull('delete_time')->find();
 
         if (!$goods) {
             throw new BusinessException('商品不存在');
@@ -211,7 +298,7 @@ class GoodsService extends BaseService
         $data = $this->normalizeSkusBySpecType($data);
 
         // 业务校验（事务外）
-        $goods = $this->model()->find($id);
+        $goods = $this->model()->where('id', $id)->whereNull('delete_time')->find();
 
         if (!$goods) {
             throw new BusinessException('商品不存在');
@@ -257,13 +344,36 @@ class GoodsService extends BaseService
     public function delete(int $id): bool
     {
         // 业务校验（事务外）
-        $goods = $this->model()->find($id);
+        $goods = $this->model()->where('id', $id)->whereNull('delete_time')->find();
 
         if (!$goods) {
             throw new BusinessException('商品不存在');
         }
 
-        // 事务内删除关联数据
+        $goods->save(['delete_time' => time()]);
+        return true;
+    }
+
+    public function restore(int $id): bool
+    {
+        $goods = $this->model()->where('id', $id)->whereNotNull('delete_time')->find();
+
+        if (!$goods) {
+            throw new BusinessException('回收站商品不存在');
+        }
+
+        $goods->save(['delete_time' => null]);
+        return true;
+    }
+
+    public function purge(int $id): bool
+    {
+        $goods = $this->model()->where('id', $id)->whereNotNull('delete_time')->find();
+
+        if (!$goods) {
+            throw new BusinessException('回收站商品不存在');
+        }
+
         return (bool) $this->transaction(function () use ($id, $goods) {
             $this->model(GoodsSku::class)->where('goods_id', $id)->delete();
             $this->model(GoodsTagRelation::class)->where('goods_id', $id)->delete();
@@ -282,7 +392,7 @@ class GoodsService extends BaseService
      */
     public function updateStatus(int $id, int $status): bool
     {
-        $goods = $this->model()->find($id);
+        $goods = $this->model()->where('id', $id)->whereNull('delete_time')->find();
 
         if (!$goods) {
             throw new BusinessException('商品不存在');
@@ -303,7 +413,7 @@ class GoodsService extends BaseService
      */
     public function updateOnSale(int $id, int $isOnSale): bool
     {
-        $goods = $this->model()->find($id);
+        $goods = $this->model()->where('id', $id)->whereNull('delete_time')->find();
 
         if (!$goods) {
             throw new BusinessException('商品不存在');

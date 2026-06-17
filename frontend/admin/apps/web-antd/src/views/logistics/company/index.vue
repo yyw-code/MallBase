@@ -180,103 +180,110 @@ onMounted(async () => {
 
 <template>
   <div class="p-4">
-    <div class="mb-4">
-      <a-button
-        type="primary"
-        @click="openModal()"
-        v-access:code="'SystemLogisticsCompanySave'"
-      >
-        新增
-      </a-button>
-      <a-button
-        class="ml-2"
-        @click="loadData"
-        v-access:code="'SystemLogisticsCompanyList'"
-      >
-        刷新
-      </a-button>
+    <div class="mb-3 flex items-center justify-between gap-4">
+      <h2 class="m-0 text-lg font-semibold">物流公司</h2>
+      <div class="flex flex-wrap justify-end gap-2">
+        <a-button
+          type="primary"
+          @click="openModal()"
+          v-access:code="'SystemLogisticsCompanySave'"
+        >
+          新增
+        </a-button>
+        <a-button
+          @click="loadData"
+          v-access:code="'SystemLogisticsCompanyList'"
+        >
+          刷新
+        </a-button>
+      </div>
     </div>
 
-    <a-form
-      layout="inline"
-      class="mb-4"
-      v-access:code="'SystemLogisticsCompanyList'"
-    >
-      <a-form-item label="平台">
-        <a-select
-          v-model:value="searchParams.platform"
-          :options="platformOptions"
-          placeholder="请选择"
-          style="width: 160px"
-        />
-      </a-form-item>
-      <a-form-item label="关键词">
-        <a-input
-          v-model:value="searchParams.keyword"
-          placeholder="公司名称/编码"
-          allow-clear
-          style="width: 200px"
-        />
-      </a-form-item>
-      <a-form-item label="状态">
-        <a-select
-          v-model:value="searchParams.status"
-          :options="statusOptions"
-          allow-clear
-          placeholder="全部"
-          style="width: 120px"
-        />
-      </a-form-item>
-      <a-form-item>
-        <a-button type="primary" @click="handleSearch">搜索</a-button>
-        <a-button class="ml-2" @click="handleReset">重置</a-button>
-      </a-form-item>
-    </a-form>
-
-    <a-table
-      :columns="columns"
-      :data-source="tableData"
-      :loading="loading"
-      :pagination="pagination"
-      :scroll="{ x: 1100 }"
-      row-key="id"
-      @change="handleTableChange"
-      v-access:code="'SystemLogisticsCompanyList'"
-    >
-      <template #bodyCell="{ column, record }">
-        <template v-if="column.dataIndex === 'platform'">
-          {{ platformName(record.platform) }}
-        </template>
-        <template v-if="column.dataIndex === 'status'">
-          <a-switch
-            :checked="record.status === 1"
-            checked-children="启"
-            un-checked-children="停"
-            @change="(checked) => handleStatus(Boolean(checked), record)"
-            v-access:code="'SystemLogisticsCompanyStatus'"
+    <div class="mb-3 rounded-lg border bg-[hsl(var(--card))] p-4">
+      <a-form
+        class="grid grid-cols-1 gap-x-4 gap-y-3 md:grid-cols-3 xl:grid-cols-6"
+        v-access:code="'SystemLogisticsCompanyList'"
+      >
+        <a-form-item label="平台" class="mb-0">
+          <a-select
+            v-model:value="searchParams.platform"
+            :options="platformOptions"
+            placeholder="请选择"
+            class="w-full"
           />
+        </a-form-item>
+        <a-form-item label="关键词" class="mb-0">
+          <a-input
+            v-model:value="searchParams.keyword"
+            placeholder="公司名称/编码"
+            allow-clear
+            class="w-full"
+          />
+        </a-form-item>
+        <a-form-item label="状态" class="mb-0">
+          <a-select
+            v-model:value="searchParams.status"
+            :options="statusOptions"
+            allow-clear
+            placeholder="全部"
+            class="w-full"
+          />
+        </a-form-item>
+        <a-form-item class="mb-0 md:col-span-3 xl:col-span-6">
+          <div class="flex justify-end gap-2">
+            <a-button type="primary" @click="handleSearch">搜索</a-button>
+            <a-button @click="handleReset">重置</a-button>
+          </div>
+        </a-form-item>
+      </a-form>
+    </div>
+
+    <div class="overflow-hidden rounded-lg border bg-[hsl(var(--card))]">
+      <a-table
+        :columns="columns"
+        :data-source="tableData"
+        :loading="loading"
+        :pagination="pagination"
+        :scroll="{ x: 1100 }"
+        row-key="id"
+        @change="handleTableChange"
+        v-access:code="'SystemLogisticsCompanyList'"
+      >
+        <template #bodyCell="{ column, record }">
+          <template v-if="column.dataIndex === 'platform'">
+            {{ platformName(record.platform) }}
+          </template>
+          <template v-if="column.dataIndex === 'status'">
+            <a-switch
+              :checked="record.status === 1"
+              checked-children="启"
+              un-checked-children="停"
+              @change="(checked) => handleStatus(Boolean(checked), record)"
+              v-access:code="'SystemLogisticsCompanyStatus'"
+            />
+          </template>
+          <template v-if="column.key === 'action'">
+            <a-button
+              type="link"
+              size="small"
+              @click="openModal(record)"
+              v-access:code="'SystemLogisticsCompanySave'"
+            >
+              编辑
+            </a-button>
+            <a-button
+              type="link"
+              size="small"
+              danger
+              @click="handleDelete(record)"
+              v-access:code="'SystemLogisticsCompanyDelete'"
+            >
+              删除
+            </a-button>
+          </template>
         </template>
-        <template v-if="column.key === 'action'">
-          <a-button
-            type="link"
-            size="small"
-            @click="openModal(record)"
-            v-access:code="'SystemLogisticsCompanySave'"
-          >
-            编辑
-          </a-button>
-          <a-button
-            type="link"
-            size="small"
-            danger
-            @click="handleDelete(record)"
-            v-access:code="'SystemLogisticsCompanyDelete'"
-          >
-            删除
-          </a-button>
-        </template>
-      </template>
-    </a-table>
+      </a-table>
+    </div>
 
     <a-modal
       v-model:open="modalVisible"

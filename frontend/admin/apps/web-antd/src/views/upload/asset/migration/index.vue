@@ -329,66 +329,71 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="migration-page">
-    <div class="migration-toolbar">
-      <a-button
-        type="primary"
-        @click="modalOpen = true"
-        v-access:code="'SystemUploadAssetMigrationCreate'"
-      >
-        新建迁移
-      </a-button>
-      <a-button
-        @click="cleanup"
-        v-access:code="'SystemUploadAssetMigrationCleanup'"
-      >
-        清理任务
-      </a-button>
-      <a-button
-        @click="loadData"
-        v-access:code="'SystemUploadAssetMigrationList'"
-      >
-        刷新
-      </a-button>
+  <div class="p-4">
+    <div class="mb-3 flex items-center justify-between gap-4">
+      <h2 class="m-0 text-lg font-semibold">素材迁移</h2>
+      <div class="flex flex-wrap justify-end gap-2">
+        <a-button
+          type="primary"
+          @click="modalOpen = true"
+          v-access:code="'SystemUploadAssetMigrationCreate'"
+        >
+          新建迁移
+        </a-button>
+        <a-button
+          @click="cleanup"
+          v-access:code="'SystemUploadAssetMigrationCleanup'"
+        >
+          清理任务
+        </a-button>
+        <a-button
+          @click="loadData"
+          v-access:code="'SystemUploadAssetMigrationList'"
+        >
+          刷新
+        </a-button>
+      </div>
     </div>
 
-    <a-table
-      row-key="id"
-      :columns="columns"
-      :data-source="tableData"
-      :loading="loading"
-      :pagination="pagination"
-      :scroll="tableScroll"
-      @change="handleTableChange"
-    >
-      <template #bodyCell="{ column, record }">
-        <template v-if="column.key === 'action'">
-          <a-space>
-            <a-button
-              type="link"
-              size="small"
-              @click="openLogs(record)"
-              v-access:code="'SystemUploadAssetMigrationLogs'"
-            >
-              日志
-            </a-button>
-            <a-button
-              v-if="
-                record.status === 0 ||
-                record.status === 1 ||
-                record.status === 3
-              "
-              type="link"
-              size="small"
-              @click="retryTask(record)"
-              v-access:code="'SystemUploadAssetMigrationRetry'"
-            >
-              重试
-            </a-button>
-          </a-space>
+    <div class="overflow-hidden rounded-lg border bg-[hsl(var(--card))]">
+      <a-table
+        row-key="id"
+        :columns="columns"
+        :data-source="tableData"
+        :loading="loading"
+        :pagination="pagination"
+        :scroll="tableScroll"
+        @change="handleTableChange"
+      >
+        <template #bodyCell="{ column, record }">
+          <template v-if="column.key === 'action'">
+            <a-space>
+              <a-button
+                type="link"
+                size="small"
+                @click="openLogs(record)"
+                v-access:code="'SystemUploadAssetMigrationLogs'"
+              >
+                日志
+              </a-button>
+              <a-button
+                v-if="
+                  record.status === 0 ||
+                  record.status === 1 ||
+                  record.status === 3
+                "
+                type="link"
+                size="small"
+                @click="retryTask(record)"
+                v-access:code="'SystemUploadAssetMigrationRetry'"
+              >
+                重试
+              </a-button>
+            </a-space>
+          </template>
         </template>
-      </template>
-    </a-table>
+      </a-table>
+    </div>
 
     <a-modal v-model:open="modalOpen" title="新建迁移任务" @ok="createTask">
       <a-form
@@ -487,16 +492,6 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.migration-page {
-  padding: 16px;
-}
-
-.migration-toolbar {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 16px;
-}
-
 .log-toolbar {
   display: flex;
   gap: 8px;

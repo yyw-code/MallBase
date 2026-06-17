@@ -7,6 +7,8 @@ use think\facade\Route;
 
 Route::group('order', function () {
     Route::get('list', 'list')->name('SystemOrderList')->option(['_alias' => '订单列表', '_desc' => '获取订单列表', '_auth' => true, '_type' => Permission::TYPE_MENU]);
+    Route::get('stats', 'stats')->name('SystemOrderStats')->option(['_alias' => '订单统计', '_desc' => '获取订单状态统计', '_auth' => true, '_type' => Permission::TYPE_MENU]);
+    Route::get('export', 'export')->name('SystemOrderExport')->option(['_alias' => '导出订单', '_desc' => '按筛选条件导出订单 CSV', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::get('detail/:id', 'detail')->name('SystemOrderDetail')->option(['_alias' => '订单详情', '_desc' => '获取订单详情', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::get('statusOptions', 'statusOptions')->name('SystemOrderStatusOptions')->option(['_alias' => '订单枚举', '_desc' => '获取订单状态/支付方式下拉项', '_auth' => true, '_type' => Permission::TYPE_MENU]);
     Route::post('ship/:id', 'ship')->name('SystemOrderShip')->option(['_alias' => '发货/修改物流', '_desc' => '后台发货或修改已发货订单物流信息', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
@@ -27,6 +29,8 @@ Route::group('order', function () {
 
 Route::group('order/refund', function () {
     Route::get('list', 'list')->name('SystemRefundOrderList')->option(['_alias' => '售后列表', '_desc' => '获取售后订单列表', '_auth' => true, '_type' => Permission::TYPE_MENU]);
+    Route::get('stats', 'stats')->name('SystemRefundOrderStats')->option(['_alias' => '售后统计', '_desc' => '获取售后状态统计', '_auth' => true, '_type' => Permission::TYPE_MENU]);
+    Route::get('export', 'export')->name('SystemRefundOrderExport')->option(['_alias' => '导出售后', '_desc' => '按筛选条件导出售后 CSV', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::get('detail/:id', 'detail')->name('SystemRefundOrderDetail')->option(['_alias' => '售后详情', '_desc' => '获取售后订单详情', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::post('approve/:id', 'approve')->name('SystemRefundOrderApprove')->option(['_alias' => '同意售后', '_desc' => '审核同意售后申请并发起微信退款', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::post('reject/:id', 'reject')->name('SystemRefundOrderReject')->option(['_alias' => '驳回售后', '_desc' => '审核驳回售后申请', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);

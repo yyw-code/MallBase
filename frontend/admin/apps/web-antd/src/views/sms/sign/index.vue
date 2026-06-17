@@ -116,94 +116,106 @@ if (hasAccessByCodes(['SmsSignList'])) {
 
 <template>
   <div class="p-4">
-    <div class="mb-4">
-      <a-tooltip title="本地登记短信签名名称,用于场景绑定和发送短信">
-        <a-button
-          type="primary"
-          :disabled="!canImport"
-          @click="openImportModal"
-          v-access:code="'SmsSignImport'"
-        >
-          导入签名
+    <div class="mb-3 flex items-center justify-between gap-4">
+      <h2 class="m-0 text-lg font-semibold">短信签名</h2>
+      <div class="flex flex-wrap justify-end gap-2">
+        <a-tooltip title="本地登记短信签名名称,用于场景绑定和发送短信">
+          <a-button
+            type="primary"
+            :disabled="!canImport"
+            @click="openImportModal"
+            v-access:code="'SmsSignImport'"
+          >
+            导入签名
+          </a-button>
+        </a-tooltip>
+        <a-button @click="refresh" v-access:code="'SmsSignList'">
+          刷新
         </a-button>
-      </a-tooltip>
-      <a-button class="ml-2" @click="refresh" v-access:code="'SmsSignList'">
-        刷新
-      </a-button>
+      </div>
     </div>
 
-    <a-form layout="inline" class="mb-4" v-access:code="'SmsSignList'">
-      <a-form-item label="服务商">
-        <a-select
-          v-model:value="searchParams.provider_id"
-          placeholder="全部"
-          allow-clear
-          :options="providers.map((p) => ({ label: p.name, value: p.id }))"
-          style="width: 180px"
-        />
-      </a-form-item>
-      <a-form-item label="关键词">
-        <a-input
-          v-model:value="searchParams.keyword"
-          placeholder="签名名称"
-          allow-clear
-          style="width: 200px"
-        />
-      </a-form-item>
-      <a-form-item>
-        <a-button
-          type="primary"
-          @click="
-            () => {
-              pagination.current = 1;
-              loadData(searchParams.value);
-            }
-          "
-        >
-          搜索
-        </a-button>
-        <a-button class="ml-2" @click="resetSearch">重置</a-button>
-      </a-form-item>
-    </a-form>
-
-    <a-table
-      :columns="columns"
-      :data-source="tableData"
-      :loading="loading"
-      :pagination="pagination"
-      :scroll="{ x: 1200 }"
-      row-key="id"
-      @change="
-        (newPagination) => {
-          pagination.current = newPagination.current;
-          pagination.pageSize = newPagination.pageSize;
-          loadData(searchParams.value);
-        }
-      "
-      v-access:code="'SmsSignList'"
-    >
-      <template #bodyCell="{ column, record }">
-        <template v-if="column.dataIndex === 'provider_id'">
-          {{ providerName(record.provider_id) }}
-        </template>
-        <template v-if="column.dataIndex === 'remark'">
-          {{ record.remark || '-' }}
-        </template>
-        <template v-if="column.key === 'action'">
-          <a-space>
+    <div class="mb-3 rounded-lg border bg-[hsl(var(--card))] p-4">
+      <a-form
+        class="grid grid-cols-1 gap-x-4 gap-y-3 md:grid-cols-3 xl:grid-cols-6"
+        v-access:code="'SmsSignList'"
+      >
+        <a-form-item label="服务商" class="mb-0">
+          <a-select
+            class="w-full"
+            v-model:value="searchParams.provider_id"
+            placeholder="全部"
+            allow-clear
+            :options="providers.map((p) => ({ label: p.name, value: p.id }))"
+          />
+        </a-form-item>
+        <a-form-item label="关键词" class="mb-0">
+          <a-input
+            v-model:value="searchParams.keyword"
+            placeholder="签名名称"
+            allow-clear
+            class="w-full"
+          />
+        </a-form-item>
+        <a-form-item class="mb-0 md:col-span-3 xl:col-span-6">
+          <div class="flex justify-end gap-2">
             <a-button
-              type="link"
-              danger
-              size="small"
-              @click="handleDelete(record, 'sign_name')"
-              v-access:code="'SmsSignDelete'"
+              type="primary"
+              @click="
+                () => {
+                  pagination.current = 1;
+                  loadData(searchParams.value);
+                }
+              "
             >
-              删除
+              搜索
             </a-button>
-          </a-space>
+            <a-button @click="resetSearch">重置</a-button>
+          </div>
+        </a-form-item>
+      </a-form>
+    </div>
+
+    <div class="overflow-hidden rounded-lg border bg-[hsl(var(--card))]">
+      <a-table
+        :columns="columns"
+        :data-source="tableData"
+        :loading="loading"
+        :pagination="pagination"
+        :scroll="{ x: 1200 }"
+        row-key="id"
+        @change="
+          (newPagination) => {
+            pagination.current = newPagination.current;
+            pagination.pageSize = newPagination.pageSize;
+            loadData(searchParams.value);
+          }
+        "
+        v-access:code="'SmsSignList'"
+      >
+        <template #bodyCell="{ column, record }">
+          <template v-if="column.dataIndex === 'provider_id'">
+            {{ providerName(record.provider_id) }}
+          </template>
+          <template v-if="column.dataIndex === 'remark'">
+            {{ record.remark || '-' }}
+          </template>
+          <template v-if="column.key === 'action'">
+            <a-space>
+              <a-button
+                type="link"
+                danger
+                size="small"
+                @click="handleDelete(record, 'sign_name')"
+                v-access:code="'SmsSignDelete'"
+              >
+                删除
+              </a-button>
+            </a-space>
+          </template>
         </template>
-      </template>
-    </a-table>
+      </a-table>
+    </div>
 
     <a-modal
       v-model:open="importModalVisible"

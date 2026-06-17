@@ -135,6 +135,17 @@ export namespace OrderApi {
     label: string;
   }
 
+  export interface StatsTab {
+    key: string;
+    label: string;
+    count: number;
+  }
+
+  export interface StatsResponse {
+    tabs: StatsTab[];
+    total: number;
+  }
+
   /** 枚举接口响应 */
   export interface StatusOptionsResponse {
     status: EnumOption[];
@@ -150,6 +161,16 @@ export async function getOrderListApi(params?: OrderApi.ListParams) {
     list: OrderApi.OrderRecord[];
     total: number;
   }>('/order/list', { params });
+}
+
+export async function getOrderStatsApi(params?: OrderApi.ListParams) {
+  return requestClient.get<OrderApi.StatsResponse>('/order/stats', {
+    params,
+  });
+}
+
+export async function exportOrderCsvApi(params?: OrderApi.ListParams) {
+  return requestClient.download<Blob>('/order/export', { params });
 }
 
 /**

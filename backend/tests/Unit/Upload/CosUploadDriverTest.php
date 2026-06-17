@@ -68,7 +68,7 @@ final class CosUploadDriverTest extends TestCase
                 'full_url' => 'https://cdn.example.com/assets/images/review/a.jpg',
                 'size' => 1234,
                 'mime' => 'image/jpeg',
-                'modified' => '2026-06-01 08:30:00',
+                'modified' => date('Y-m-d H:i:s', strtotime('Mon, 01 Jun 2026 08:30:00 GMT')),
             ], $info);
         } finally {
             @unlink($tmpFile);

@@ -14,6 +14,7 @@ use app\service\order\OrderSettingService;
 use app\service\order\StockService;
 use app\service\order\WechatPrepayCloseService;
 use app\service\logistics\LogisticsService;
+use app\service\admin\support\CsvExportService;
 use app\service\upload\AssetHydrator;
 use app\common\enum\OperatorType;
 use app\common\enum\OrderStatus;
@@ -37,6 +38,7 @@ class OrderAdminService extends BaseService
 
     public const ADJUST_MODE_ITEM_DISCOUNT = 'item_discount';
     public const ADJUST_MODE_PAY_PERCENT = 'pay_percent';
+    private const EXPORT_LIMIT = 5000;
 
     /**
      * 发货或修改物流信息。
@@ -646,47 +648,7 @@ class OrderAdminService extends BaseService
      */
     public function adminList(array $filter = [], int $page = 1, int $pageSize = 10): array
     {
-        $query = $this->model()->whereNull('delete_time');
-
-        if (!empty($filter['sn'])) {
-            $query->where('sn', 'like', '%' . trim((string) $filter['sn']) . '%');
-        }
-        if (isset($filter['status']) && $filter['status'] !== null && $filter['status'] !== '') {
-            $query->where('status', (int) $filter['status']);
-        }
-        if (!empty($filter['user_id'])) {
-            $query->where('user_id', (int) $filter['user_id']);
-        }
-        if (!empty($filter['logistics_sn'])) {
-            $query->where('logistics_sn', 'like', '%' . trim((string) $filter['logistics_sn']) . '%');
-        }
-        if (!empty($filter['created_start'])) {
-            $query->where('create_time', '>=', (string) $filter['created_start']);
-        }
-        if (!empty($filter['created_end'])) {
-            $query->where('create_time', '<=', (string) $filter['created_end']);
-        }
-
-        // has_after_sale：两步查询兼容多种数据库前缀
-        // 先查出所有存在进行中售后单的 order_id，再 whereIn/whereNotIn
-        // MVP 量级够用，百万级可改冗余字段 after_sale_tag
-        if (isset($filter['has_after_sale']) && $filter['has_after_sale'] !== null && $filter['has_after_sale'] !== '') {
-            $activeOrderIds = $this->model(RefundOrder::class)
-                ->whereIn('status', RefundOrderStatus::activeStatuses())
-                ->whereNull('delete_time')
-                ->distinct(true)
-                ->column('order_id');
-            $activeOrderIds = array_values(array_unique(array_map('intval', $activeOrderIds)));
-
-            if ((bool) $filter['has_after_sale']) {
-                // 无任何进行中售后单 → 命中集合为空，列表必定为空
-                $query->whereIn('id', $activeOrderIds ?: [0]);
-            } else {
-                if ($activeOrderIds !== []) {
-                    $query->whereNotIn('id', $activeOrderIds);
-                }
-            }
-        }
+        $query = $this->buildAdminListQuery($filter);
 
         $total = (clone $query)->count();
         $list = $query
@@ -710,6 +672,69 @@ class OrderAdminService extends BaseService
     }
 
     /**
+     * @param array{sn?:string, status?:int|null, user_id?:int|null, logistics_sn?:string, created_start?:string, created_end?:string, has_after_sale?:bool|null} $filter
+     * @return array{total:int,tabs:array<int,array{key:string,label:string,count:int}>}
+     */
+    public function adminStats(array $filter = []): array
+    {
+        $baseFilter = $filter;
+        unset($baseFilter['status']);
+
+        $total = (int) $this->buildAdminListQuery($baseFilter)->count();
+        $tabs = [[
+            'key' => 'all',
+            'label' => '全部',
+            'count' => $total,
+        ]];
+
+        foreach (OrderStatus::options() as $option) {
+            $statusFilter = $baseFilter;
+            $statusFilter['status'] = $option['value'];
+            $tabs[] = [
+                'key' => (string) $option['value'],
+                'label' => (string) $option['label'],
+                'count' => (int) $this->buildAdminListQuery($statusFilter)->count(),
+            ];
+        }
+
+        return compact('total', 'tabs');
+    }
+
+    /**
+     * @param array{sn?:string, status?:int|null, user_id?:int|null, logistics_sn?:string, created_start?:string, created_end?:string, has_after_sale?:bool|null} $filter
+     */
+    public function exportCsv(array $filter = []): string
+    {
+        $rows = $this->buildAdminListQuery($filter)
+            ->order('id', 'desc')
+            ->limit(self::EXPORT_LIMIT)
+            ->select()
+            ->toArray();
+
+        foreach ($rows as &$row) {
+            $row['status_text'] = OrderStatus::textOf((int) ($row['status'] ?? 0));
+            $row['pay_method_text'] = isset($row['pay_method']) && $row['pay_method'] !== null
+                ? PayMethod::textOf((int) $row['pay_method'])
+                : '';
+        }
+        unset($row);
+
+        return app()->make(CsvExportService::class)->make([
+            'id' => 'ID',
+            'sn' => '订单号',
+            'status_text' => '状态',
+            'user_id' => '买家ID',
+            'pay_amount' => '应付金额',
+            'pay_method_text' => '支付方式',
+            'receiver_name' => '收件人',
+            'receiver_phone' => '收件手机',
+            'logistics_company' => '物流公司',
+            'logistics_sn' => '运单号',
+            'create_time' => '下单时间',
+        ], $rows);
+    }
+
+    /**
      * 后台订单详情（含订单项 + 日志时间轴 + 售后标签）
      */
     public function adminDetail(int $orderId): array
@@ -729,6 +754,50 @@ class OrderAdminService extends BaseService
     }
 
     // ---------------- 内部 ----------------
+
+    /**
+     * @param array{sn?:string, status?:int|null, user_id?:int|null, logistics_sn?:string, created_start?:string, created_end?:string, has_after_sale?:bool|null} $filter
+     */
+    private function buildAdminListQuery(array $filter)
+    {
+        $query = $this->model()->whereNull('delete_time');
+
+        if (!empty($filter['sn'])) {
+            $query->where('sn', 'like', '%' . trim((string) $filter['sn']) . '%');
+        }
+        if (isset($filter['status']) && $filter['status'] !== null && $filter['status'] !== '') {
+            $query->where('status', (int) $filter['status']);
+        }
+        if (!empty($filter['user_id'])) {
+            $query->where('user_id', (int) $filter['user_id']);
+        }
+        if (!empty($filter['logistics_sn'])) {
+            $query->where('logistics_sn', 'like', '%' . trim((string) $filter['logistics_sn']) . '%');
+        }
+        if (!empty($filter['created_start'])) {
+            $query->where('create_time', '>=', (string) $filter['created_start']);
+        }
+        if (!empty($filter['created_end'])) {
+            $query->where('create_time', '<=', (string) $filter['created_end']);
+        }
+
+        if (isset($filter['has_after_sale']) && $filter['has_after_sale'] !== null && $filter['has_after_sale'] !== '') {
+            $activeOrderIds = $this->model(RefundOrder::class)
+                ->whereIn('status', RefundOrderStatus::activeStatuses())
+                ->whereNull('delete_time')
+                ->distinct(true)
+                ->column('order_id');
+            $activeOrderIds = array_values(array_unique(array_map('intval', $activeOrderIds)));
+
+            if ((bool) $filter['has_after_sale']) {
+                $query->whereIn('id', $activeOrderIds ?: [0]);
+            } elseif ($activeOrderIds !== []) {
+                $query->whereNotIn('id', $activeOrderIds);
+            }
+        }
+
+        return $query;
+    }
 
     protected function findOrder(int $orderId): Order
     {

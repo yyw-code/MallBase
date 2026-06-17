@@ -151,50 +151,55 @@ onMounted(loadData);
 </script>
 
 <template>
-  <div class="category-page">
-    <div class="category-toolbar">
-      <a-button
-        type="primary"
-        @click="openCreate"
-        v-access:code="'SystemUploadAssetCategoryCreate'"
-      >
-        新增分类
-      </a-button>
+  <div class="p-4">
+    <div class="mb-3 flex items-center justify-between gap-4">
+      <h2 class="m-0 text-lg font-semibold">素材分类</h2>
+      <div class="flex flex-wrap justify-end gap-2">
+        <a-button
+          type="primary"
+          @click="openCreate"
+          v-access:code="'SystemUploadAssetCategoryCreate'"
+        >
+          新增分类
+        </a-button>
+      </div>
     </div>
 
-    <a-table
-      row-key="id"
-      :columns="columns"
-      :data-source="tableData"
-      :loading="loading"
-      :pagination="pagination"
-      :scroll="tableScroll"
-      @change="handleTableChange"
-    >
-      <template #bodyCell="{ column, record }">
-        <template v-if="column.key === 'action'">
-          <a-button
-            type="link"
-            size="small"
-            @click="openEdit(record)"
-            v-access:code="'SystemUploadAssetCategoryUpdate'"
-          >
-            编辑
-          </a-button>
-          <a-button
-            type="link"
-            danger
-            size="small"
-            :disabled="record.is_system === 1"
-            :title="record.is_system === 1 ? '系统分类不能删除' : ''"
-            @click="handleDelete(record)"
-            v-access:code="'SystemUploadAssetCategoryDelete'"
-          >
-            删除
-          </a-button>
+    <div class="overflow-hidden rounded-lg border bg-[hsl(var(--card))]">
+      <a-table
+        row-key="id"
+        :columns="columns"
+        :data-source="tableData"
+        :loading="loading"
+        :pagination="pagination"
+        :scroll="tableScroll"
+        @change="handleTableChange"
+      >
+        <template #bodyCell="{ column, record }">
+          <template v-if="column.key === 'action'">
+            <a-button
+              type="link"
+              size="small"
+              @click="openEdit(record)"
+              v-access:code="'SystemUploadAssetCategoryUpdate'"
+            >
+              编辑
+            </a-button>
+            <a-button
+              type="link"
+              danger
+              size="small"
+              :disabled="record.is_system === 1"
+              :title="record.is_system === 1 ? '系统分类不能删除' : ''"
+              @click="handleDelete(record)"
+              v-access:code="'SystemUploadAssetCategoryDelete'"
+            >
+              删除
+            </a-button>
+          </template>
         </template>
-      </template>
-    </a-table>
+      </a-table>
+    </div>
 
     <a-modal
       v-model:open="modalOpen"
@@ -240,14 +245,6 @@ onMounted(loadData);
 </template>
 
 <style scoped>
-.category-page {
-  padding: 16px;
-}
-
-.category-toolbar {
-  margin-bottom: 16px;
-}
-
 .category-number {
   width: 160px;
 }

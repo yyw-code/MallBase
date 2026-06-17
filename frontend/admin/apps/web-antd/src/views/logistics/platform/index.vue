@@ -185,111 +185,117 @@ onMounted(() => {
 
 <template>
   <div class="p-4">
-    <div class="mb-4">
-      <a-button
-        type="primary"
-        @click="openModal()"
-        v-access:code="'SystemLogisticsPlatformSave'"
-      >
-        新增平台
-      </a-button>
-      <a-button
-        class="ml-2"
-        @click="loadData"
-        v-access:code="'SystemLogisticsPlatformList'"
-      >
-        刷新
-      </a-button>
-      <a-button
-        class="ml-2"
-        danger
-        :disabled="selectedRowKeys.length === 0"
-        :loading="clearing"
-        @click="handleClearCache"
-        v-access:code="'SystemLogisticsPlatformClearCache'"
-      >
-        清缓存{{
-          selectedRowKeys.length > 0 ? `（${selectedRowKeys.length}）` : ''
-        }}
-      </a-button>
+    <div class="mb-3 flex items-center justify-between gap-4">
+      <h2 class="m-0 text-lg font-semibold">物流平台</h2>
+      <div class="flex flex-wrap justify-end gap-2">
+        <a-button
+          type="primary"
+          @click="openModal()"
+          v-access:code="'SystemLogisticsPlatformSave'"
+        >
+          新增平台
+        </a-button>
+        <a-button
+          @click="loadData"
+          v-access:code="'SystemLogisticsPlatformList'"
+        >
+          刷新
+        </a-button>
+        <a-button
+          danger
+          :disabled="selectedRowKeys.length === 0"
+          :loading="clearing"
+          @click="handleClearCache"
+          v-access:code="'SystemLogisticsPlatformClearCache'"
+        >
+          清缓存{{
+            selectedRowKeys.length > 0 ? `（${selectedRowKeys.length}）` : ''
+          }}
+        </a-button>
+      </div>
     </div>
 
-    <a-form
-      layout="inline"
-      class="mb-4"
-      v-access:code="'SystemLogisticsPlatformList'"
-    >
-      <a-form-item label="关键词">
-        <a-input
-          v-model:value="searchParams.keyword"
-          placeholder="平台名称/编码"
-          allow-clear
-          style="width: 200px"
-        />
-      </a-form-item>
-      <a-form-item label="接口驱动">
-        <a-select
-          v-model:value="searchParams.driver"
-          :options="driverOptions"
-          allow-clear
-          placeholder="全部"
-          style="width: 140px"
-        />
-      </a-form-item>
-      <a-form-item label="状态">
-        <a-select
-          v-model:value="searchParams.status"
-          :options="statusOptions"
-          allow-clear
-          placeholder="全部"
-          style="width: 120px"
-        />
-      </a-form-item>
-      <a-form-item>
-        <a-button type="primary" @click="handleSearch">搜索</a-button>
-        <a-button class="ml-2" @click="handleReset">重置</a-button>
-      </a-form-item>
-    </a-form>
+    <div class="mb-3 rounded-lg border bg-[hsl(var(--card))] p-4">
+      <a-form
+        class="grid grid-cols-1 gap-x-4 gap-y-3 md:grid-cols-3 xl:grid-cols-6"
+        v-access:code="'SystemLogisticsPlatformList'"
+      >
+        <a-form-item label="关键词" class="mb-0">
+          <a-input
+            v-model:value="searchParams.keyword"
+            placeholder="平台名称/编码"
+            allow-clear
+            class="w-full"
+          />
+        </a-form-item>
+        <a-form-item label="接口驱动" class="mb-0">
+          <a-select
+            v-model:value="searchParams.driver"
+            :options="driverOptions"
+            allow-clear
+            placeholder="全部"
+            class="w-full"
+          />
+        </a-form-item>
+        <a-form-item label="状态" class="mb-0">
+          <a-select
+            v-model:value="searchParams.status"
+            :options="statusOptions"
+            allow-clear
+            placeholder="全部"
+            class="w-full"
+          />
+        </a-form-item>
+        <a-form-item class="mb-0 md:col-span-3 xl:col-span-6">
+          <div class="flex justify-end gap-2">
+            <a-button type="primary" @click="handleSearch">搜索</a-button>
+            <a-button @click="handleReset">重置</a-button>
+          </div>
+        </a-form-item>
+      </a-form>
+    </div>
 
-    <a-table
-      :columns="columns"
-      :data-source="tableData"
-      :loading="loading"
-      :pagination="pagination"
-      :row-selection="rowSelection"
-      :scroll="{ x: 1050 }"
-      row-key="id"
-      @change="handleTableChange"
-      v-access:code="'SystemLogisticsPlatformList'"
-    >
-      <template #bodyCell="{ column, record }">
-        <template v-if="column.dataIndex === 'driver'">
-          <a-tag color="blue">{{ driverLabel(record.driver) }}</a-tag>
+    <div class="overflow-hidden rounded-lg border bg-[hsl(var(--card))]">
+      <a-table
+        :columns="columns"
+        :data-source="tableData"
+        :loading="loading"
+        :pagination="pagination"
+        :row-selection="rowSelection"
+        :scroll="{ x: 1050 }"
+        row-key="id"
+        @change="handleTableChange"
+        v-access:code="'SystemLogisticsPlatformList'"
+      >
+        <template #bodyCell="{ column, record }">
+          <template v-if="column.dataIndex === 'driver'">
+            <a-tag color="blue">{{ driverLabel(record.driver) }}</a-tag>
+          </template>
+          <template v-if="column.dataIndex === 'query_type'">
+            {{ queryTypeLabel(record) }}
+          </template>
+          <template v-if="column.dataIndex === 'is_default'">
+            <a-tag v-if="record.is_default === 1" color="green">默认</a-tag>
+            <span v-else>-</span>
+          </template>
+          <template v-if="column.dataIndex === 'status'">
+            <a-tag :color="record.status === 1 ? 'green' : 'default'">
+              {{ record.status === 1 ? '启用' : '禁用' }}
+            </a-tag>
+          </template>
+          <template v-if="column.key === 'action'">
+            <a-button
+              type="link"
+              size="small"
+              @click="openModal(record)"
+              v-access:code="'SystemLogisticsPlatformSave'"
+            >
+              编辑
+            </a-button>
+          </template>
         </template>
-        <template v-if="column.dataIndex === 'query_type'">
-          {{ queryTypeLabel(record) }}
-        </template>
-        <template v-if="column.dataIndex === 'is_default'">
-          <a-tag v-if="record.is_default === 1" color="green">默认</a-tag>
-          <span v-else>-</span>
-        </template>
-        <template v-if="column.dataIndex === 'status'">
-          <a-tag :color="record.status === 1 ? 'green' : 'default'">
-            {{ record.status === 1 ? '启用' : '禁用' }}
-          </a-tag>
-        </template>
-        <template v-if="column.key === 'action'">
-          <a-button
-            type="link"
-            size="small"
-            @click="openModal(record)"
-            v-access:code="'SystemLogisticsPlatformSave'"
-          >
-            编辑
-          </a-button>
-        </template>
-      </template>
-    </a-table>
+      </a-table>
+    </div>
 
     <a-modal
       v-model:open="modalVisible"

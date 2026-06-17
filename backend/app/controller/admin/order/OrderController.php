@@ -40,6 +40,29 @@ class OrderController extends BaseController
         return $this->success($this->service()->adminList($filter, $page, $pageSize), '获取成功');
     }
 
+    public function stats()
+    {
+        $filter = $this->request->param([
+            'sn', 'status', 'user_id', 'logistics_sn',
+            'created_start', 'created_end', 'has_after_sale',
+        ]);
+
+        return $this->success($this->service()->adminStats($filter), '获取成功');
+    }
+
+    public function export()
+    {
+        $filter = $this->request->param([
+            'sn', 'status', 'user_id', 'logistics_sn',
+            'created_start', 'created_end', 'has_after_sale',
+        ]);
+
+        return response($this->service()->exportCsv($filter), 200, [
+            'Content-Type' => 'text/csv; charset=utf-8',
+            'Content-Disposition' => 'attachment; filename="orders.csv"',
+        ]);
+    }
+
     /**
      * 订单详情
      */

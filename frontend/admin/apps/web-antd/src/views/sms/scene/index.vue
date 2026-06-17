@@ -366,7 +366,11 @@ if (hasAccessByCodes(['SmsSceneList'])) {
 
 <template>
   <div class="p-4">
-    <div class="mb-4">
+    <div class="mb-3 flex items-center justify-between gap-4">
+      <h2 class="m-0 text-lg font-semibold">短信场景</h2>
+    </div>
+
+    <div class="mb-3">
       <a-alert
         type="info"
         show-icon
@@ -374,120 +378,129 @@ if (hasAccessByCodes(['SmsSceneList'])) {
       />
     </div>
 
-    <a-form layout="inline" class="mb-4" v-access:code="'SmsSceneList'">
-      <a-form-item label="服务商">
-        <a-select
-          v-model:value="searchParams.provider_id"
-          placeholder="全部"
-          allow-clear
-          :options="providerOptions"
-          style="width: 180px"
-        />
-      </a-form-item>
-      <a-form-item label="关键词">
-        <a-input
-          v-model:value="searchParams.keyword"
-          placeholder="场景/编码/模板/签名/草稿"
-          allow-clear
-          style="width: 240px"
-          @press-enter="handleSearch"
-        />
-      </a-form-item>
-      <a-form-item label="状态">
-        <a-select
-          v-model:value="searchParams.status"
-          placeholder="全部"
-          allow-clear
-          :options="statusOptions"
-          style="width: 120px"
-        />
-      </a-form-item>
-      <a-form-item>
-        <a-button type="primary" @click="handleSearch">搜索</a-button>
-        <a-button class="ml-2" @click="resetSearch">重置</a-button>
-      </a-form-item>
-    </a-form>
+    <div class="mb-3 rounded-lg border bg-[hsl(var(--card))] p-4">
+      <a-form
+        class="grid grid-cols-1 gap-x-4 gap-y-3 md:grid-cols-3 xl:grid-cols-6"
+        v-access:code="'SmsSceneList'"
+      >
+        <a-form-item label="服务商" class="mb-0">
+          <a-select
+            v-model:value="searchParams.provider_id"
+            placeholder="全部"
+            allow-clear
+            :options="providerOptions"
+            class="w-full"
+          />
+        </a-form-item>
+        <a-form-item label="关键词" class="mb-0">
+          <a-input
+            v-model:value="searchParams.keyword"
+            placeholder="场景/编码/模板/签名/草稿"
+            allow-clear
+            class="w-full"
+            @press-enter="handleSearch"
+          />
+        </a-form-item>
+        <a-form-item label="状态" class="mb-0">
+          <a-select
+            v-model:value="searchParams.status"
+            placeholder="全部"
+            allow-clear
+            :options="statusOptions"
+            class="w-full"
+          />
+        </a-form-item>
+        <a-form-item class="mb-0 md:col-span-3 xl:col-span-6">
+          <div class="flex justify-end gap-2">
+            <a-button type="primary" @click="handleSearch">搜索</a-button>
+            <a-button @click="resetSearch">重置</a-button>
+          </div>
+        </a-form-item>
+      </a-form>
+    </div>
 
-    <a-table
-      :columns="columns"
-      :data-source="tableData"
-      :loading="loading"
-      :pagination="pagination"
-      :scroll="{ x: 1900 }"
-      row-key="scene_code"
-      @change="handleTableChange"
-      v-access:code="'SmsSceneList'"
-    >
-      <template #bodyCell="{ column, record }">
-        <template v-if="column.dataIndex === 'id'">
-          <span>{{ record.id || '-' }}</span>
-        </template>
-        <template v-if="column.dataIndex === 'provider_name'">
-          <span v-if="record.provider_name">{{ record.provider_name }}</span>
-          <a-tag v-else color="default">未绑定</a-tag>
-        </template>
-        <template v-if="column.dataIndex === 'template_name'">
-          <template v-if="record.template_name">
-            <span>{{ record.template_name }}</span>
-            <a-tag
-              class="ml-1"
-              :color="auditColor(record.template_audit_status)"
-            >
-              {{ auditLabel(record.template_audit_status) }}
+    <div class="overflow-hidden rounded-lg border bg-[hsl(var(--card))]">
+      <a-table
+        :columns="columns"
+        :data-source="tableData"
+        :loading="loading"
+        :pagination="pagination"
+        :scroll="{ x: 1900 }"
+        row-key="scene_code"
+        @change="handleTableChange"
+        v-access:code="'SmsSceneList'"
+      >
+        <template #bodyCell="{ column, record }">
+          <template v-if="column.dataIndex === 'id'">
+            <span>{{ record.id || '-' }}</span>
+          </template>
+          <template v-if="column.dataIndex === 'provider_name'">
+            <span v-if="record.provider_name">{{ record.provider_name }}</span>
+            <a-tag v-else color="default">未绑定</a-tag>
+          </template>
+          <template v-if="column.dataIndex === 'template_name'">
+            <template v-if="record.template_name">
+              <span>{{ record.template_name }}</span>
+              <a-tag
+                class="ml-1"
+                :color="auditColor(record.template_audit_status)"
+              >
+                {{ auditLabel(record.template_audit_status) }}
+              </a-tag>
+            </template>
+            <a-tag v-else color="default">未绑定</a-tag>
+          </template>
+          <template v-if="column.dataIndex === 'template_code'">
+            <span v-if="record.template_code">{{ record.template_code }}</span>
+            <a-tag v-else color="default">未填写</a-tag>
+          </template>
+          <template v-if="column.dataIndex === 'sign_name'">
+            <span v-if="record.sign_name">{{ record.sign_name }}</span>
+            <a-tag v-else color="default">未绑定</a-tag>
+          </template>
+          <template v-if="column.dataIndex === 'draft_template_content'">
+            <a-tooltip :title="record.draft_template_content">
+              <span class="text-xs">
+                {{ record.draft_template_content || '-' }}
+              </span>
+            </a-tooltip>
+          </template>
+          <template v-if="column.dataIndex === 'status'">
+            <a-tag :color="record.status === 1 ? 'green' : 'default'">
+              {{
+                record.status === 1
+                  ? '启用'
+                  : record.status === 0
+                    ? '禁用'
+                    : '未绑定'
+              }}
             </a-tag>
           </template>
-          <a-tag v-else color="default">未绑定</a-tag>
+          <template v-if="column.key === 'action'">
+            <a-space>
+              <a-button
+                type="link"
+                size="small"
+                @click="openBindModal(record)"
+                v-access:code="'SmsSceneBind'"
+              >
+                {{ record.provider_id ? '配置' : '配置场景' }}
+              </a-button>
+              <a-button
+                v-if="record.provider_id"
+                type="link"
+                danger
+                size="small"
+                @click="handleUnbind(record)"
+                v-access:code="'SmsSceneUnbind'"
+              >
+                取消绑定
+              </a-button>
+            </a-space>
+          </template>
         </template>
-        <template v-if="column.dataIndex === 'template_code'">
-          <span v-if="record.template_code">{{ record.template_code }}</span>
-          <a-tag v-else color="default">未填写</a-tag>
-        </template>
-        <template v-if="column.dataIndex === 'sign_name'">
-          <span v-if="record.sign_name">{{ record.sign_name }}</span>
-          <a-tag v-else color="default">未绑定</a-tag>
-        </template>
-        <template v-if="column.dataIndex === 'draft_template_content'">
-          <a-tooltip :title="record.draft_template_content">
-            <span class="text-xs">
-              {{ record.draft_template_content || '-' }}
-            </span>
-          </a-tooltip>
-        </template>
-        <template v-if="column.dataIndex === 'status'">
-          <a-tag :color="record.status === 1 ? 'green' : 'default'">
-            {{
-              record.status === 1
-                ? '启用'
-                : record.status === 0
-                  ? '禁用'
-                  : '未绑定'
-            }}
-          </a-tag>
-        </template>
-        <template v-if="column.key === 'action'">
-          <a-space>
-            <a-button
-              type="link"
-              size="small"
-              @click="openBindModal(record)"
-              v-access:code="'SmsSceneBind'"
-            >
-              {{ record.provider_id ? '配置' : '配置场景' }}
-            </a-button>
-            <a-button
-              v-if="record.provider_id"
-              type="link"
-              danger
-              size="small"
-              @click="handleUnbind(record)"
-              v-access:code="'SmsSceneUnbind'"
-            >
-              取消绑定
-            </a-button>
-          </a-space>
-        </template>
-      </template>
-    </a-table>
+      </a-table>
+    </div>
 
     <a-modal
       v-model:open="modalVisible"

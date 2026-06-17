@@ -367,114 +367,126 @@ watch(
 </script>
 
 <template>
-  <div class="asset-page">
-    <div class="asset-toolbar">
-      <a-input
-        v-model:value="searchParams.keyword"
-        placeholder="关键词"
-        allow-clear
-        class="asset-toolbar__item"
-      />
-      <a-tree-select
-        v-model:value="searchParams.category_id"
-        :tree-data="categoryOptions()"
-        placeholder="分类"
-        allow-clear
-        tree-default-expand-all
-        class="asset-toolbar__item"
-      />
-      <a-select
-        v-model:value="searchParams.type"
-        placeholder="类型"
-        allow-clear
-        show-search
-        class="asset-toolbar__item"
-        option-filter-prop="label"
-        :options="assetTypeOptions"
-        :loading="uploadOptionsLoading"
-      />
-      <a-select
-        v-model:value="searchParams.driver"
-        placeholder="上传驱动"
-        allow-clear
-        show-search
-        class="asset-toolbar__item"
-        option-filter-prop="label"
-        :options="driverOptions"
-        :loading="uploadOptionsLoading"
-      />
-      <span v-if="currentDriverLabel" class="asset-toolbar__hint">
-        当前驱动：{{ currentDriverLabel }}
-      </span>
-      <a-button
-        type="primary"
-        @click="loadData"
-        v-access:code="'SystemUploadAssetList'"
-      >
-        查询
-      </a-button>
-      <a-button @click="resetSearch">重置</a-button>
-      <a-button
-        v-if="isRecyclePage"
-        danger
-        :disabled="pagination.total <= 0"
-        @click="handleClearRecycle"
-        v-access:code="'SystemUploadAssetRecycleClear'"
-      >
-        清空回收站
-      </a-button>
+  <div class="p-4">
+    <div class="mb-3 flex items-center justify-between gap-4">
+      <h2 class="m-0 text-lg font-semibold">素材管理</h2>
     </div>
 
-    <a-table
-      row-key="id"
-      :columns="columns"
-      :data-source="tableData"
-      :loading="loading"
-      :pagination="pagination"
-      :scroll="tableScroll"
-      @change="handleTableChange"
-    >
-      <template #bodyCell="{ column, record }">
-        <template v-if="column.key === 'action'">
+    <div class="mb-3 rounded-lg border bg-[hsl(var(--card))] p-4">
+      <div
+        class="grid grid-cols-1 gap-x-4 gap-y-3 md:grid-cols-3 xl:grid-cols-6"
+      >
+        <a-input
+          v-model:value="searchParams.keyword"
+          placeholder="关键词"
+          allow-clear
+          class="w-full"
+        />
+        <a-tree-select
+          v-model:value="searchParams.category_id"
+          :tree-data="categoryOptions()"
+          placeholder="分类"
+          allow-clear
+          tree-default-expand-all
+          class="w-full"
+        />
+        <a-select
+          v-model:value="searchParams.type"
+          placeholder="类型"
+          allow-clear
+          show-search
+          class="w-full"
+          option-filter-prop="label"
+          :options="assetTypeOptions"
+          :loading="uploadOptionsLoading"
+        />
+        <a-select
+          v-model:value="searchParams.driver"
+          placeholder="上传驱动"
+          allow-clear
+          show-search
+          class="w-full"
+          option-filter-prop="label"
+          :options="driverOptions"
+          :loading="uploadOptionsLoading"
+        />
+        <span v-if="currentDriverLabel" class="asset-toolbar__hint">
+          当前驱动：{{ currentDriverLabel }}
+        </span>
+        <div class="flex justify-end gap-2 md:col-span-3 xl:col-span-6">
           <a-button
-            type="link"
-            size="small"
-            @click="openDetail(record)"
-            v-access:code="'SystemUploadAssetInfo'"
+            type="primary"
+            @click="loadData"
+            v-access:code="'SystemUploadAssetList'"
           >
-            详情
+            查询
           </a-button>
+          <a-button @click="resetSearch">重置</a-button>
           <a-button
-            v-if="record.status === 1"
-            type="link"
-            size="small"
-            @click="handleDelete(record)"
-            v-access:code="'SystemUploadAssetDelete'"
-          >
-            删除
-          </a-button>
-          <a-button
-            v-if="record.status === 0"
-            type="link"
-            size="small"
-            @click="handleRestore(record)"
-            v-access:code="'SystemUploadAssetRestore'"
-          >
-            恢复
-          </a-button>
-          <a-button
-            v-if="record.status === 0"
-            type="link"
+            v-if="isRecyclePage"
             danger
-            size="small"
-            @click="handlePurge(record)"
-            v-access:code="'SystemUploadAssetPurge'"
+            :disabled="pagination.total <= 0"
+            @click="handleClearRecycle"
+            v-access:code="'SystemUploadAssetRecycleClear'"
           >
-            永久删除
+            清空回收站
           </a-button>
+        </div>
+      </div>
+    </div>
+
+    <div class="overflow-hidden rounded-lg border bg-[hsl(var(--card))]">
+      <a-table
+        row-key="id"
+        :columns="columns"
+        :data-source="tableData"
+        :loading="loading"
+        :pagination="pagination"
+        :scroll="tableScroll"
+        @change="handleTableChange"
+      >
+        <template #bodyCell="{ column, record }">
+          <template v-if="column.key === 'action'">
+            <a-button
+              type="link"
+              size="small"
+              @click="openDetail(record)"
+              v-access:code="'SystemUploadAssetInfo'"
+            >
+              详情
+            </a-button>
+            <a-button
+              v-if="record.status === 1"
+              type="link"
+              size="small"
+              @click="handleDelete(record)"
+              v-access:code="'SystemUploadAssetDelete'"
+            >
+              删除
+            </a-button>
+            <a-button
+              v-if="record.status === 0"
+              type="link"
+              size="small"
+              @click="handleRestore(record)"
+              v-access:code="'SystemUploadAssetRestore'"
+            >
+              恢复
+            </a-button>
+            <a-button
+              v-if="record.status === 0"
+              type="link"
+              danger
+              size="small"
+              @click="handlePurge(record)"
+              v-access:code="'SystemUploadAssetPurge'"
+            >
+              永久删除
+            </a-button>
+          </template>
         </template>
-      </template>
-    </a-table>
+      </a-table>
+    </div>
 
     <a-drawer
       v-model:open="detailOpen"
@@ -613,21 +625,6 @@ watch(
 </template>
 
 <style scoped>
-.asset-page {
-  padding: 16px;
-}
-
-.asset-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 16px;
-}
-
-.asset-toolbar__item {
-  width: 180px;
-}
-
 .asset-toolbar__hint {
   display: inline-flex;
   align-items: center;

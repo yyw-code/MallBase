@@ -47,6 +47,17 @@ export namespace ClientUserApi {
     tag_ids?: number[];
   }
 
+  export interface StatsTab {
+    key: string;
+    label: string;
+    count: number;
+  }
+
+  export interface StatsResponse {
+    tabs: StatsTab[];
+    total: number;
+  }
+
   /** 创建参数 */
   export interface CreateParams {
     mobile?: string;
@@ -148,6 +159,18 @@ export async function getClientUserListApi(params?: ClientUserApi.ListParams) {
     list: ClientUserApi.UserItem[];
     total: number;
   }>('/user/list', { params });
+}
+
+export async function getClientUserStatsApi(
+  params?: ClientUserApi.ListParams,
+) {
+  return requestClient.get<ClientUserApi.StatsResponse>('/user/stats', {
+    params,
+  });
+}
+
+export async function exportClientUserCsvApi(params?: ClientUserApi.ListParams) {
+  return requestClient.download<Blob>('/user/export', { params });
 }
 
 /**

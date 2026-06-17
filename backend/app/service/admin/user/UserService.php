@@ -10,6 +10,7 @@ use app\model\user\UserGroupRelation;
 use app\model\user\UserTag;
 use app\model\user\UserTagRelation;
 use app\model\user\UserWallet;
+use app\service\admin\support\CsvExportService;
 use app\service\upload\AssetHydrator;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
@@ -20,6 +21,8 @@ use mall_base\exception\BusinessException;
  */
 class UserService extends BaseService
 {
+    private const EXPORT_LIMIT = 5000;
+
     /**
      * Model 类名
      */
@@ -36,26 +39,69 @@ class UserService extends BaseService
         // 计算总数（复用查询条件）
         $total = $this->buildListQuery($where)->count();
 
-        // 批量获取分组和标签信息（避免 N+1 查询）
-        $userIds = array_column($list, 'id');
-        $groupMap = $this->batchGetUserGroups($userIds);
-        $tagMap = $this->batchGetUserTags($userIds);
-        $walletMap = $this->batchGetWallets($userIds);
+        $list = $this->appendListDerivedFields($list);
 
-        $list = app()->make(AssetHydrator::class)->hydrateFields($list, [
-            'avatar' => 'avatar_full_url',
-        ]);
+        return compact('total', 'list');
+    }
 
-        foreach ($list as &$user) {
-            $user['groups'] = $groupMap[$user['id']] ?? [];
-            $user['tags'] = $tagMap[$user['id']] ?? [];
-            $user['wallet'] = $walletMap[$user['id']] ?? [
-                'balance' => '0.00',
-                'frozen_amount' => '0.00',
+    /**
+     * @return array{total:int,tabs:array<int,array{key:string,label:string,count:int}>}
+     */
+    public function stats(array $where = []): array
+    {
+        $baseWhere = $where;
+        unset($baseWhere['status']);
+
+        $total = (int) $this->buildListQuery($baseWhere)->count();
+        $tabs = [[
+            'key' => 'all',
+            'label' => '全部',
+            'count' => $total,
+        ]];
+
+        foreach ([1 => '启用', 0 => '禁用'] as $status => $label) {
+            $statusWhere = $baseWhere;
+            $statusWhere['status'] = $status;
+            $tabs[] = [
+                'key' => (string) $status,
+                'label' => $label,
+                'count' => (int) $this->buildListQuery($statusWhere)->count(),
             ];
         }
 
-        return compact('total', 'list');
+        return compact('total', 'tabs');
+    }
+
+    public function exportCsv(array $where = []): string
+    {
+        $rows = $this->buildListQuery($where)
+            ->order('id', 'desc')
+            ->limit(self::EXPORT_LIMIT)
+            ->select()
+            ->toArray();
+        $rows = $this->appendListDerivedFields($rows);
+
+        foreach ($rows as &$row) {
+            $row['status_text'] = (int) ($row['status'] ?? 0) === 1 ? '启用' : '禁用';
+            $row['groups_text'] = implode('、', array_column($row['groups'] ?? [], 'name'));
+            $row['tags_text'] = implode('、', array_column($row['tags'] ?? [], 'name'));
+            $row['balance'] = $row['wallet']['balance'] ?? '0.00';
+        }
+        unset($row);
+
+        return app()->make(CsvExportService::class)->make([
+            'id' => 'ID',
+            'nickname' => '昵称',
+            'mobile' => '手机号',
+            'email' => '邮箱',
+            'balance' => '余额',
+            'register_type' => '注册方式',
+            'status_text' => '状态',
+            'groups_text' => '分组',
+            'tags_text' => '标签',
+            'last_login_time' => '最后登录',
+            'create_time' => '注册时间',
+        ], $rows);
     }
 
     /**
@@ -64,6 +110,7 @@ class UserService extends BaseService
     protected function buildListQuery(array $where)
     {
         return $this->model()
+            ->whereNull('delete_time')
             ->when(!empty($where['keyword']), function ($q) use ($where) {
                 $q->whereLike('mobile|email|nickname', "%{$where['keyword']}%");
             })
@@ -85,6 +132,38 @@ class UserService extends BaseService
                     ->column('user_id');
                 $q->whereIn('id', array_unique($tagUserIds) ?: [0]);
             });
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $list
+     * @return array<int, array<string, mixed>>
+     */
+    private function appendListDerivedFields(array $list): array
+    {
+        if ($list === []) {
+            return [];
+        }
+
+        $userIds = array_column($list, 'id');
+        $groupMap = $this->batchGetUserGroups($userIds);
+        $tagMap = $this->batchGetUserTags($userIds);
+        $walletMap = $this->batchGetWallets($userIds);
+
+        $list = app()->make(AssetHydrator::class)->hydrateFields($list, [
+            'avatar' => 'avatar_full_url',
+        ]);
+
+        foreach ($list as &$user) {
+            $user['groups'] = $groupMap[$user['id']] ?? [];
+            $user['tags'] = $tagMap[$user['id']] ?? [];
+            $user['wallet'] = $walletMap[$user['id']] ?? [
+                'balance' => '0.00',
+                'frozen_amount' => '0.00',
+            ];
+        }
+        unset($user);
+
+        return $list;
     }
 
     /**
@@ -218,7 +297,7 @@ class UserService extends BaseService
      */
     public function getInfo(int $id): array
     {
-        $user = $this->model()->find($id);
+        $user = $this->model()->where('id', $id)->whereNull('delete_time')->find();
 
         if (!$user) {
             throw new BusinessException('用户不存在');
@@ -260,14 +339,14 @@ class UserService extends BaseService
     {
         // 业务校验（事务外）
         if (!empty($data['mobile'])) {
-            $exists = $this->model()->where('mobile', $data['mobile'])->find();
+            $exists = $this->model()->where('mobile', $data['mobile'])->whereNull('delete_time')->find();
             if ($exists) {
                 throw new BusinessException('该手机号已被注册');
             }
         }
 
         if (!empty($data['email'])) {
-            $exists = $this->model()->where('email', $data['email'])->find();
+            $exists = $this->model()->where('email', $data['email'])->whereNull('delete_time')->find();
             if ($exists) {
                 throw new BusinessException('该邮箱已被注册');
             }
@@ -296,7 +375,7 @@ class UserService extends BaseService
     public function update(int $id, array $data): bool
     {
         // 业务校验（事务外）
-        $user = $this->model()->find($id);
+        $user = $this->model()->where('id', $id)->whereNull('delete_time')->find();
 
         if (!$user) {
             throw new BusinessException('用户不存在');
@@ -306,6 +385,7 @@ class UserService extends BaseService
             $exists = $this->model()
                 ->where('mobile', $data['mobile'])
                 ->where('id', '<>', $id)
+                ->whereNull('delete_time')
                 ->find();
             if ($exists) {
                 throw new BusinessException('该手机号已被使用');
@@ -316,6 +396,7 @@ class UserService extends BaseService
             $exists = $this->model()
                 ->where('email', $data['email'])
                 ->where('id', '<>', $id)
+                ->whereNull('delete_time')
                 ->find();
             if ($exists) {
                 throw new BusinessException('该邮箱已被使用');
@@ -344,7 +425,7 @@ class UserService extends BaseService
     public function delete(int $id): bool
     {
         // 业务校验（事务外）
-        $user = $this->model()->find($id);
+        $user = $this->model()->where('id', $id)->whereNull('delete_time')->find();
 
         if (!$user) {
             throw new BusinessException('用户不存在');
@@ -364,7 +445,7 @@ class UserService extends BaseService
      */
     public function updateStatus(int $id, int $status): bool
     {
-        $user = $this->model()->find($id);
+        $user = $this->model()->where('id', $id)->whereNull('delete_time')->find();
 
         if (!$user) {
             throw new BusinessException('用户不存在');
@@ -380,7 +461,7 @@ class UserService extends BaseService
      */
     public function resetPassword(int $id, string $password): bool
     {
-        $user = $this->model()->find($id);
+        $user = $this->model()->where('id', $id)->whereNull('delete_time')->find();
 
         if (!$user) {
             throw new BusinessException('用户不存在');

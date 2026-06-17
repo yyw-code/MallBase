@@ -125,6 +125,17 @@ export namespace RefundApi {
     label: string;
   }
 
+  export interface StatsTab {
+    key: string;
+    label: string;
+    count: number;
+  }
+
+  export interface StatsResponse {
+    tabs: StatsTab[];
+    total: number;
+  }
+
   /** statusOptions 接口响应 */
   export interface StatusOptionsResponse {
     status: EnumOption[];
@@ -143,6 +154,16 @@ export async function getRefundListApi(params?: RefundApi.ListParams) {
     list: RefundApi.RefundRecord[];
     total: number;
   }>('/order/refund/list', { params });
+}
+
+export async function getRefundStatsApi(params?: RefundApi.ListParams) {
+  return requestClient.get<RefundApi.StatsResponse>('/order/refund/stats', {
+    params,
+  });
+}
+
+export async function exportRefundCsvApi(params?: RefundApi.ListParams) {
+  return requestClient.download<Blob>('/order/refund/export', { params });
 }
 
 /**

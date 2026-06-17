@@ -8,18 +8,14 @@ import { useAccess } from '@vben/access';
 import { message, Modal, Switch, Tag } from 'ant-design-vue';
 
 import {
-  batchSetUserGroupApi,
-  createUserGroupApi,
   deleteUserGroupApi,
   getUserGroupCountApi,
   getUserGroupInfoApi,
   getUserGroupListApi,
-  removeUserGroupApi,
-  updateUserGroupApi,
   updateUserGroupStatusApi,
 } from '#/api/user';
-import { useTableCrud } from '#/composables/useTableCrud';
 import { useColorMap } from '#/composables/useColorOptions';
+import { useTableCrud } from '#/composables/useTableCrud';
 
 import GroupModal from './group-modal.vue';
 
@@ -61,7 +57,7 @@ const resetSearch = () => {
 
 /* ---------------- 弹窗 ---------------- */
 const groupModalVisible = ref(false);
-const editingItem = ref<UserGroupApi.GroupItem | null>(null);
+const editingItem = ref<null | UserGroupApi.GroupItem>(null);
 
 const handleCreate = () => {
   editingItem.value = null;
@@ -130,12 +126,11 @@ const columns = [
     width: 120,
     customRender: ({ record }: { record: UserGroupApi.GroupItem }) => {
       if (!record.color) return '-';
-      const config = colorMap.value[record.color] || { label: record.color, color: record.color };
-      return h(
-        Tag,
-        { color: config.color },
-        () => config.label,
-      );
+      const config = colorMap.value[record.color] || {
+        label: record.color,
+        color: record.color,
+      };
+      return h(Tag, { color: config.color }, () => config.label);
     },
   },
   { title: '排序', dataIndex: 'sort', width: 80 },
@@ -168,95 +163,120 @@ onMounted(() => {
 
 <template>
   <div class="p-4">
-    <div class="mb-4">
-      <a-button type="primary" @click="handleCreate" v-access:code="'SystemUserGroupCreate'"> 新增分组 </a-button>
-      <a-button class="ml-2" @click="() => loadData(searchParams)">
-        刷新
-      </a-button>
+    <div class="mb-3 flex items-center justify-between gap-4">
+      <h2 class="m-0 text-lg font-semibold">用户分组</h2>
+      <div class="flex flex-wrap justify-end gap-2">
+        <a-button
+          type="primary"
+          @click="handleCreate"
+          v-access:code="'SystemUserGroupCreate'"
+        >
+          新增分组
+        </a-button>
+        <a-button @click="() => loadData(searchParams)"> 刷新 </a-button>
+      </div>
     </div>
 
     <!-- 搜索表单 -->
-    <a-form layout="inline" class="mb-4">
-      <a-form-item label="分组名称">
-        <a-input
-          v-model:value="searchParams.name"
-          placeholder="请输入分组名称"
-          allow-clear
-          style="width: 180px"
-        />
-      </a-form-item>
-      <a-form-item label="分组编码">
-        <a-input
-          v-model:value="searchParams.code"
-          placeholder="请输入分组编码"
-          allow-clear
-          style="width: 180px"
-        />
-      </a-form-item>
-      <a-form-item label="状态">
-        <a-select
-          v-model:value="searchParams.status"
-          placeholder="请选择"
-          allow-clear
-          style="width: 120px"
-        >
-          <a-select-option :value="1">启用</a-select-option>
-          <a-select-option :value="0">禁用</a-select-option>
-        </a-select>
-      </a-form-item>
-      <a-form-item>
-        <a-button
-          type="primary"
-          @click="
-            () => {
-              pagination.current = 1;
-              loadData(searchParams);
-            }
-          "
-        >
-          搜索
-        </a-button>
-        <a-button class="ml-2" @click="resetSearch"> 重置 </a-button>
-      </a-form-item>
-    </a-form>
-
-    <a-table
-      :columns="columns"
-      :data-source="tableData"
-      :loading="loading"
-      :pagination="pagination"
-      :scroll="{ x: 1100 }"
-      row-key="id"
-      @change="
-        (newPagination) => {
-          pagination.current = newPagination.current;
-          pagination.pageSize = newPagination.pageSize;
-          loadData(searchParams);
-        }
-      "
-    >
-      <template #bodyCell="{ column, record }">
-        <template v-if="column.key === 'action'">
-          <a-space>
-            <a-button type="link" size="small" @click="handleEdit(record)" v-access:code="'SystemUserGroupUpdate'">
-              编辑
-            </a-button>
-            <a-button type="link" size="small" @click="handleViewUsers(record)" v-access:code="'SystemUserGroupGetUserGroups'">
-              查看用户
-            </a-button>
+    <div class="mb-3 rounded-lg border bg-[hsl(var(--card))] p-4">
+      <a-form
+        class="grid grid-cols-1 gap-x-4 gap-y-3 md:grid-cols-3 xl:grid-cols-6"
+      >
+        <a-form-item label="分组名称" class="mb-0">
+          <a-input
+            v-model:value="searchParams.name"
+            placeholder="请输入分组名称"
+            allow-clear
+            class="w-full"
+          />
+        </a-form-item>
+        <a-form-item label="分组编码" class="mb-0">
+          <a-input
+            v-model:value="searchParams.code"
+            placeholder="请输入分组编码"
+            allow-clear
+            class="w-full"
+          />
+        </a-form-item>
+        <a-form-item label="状态" class="mb-0">
+          <a-select
+            v-model:value="searchParams.status"
+            placeholder="请选择"
+            allow-clear
+            class="w-full"
+          >
+            <a-select-option :value="1"> 启用 </a-select-option>
+            <a-select-option :value="0"> 禁用 </a-select-option>
+          </a-select>
+        </a-form-item>
+        <a-form-item class="mb-0 md:col-span-3 xl:col-span-6">
+          <div class="flex justify-end gap-2">
             <a-button
-              type="link"
-              danger
-              size="small"
-              @click="handleDelete(record, 'name', 'code')"
-              v-access:code="'SystemUserGroupDelete'"
+              type="primary"
+              @click="
+                () => {
+                  pagination.current = 1;
+                  loadData(searchParams);
+                }
+              "
             >
-              删除
+              搜索
             </a-button>
-          </a-space>
+            <a-button @click="resetSearch"> 重置 </a-button>
+          </div>
+        </a-form-item>
+      </a-form>
+    </div>
+
+    <div class="overflow-hidden rounded-lg border bg-[hsl(var(--card))]">
+      <a-table
+        :columns="columns"
+        :data-source="tableData"
+        :loading="loading"
+        :pagination="pagination"
+        :scroll="{ x: 1100 }"
+        row-key="id"
+        @change="
+          (newPagination) => {
+            pagination.current = newPagination.current;
+            pagination.pageSize = newPagination.pageSize;
+            loadData(searchParams);
+          }
+        "
+      >
+        <template #bodyCell="{ column, record }">
+          <template v-if="column.key === 'action'">
+            <a-space>
+              <a-button
+                type="link"
+                size="small"
+                @click="handleEdit(record)"
+                v-access:code="'SystemUserGroupUpdate'"
+              >
+                编辑
+              </a-button>
+              <a-button
+                type="link"
+                size="small"
+                @click="handleViewUsers(record)"
+                v-access:code="'SystemUserGroupGetUserGroups'"
+              >
+                查看用户
+              </a-button>
+              <a-button
+                type="link"
+                danger
+                size="small"
+                @click="handleDelete(record, 'name', 'code')"
+                v-access:code="'SystemUserGroupDelete'"
+              >
+                删除
+              </a-button>
+            </a-space>
+          </template>
         </template>
-      </template>
-    </a-table>
+      </a-table>
+    </div>
 
     <!-- 分组表单弹窗 -->
     <GroupModal

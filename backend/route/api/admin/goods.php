@@ -95,10 +95,14 @@ Route::group('goods/spec-template', function () {
 
 Route::group('goods/list', function () {
     Route::get('list', 'list')->name('SystemGoodsList')->option(['_alias' => '商品列表', '_desc' => '获取商品列表', '_auth' => true, '_type' => Permission::TYPE_MENU]);
+    Route::get('stats', 'stats')->name('SystemGoodsStats')->option(['_alias' => '商品统计', '_desc' => '获取商品状态统计', '_auth' => true, '_type' => Permission::TYPE_MENU]);
+    Route::get('export', 'export')->name('SystemGoodsExport')->option(['_alias' => '导出商品', '_desc' => '按筛选条件导出商品 CSV', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::get('info/:id', 'info')->name('SystemGoodsInfo')->option(['_alias' => '商品详情', '_desc' => '获取商品详情', '_auth' => true, '_type' => Permission::TYPE_MENU]);
     Route::post('create', 'create')->name('SystemGoodsCreate')->option(['_alias' => '创建商品', '_desc' => '创建商品', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::put('update/:id', 'update')->name('SystemGoodsUpdate')->option(['_alias' => '更新商品', '_desc' => '更新商品', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::delete('delete/:id', 'delete')->name('SystemGoodsDelete')->option(['_alias' => '删除商品', '_desc' => '删除商品', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
+    Route::put('restore/:id', 'restore')->name('SystemGoodsRestore')->option(['_alias' => '恢复商品', '_desc' => '从回收站恢复商品', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
+    Route::delete('purge/:id', 'purge')->name('SystemGoodsPurge')->option(['_alias' => '永久删除商品', '_desc' => '永久删除回收站商品', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::put('updateStatus/:id', 'updateStatus')->name('SystemGoodsUpdateStatus')->option(['_alias' => '商品状态', '_desc' => '更新商品状态', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::put('updateOnSale/:id', 'updateOnSale')->name('SystemGoodsUpdateOnSale')->option(['_alias' => '上下架', '_desc' => '商品上下架', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
 })->prefix('admin.goods.GoodsController/')

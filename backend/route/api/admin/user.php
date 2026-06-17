@@ -7,6 +7,8 @@ use think\facade\Route;
 
 Route::group('user', function () {
     Route::get('list', 'list')->name('SystemUserList')->option(['_alias' => '列表', '_desc' => '获取前台用户列表', '_auth' => true, '_type' => Permission::TYPE_MENU]);
+    Route::get('stats', 'stats')->name('SystemUserStats')->option(['_alias' => '用户统计', '_desc' => '获取前台用户状态统计', '_auth' => true, '_type' => Permission::TYPE_MENU]);
+    Route::get('export', 'export')->name('SystemUserExport')->option(['_alias' => '导出用户', '_desc' => '按筛选条件导出前台用户 CSV', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::get('info/:id', 'info')->name('SystemUserInfo')->option(['_alias' => '详情', '_desc' => '获取前台用户详情', '_auth' => true, '_type' => Permission::TYPE_MENU]);
     Route::post('create', 'create')->name('SystemUserCreate')->option(['_alias' => '新增', '_desc' => '创建前台用户', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::put('update/:id', 'update')->name('SystemUserUpdate')->option(['_alias' => '编辑', '_desc' => '更新前台用户', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
