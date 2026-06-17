@@ -3,6 +3,8 @@ import type { UserAddressApi } from '#/api/user';
 
 import { h, onMounted, ref } from 'vue';
 
+import { useAccess } from '@vben/access';
+
 import { message, Switch, Tag, Tooltip } from 'ant-design-vue';
 
 import {
@@ -17,6 +19,8 @@ import { useTableCrud } from '#/composables/useTableCrud';
 import AddressModal from './address-modal.vue';
 
 defineOptions({ name: 'UserAddressManagement' });
+
+const { hasAccessByCodes } = useAccess();
 
 const { tableData, loading, pagination, loadData, handleDelete } = useTableCrud<
   UserAddressApi.AddressItem,
@@ -126,7 +130,9 @@ const columns = [
         checked: record.is_default === 1,
         checkedChildren: '是',
         unCheckedChildren: '否',
-        disabled: record.is_default === 1,
+        disabled:
+          record.is_default === 1 ||
+          !hasAccessByCodes(['SystemUserAddressSetDefault']),
         onChange: () => handleSetDefault(record),
       }),
   },
@@ -138,8 +144,18 @@ const columns = [
 <template>
   <div class="p-4">
     <div class="mb-4">
-      <a-button type="primary" @click="handleCreate" v-access:code="'SystemUserAddressCreate'">新增地址</a-button>
-      <a-button class="ml-2" @click="handleRefreshInvalid" v-access:code="'SystemUserAddressRefreshInvalid'">
+      <a-button
+        type="primary"
+        @click="handleCreate"
+        v-access:code="'SystemUserAddressCreate'"
+      >
+        新增地址
+      </a-button>
+      <a-button
+        class="ml-2"
+        @click="handleRefreshInvalid"
+        v-access:code="'SystemUserAddressRefreshInvalid'"
+      >
         更新失效数据
       </a-button>
       <a-button class="ml-2" @click="() => loadData(searchParams)">
@@ -200,7 +216,12 @@ const columns = [
       <template #bodyCell="{ column, record }">
         <template v-if="column.key === 'action'">
           <a-space>
-            <a-button type="link" size="small" @click="handleEdit(record)" v-access:code="'SystemUserAddressUpdate'">
+            <a-button
+              type="link"
+              size="small"
+              @click="handleEdit(record)"
+              v-access:code="'SystemUserAddressUpdate'"
+            >
               编辑
             </a-button>
             <a-button

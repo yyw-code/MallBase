@@ -170,11 +170,13 @@ function setupAccessGuard(router: Router) {
     accessStore.setAccessRoutes(accessibleRoutes);
     accessStore.setIsAccessChecked(true);
 
-    // 使用后端返回的 home_path（已在 access.ts 中设置到 preferences.app.defaultHomePath）
+    const userHomePath =
+      userStore.userInfo?.homePath || preferences.app.defaultHomePath;
     const redirectPath = (from.query.redirect ||
-      to.fullPath ||
-      userStore.userInfo?.homePath ||
-      preferences.app.defaultHomePath) as string;
+      (to.fullPath === preferences.app.defaultHomePath
+        ? userHomePath
+        : to.fullPath) ||
+      userHomePath) as string;
 
     return {
       ...router.resolve(decodeURIComponent(redirectPath)),

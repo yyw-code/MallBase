@@ -66,7 +66,9 @@ export const useAuthStore = defineStore('auth', () => {
         } else {
           await (onSuccess
             ? onSuccess?.()
-            : router.push(preferences.app.defaultHomePath));
+            : router.push(
+                userStore.userInfo?.homePath || preferences.app.defaultHomePath,
+              ));
         }
 
         if (adminInfo?.nickname) {
@@ -133,6 +135,7 @@ export const useAuthStore = defineStore('auth', () => {
           roles: adminInfo.roles?.map((role) => role.code) || [],
           username: adminInfo.username || '',
           email: adminInfo.email || '',
+          homePath: adminInfo.home_path || '',
         };
         userStore.setUserInfo(userInfo);
       }

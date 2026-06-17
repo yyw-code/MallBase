@@ -6,10 +6,10 @@ use app\model\auth\Permission;
 use think\facade\Route;
 
 Route::group('goods/category', function () {
-    Route::get('tree', 'tree')->name('SystemGoodsCategoryTree')->option(['_alias' => '分类树', '_desc' => '获取商品分类树', '_auth' => true]);
-    Route::get('list', 'list')->name('SystemGoodsCategoryList')->option(['_alias' => '分类列表', '_desc' => '获取商品分类列表', '_auth' => true]);
-    Route::get('info/:id', 'info')->name('SystemGoodsCategoryInfo')->option(['_alias' => '分类详情', '_desc' => '获取分类详情', '_auth' => true]);
-    Route::get('all', 'getAllCategories')->name('SystemGoodsCategoryAll')->option(['_alias' => '全部分类', '_desc' => '获取所有启用分类（树形）', '_auth' => true]);
+    Route::get('tree', 'tree')->name('SystemGoodsCategoryTree')->option(['_alias' => '分类树', '_desc' => '获取商品分类树', '_auth' => true, '_type' => Permission::TYPE_MENU]);
+    Route::get('list', 'list')->name('SystemGoodsCategoryList')->option(['_alias' => '分类列表', '_desc' => '获取商品分类列表', '_auth' => true, '_type' => Permission::TYPE_MENU]);
+    Route::get('info/:id', 'info')->name('SystemGoodsCategoryInfo')->option(['_alias' => '分类详情', '_desc' => '获取分类详情', '_auth' => true, '_type' => Permission::TYPE_MENU]);
+    Route::get('all', 'getAllCategories')->name('SystemGoodsCategoryAll')->option(['_alias' => '全部分类', '_desc' => '获取所有启用分类（树形）', '_auth' => true, '_type' => Permission::TYPE_MENU]);
     Route::post('create', 'create')->name('SystemGoodsCategoryCreate')->option(['_alias' => '创建分类', '_desc' => '创建商品分类', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::put('update/:id', 'update')->name('SystemGoodsCategoryUpdate')->option(['_alias' => '更新分类', '_desc' => '更新商品分类', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::delete('delete/:id', 'delete')->name('SystemGoodsCategoryDelete')->option(['_alias' => '删除分类', '_desc' => '删除商品分类', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
@@ -28,9 +28,9 @@ Route::group('goods/category', function () {
     ]);
 
 Route::group('goods/brand', function () {
-    Route::get('list', 'list')->name('SystemGoodsBrandList')->option(['_alias' => '品牌列表', '_desc' => '获取品牌列表', '_auth' => true]);
-    Route::get('info/:id', 'info')->name('SystemGoodsBrandInfo')->option(['_alias' => '品牌详情', '_desc' => '获取品牌详情', '_auth' => true]);
-    Route::get('all', 'getAllBrands')->name('SystemGoodsBrandAll')->option(['_alias' => '全部品牌', '_desc' => '获取所有启用品牌', '_auth' => true]);
+    Route::get('list', 'list')->name('SystemGoodsBrandList')->option(['_alias' => '品牌列表', '_desc' => '获取品牌列表', '_auth' => true, '_type' => Permission::TYPE_MENU]);
+    Route::get('info/:id', 'info')->name('SystemGoodsBrandInfo')->option(['_alias' => '品牌详情', '_desc' => '获取品牌详情', '_auth' => true, '_type' => Permission::TYPE_MENU]);
+    Route::get('all', 'getAllBrands')->name('SystemGoodsBrandAll')->option(['_alias' => '全部品牌', '_desc' => '获取所有启用品牌', '_auth' => true, '_type' => Permission::TYPE_MENU]);
     Route::post('create', 'create')->name('SystemGoodsBrandCreate')->option(['_alias' => '创建品牌', '_desc' => '创建品牌', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::put('update/:id', 'update')->name('SystemGoodsBrandUpdate')->option(['_alias' => '更新品牌', '_desc' => '更新品牌', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::delete('delete/:id', 'delete')->name('SystemGoodsBrandDelete')->option(['_alias' => '删除品牌', '_desc' => '删除品牌', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
@@ -49,9 +49,9 @@ Route::group('goods/brand', function () {
     ]);
 
 Route::group('goods/spec', function () {
-    Route::get('list', 'list')->name('SystemGoodsSpecList')->option(['_alias' => '规格列表', '_desc' => '获取规格列表', '_auth' => true]);
-    Route::get('info/:id', 'info')->name('SystemGoodsSpecInfo')->option(['_alias' => '规格详情', '_desc' => '获取规格详情', '_auth' => true]);
-    Route::get('all', 'getAllSpecs')->name('SystemGoodsSpecAll')->option(['_alias' => '全部规格', '_desc' => '获取所有启用规格（含规格值）', '_auth' => true]);
+    Route::get('list', 'list')->name('SystemGoodsSpecList')->option(['_alias' => '规格列表', '_desc' => '获取规格列表', '_auth' => true, '_type' => Permission::TYPE_MENU]);
+    Route::get('info/:id', 'info')->name('SystemGoodsSpecInfo')->option(['_alias' => '规格详情', '_desc' => '获取规格详情', '_auth' => true, '_type' => Permission::TYPE_MENU]);
+    Route::get('all', 'getAllSpecs')->name('SystemGoodsSpecAll')->option(['_alias' => '全部规格', '_desc' => '获取所有启用规格（含规格值）', '_auth' => true, '_type' => Permission::TYPE_MENU]);
     Route::post('create', 'create')->name('SystemGoodsSpecCreate')->option(['_alias' => '创建规格', '_desc' => '创建规格', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::put('update/:id', 'update')->name('SystemGoodsSpecUpdate')->option(['_alias' => '更新规格', '_desc' => '更新规格', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::delete('delete/:id', 'delete')->name('SystemGoodsSpecDelete')->option(['_alias' => '删除规格', '_desc' => '删除规格', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
@@ -73,9 +73,9 @@ Route::group('goods/spec', function () {
     ]);
 
 Route::group('goods/spec-template', function () {
-    Route::get('list', 'list')->name('SystemGoodsSpecTemplateList')->option(['_alias' => '模板列表', '_desc' => '获取规格模板列表', '_auth' => true]);
-    Route::get('info/:id', 'info')->name('SystemGoodsSpecTemplateInfo')->option(['_alias' => '模板详情', '_desc' => '获取规格模板详情', '_auth' => true]);
-    Route::get('all', 'all')->name('SystemGoodsSpecTemplateAll')->option(['_alias' => '全部模板', '_desc' => '获取所有启用规格模板', '_auth' => true]);
+    Route::get('list', 'list')->name('SystemGoodsSpecTemplateList')->option(['_alias' => '模板列表', '_desc' => '获取规格模板列表', '_auth' => true, '_type' => Permission::TYPE_MENU]);
+    Route::get('info/:id', 'info')->name('SystemGoodsSpecTemplateInfo')->option(['_alias' => '模板详情', '_desc' => '获取规格模板详情', '_auth' => true, '_type' => Permission::TYPE_MENU]);
+    Route::get('all', 'all')->name('SystemGoodsSpecTemplateAll')->option(['_alias' => '全部模板', '_desc' => '获取所有启用规格模板', '_auth' => true, '_type' => Permission::TYPE_MENU]);
     Route::post('create', 'create')->name('SystemGoodsSpecTemplateCreate')->option(['_alias' => '创建模板', '_desc' => '创建规格模板', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::put('update/:id', 'update')->name('SystemGoodsSpecTemplateUpdate')->option(['_alias' => '更新模板', '_desc' => '更新规格模板', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::delete('delete/:id', 'delete')->name('SystemGoodsSpecTemplateDelete')->option(['_alias' => '删除模板', '_desc' => '删除规格模板', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
@@ -94,8 +94,8 @@ Route::group('goods/spec-template', function () {
     ]);
 
 Route::group('goods/list', function () {
-    Route::get('list', 'list')->name('SystemGoodsList')->option(['_alias' => '商品列表', '_desc' => '获取商品列表', '_auth' => true]);
-    Route::get('info/:id', 'info')->name('SystemGoodsInfo')->option(['_alias' => '商品详情', '_desc' => '获取商品详情', '_auth' => true]);
+    Route::get('list', 'list')->name('SystemGoodsList')->option(['_alias' => '商品列表', '_desc' => '获取商品列表', '_auth' => true, '_type' => Permission::TYPE_MENU]);
+    Route::get('info/:id', 'info')->name('SystemGoodsInfo')->option(['_alias' => '商品详情', '_desc' => '获取商品详情', '_auth' => true, '_type' => Permission::TYPE_MENU]);
     Route::post('create', 'create')->name('SystemGoodsCreate')->option(['_alias' => '创建商品', '_desc' => '创建商品', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::put('update/:id', 'update')->name('SystemGoodsUpdate')->option(['_alias' => '更新商品', '_desc' => '更新商品', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::delete('delete/:id', 'delete')->name('SystemGoodsDelete')->option(['_alias' => '删除商品', '_desc' => '删除商品', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
@@ -115,9 +115,9 @@ Route::group('goods/list', function () {
     ]);
 
 Route::group('goods/tag', function () {
-    Route::get('list', 'list')->name('SystemGoodsTagList')->option(['_alias' => '标签列表', '_desc' => '获取商品标签列表', '_auth' => true]);
-    Route::get('info/:id', 'info')->name('SystemGoodsTagInfo')->option(['_alias' => '标签详情', '_desc' => '获取标签详情', '_auth' => true]);
-    Route::get('all', 'getAllTags')->name('SystemGoodsTagAll')->option(['_alias' => '全部标签', '_desc' => '获取所有启用标签', '_auth' => true]);
+    Route::get('list', 'list')->name('SystemGoodsTagList')->option(['_alias' => '标签列表', '_desc' => '获取商品标签列表', '_auth' => true, '_type' => Permission::TYPE_MENU]);
+    Route::get('info/:id', 'info')->name('SystemGoodsTagInfo')->option(['_alias' => '标签详情', '_desc' => '获取标签详情', '_auth' => true, '_type' => Permission::TYPE_MENU]);
+    Route::get('all', 'getAllTags')->name('SystemGoodsTagAll')->option(['_alias' => '全部标签', '_desc' => '获取所有启用标签', '_auth' => true, '_type' => Permission::TYPE_MENU]);
     Route::post('create', 'create')->name('SystemGoodsTagCreate')->option(['_alias' => '创建标签', '_desc' => '创建商品标签', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::put('update/:id', 'update')->name('SystemGoodsTagUpdate')->option(['_alias' => '更新标签', '_desc' => '更新商品标签', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::delete('delete/:id', 'delete')->name('SystemGoodsTagDelete')->option(['_alias' => '删除标签', '_desc' => '删除商品标签', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
@@ -136,8 +136,8 @@ Route::group('goods/tag', function () {
     ]);
 
 Route::group('goods/comment', function () {
-    Route::get('list', 'list')->name('SystemGoodsCommentList')->option(['_alias' => '评论列表', '_desc' => '获取商品评论列表', '_auth' => true]);
-    Route::get('info/:id', 'info')->name('SystemGoodsCommentInfo')->option(['_alias' => '评论详情', '_desc' => '获取评论详情', '_auth' => true]);
+    Route::get('list', 'list')->name('SystemGoodsCommentList')->option(['_alias' => '评论列表', '_desc' => '获取商品评论列表', '_auth' => true, '_type' => Permission::TYPE_MENU]);
+    Route::get('info/:id', 'info')->name('SystemGoodsCommentInfo')->option(['_alias' => '评论详情', '_desc' => '获取评论详情', '_auth' => true, '_type' => Permission::TYPE_MENU]);
     Route::post(':id/reply', 'reply')->name('SystemGoodsCommentReply')->option(['_alias' => '回复评论', '_desc' => '商家回复评论', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::put('updateStatus/:id', 'updateStatus')->name('SystemGoodsCommentUpdateStatus')->option(['_alias' => '评论状态', '_desc' => '更新评论状态', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::delete('delete/:id', 'delete')->name('SystemGoodsCommentDelete')->option(['_alias' => '删除评论', '_desc' => '删除评论', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);

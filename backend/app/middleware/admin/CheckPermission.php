@@ -44,7 +44,7 @@ class CheckPermission
         $permissionCode = $this->getPermissionCode($request);
 
         if (empty($permissionCode)) {
-            // 如果没有权限标识，直接通过（可能是公共接口）
+            // 如果没有权限标识，直接通过（可能是公共接口或登录态基础接口）
             return $next($request);
         }
 
@@ -68,6 +68,11 @@ class CheckPermission
         $route = $request->rule();
 
         if ($route) {
+            $option = $route->getOption();
+            if (($option['_auth'] ?? true) === false) {
+                return null;
+            }
+
             return $route->getName();
         }
 

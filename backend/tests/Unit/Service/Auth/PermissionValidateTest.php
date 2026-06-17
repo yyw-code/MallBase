@@ -27,6 +27,15 @@ final class PermissionValidateTest extends TestCase
         ])));
     }
 
+    public function testPermissionTypeRejectsApiType(): void
+    {
+        $validate = new PermissionValidate();
+
+        $this->assertFalse($validate->scene('create')->check($this->payload([
+            'type' => 3,
+        ])));
+    }
+
     /**
      * @param array<string, mixed> $override
      * @return array<string, mixed>

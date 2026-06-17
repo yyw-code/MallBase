@@ -183,7 +183,7 @@ class AdminService extends BaseService
 
         // 获取角色ID列表
         $info['role_ids'] = array_column($info['roles'] ?? [], 'id');
-        $info['home_path'] = '/workspace';
+        $info['home_path'] = app()->make(PermissionService::class)->getMenu($id)['home_path'] ?? '/workspace';
 
         return $info;
     }
@@ -228,6 +228,10 @@ class AdminService extends BaseService
         $admin = $this->model()->find($id);
         if (!$admin) {
             throw new BusinessException('管理员不存在');
+        }
+
+        if ($id === $this->model()::SUPER_ADMIN_ID) {
+            throw new BusinessException('系统管理员不允许在管理员管理中修改');
         }
 
         // 检查用户名是否重复
@@ -277,6 +281,10 @@ class AdminService extends BaseService
             throw new BusinessException('管理员不存在');
         }
 
+        if ($id === $this->model()::SUPER_ADMIN_ID && $status !== 1) {
+            throw new BusinessException('不能禁用超级管理员');
+        }
+
         $this->model()->updateById($id, ['status' => $status]);
         return true;
     }
@@ -316,6 +324,11 @@ class AdminService extends BaseService
         // 删除原有角色
         $this->model(AdminRole::class)->where('admin_id', $adminId)->delete();
 
+        if ($adminId === $this->model()::SUPER_ADMIN_ID) {
+            $this->clearUserPermissionCache($adminId);
+            return;
+        }
+
         // 批量分配新角色
         if (!empty($roleIds)) {
             $insertData = [];
@@ -348,19 +361,24 @@ class AdminService extends BaseService
     /**
      * 重置密码
      */
-    public function resetPassword(int $id, array $data): bool
+    public function resetPassword(int $id, array|string $data): bool
     {
         $admin = $this->model()->find($id);
 
         if (!$admin) {
             throw new BusinessException('管理员不存在');
         }
-        if (!$admin->checkPassword($data['old_password'])) {
+
+        if ($id === $this->model()::SUPER_ADMIN_ID && is_string($data)) {
+            throw new BusinessException('系统管理员不允许在管理员管理中重置密码');
+        }
+
+        if (is_array($data) && !$admin->checkPassword($data['old_password'])) {
             throw new BusinessException('旧密码错误');
         }
         // 使用模型属性赋值，会触发 setPasswordAttr 修改器
-        $admin->password = $data['password'];
-        // 写入最近改密时间，清除"首次强制改密"标记；后续主动改密也统一刷新该字段。
+        $admin->password = is_array($data) ? $data['password'] : $data;
+        // 写入最近改密时间；后续主动改密也统一刷新该字段。
         $admin->password_changed_at = date('Y-m-d H:i:s');
         return $admin->save();
     }

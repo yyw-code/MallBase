@@ -37,6 +37,7 @@ class InstallService extends BaseService
         'copy_demo_static'         => '拷贝演示静态资源',
         'sync_permissions'         => '同步路由权限',
         'sync_setting_permissions' => '同步系统设置菜单',
+        'seed_role_permissions'    => '初始化默认角色权限',
         'import_regions'           => '导入地区数据',
         'seed_site_url'            => '写入站点域名',
         'verify_default_assets'    => '检查默认静态资源',
@@ -57,9 +58,9 @@ class InstallService extends BaseService
     ];
 
     /**
-     * 默认头像路径（超管创建时使用；与 mb_setting.default_avatar 默认值保持一致）
+     * 默认管理员头像路径（超管创建时使用）
      */
-    private const DEFAULT_AVATAR_PATH = '/static/admin/avatar-default.png';
+    private const DEFAULT_AVATAR_PATH = '/static/admin/logo.png';
 
     protected string $modelClass = BaseModel::class;
 
@@ -860,6 +861,16 @@ class InstallService extends BaseService
         }
 
         try {
+            $emit('seed_role_permissions', 'running', '正在初始化默认角色权限…');
+            $this->seedDefaultRolePermissions();
+            $emit('seed_role_permissions', 'success', '默认角色权限已初始化');
+        } catch (\Throwable $e) {
+            $message = '默认角色权限初始化失败：' . $e->getMessage();
+            $emit('seed_role_permissions', 'error', $message);
+            return $this->buildFailureResponse('seed_role_permissions', $message, $steps);
+        }
+
+        try {
             $emit('import_regions', 'running', '正在导入地区数据…');
             $regionProgress = [
                 'processed' => 0,
@@ -1059,6 +1070,34 @@ class InstallService extends BaseService
     }
 
     /**
+     * 安装完成后，默认 super_admin 角色拥有所有已同步的菜单和按钮权限。
+     */
+    private function seedDefaultRolePermissions(): void
+    {
+        $roleId = Db::name('role')->where('code', 'super_admin')->value('id');
+        if (empty($roleId)) {
+            return;
+        }
+
+        Db::name('admin_role')->where('admin_id', 1)->delete();
+
+        $prefix = (string) config('database.connections.mysql.prefix', 'mb_');
+        $roleTable = $prefix . 'role';
+        $permissionTable = $prefix . 'permission';
+        $rolePermissionTable = $prefix . 'role_permission';
+
+        Db::execute(
+            "INSERT IGNORE INTO `{$rolePermissionTable}` (`role_id`, `permission_id`, `create_time`)
+            SELECT `r`.`id`, `p`.`id`, NOW()
+            FROM `{$roleTable}` AS `r`
+            INNER JOIN `{$permissionTable}` AS `p`
+            WHERE `r`.`code` = 'super_admin'
+              AND `p`.`type` IN (1, 2)
+              AND `p`.`status` = 1"
+        );
+    }
+
+    /**
      * @param array<string, string> $envData
      */
     private function writeEnvFile(array $envData): void
@@ -1246,20 +1285,22 @@ class InstallService extends BaseService
 
         $stmt = $pdo->prepare(
             "INSERT INTO `mb_admin` (`id`, `username`, `nickname`, `password`, `avatar`, `status`, `password_changed_at`, `create_time`, `update_time`)
-             VALUES (1, :username, :nickname, :password, :avatar, 1, NULL, :create_time, :update_time)
-             ON DUPLICATE KEY UPDATE `username` = :username2, `password` = :password2, `password_changed_at` = NULL, `update_time` = :update_time2"
+             VALUES (1, :username, :nickname, :password, :avatar, 1, :password_changed_at, :create_time, :update_time)
+             ON DUPLICATE KEY UPDATE `username` = :username2, `password` = :password2, `password_changed_at` = :password_changed_at2, `update_time` = :update_time2"
         );
 
         $stmt->execute([
-            ':username'     => $username,
-            ':nickname'     => '超级管理员',
-            ':password'     => $hashedPassword,
-            ':avatar'       => $avatar,
-            ':create_time'  => $now,
-            ':update_time'  => $now,
-            ':username2'    => $username,
-            ':password2'    => $hashedPassword,
-            ':update_time2' => $now,
+            ':username'             => $username,
+            ':nickname'             => '超级管理员',
+            ':password'             => $hashedPassword,
+            ':avatar'               => $avatar,
+            ':password_changed_at'  => $now,
+            ':create_time'          => $now,
+            ':update_time'          => $now,
+            ':username2'            => $username,
+            ':password2'            => $hashedPassword,
+            ':password_changed_at2' => $now,
+            ':update_time2'         => $now,
         ]);
     }
 

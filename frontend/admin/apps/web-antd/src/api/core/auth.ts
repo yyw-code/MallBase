@@ -43,6 +43,7 @@ export namespace AuthApi {
     remark: string;
     last_login_time: string;
     last_login_ip: string;
+    home_path?: string;
   }
 
   /** 用户权限码返回值 */

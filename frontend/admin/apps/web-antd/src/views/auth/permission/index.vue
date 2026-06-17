@@ -99,6 +99,7 @@ const {
   openEditModal,
   handleSubmit,
 } = useFormModal();
+void formRef;
 
 // 打开新增弹窗
 const handleCreate = () => {
@@ -247,13 +248,14 @@ const columns = [
       }
       return h(Switch, {
         checked: record.status === 1,
-        onChange: async (checked: boolean) => {
+        onChange: async (checked: any) => {
+          const enabled = checked === true;
           const hasChildren = record.children && record.children.length > 0;
 
           if (hasChildren) {
             Modal.confirm({
               title: '确认操作',
-              content: checked
+              content: enabled
                 ? '是否同时启用所有子权限？'
                 : '是否同时禁用所有子权限？',
               okText: '是',
@@ -261,7 +263,7 @@ const columns = [
               onOk: async () => {
                 await batchUpdatePermissionApi(record.id, {
                   field: 'status',
-                  value: checked ? 1 : 0,
+                  value: enabled ? 1 : 0,
                   include_children: true,
                 });
                 message.success('更新成功');
@@ -270,7 +272,7 @@ const columns = [
               onCancel: async () => {
                 await batchUpdatePermissionApi(record.id, {
                   field: 'status',
-                  value: checked ? 1 : 0,
+                  value: enabled ? 1 : 0,
                   include_children: false,
                 });
                 message.success('更新成功');
@@ -280,7 +282,7 @@ const columns = [
           } else {
             await batchUpdatePermissionApi(record.id, {
               field: 'status',
-              value: checked ? 1 : 0,
+              value: enabled ? 1 : 0,
               include_children: false,
             });
             message.success('更新成功');
@@ -300,13 +302,14 @@ const columns = [
       }
       return h(Switch, {
         checked: record.is_show === 1,
-        onChange: async (checked: boolean) => {
+        onChange: async (checked: any) => {
+          const enabled = checked === true;
           const hasChildren = record.children && record.children.length > 0;
 
           if (hasChildren) {
             Modal.confirm({
               title: '确认操作',
-              content: checked
+              content: enabled
                 ? '是否同时显示所有子菜单？'
                 : '是否同时隐藏所有子菜单？',
               okText: '是',
@@ -314,7 +317,7 @@ const columns = [
               onOk: async () => {
                 await batchUpdatePermissionApi(record.id, {
                   field: 'is_show',
-                  value: checked ? 1 : 0,
+                  value: enabled ? 1 : 0,
                   include_children: true,
                 });
                 message.success('更新成功');
@@ -323,7 +326,7 @@ const columns = [
               onCancel: async () => {
                 await batchUpdatePermissionApi(record.id, {
                   field: 'is_show',
-                  value: checked ? 1 : 0,
+                  value: enabled ? 1 : 0,
                   include_children: false,
                 });
                 message.success('更新成功');
@@ -333,7 +336,7 @@ const columns = [
           } else {
             await batchUpdatePermissionApi(record.id, {
               field: 'is_show',
-              value: checked ? 1 : 0,
+              value: enabled ? 1 : 0,
               include_children: false,
             });
             message.success('更新成功');
@@ -438,7 +441,6 @@ if (hasAccessByCodes(['SystemPermissionTree'])) {
         >
           <a-select-option :value="1">菜单</a-select-option>
           <a-select-option :value="2">按钮</a-select-option>
-          <a-select-option :value="3">接口</a-select-option>
         </a-select>
       </a-form-item>
       <a-form-item label="状态">
@@ -491,9 +493,6 @@ if (hasAccessByCodes(['SystemPermissionTree'])) {
           </a-tag>
           <a-tag v-else-if="record.type === 2" color="green">
             <span class="mr-1">🔘</span>按钮
-          </a-tag>
-          <a-tag v-else-if="record.type === 3" color="purple">
-            <span class="mr-1">🔗</span>接口
           </a-tag>
           <span v-else>-</span>
         </template>
@@ -587,7 +586,6 @@ if (hasAccessByCodes(['SystemPermissionTree'])) {
           <a-radio-group v-model:value="formData.type">
             <a-radio :value="1">菜单</a-radio>
             <a-radio :value="2">按钮</a-radio>
-            <a-radio :value="3">接口</a-radio>
           </a-radio-group>
         </a-form-item>
         <a-form-item label="路由路径" name="path">

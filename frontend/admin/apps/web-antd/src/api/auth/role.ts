@@ -11,7 +11,6 @@ export namespace RoleApi {
     remark: string;
     menu_permission_ids?: number[];
     button_permission_ids?: number[];
-    api_permission_ids?: number[];
     create_time?: string;
     update_time?: string;
   }
@@ -22,7 +21,7 @@ export namespace RoleApi {
     parent_id: number;
     name: string;
     code: string;
-    type: number; // 1=菜单, 2=按钮, 3=接口
+    type: number; // 1=菜单, 2=按钮
     path?: string;
     icon?: string;
     component?: string;
@@ -50,7 +49,6 @@ export namespace RoleApi {
     remark?: string;
     menu_permission_ids?: number[];
     button_permission_ids?: number[];
-    api_permission_ids?: number[];
   }
 
   /** 更新角色参数 */

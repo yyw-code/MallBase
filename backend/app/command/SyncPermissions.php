@@ -40,7 +40,7 @@ class SyncPermissions extends Command
      */
     const TYPE_MENU = 1;      // 菜单
     const TYPE_BUTTON = 2;    // 按钮
-    const TYPE_API = 3;       // 接口
+    const TYPE_API = 3;       // 历史接口类型，仅兼容旧数据，不再生成
 
     /**
      * 权限来源
@@ -247,6 +247,11 @@ class SyncPermissions extends Command
                 $hasGroupCode = isset($option['_group_code']);
                 $isRouteGroup = empty($route['rule']) || $route['rule'] === '/';
 
+                // 跳过不参与角色授权的路由和路由组，避免基础接口集合生成可选权限节点。
+                if (isset($option['_auth']) && $option['_auth'] === false) {
+                    continue;
+                }
+
                 // 如果有 _group_code，创建路由组菜单（路由组本身不在 getRuleList 中，需要从子路由创建）
                 if ($hasGroupCode) {
                     $groupCode = $option['_group_code'];
@@ -265,11 +270,6 @@ class SyncPermissions extends Command
 
                     // 修改子路由的 _parent 为路由组 code，这样子路由会挂在路由组菜单下
                     $option['_parent'] = $groupCode;
-                }
-
-                // 跳过不需要权限验证的路由（_auth => false）
-                if (isset($option['_auth']) && $option['_auth'] === false) {
-                    continue;
                 }
 
                 // 处理有 _alias 或 _group_name 的路由
@@ -330,20 +330,15 @@ class SyncPermissions extends Command
      */
     protected function parseRouteOption($routeName, $route, $option)
     {
+        $isActualRoute = !empty($route['rule']) && $route['rule'] !== '/';
+        $isGeneratedGroup = isset($option['_group_code']) && $routeName === $option['_group_code'];
+
         // 确定权限类型
         $type = $option['_type'] ?? null;
 
         if ($type === null) {
-            // 没指定类型时：
-            // 1. 路由有实际的 rule（路径）的，默认为接口
-            // 2. 没有 rule 的（group 级别的），默认为菜单
-            if (!empty($route['rule']) && $route['rule'] !== '/') {
-                // 有实际路由路径的是接口
-                $type = self::TYPE_API;
-            } else {
-                // 没有 rule 的是菜单（group 级别）
-                $type = self::TYPE_MENU;
-            }
+            // 未指定类型时默认按读权限处理；写操作应在路由中显式标记为按钮权限。
+            $type = self::TYPE_MENU;
         } else {
             // 支持数字和字符串类型
             if (is_numeric($type)) {
@@ -354,10 +349,14 @@ class SyncPermissions extends Command
                 $typeMap = [
                     'menu' => self::TYPE_MENU,
                     'button' => self::TYPE_BUTTON,
-                    'api' => self::TYPE_API,
+                    'api' => self::TYPE_MENU,
                 ];
-                $type = $typeMap[strtolower($type)] ?? self::TYPE_API;
+                $type = $typeMap[strtolower($type)] ?? self::TYPE_MENU;
             }
+        }
+
+        if ($type === self::TYPE_API) {
+            $type = self::TYPE_MENU;
         }
 
         // 确定父级权限的 code
@@ -410,13 +409,9 @@ class SyncPermissions extends Command
             }
         }
 
-        // 处理路由路径（只有接口才有实际路由路径）
-        if ($type === self::TYPE_API && !isset($data['path'])) {
-            $data['path'] = ltrim($route['rule'], '/');
-        }
-
-        // 接口默认不显示
-        if ($type === self::TYPE_API && !isset($data['is_show'])) {
+        // 路由子权限默认不显示在菜单，只作为页面读权限或按钮权限参与授权。
+        if ($isActualRoute && !$isGeneratedGroup) {
+            unset($data['path'], $data['icon'], $data['component'], $data['redirect']);
             $data['is_show'] = 0;
         }
 
@@ -571,23 +566,24 @@ class SyncPermissions extends Command
     {
         foreach ($menus as $menu) {
             $code = $menu['code'];
+            $effectiveParentCode = $menu['parent'] ?? $parentCode;
             $syncPermission = $this->syncDbPermissions[$code] ?? null;
 
             // 构建菜单父子映射
-            $this->menuParentMap[$code] = $parentCode;
+            $this->menuParentMap[$code] = $effectiveParentCode;
 
             if ($syncPermission) {
                 // source=2 的记录已存在，需要更新
                 $this->toUpdate[] = [
                     'code' => $code,
                     'db_id' => $syncPermission['id'],
-                    'data' => $this->buildMenuPermissionData($menu, $parentCode, false),
+                    'data' => $this->buildMenuPermissionData($menu, $effectiveParentCode, false),
                 ];
             } elseif (!isset($this->dbPermissions[$code])) {
                 // 数据库中完全不存在，需要创建
                 $this->toCreate[] = [
                     'code' => $code,
-                    'data' => $this->buildMenuPermissionData($menu, $parentCode, false),
+                    'data' => $this->buildMenuPermissionData($menu, $effectiveParentCode, false),
                 ];
             }
             // source=1 的记录已存在，跳过不动
@@ -666,8 +662,8 @@ class SyncPermissions extends Command
         // 根据 type 确定允许的字段
         $dbFields = array_keys(self::DB_DEFAULTS);
 
-        // type=2(按钮) 和 type=3(接口) 不包含 icon、component、redirect
-        if ($route['type'] === self::TYPE_BUTTON || $route['type'] === self::TYPE_API) {
+        // 按钮权限不包含 path、icon、component、redirect
+        if ($route['type'] === self::TYPE_BUTTON) {
             // 排除这些字段
             $excludeFields = ['path', 'icon', 'component', 'redirect'];
             $dbFields = array_diff($dbFields, $excludeFields);
@@ -916,6 +912,10 @@ class SyncPermissions extends Command
             if (!empty($this->toDelete)) {
                 $output->writeln('<comment>3. 删除无效权限...</comment>');
                 foreach ($this->toDelete as $code) {
+                    $permissionId = Db::name('permission')->where('code', $code)->value('id');
+                    if (!empty($permissionId)) {
+                        Db::name('role_permission')->where('permission_id', $permissionId)->delete();
+                    }
                     Db::name('permission')->where('code', $code)->delete();
                     $output->writeln("   - 删除: {$code}");
                     $deletedCount++;

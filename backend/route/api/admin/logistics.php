@@ -5,7 +5,7 @@ use think\facade\Route;
 
 Route::group('logistics/platform', function () {
     Route::get('list', 'list')->name('SystemLogisticsPlatformList')->option([
-        '_alias' => '平台配置', '_desc' => '获取物流平台配置列表', '_auth' => true,
+        '_alias' => '平台配置', '_desc' => '获取物流平台配置列表', '_auth' => true, '_type' => Permission::TYPE_MENU,
     ]);
     Route::post('save', 'save')->name('SystemLogisticsPlatformSave')->option([
         '_alias' => '保存平台', '_desc' => '新增或更新物流平台配置', '_auth' => true, '_type' => Permission::TYPE_BUTTON,
@@ -27,10 +27,10 @@ Route::group('logistics/platform', function () {
 
 Route::group('logistics/company', function () {
     Route::get('list', 'list')->name('SystemLogisticsCompanyList')->option([
-        '_alias' => '物流公司', '_desc' => '获取平台物流公司目录', '_auth' => true,
+        '_alias' => '物流公司', '_desc' => '获取平台物流公司目录', '_auth' => true, '_type' => Permission::TYPE_MENU,
     ]);
     Route::get('options', 'options')->name('SystemLogisticsCompanyOptions')->option([
-        '_alias' => '公司选项', '_desc' => '获取发货可用物流公司选项', '_auth' => true,
+        '_alias' => '公司选项', '_desc' => '获取发货可用物流公司选项', '_auth' => true, '_type' => Permission::TYPE_MENU,
     ]);
     Route::put('status/:id', 'status')->name('SystemLogisticsCompanyStatus')->option([
         '_alias' => '更新状态', '_desc' => '启用或停用平台物流公司', '_auth' => true, '_type' => Permission::TYPE_BUTTON,

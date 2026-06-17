@@ -10,15 +10,15 @@ Route::post('upload/asset/upload', 'admin.UploadController/single')
     ->option(['_alias' => '上传素材', '_desc' => '上传文件并创建素材', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
 
 Route::group('upload/asset', function () {
-    Route::get('list', 'list')->name('SystemUploadAssetList')->option(['_alias' => '素材列表', '_desc' => '获取素材列表', '_auth' => true]);
-    Route::get('select', 'select')->name('SystemUploadAssetSelect')->option(['_alias' => '选择素材', '_desc' => '素材选择器列表', '_auth' => true]);
-    Route::get('info/:id', 'info')->name('SystemUploadAssetInfo')->option(['_alias' => '素材详情', '_desc' => '获取素材详情', '_auth' => true]);
+    Route::get('list', 'list')->name('SystemUploadAssetList')->option(['_alias' => '素材列表', '_desc' => '获取素材列表', '_auth' => true, '_type' => Permission::TYPE_MENU]);
+    Route::get('select', 'select')->name('SystemUploadAssetSelect')->option(['_alias' => '选择素材', '_desc' => '素材选择器列表', '_auth' => true, '_type' => Permission::TYPE_MENU]);
+    Route::get('info/:id', 'info')->name('SystemUploadAssetInfo')->option(['_alias' => '素材详情', '_desc' => '获取素材详情', '_auth' => true, '_type' => Permission::TYPE_MENU]);
     Route::put('update/:id', 'update')->name('SystemUploadAssetUpdate')->option(['_alias' => '更新素材', '_desc' => '更新素材信息', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::put('move/:id', 'move')->name('SystemUploadAssetMove')->option(['_alias' => '移动素材', '_desc' => '移动素材分类', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::delete('delete/:id', 'delete')->name('SystemUploadAssetDelete')->option(['_alias' => '删除素材', '_desc' => '素材移入回收站', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::put('restore/:id', 'restore')->name('SystemUploadAssetRestore')->option(['_alias' => '恢复素材', '_desc' => '从回收站恢复素材', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::delete('purge/:id', 'purge')->name('SystemUploadAssetPurge')->option(['_alias' => '永久删除', '_desc' => '永久删除素材和存储对象', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
-    Route::get('usage/:id', 'usage')->name('SystemUploadAssetUsage')->option(['_alias' => '素材引用', '_desc' => '查看素材引用关系', '_auth' => true]);
+    Route::get('usage/:id', 'usage')->name('SystemUploadAssetUsage')->option(['_alias' => '素材引用', '_desc' => '查看素材引用关系', '_auth' => true, '_type' => Permission::TYPE_MENU]);
 })->prefix('admin.upload.UploadAssetController/')
     ->middleware([JwtAuth::class, CheckPermission::class])
     ->option([
@@ -33,8 +33,8 @@ Route::group('upload/asset', function () {
     ]);
 
 Route::group('upload/asset/category', function () {
-    Route::get('list', 'list')->name('SystemUploadAssetCategoryList')->option(['_alias' => '素材分类列表', '_desc' => '获取素材分类列表', '_auth' => true]);
-    Route::get('tree', 'tree')->name('SystemUploadAssetCategoryTree')->option(['_alias' => '素材分类树', '_desc' => '获取素材分类树', '_auth' => true]);
+    Route::get('list', 'list')->name('SystemUploadAssetCategoryList')->option(['_alias' => '素材分类列表', '_desc' => '获取素材分类列表', '_auth' => true, '_type' => Permission::TYPE_MENU]);
+    Route::get('tree', 'tree')->name('SystemUploadAssetCategoryTree')->option(['_alias' => '素材分类树', '_desc' => '获取素材分类树', '_auth' => true, '_type' => Permission::TYPE_MENU]);
     Route::post('create', 'create')->name('SystemUploadAssetCategoryCreate')->option(['_alias' => '创建素材分类', '_desc' => '创建素材分类', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::put('update/:id', 'update')->name('SystemUploadAssetCategoryUpdate')->option(['_alias' => '更新素材分类', '_desc' => '更新素材分类', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::delete('delete/:id', 'delete')->name('SystemUploadAssetCategoryDelete')->option(['_alias' => '删除素材分类', '_desc' => '删除素材分类', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
@@ -52,7 +52,7 @@ Route::group('upload/asset/category', function () {
     ]);
 
 Route::group('upload/asset/migration', function () {
-    Route::get('list', 'list')->name('SystemUploadAssetMigrationList')->option(['_alias' => '迁移任务列表', '_desc' => '获取素材迁移任务列表', '_auth' => true]);
+    Route::get('list', 'list')->name('SystemUploadAssetMigrationList')->option(['_alias' => '迁移任务列表', '_desc' => '获取素材迁移任务列表', '_auth' => true, '_type' => Permission::TYPE_MENU]);
     Route::post('create', 'create')->name('SystemUploadAssetMigrationCreate')->option(['_alias' => '创建迁移任务', '_desc' => '创建素材迁移任务', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::post('retry/:id', 'retry')->name('SystemUploadAssetMigrationRetry')->option(['_alias' => '重试迁移任务', '_desc' => '重新执行素材迁移任务', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::get('logs/:id', 'logs')->name('SystemUploadAssetMigrationLogs')->option(['_alias' => '迁移明细日志', '_desc' => '查看素材迁移明细日志', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
@@ -71,7 +71,7 @@ Route::group('upload/asset/migration', function () {
     ]);
 
 Route::group('upload/asset/recycle', function () {
-    Route::get('list', 'list')->name('SystemUploadAssetRecycleList')->option(['_alias' => '回收站列表', '_desc' => '获取回收站素材列表', '_auth' => true]);
+    Route::get('list', 'list')->name('SystemUploadAssetRecycleList')->option(['_alias' => '回收站列表', '_desc' => '获取回收站素材列表', '_auth' => true, '_type' => Permission::TYPE_MENU]);
     Route::delete('clear', 'clearRecycle')->name('SystemUploadAssetRecycleClear')->option(['_alias' => '清空回收站', '_desc' => '永久删除回收站内素材和存储对象', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
 })->prefix('admin.upload.UploadAssetController/')
     ->middleware([JwtAuth::class, CheckPermission::class])

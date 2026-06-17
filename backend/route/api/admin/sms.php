@@ -8,10 +8,10 @@ use think\facade\Route;
 // ============================================================
 Route::group('sms/provider', function () {
     Route::get('list', 'list')->name('SmsProviderList')->option([
-        '_alias' => '列表', '_desc' => '服务商列表', '_auth' => true,
+        '_alias' => '列表', '_desc' => '服务商列表', '_auth' => true, '_type' => Permission::TYPE_MENU,
     ]);
     Route::get('info/:id', 'info')->name('SmsProviderInfo')->option([
-        '_alias' => '详情', '_desc' => '服务商详情', '_auth' => true,
+        '_alias' => '详情', '_desc' => '服务商详情', '_auth' => true, '_type' => Permission::TYPE_MENU,
     ]);
     Route::post('create', 'create')->name('SmsProviderCreate')->option([
         '_alias' => '创建', '_desc' => '新增服务商', '_auth' => true, '_type' => Permission::TYPE_BUTTON,
@@ -41,10 +41,10 @@ Route::group('sms/provider', function () {
 // ============================================================
 Route::group('sms/sign', function () {
     Route::get('list', 'list')->name('SmsSignList')->option([
-        '_alias' => '列表', '_desc' => '签名列表', '_auth' => true,
+        '_alias' => '列表', '_desc' => '签名列表', '_auth' => true, '_type' => Permission::TYPE_MENU,
     ]);
     Route::get('info/:id', 'info')->name('SmsSignInfo')->option([
-        '_alias' => '详情', '_desc' => '签名详情', '_auth' => true,
+        '_alias' => '详情', '_desc' => '签名详情', '_auth' => true, '_type' => Permission::TYPE_MENU,
     ]);
     Route::post('import', 'import')->name('SmsSignImport')->option([
         '_alias' => '导入', '_desc' => '本地登记短信签名', '_auth' => true, '_type' => Permission::TYPE_BUTTON,
@@ -68,10 +68,10 @@ Route::group('sms/sign', function () {
 // ============================================================
 Route::group('sms/template', function () {
     Route::get('list', 'list')->name('SmsTemplateList')->option([
-        '_alias' => '列表', '_desc' => '模板列表', '_auth' => true,
+        '_alias' => '列表', '_desc' => '模板列表', '_auth' => true, '_type' => Permission::TYPE_MENU,
     ]);
     Route::get('info/:id', 'info')->name('SmsTemplateInfo')->option([
-        '_alias' => '详情', '_desc' => '模板详情', '_auth' => true,
+        '_alias' => '详情', '_desc' => '模板详情', '_auth' => true, '_type' => Permission::TYPE_MENU,
     ]);
     Route::post('create', 'create')->name('SmsTemplateCreate')->option([
         '_alias' => '创建', '_desc' => '提交模板审核', '_auth' => true, '_type' => Permission::TYPE_BUTTON,
@@ -110,7 +110,7 @@ Route::group('sms/template', function () {
 // ============================================================
 Route::group('sms/scene', function () {
     Route::get('list', 'list')->name('SmsSceneList')->option([
-        '_alias' => '列表', '_desc' => '场景绑定列表(含未绑定场景)', '_auth' => true,
+        '_alias' => '列表', '_desc' => '场景绑定列表(含未绑定场景)', '_auth' => true, '_type' => Permission::TYPE_MENU,
     ]);
     Route::post('bind', 'bind')->name('SmsSceneBind')->option([
         '_alias' => '绑定', '_desc' => '为场景指定服务商/模板/签名', '_auth' => true, '_type' => Permission::TYPE_BUTTON,
@@ -140,7 +140,7 @@ Route::group('sms/scene', function () {
 // ============================================================
 Route::group('sms/config', function () {
     Route::get('info', 'info')->name('SmsConfigInfo')->option([
-        '_alias' => '详情', '_desc' => '频控配置详情', '_auth' => true,
+        '_alias' => '详情', '_desc' => '频控配置详情', '_auth' => true, '_type' => Permission::TYPE_MENU,
     ]);
     Route::post('save', 'save')->name('SmsConfigSave')->option([
         '_alias' => '保存', '_desc' => '保存频控配置', '_auth' => true, '_type' => Permission::TYPE_BUTTON,

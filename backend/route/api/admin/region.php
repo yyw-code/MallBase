@@ -6,10 +6,10 @@ use app\model\auth\Permission;
 use think\facade\Route;
 
 Route::group('region', function () {
-    Route::get('list', 'list')->name('SystemRegionList')->option(['_alias' => '地区列表', '_desc' => '获取地区列表', '_auth' => true]);
-    Route::get('children', 'children')->name('SystemRegionChildren')->option(['_alias' => '子级地区', '_desc' => '获取子级地区', '_auth' => true]);
-    Route::get('path/:id', 'path')->name('SystemRegionPath')->option(['_alias' => '地区路径', '_desc' => '获取地区路径', '_auth' => true]);
-    Route::get('info/:id', 'info')->name('SystemRegionInfo')->option(['_alias' => '地区详情', '_desc' => '获取地区详情', '_auth' => true]);
+    Route::get('list', 'list')->name('SystemRegionList')->option(['_alias' => '地区列表', '_desc' => '获取地区列表', '_auth' => true, '_type' => Permission::TYPE_MENU]);
+    Route::get('children', 'children')->name('SystemRegionChildren')->option(['_alias' => '子级地区', '_desc' => '获取子级地区', '_auth' => true, '_type' => Permission::TYPE_MENU]);
+    Route::get('path/:id', 'path')->name('SystemRegionPath')->option(['_alias' => '地区路径', '_desc' => '获取地区路径', '_auth' => true, '_type' => Permission::TYPE_MENU]);
+    Route::get('info/:id', 'info')->name('SystemRegionInfo')->option(['_alias' => '地区详情', '_desc' => '获取地区详情', '_auth' => true, '_type' => Permission::TYPE_MENU]);
     Route::post('create', 'create')->name('SystemRegionCreate')->option(['_alias' => '新增地区', '_desc' => '新增地区', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::put('update/:id', 'update')->name('SystemRegionUpdate')->option(['_alias' => '编辑地区', '_desc' => '编辑地区', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::put('updateStatus/:id', 'updateStatus')->name('SystemRegionUpdateStatus')->option(['_alias' => '地区状态', '_desc' => '更新地区状态', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);

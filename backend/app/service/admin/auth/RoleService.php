@@ -4,9 +4,8 @@ declare (strict_types=1);
 
 namespace app\service\admin\auth;
 
-use app\model\auth\Role as RoleModel;
 use app\model\auth\RolePermission;
-use app\model\auth\Permission;
+use app\model\auth\Role as RoleModel;
 use app\service\cache\PermissionCacheService;
 use app\model\auth\Permission as PermissionModel;
 use mall_base\base\BaseService;
@@ -108,8 +107,6 @@ class RoleService extends BaseService
         $menuPermissions = [];
         // 按钮权限
         $buttonPermissions = [];
-        // 接口权限
-        $apiPermissions = [];
         foreach ($rolePermissions as $item) {
             if (!empty($item['id'])) {
                 $permission = $item;
@@ -121,9 +118,6 @@ class RoleService extends BaseService
                     case PermissionModel::TYPE_BUTTON:
                         $buttonPermissions[] = $permission;
                         break;
-                    case PermissionModel::TYPE_API:
-                        $apiPermissions[] = $permission;
-                        break;
                 }
 
             }
@@ -131,7 +125,6 @@ class RoleService extends BaseService
 
         $info['menu_permission_ids'] = array_column($menuPermissions, 'id');
         $info['button_permission_ids'] = array_column($buttonPermissions, 'id');
-        $info['api_permission_ids'] = array_column($apiPermissions, 'id');
 
         return $info;
     }
@@ -169,8 +162,7 @@ class RoleService extends BaseService
 
             $permissionIds = array_merge(
                 $data['menu_permission_ids'] ?? [],
-                $data['button_permission_ids'] ?? [],
-                $data['api_permission_ids'] ?? []
+                $data['button_permission_ids'] ?? []
             );
             // 分配权限
             if (!empty($permissionIds)) {
@@ -202,9 +194,9 @@ class RoleService extends BaseService
         $permissionIds = array_merge(
             $data['menu_permission_ids'] ?? [],
             $data['button_permission_ids'] ?? [],
-            $data['api_permission_ids'] ?? []
+            $this->getLegacyApiPermissionIds($id)
         );
-        unset($data['menu_permission_ids'], $data['button_permission_ids'], $data['api_permission_ids']);
+        unset($data['menu_permission_ids'], $data['button_permission_ids']);
         return $this->transaction(function () use ($id, $data, $permissionIds) {
 
             $this->assignPermissions($id, $permissionIds);
@@ -234,11 +226,6 @@ class RoleService extends BaseService
      */
     public function delete(int $id): bool
     {
-        // 不允许删除超级管理员角色
-        if ($id === 1) {
-            throw new BusinessException('不能删除超级管理员角色');
-        }
-
         $role = $this->model()->find($id);
         if (!$role) {
             throw new BusinessException('角色不存在');
@@ -265,6 +252,7 @@ class RoleService extends BaseService
         $this->model(RolePermission::class)->where('role_id', $roleId)->delete();
 
         // 批量分配新权限
+        $permissionIds = array_values(array_unique(array_map('intval', $permissionIds)));
         if (!empty($permissionIds)) {
             $insertData = [];
             foreach ($permissionIds as $permissionId) {
@@ -278,6 +266,21 @@ class RoleService extends BaseService
 
         // 清除拥有该角色的用户权限缓存
         $this->clearRoleUsersCache($roleId);
+    }
+
+    /**
+     * 保留同步前的历史接口权限，避免编辑旧角色时误删仍在生效的权限码。
+     *
+     * @return array<int, int>
+     */
+    protected function getLegacyApiPermissionIds(int $roleId): array
+    {
+        return $this->model(RolePermission::class)
+            ->alias('rp')
+            ->leftJoin('permission p', 'rp.permission_id = p.id')
+            ->where('rp.role_id', $roleId)
+            ->where('p.type', PermissionModel::TYPE_API)
+            ->column('rp.permission_id');
     }
 
     /**

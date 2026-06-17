@@ -20,7 +20,7 @@ class PermissionValidate extends Validate
         'parent_id|父级ID' => 'number|egt:0',
         'name|权限名称' => 'require|max:50',
         'code|权限编码' => 'require|regex:/^[A-Za-z0-9:]+$/|max:50|min:2',
-        'type|权限类型' => 'in:1,2,3',
+        'type|权限类型' => 'in:1,2',
         'path|路径' => 'max:255',
         'icon|图标' => 'max:100',
         'component|组件' => 'max:255',

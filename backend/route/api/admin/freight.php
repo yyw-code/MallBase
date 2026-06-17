@@ -6,8 +6,8 @@ use app\model\auth\Permission;
 use think\facade\Route;
 
 Route::group('setting/freight-template', function () {
-    Route::get('list', 'list')->name('SystemFreightTemplateList')->option(['_alias' => '模板列表', '_desc' => '获取运费模板列表', '_auth' => true]);
-    Route::get('info/:id', 'info')->name('SystemFreightTemplateInfo')->option(['_alias' => '模板详情', '_desc' => '获取运费模板详情', '_auth' => true]);
+    Route::get('list', 'list')->name('SystemFreightTemplateList')->option(['_alias' => '模板列表', '_desc' => '获取运费模板列表', '_auth' => true, '_type' => Permission::TYPE_MENU]);
+    Route::get('info/:id', 'info')->name('SystemFreightTemplateInfo')->option(['_alias' => '模板详情', '_desc' => '获取运费模板详情', '_auth' => true, '_type' => Permission::TYPE_MENU]);
     Route::post('create', 'create')->name('SystemFreightTemplateCreate')->option(['_alias' => '新增模板', '_desc' => '新增运费模板', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::put('update/:id', 'update')->name('SystemFreightTemplateUpdate')->option(['_alias' => '编辑模板', '_desc' => '编辑运费模板', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::delete('delete/:id', 'delete')->name('SystemFreightTemplateDelete')->option(['_alias' => '删除模板', '_desc' => '删除运费模板', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);

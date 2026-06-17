@@ -59,7 +59,7 @@ class RoleController extends BaseController
      */
     public function create()
     {
-        $data = $this->request->param(['name', 'code', 'status', 'sort', 'remark', 'menu_permission_ids', 'api_permission_ids', 'button_permission_ids']);
+        $data = $this->request->param(['name', 'code', 'status', 'sort', 'remark', 'menu_permission_ids', 'button_permission_ids']);
 
         // 验证创建参数
         $this->validate($data, RoleValidate::class . '.create');
@@ -73,7 +73,7 @@ class RoleController extends BaseController
      */
     public function update($id)
     {
-        $data = $this->request->param(['name', 'code', 'status', 'sort', 'remark', 'menu_permission_ids', 'api_permission_ids', 'button_permission_ids']);
+        $data = $this->request->param(['name', 'code', 'status', 'sort', 'remark', 'menu_permission_ids', 'button_permission_ids']);
 
         if (empty($id)) {
             return $this->error('ID不能为空');

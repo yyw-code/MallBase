@@ -18,7 +18,7 @@ CREATE TABLE `mb_admin` (
   `status` tinyint(1) NOT NULL DEFAULT 1 COMMENT '状态：0=禁用 1=启用',
   `last_login_time` datetime DEFAULT NULL COMMENT '最后登录时间',
   `last_login_ip` varchar(50) DEFAULT NULL COMMENT '最后登录IP',
-  `password_changed_at` datetime DEFAULT NULL COMMENT '最近改密时间，NULL=从未改过（首次登录需强制改密）',
+  `password_changed_at` datetime DEFAULT NULL COMMENT '最近改密时间，NULL=未知或从未改过',
   `remark` varchar(255) DEFAULT NULL COMMENT '备注',
   `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
@@ -134,14 +134,10 @@ CREATE TABLE `mb_admin_operation_log` (
 -- -----------------------------
 
 -- 插入超级管理员（默认密码：admin123，需要在生产环境修改）
-INSERT INTO `mb_admin` (`id`, `username`, `password`, `nickname`, `status`, `remark`) VALUES
-(1, 'admin', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', '超级管理员', 1, '系统默认管理员');
+INSERT INTO `mb_admin` (`id`, `username`, `password`, `nickname`, `avatar`, `status`, `password_changed_at`, `remark`) VALUES
+(1, 'admin', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', '超级管理员', '/static/admin/logo.png', 1, CURRENT_TIMESTAMP, '系统默认管理员');
 
 -- 插入默认角色
 INSERT INTO `mb_role` (`id`, `name`, `code`, `remark`, `status`, `sort`) VALUES
 (1, '超级管理员', 'super_admin', '拥有所有权限', 1, 1),
 (2, '普通管理员', 'admin', '普通管理员权限', 1, 2);
-
--- 为超级管理员分配角色
-INSERT INTO `mb_admin_role` (`admin_id`, `role_id`) VALUES
-(1, 1);

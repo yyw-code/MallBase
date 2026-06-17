@@ -47,6 +47,7 @@ const {
   openEditModal,
   handleSubmit,
 } = useFormModal<AdminApi.AdminItem>();
+void formRef;
 
 const isEdit = computed(() => modalTitle.value.includes('编辑'));
 
@@ -144,6 +145,20 @@ const resetSearch = () => {
   loadData(searchParams.value);
 };
 
+const handleSearch = () => {
+  pagination.current = 1;
+  loadData(searchParams.value);
+};
+
+const handleTableChange = (newPagination: {
+  current?: number;
+  pageSize?: number;
+}) => {
+  pagination.current = newPagination.current ?? pagination.current;
+  pagination.pageSize = newPagination.pageSize ?? pagination.pageSize;
+  loadData(searchParams.value);
+};
+
 /* ---------------- 表格列 ---------------- */
 
 const columns = [
@@ -172,6 +187,7 @@ const columns = [
       }
       return h(Switch, {
         checked: record.status === 1,
+        disabled: record.id === 1,
         onChange: async (checked: any) => {
           await updateAdminStatusApi(record.id, {
             status: checked ? 1 : 0,
@@ -236,17 +252,7 @@ if (hasAccessByCodes(['SystemAdminList'])) {
         </a-select>
       </a-form-item>
       <a-form-item>
-        <a-button
-          type="primary"
-          @click="
-            () => {
-              pagination.current = 1;
-              loadData(searchParams.value);
-            }
-          "
-        >
-          搜索
-        </a-button>
+        <a-button type="primary" @click="handleSearch"> 搜索 </a-button>
         <a-button class="ml-2" @click="resetSearch"> 重置 </a-button>
       </a-form-item>
     </a-form>
@@ -258,13 +264,7 @@ if (hasAccessByCodes(['SystemAdminList'])) {
       :pagination="pagination"
       :scroll="{ x: 1200 }"
       row-key="id"
-      @change="
-        (newPagination) => {
-          pagination.current = newPagination.current;
-          pagination.pageSize = newPagination.pageSize;
-          loadData(searchParams.value);
-        }
-      "
+      @change="handleTableChange"
       v-access:code="'SystemAdminList'"
     >
       <template #bodyCell="{ column, record }">
@@ -280,7 +280,7 @@ if (hasAccessByCodes(['SystemAdminList'])) {
         </template>
 
         <template v-if="column.key === 'action'">
-          <a-space>
+          <a-space v-if="record.id !== 1">
             <a-button
               type="link"
               size="small"
@@ -309,6 +309,7 @@ if (hasAccessByCodes(['SystemAdminList'])) {
               删除
             </a-button>
           </a-space>
+          <span v-else>-</span>
         </template>
       </template>
     </a-table>
@@ -324,8 +325,8 @@ if (hasAccessByCodes(['SystemAdminList'])) {
       <a-form
         ref="formRef"
         :model="formData"
-        :label-col="{ span: 6 }"
-        :wrapper-col="{ span: 16 }"
+        :label-col="{ style: { width: '100px' } }"
+        class="pt-4"
       >
         <a-form-item
           label="用户名"

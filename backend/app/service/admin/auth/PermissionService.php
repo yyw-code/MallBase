@@ -86,7 +86,7 @@ class PermissionService extends BaseService
     {
 
         if ($adminId == Admin::SUPER_ADMIN_ID) {
-            $codes = $this->model()->whereIn('type', [PermissionModel::TYPE_BUTTON, PermissionModel::TYPE_API])->where('status', 1)->column('code');
+            $codes = $this->model()->whereIn('type', $this->accessCodeTypes())->where('status', 1)->column('code');
             $codes = array_merge($codes, $this->routeAccessCodes());
         } else {
             // 获取管理员的角色ID
@@ -103,7 +103,7 @@ class PermissionService extends BaseService
                 ->alias('p')
                 ->leftJoin('role_permission rp', 'rp.permission_id = p.id')
                 ->whereIn('rp.role_id', $roleIds)
-                ->whereIn('p.type', [PermissionModel::TYPE_BUTTON, PermissionModel::TYPE_API])
+                ->whereIn('p.type', $this->accessCodeTypes())
                 ->where('p.status', 1)
                 ->column('p.code');
         }
@@ -113,10 +113,10 @@ class PermissionService extends BaseService
     }
 
     /**
-     * 从当前路由表补充按钮/API 权限码。
+     * 从当前路由表补充菜单/按钮权限码。
      *
      * 作用：新路由代码已存在但尚未执行 sync:permissions 时，超级管理员前端仍应能获得
-     * 对应按钮权限码；普通角色仍以数据库 role_permission 为准，不走此兜底。
+     * 对应权限码；普通角色仍以数据库 role_permission 为准，不走此兜底。
      *
      * @return array<int, string>
      */
@@ -145,7 +145,7 @@ class PermissionService extends BaseService
             }
 
             $type = $this->normalizeRoutePermissionType($option['_type'] ?? null, (string) ($route['rule'] ?? ''));
-            if (in_array($type, [PermissionModel::TYPE_BUTTON, PermissionModel::TYPE_API], true)) {
+            if (in_array($type, [PermissionModel::TYPE_MENU, PermissionModel::TYPE_BUTTON], true)) {
                 $codes[] = $name;
             }
         }
@@ -153,12 +153,24 @@ class PermissionService extends BaseService
         return array_values(array_unique($codes));
     }
 
+    /**
+     * 角色编辑已收敛为菜单和按钮权限；历史接口类型仅用于兼容未同步的旧数据。
+     *
+     * @return array<int, int>
+     */
+    protected function accessCodeTypes(): array
+    {
+        return [
+            PermissionModel::TYPE_MENU,
+            PermissionModel::TYPE_BUTTON,
+            PermissionModel::TYPE_API,
+        ];
+    }
+
     protected function normalizeRoutePermissionType(mixed $type, string $rule): int
     {
         if ($type === null) {
-            return $rule !== '' && $rule !== '/'
-                ? PermissionModel::TYPE_API
-                : PermissionModel::TYPE_MENU;
+            return PermissionModel::TYPE_MENU;
         }
 
         if (is_numeric($type)) {
@@ -168,8 +180,8 @@ class PermissionService extends BaseService
         return [
             'menu' => PermissionModel::TYPE_MENU,
             'button' => PermissionModel::TYPE_BUTTON,
-            'api' => PermissionModel::TYPE_API,
-        ][strtolower((string) $type)] ?? PermissionModel::TYPE_API;
+            'api' => PermissionModel::TYPE_MENU,
+        ][strtolower((string) $type)] ?? PermissionModel::TYPE_MENU;
     }
 
     /**
@@ -395,6 +407,10 @@ class PermissionService extends BaseService
         foreach ($nodes as $node) {
             // 跳过空数据
             if (empty($node['code']) || empty($node['name'])) {
+                continue;
+            }
+
+            if (empty($node['path']) && empty($node['component']) && empty($node['redirect'])) {
                 continue;
             }
 
