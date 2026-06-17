@@ -204,7 +204,7 @@ rm -f backend/runtime/install/install.lock
 [install:auto] - 客户端入口：http://127.0.0.1:8080/client/
 [install:auto] - 数据库：mallbase@127.0.0.1:3306/mallbase
 [install:auto] - Redis：127.0.0.1:6379 DB 0
-[install:auto] 首次登录后请修改默认管理员密码。
+[install:auto] 安装完成后请尽快修改默认管理员密码。
 [install:auto] 安装完成后请重启 Swoole，让新配置和安装锁生效。
 ```
 
@@ -274,7 +274,7 @@ curl -I http://127.0.0.1:8080/admin/
 - 用户名：`admin`
 - 密码：`admin123`
 
-首次登录后会进入改密流程。
+登录后可在个人资料页修改默认管理员密码。
 
 ## 常见问题
 

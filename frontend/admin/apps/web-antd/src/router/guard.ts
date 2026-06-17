@@ -51,29 +51,6 @@ function setupAccessGuard(router: Router) {
     const accessStore = useAccessStore();
     const userStore = useUserStore();
     const authStore = useAuthStore();
-    const changePasswordPath = '/auth/change-password';
-
-    if (!accessStore.accessToken && accessStore.mustChangePassword) {
-      accessStore.setMustChangePassword(false);
-    }
-
-    if (accessStore.mustChangePassword && accessStore.accessToken) {
-      if (to.path === LOGIN_PATH) {
-        return {
-          path: changePasswordPath,
-          replace: true,
-        };
-      }
-
-      if (to.path !== changePasswordPath) {
-        return {
-          path: changePasswordPath,
-          replace: true,
-        };
-      }
-
-      return true;
-    }
 
     // 基本路由，这些路由不需要进入权限拦截
     if (coreRouteNames.includes(to.name as string)) {

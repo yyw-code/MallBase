@@ -90,18 +90,6 @@ const coreRoutes: RouteRecordRaw[] = [
           title: $t('page.auth.register'),
         },
       },
-      {
-        name: 'ChangePassword',
-        path: 'change-password',
-        component: () =>
-          import('#/views/_core/authentication/change-password.vue'),
-        meta: {
-          // 强制改密页：已登录但 password_changed_at=NULL 时进入；
-          // 允许已认证用户访问，ignoreAccess=true 跳过权限校验。
-          ignoreAccess: true,
-          title: '首次登录改密',
-        },
-      },
     ],
   },
 ];

@@ -188,7 +188,7 @@ redis-cli -h "${REDIS_HOST}" -p "${REDIS_PORT:-6379}" -n "${REDIS_CACHE_DB:-0}" 
 [install:auto] - 客户端入口：http://127.0.0.1:8080/client/
 [install:auto] - 数据库：mallbase@127.0.0.1:3306/mallbase
 [install:auto] - Redis：127.0.0.1:6379 DB 0
-[install:auto] 首次登录后请修改默认管理员密码。
+[install:auto] 安装完成后请尽快修改默认管理员密码。
 [install:auto] 安装完成后请重启 Swoole，让新配置和安装锁生效。
 ```
 
