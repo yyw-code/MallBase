@@ -40,7 +40,7 @@ const { tableData, loading, pagination, loadData } = useTableCrud<
 interface SearchForm {
   sn: string;
   status: number | undefined;
-  user_id: number | undefined;
+  buyer_keyword: string;
   logistics_sn: string;
   created_range: [string, string] | undefined;
   has_after_sale: 0 | 1 | undefined;
@@ -49,20 +49,27 @@ interface SearchForm {
 const searchParams = ref<SearchForm>({
   sn: '',
   status: undefined,
-  user_id: undefined,
+  buyer_keyword: '',
   logistics_sn: '',
   created_range: undefined,
   has_after_sale: undefined,
 });
 const activeStatusTab = ref('all');
 const statsTabs = ref<OrderApi.StatsTab[]>([]);
+const selectedRowKeys = ref<number[]>([]);
+const rowSelection = computed(() => ({
+  selectedRowKeys: selectedRowKeys.value,
+  onChange: (keys: Array<number | string>) => {
+    selectedRowKeys.value = keys.map(Number).filter((key) => key > 0);
+  },
+}));
 
 const buildQuery = (): OrderApi.ListParams => {
   const range = searchParams.value.created_range;
   return {
     sn: searchParams.value.sn?.trim() || undefined,
     status: searchParams.value.status,
-    user_id: searchParams.value.user_id,
+    buyer_keyword: searchParams.value.buyer_keyword?.trim() || undefined,
     logistics_sn: searchParams.value.logistics_sn?.trim() || undefined,
     created_start: range?.[0] || undefined,
     created_end: range?.[1] || undefined,
@@ -71,10 +78,11 @@ const buildQuery = (): OrderApi.ListParams => {
 };
 
 const resetSearch = () => {
+  selectedRowKeys.value = [];
   searchParams.value = {
     sn: '',
     status: undefined,
-    user_id: undefined,
+    buyer_keyword: '',
     logistics_sn: '',
     created_range: undefined,
     has_after_sale: undefined,
@@ -85,6 +93,7 @@ const resetSearch = () => {
 };
 
 const submitSearch = () => {
+  selectedRowKeys.value = [];
   pagination.current = 1;
   refreshData();
 };
@@ -99,6 +108,7 @@ const refreshData = async () => {
 };
 
 const handleStatusTabChange = (key: string) => {
+  selectedRowKeys.value = [];
   activeStatusTab.value = key;
   searchParams.value.status = key === 'all' ? undefined : Number(key);
   pagination.current = 1;
@@ -107,7 +117,11 @@ const handleStatusTabChange = (key: string) => {
 
 const handleExport = async () => {
   try {
-    const blob = await exportOrderCsvApi(buildQuery());
+    const params =
+      selectedRowKeys.value.length > 0
+        ? { ids: selectedRowKeys.value.join(',') }
+        : buildQuery();
+    const blob = await exportOrderCsvApi(params);
     downloadBlob(blob, 'orders.csv');
   } catch (error: any) {
     message.error(error?.message || '导出失败');
@@ -202,6 +216,15 @@ const handleClose = (record: OrderApi.OrderRecord) => {
   });
 };
 
+const buyerDisplayName = (record: OrderApi.OrderRecord) =>
+  record.buyer?.nickname || `用户 ${record.user_id}`;
+
+const buyerInitial = (record: OrderApi.OrderRecord) =>
+  buyerDisplayName(record).slice(0, 1) || '买';
+
+const buyerContact = (record: OrderApi.OrderRecord) =>
+  record.buyer?.mobile || record.buyer?.email || '未填写联系方式';
+
 /* ---------------- 表格列 ---------------- */
 const columns = [
   { title: 'ID', dataIndex: 'id', width: 70, fixed: 'left' },
@@ -217,7 +240,7 @@ const columns = [
         : text;
     },
   },
-  { title: '买家 ID', dataIndex: 'user_id', width: 90 },
+  { title: '买家信息', dataIndex: 'buyer', key: 'buyer', width: 220 },
   { title: '应付', dataIndex: 'pay_amount', width: 100 },
   {
     title: '支付方式',
@@ -250,7 +273,11 @@ onMounted(() => {
       <div class="order-actions">
         <a-button @click="refreshData">刷新</a-button>
         <a-button v-access:code="'SystemOrderExport'" @click="handleExport">
-          导出
+          {{
+            selectedRowKeys.length > 0
+              ? `导出已选（${selectedRowKeys.length}）`
+              : '导出'
+          }}
         </a-button>
       </div>
     </div>
@@ -273,11 +300,11 @@ onMounted(() => {
             </a-form-item>
           </div>
           <div>
-            <a-form-item class="mb-0" label="买家ID">
-              <a-input-number
-                v-model:value="searchParams.user_id"
-                placeholder="买家ID"
-                :min="1"
+            <a-form-item class="mb-0" label="买家">
+              <a-input
+                v-model:value="searchParams.buyer_keyword"
+                placeholder="ID / 昵称 / 手机号 / 邮箱"
+                allow-clear
                 class="w-full"
                 @press-enter="submitSearch"
               />
@@ -344,7 +371,8 @@ onMounted(() => {
         :data-source="tableData"
         :loading="loading"
         :pagination="pagination"
-        :scroll="{ x: 1500 }"
+        :row-selection="rowSelection"
+        :scroll="{ x: 1650 }"
         row-key="id"
         @change="
           (newPagination: any) => {
@@ -355,6 +383,24 @@ onMounted(() => {
         "
       >
         <template #bodyCell="{ column, record }">
+          <template v-if="column.key === 'buyer'">
+            <div class="order-buyer-cell">
+              <a-avatar
+                :size="32"
+                :src="record.buyer?.avatar_full_url || undefined"
+              >
+                {{ buyerInitial(record) }}
+              </a-avatar>
+              <div class="order-buyer-meta">
+                <div class="order-buyer-name">
+                  {{ buyerDisplayName(record) }}
+                </div>
+                <div class="order-buyer-sub">
+                  {{ buyerContact(record) }} · ID {{ record.user_id }}
+                </div>
+              </div>
+            </div>
+          </template>
           <template v-if="column.key === 'action'">
             <a-space>
               <a-button
@@ -476,6 +522,35 @@ onMounted(() => {
 
 .order-status-tabs :deep(.ant-tabs-tab) {
   padding: 14px 0 12px;
+}
+
+.order-buyer-cell {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 8px;
+}
+
+.order-buyer-meta {
+  min-width: 0;
+}
+
+.order-buyer-name {
+  overflow: hidden;
+  color: hsl(var(--foreground));
+  font-weight: 500;
+  line-height: 20px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.order-buyer-sub {
+  overflow: hidden;
+  color: hsl(var(--muted-foreground));
+  font-size: 12px;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .order-table-panel :deep(.ant-table-wrapper) {

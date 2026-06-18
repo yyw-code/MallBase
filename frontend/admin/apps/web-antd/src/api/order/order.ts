@@ -36,6 +36,17 @@ export namespace OrderApi {
     create_time: string;
   }
 
+  /** 买家摘要 */
+  export interface BuyerInfo {
+    id: number;
+    nickname?: string;
+    mobile?: string;
+    email?: string;
+    avatar?: null | number | string;
+    avatar_full_url?: string;
+    status?: null | number;
+  }
+
   /** 订单主记录（含聚合字段） */
   export interface OrderRecord {
     id: number;
@@ -72,6 +83,7 @@ export namespace OrderApi {
     create_time: string;
     update_time?: string;
     items?: OrderItem[];
+    buyer?: BuyerInfo;
     /** 实时聚合，非落库字段 */
     after_sale_tag_text?: string;
   }
@@ -86,6 +98,8 @@ export namespace OrderApi {
     sn?: string;
     status?: number;
     user_id?: number;
+    buyer_keyword?: string;
+    ids?: string;
     logistics_sn?: string;
     created_start?: string;
     created_end?: string;

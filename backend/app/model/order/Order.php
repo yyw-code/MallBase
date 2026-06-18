@@ -5,6 +5,8 @@ namespace app\model\order;
 
 use app\common\enum\OrderStatus;
 use app\common\enum\PayMethod;
+use app\common\enum\RefundOrderStatus;
+use app\model\user\User;
 use mall_base\base\BaseModel;
 
 /**
@@ -38,6 +40,25 @@ class Order extends BaseModel
     public function logs()
     {
         return $this->hasMany(OrderLog::class, 'order_id', 'id');
+    }
+
+    /**
+     * 买家（订单归属用户）
+     */
+    public function buyer()
+    {
+        return $this->belongsTo(User::class, 'user_id', 'id');
+    }
+
+    /**
+     * 进行中的售后单（用于订单列表售后标签）
+     */
+    public function activeRefunds()
+    {
+        return $this->hasMany(RefundOrder::class, 'order_id', 'id')
+            ->whereIn('status', RefundOrderStatus::activeStatuses())
+            ->whereNull('delete_time')
+            ->order('id', 'desc');
     }
 
     /**

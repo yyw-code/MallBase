@@ -14,7 +14,6 @@ class Goods extends BaseModel
     protected $name = 'goods';
     protected $json = ['spec_meta', 'images'];
     protected $jsonAssoc = true;
-    protected array $append = ['main_image_full_url', 'main_video_full_url'];
 
     public const SPEC_TYPE_SINGLE = 1;
     public const SPEC_TYPE_MULTI = 2;
@@ -78,16 +77,4 @@ class Goods extends BaseModel
         return $images;
     }
 
-    public function getMainImageFullUrlAttr($value, $data): string
-    {
-        return buildUploadUrl($data['main_image'] ?? '');
-    }
-
-    /**
-     * 获取主视频完整地址
-     */
-    public function getMainVideoFullUrlAttr($value, $data): string
-    {
-        return buildUploadUrl($data['main_video'] ?? '');
-    }
 }

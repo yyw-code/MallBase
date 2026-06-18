@@ -18,6 +18,7 @@ use app\service\admin\support\CsvExportService;
 use app\service\upload\AssetHydrator;
 use app\common\enum\OperatorType;
 use app\common\enum\OrderStatus;
+use app\common\enum\PayMethod;
 use app\common\enum\RefundOrderStatus;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
@@ -38,7 +39,6 @@ class OrderAdminService extends BaseService
 
     public const ADJUST_MODE_ITEM_DISCOUNT = 'item_discount';
     public const ADJUST_MODE_PAY_PERCENT = 'pay_percent';
-    private const EXPORT_LIMIT = 5000;
 
     /**
      * 发货或修改物流信息。
@@ -445,19 +445,17 @@ class OrderAdminService extends BaseService
         return sprintf('%d.%02d', intdiv($basisPoints, 100), $basisPoints % 100);
     }
 
-    protected function prepayCloseService(): WechatPrepayCloseService
-    {
-        /** @var WechatPrepayCloseService $service */
-        $service = app()->make(WechatPrepayCloseService::class);
-        return $service;
-    }
-
     protected function requestIp(): string
     {
         if (!function_exists('request')) {
             return '';
         }
         return (string) request()->ip();
+    }
+
+    protected function prepayCloseService(): WechatPrepayCloseService
+    {
+        return app()->make(WechatPrepayCloseService::class);
     }
 
     /**
@@ -643,7 +641,7 @@ class OrderAdminService extends BaseService
      *
      * 条件同源 + 实时聚合 refund_order 得出 after_sale_tag_text
      *
-     * @param array{sn?:string, status?:int|null, user_id?:int|null, logistics_sn?:string, created_start?:string, created_end?:string, has_after_sale?:bool|null} $filter
+     * @param array{sn?:string, status?:int|null, user_id?:int|null, buyer_keyword?:string, logistics_sn?:string, created_start?:string, created_end?:string, has_after_sale?:bool|null} $filter
      * @return array{total:int, list:array<int, array<string, mixed>>}
      */
     public function adminList(array $filter = [], int $page = 1, int $pageSize = 10): array
@@ -652,19 +650,29 @@ class OrderAdminService extends BaseService
 
         $total = (clone $query)->count();
         $list = $query
-            ->order('id', 'desc')
+            ->with([
+                'buyer' => static function ($q): void {
+                    $q->field('id,nickname,mobile,email,avatar,status')
+                        ->whereNull('delete_time');
+                },
+                'items' => static function ($q): void {
+                    $q->order('id', 'asc');
+                },
+                'activeRefunds' => static function ($q): void {
+                    $q->field('id,order_id,status')
+                        ->order('id', 'desc');
+                },
+            ])
+            ->field('o.*')
+            ->order('o.id', 'desc')
             ->page($page, $pageSize)
             ->select()
             ->toArray();
-
-        $orderIds = array_map(static fn(array $r): int => (int) $r['id'], $list);
-        $itemsMap = $this->fetchItemsByOrderIds($orderIds);
-        $tagMap   = $this->aggregateAfterSaleTags($orderIds);
+        $list = $this->hydrateOrderRelationAssets($list);
 
         foreach ($list as &$row) {
-            $oid = (int) $row['id'];
-            $row['items']               = $itemsMap[$oid] ?? [];
-            $row['after_sale_tag_text'] = $tagMap[$oid] ?? '';
+            $row['after_sale_tag_text'] = (string) ($row['active_refunds'][0]['status_text'] ?? '');
+            unset($row['active_refunds']);
         }
         unset($row);
 
@@ -672,7 +680,7 @@ class OrderAdminService extends BaseService
     }
 
     /**
-     * @param array{sn?:string, status?:int|null, user_id?:int|null, logistics_sn?:string, created_start?:string, created_end?:string, has_after_sale?:bool|null} $filter
+     * @param array{sn?:string, status?:int|null, user_id?:int|null, buyer_keyword?:string, logistics_sn?:string, created_start?:string, created_end?:string, has_after_sale?:bool|null} $filter
      * @return array{total:int,tabs:array<int,array{key:string,label:string,count:int}>}
      */
     public function adminStats(array $filter = []): array
@@ -701,21 +709,30 @@ class OrderAdminService extends BaseService
     }
 
     /**
-     * @param array{sn?:string, status?:int|null, user_id?:int|null, logistics_sn?:string, created_start?:string, created_end?:string, has_after_sale?:bool|null} $filter
+     * @param array{sn?:string, status?:int|null, user_id?:int|null, buyer_keyword?:string, ids?:array<int,int>|string, logistics_sn?:string, created_start?:string, created_end?:string, has_after_sale?:bool|null} $filter
      */
     public function exportCsv(array $filter = []): string
     {
         $rows = $this->buildAdminListQuery($filter)
-            ->order('id', 'desc')
-            ->limit(self::EXPORT_LIMIT)
+            ->with(['buyer' => static function ($q): void {
+                $q->field('id,nickname,mobile,email,avatar,status')
+                    ->whereNull('delete_time');
+            }])
+            ->field('o.*')
+            ->order('o.id', 'desc')
             ->select()
             ->toArray();
+        $rows = $this->hydrateOrderRelationAssets($rows);
 
         foreach ($rows as &$row) {
             $row['status_text'] = OrderStatus::textOf((int) ($row['status'] ?? 0));
             $row['pay_method_text'] = isset($row['pay_method']) && $row['pay_method'] !== null
                 ? PayMethod::textOf((int) $row['pay_method'])
                 : '';
+            $row['buyer_nickname'] = $row['buyer']['nickname'] ?? '';
+            $row['buyer_mobile'] = $row['buyer']['mobile'] ?? '';
+            $row['buyer_email'] = $row['buyer']['email'] ?? '';
+            $row['buyer_avatar_url'] = $row['buyer']['avatar_full_url'] ?? '';
         }
         unset($row);
 
@@ -724,6 +741,10 @@ class OrderAdminService extends BaseService
             'sn' => '订单号',
             'status_text' => '状态',
             'user_id' => '买家ID',
+            'buyer_nickname' => '买家昵称',
+            'buyer_mobile' => '买家手机号',
+            'buyer_email' => '买家邮箱',
+            'buyer_avatar_url' => '买家头像',
             'pay_amount' => '应付金额',
             'pay_method_text' => '支付方式',
             'receiver_name' => '收件人',
@@ -739,16 +760,35 @@ class OrderAdminService extends BaseService
      */
     public function adminDetail(int $orderId): array
     {
-        $order = $this->findOrder($orderId);
-        $data  = $order->toArray();
+        /** @var Order|null $order */
+        $order = $this->model()
+            ->with([
+                'items' => static function ($q): void {
+                    $q->order('id', 'asc');
+                },
+                'logs' => static function ($q): void {
+                    $q->order('id', 'asc');
+                },
+                'buyer' => static function ($q): void {
+                    $q->field('id,nickname,mobile,email,avatar,status')
+                        ->whereNull('delete_time');
+                },
+                'activeRefunds' => static function ($q): void {
+                    $q->field('id,order_id,status')
+                        ->order('id', 'desc');
+                },
+            ])
+            ->where('id', $orderId)
+            ->whereNull('delete_time')
+            ->find();
+        if ($order === null) {
+            throw new BusinessException('订单不存在');
+        }
 
-        $data['items']               = $this->fetchItemsByOrderIds([$orderId])[$orderId] ?? [];
-        $data['logs']                = $this->model(OrderLog::class)
-            ->where('order_id', $orderId)
-            ->order('id', 'asc')
-            ->select()
-            ->toArray();
-        $data['after_sale_tag_text'] = $this->aggregateAfterSaleTags([$orderId])[$orderId] ?? '';
+        $data = $order->toArray();
+        $data = $this->hydrateOrderRelationAssets([$data])[0];
+        $data['after_sale_tag_text'] = (string) ($data['active_refunds'][0]['status_text'] ?? '');
+        unset($data['active_refunds']);
 
         return $data;
     }
@@ -756,29 +796,51 @@ class OrderAdminService extends BaseService
     // ---------------- 内部 ----------------
 
     /**
-     * @param array{sn?:string, status?:int|null, user_id?:int|null, logistics_sn?:string, created_start?:string, created_end?:string, has_after_sale?:bool|null} $filter
+     * @param array{sn?:string, status?:int|null, user_id?:int|null, buyer_keyword?:string, ids?:array<int,int>|string, logistics_sn?:string, created_start?:string, created_end?:string, has_after_sale?:bool|null} $filter
      */
     private function buildAdminListQuery(array $filter)
     {
-        $query = $this->model()->whereNull('delete_time');
+        $query = $this->model()
+            ->alias('o')
+            ->whereNull('o.delete_time');
 
+        $ids = $this->normalizeIds($filter['ids'] ?? null);
+        if ($ids !== []) {
+            $query->whereIn('o.id', $ids);
+        }
         if (!empty($filter['sn'])) {
-            $query->where('sn', 'like', '%' . trim((string) $filter['sn']) . '%');
+            $query->where('o.sn', 'like', '%' . trim((string) $filter['sn']) . '%');
         }
         if (isset($filter['status']) && $filter['status'] !== null && $filter['status'] !== '') {
-            $query->where('status', (int) $filter['status']);
+            $query->where('o.status', (int) $filter['status']);
         }
         if (!empty($filter['user_id'])) {
-            $query->where('user_id', (int) $filter['user_id']);
+            $query->where('o.user_id', (int) $filter['user_id']);
+        }
+        $buyerKeyword = trim((string) ($filter['buyer_keyword'] ?? ''));
+        if ($buyerKeyword !== '') {
+            $query->leftJoin('mb_user u', 'u.id = o.user_id AND u.delete_time IS NULL');
+            $query->where(function ($q) use ($buyerKeyword): void {
+                $like = '%' . $buyerKeyword . '%';
+                if (ctype_digit($buyerKeyword)) {
+                    $q->where('o.user_id', (int) $buyerKeyword)
+                        ->whereOr('u.nickname', 'like', $like)
+                        ->whereOr('u.mobile', 'like', $like)
+                        ->whereOr('u.email', 'like', $like);
+                    return;
+                }
+
+                $q->whereLike('u.nickname|u.mobile|u.email', $like);
+            });
         }
         if (!empty($filter['logistics_sn'])) {
-            $query->where('logistics_sn', 'like', '%' . trim((string) $filter['logistics_sn']) . '%');
+            $query->where('o.logistics_sn', 'like', '%' . trim((string) $filter['logistics_sn']) . '%');
         }
         if (!empty($filter['created_start'])) {
-            $query->where('create_time', '>=', (string) $filter['created_start']);
+            $query->where('o.create_time', '>=', (string) $filter['created_start']);
         }
         if (!empty($filter['created_end'])) {
-            $query->where('create_time', '<=', (string) $filter['created_end']);
+            $query->where('o.create_time', '<=', (string) $filter['created_end']);
         }
 
         if (isset($filter['has_after_sale']) && $filter['has_after_sale'] !== null && $filter['has_after_sale'] !== '') {
@@ -790,13 +852,86 @@ class OrderAdminService extends BaseService
             $activeOrderIds = array_values(array_unique(array_map('intval', $activeOrderIds)));
 
             if ((bool) $filter['has_after_sale']) {
-                $query->whereIn('id', $activeOrderIds ?: [0]);
+                $query->whereIn('o.id', $activeOrderIds ?: [0]);
             } elseif ($activeOrderIds !== []) {
-                $query->whereNotIn('id', $activeOrderIds);
+                $query->whereNotIn('o.id', $activeOrderIds);
             }
         }
 
         return $query;
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $rows
+     * @return array<int, array<string, mixed>>
+     */
+    private function hydrateOrderRelationAssets(array $rows): array
+    {
+        $buyers = [];
+        $rowIndexes = [];
+        $items = [];
+        $itemIndexes = [];
+        foreach ($rows as $index => $row) {
+            if (is_array($row['buyer'] ?? null)) {
+                $buyers[] = $row['buyer'];
+                $rowIndexes[] = $index;
+            }
+
+            if (!is_array($row['items'] ?? null)) {
+                continue;
+            }
+            foreach ($row['items'] as $itemIndex => $item) {
+                if (!is_array($item)) {
+                    continue;
+                }
+                $items[] = $item;
+                $itemIndexes[] = [$index, $itemIndex];
+            }
+        }
+
+        /** @var AssetHydrator $hydrator */
+        $hydrator = app()->make(AssetHydrator::class);
+        if ($buyers !== []) {
+            $buyers = $hydrator->hydrateFields($buyers, [
+                'avatar' => 'avatar_full_url',
+            ]);
+            foreach ($buyers as $buyerIndex => $buyer) {
+                $rows[$rowIndexes[$buyerIndex]]['buyer'] = $buyer;
+            }
+        }
+        if ($items !== []) {
+            $items = $hydrator->hydrateFields($items, [
+                'goods_image' => 'goods_image_full_url',
+            ]);
+            foreach ($items as $itemOffset => $item) {
+                [$rowIndex, $itemIndex] = $itemIndexes[$itemOffset];
+                $rows[$rowIndex]['items'][$itemIndex] = $item;
+            }
+        }
+
+        return $rows;
+    }
+
+    /**
+     * @param mixed $value
+     * @return array<int, int>
+     */
+    private function normalizeIds(mixed $value): array
+    {
+        if ($value === null || $value === '') {
+            return [];
+        }
+
+        $rawIds = is_array($value) ? $value : explode(',', (string) $value);
+        $ids = [];
+        foreach ($rawIds as $rawId) {
+            $id = (int) $rawId;
+            if ($id > 0) {
+                $ids[] = $id;
+            }
+        }
+
+        return array_values(array_unique($ids));
     }
 
     protected function findOrder(int $orderId): Order
@@ -821,62 +956,4 @@ class OrderAdminService extends BaseService
             ->toArray();
     }
 
-    /**
-     * 批量查订单项
-     *
-     * @param array<int, int> $orderIds
-     * @return array<int, array<int, array<string, mixed>>>
-     */
-    private function fetchItemsByOrderIds(array $orderIds): array
-    {
-        if ($orderIds === []) {
-            return [];
-        }
-        $rows = $this->model(OrderItem::class)
-            ->whereIn('order_id', $orderIds)
-            ->select()
-            ->toArray();
-        $rows = app()->make(AssetHydrator::class)->hydrateFields($rows, [
-            'goods_image' => 'goods_image_full_url',
-        ]);
-
-        $map = [];
-        foreach ($rows as $row) {
-            $map[(int) $row['order_id']][] = $row;
-        }
-        return $map;
-    }
-
-    /**
-     * 按订单 ID 聚合进行中的售后标签
-     *
-     * 规则：若订单下存在任一进行中售后单，取最新一条的 status_text 作为 after_sale_tag_text
-     *
-     * @param array<int, int> $orderIds
-     * @return array<int, string>
-     */
-    private function aggregateAfterSaleTags(array $orderIds): array
-    {
-        if ($orderIds === []) {
-            return [];
-        }
-        $rows = $this->model(RefundOrder::class)
-            ->whereIn('order_id', $orderIds)
-            ->whereIn('status', RefundOrderStatus::activeStatuses())
-            ->whereNull('delete_time')
-            ->order('id', 'desc')
-            ->field('order_id, status')
-            ->select()
-            ->toArray();
-
-        $map = [];
-        foreach ($rows as $row) {
-            $oid = (int) $row['order_id'];
-            // order desc 后第一条即最新
-            if (!isset($map[$oid])) {
-                $map[$oid] = RefundOrderStatus::textOf((int) $row['status']);
-            }
-        }
-        return $map;
-    }
 }

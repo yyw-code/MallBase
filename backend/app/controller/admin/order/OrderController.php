@@ -27,12 +27,12 @@ class OrderController extends BaseController
     /**
      * 订单列表（分页 + 筛选）
      *
-     * 筛选字段：sn / status / user_id / logistics_sn / created_start / created_end / has_after_sale
+     * 筛选字段：sn / status / user_id / buyer_keyword / logistics_sn / created_start / created_end / has_after_sale
      */
     public function list()
     {
         $filter = $this->request->param([
-            'sn', 'status', 'user_id', 'logistics_sn',
+            'sn', 'status', 'user_id', 'buyer_keyword', 'logistics_sn',
             'created_start', 'created_end', 'has_after_sale',
         ]);
         [$page, $pageSize] = $this->getPagination(1, 15);
@@ -43,7 +43,7 @@ class OrderController extends BaseController
     public function stats()
     {
         $filter = $this->request->param([
-            'sn', 'status', 'user_id', 'logistics_sn',
+            'sn', 'status', 'user_id', 'buyer_keyword', 'logistics_sn',
             'created_start', 'created_end', 'has_after_sale',
         ]);
 
@@ -53,7 +53,7 @@ class OrderController extends BaseController
     public function export()
     {
         $filter = $this->request->param([
-            'sn', 'status', 'user_id', 'logistics_sn',
+            'sn', 'status', 'user_id', 'buyer_keyword', 'ids', 'logistics_sn',
             'created_start', 'created_end', 'has_after_sale',
         ]);
 
