@@ -20,8 +20,8 @@ final class PlatformReporter
     private const REPORT_INTERVAL = 86400;
     private const RETRY_INTERVAL = 300;
     private const COMPONENT_ACTIVE_WINDOW = 1296000;
-    private const CONNECT_TIMEOUT_MS = 500;
-    private const TIMEOUT_MS = 1000;
+    private const CONNECT_TIMEOUT_MS = 2000;
+    private const TIMEOUT_MS = 5000;
 
     public function __construct(
         private readonly ?InstallLockService $lockService = null,

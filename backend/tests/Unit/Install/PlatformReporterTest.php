@@ -164,5 +164,14 @@ namespace Tests\Unit\Install {
                 'Accept: application/json',
             ]));
         }
+
+        public function testNetworkTimeoutsAllowContainerDnsLatency(): void
+        {
+            $connectTimeout = new \ReflectionClassConstant(PlatformReporter::class, 'CONNECT_TIMEOUT_MS');
+            $requestTimeout = new \ReflectionClassConstant(PlatformReporter::class, 'TIMEOUT_MS');
+
+            $this->assertGreaterThanOrEqual(2000, $connectTimeout->getValue());
+            $this->assertGreaterThanOrEqual(5000, $requestTimeout->getValue());
+        }
     }
 }
