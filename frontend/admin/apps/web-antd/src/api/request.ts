@@ -84,6 +84,7 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
       const accessStore = useAccessStore();
       config.headers.Authorization = formatToken(accessStore.accessToken);
       config.headers['Accept-Language'] = preferences.app.locale;
+      config.headers['X-MallBase-Client'] = 'admin_web';
       return config;
     },
   });
@@ -165,6 +166,13 @@ export const requestClient = createRequestClient(apiURL, {
 
 export const baseRequestClient = new RequestClient({ baseURL: apiURL });
 
+baseRequestClient.addRequestInterceptor({
+  fulfilled: async (config) => {
+    config.headers['X-MallBase-Client'] = 'admin_web';
+    return config;
+  },
+});
+
 function createPublicRequestClient(baseURL: string) {
   const client = new RequestClient({
     baseURL,
@@ -174,6 +182,7 @@ function createPublicRequestClient(baseURL: string) {
   client.addRequestInterceptor({
     fulfilled: async (config) => {
       config.headers['Accept-Language'] = preferences.app.locale;
+      config.headers['X-MallBase-Client'] = 'admin_web';
       return config;
     },
   });

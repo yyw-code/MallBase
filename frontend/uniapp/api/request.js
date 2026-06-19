@@ -7,6 +7,13 @@ function getToken() {
   return uni.getStorageSync(TOKEN_KEY) || ''
 }
 
+function getClientType() {
+  // #ifdef MP-WEIXIN
+  return 'wechat_miniapp'
+  // #endif
+  return 'uniapp'
+}
+
 function handleUnauthorized(message = '请重新登录') {
   uni.removeStorageSync(TOKEN_KEY)
   uni.removeStorageSync('mb_refresh_token')
@@ -40,6 +47,7 @@ function request(options) {
       timeout: REQUEST_TIMEOUT,
       header: {
         'Content-Type': 'application/json',
+        'X-MallBase-Client': getClientType(),
         ...header
       },
       success(res) {
@@ -76,6 +84,7 @@ export function uploadFile(url, filePath, name = 'file', formData = {}) {
   const requestUrl = `${config.baseUrl}${url}`
   const token = getToken()
   const header = {}
+  header['X-MallBase-Client'] = getClientType()
   if (token) {
     header.Authorization = `Bearer ${token}`
   }

@@ -14,6 +14,7 @@
 | 配 Nginx / 静态资源路径 | [install/nginx-reverse-proxy.md](./install/nginx-reverse-proxy.md) |
 | 配置上传云存储 | [install/cloud-storage-upload.md](./install/cloud-storage-upload.md) |
 | 新增云存储驱动 | [upload-storage-driver-extension.md](./upload-storage-driver-extension.md) |
+| 查看隐私与平台统计范围 | [privacy.md](./privacy.md) |
 | 做前端构建或上传 | [install/commands-frontend.md](./install/commands-frontend.md) |
 | 看测试入口 | [testing/change-trigger-test-matrix.md](./testing/change-trigger-test-matrix.md) |
 
@@ -61,6 +62,7 @@
 | [uniapp-design-brief.md](./uniapp-design-brief.md) | UniApp 移动端设计需求 |
 | [freight-template-roadmap.md](./freight-template-roadmap.md) | 运费模板路线图 |
 | [upload-storage-driver-extension.md](./upload-storage-driver-extension.md) | 新增云存储服务商时需要修改的后端、前端、seed、测试和文档清单 |
+| [privacy.md](./privacy.md) | 平台实例统计的数据范围、本地状态与关闭方式 |
 | [testing/change-trigger-test-matrix.md](./testing/change-trigger-test-matrix.md) | 测试基线与触发矩阵 |
 | [claude-code-guide.md](./claude-code-guide.md) | Claude Code 使用指南 |
 

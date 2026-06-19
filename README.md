@@ -94,6 +94,7 @@ mall-base/
 │   ├── uniapp-design-brief.md      # UniApp 移动端设计需求文档
 │   ├── freight-template-roadmap.md # 运费模板路线图
 │   ├── upload-storage-driver-extension.md # 新增云存储上传驱动开发指南
+│   ├── privacy.md                  # 隐私与平台实例统计说明
 │   ├── claude-code-guide.md        # Claude Code 使用指南
 │   └── testing/
 │       └── change-trigger-test-matrix.md  # 测试基线与触发矩阵
@@ -188,6 +189,7 @@ docker compose restart
 | [UniApp 移动端设计需求](docs/uniapp-design-brief.md) | UniApp 端功能范围、页面清单、数据结构与设计方向 |
 | [运费模板路线图](docs/freight-template-roadmap.md) | 运费计算能力落地进度与订单接入计划 |
 | [新增云存储上传驱动开发指南](docs/upload-storage-driver-extension.md) | 新增云存储服务商时需要修改的后端、前端、seed、测试和文档清单 |
+| [隐私与平台实例统计说明](docs/privacy.md) | 平台实例统计的数据范围、本地状态与关闭方式 |
 | [测试基线与触发矩阵](docs/testing/change-trigger-test-matrix.md) | 后端 / 前端测试入口与变更触发规则 |
 | [Claude Code 使用指南](docs/claude-code-guide.md) | AI 工具、Skills、MCP、多 Agent 协作 |
 

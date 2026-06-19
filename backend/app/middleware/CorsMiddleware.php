@@ -23,7 +23,7 @@ use think\Request;
 class CorsMiddleware
 {
     private const ALLOW_METHODS = 'GET, POST, PUT, DELETE, OPTIONS';
-    private const ALLOW_HEADERS = 'Authorization, Content-Type, X-Requested-With';
+    private const ALLOW_HEADERS = 'Authorization, Content-Type, X-Requested-With, X-MallBase-Client';
     private const MAX_AGE       = '86400';
 
     public function handle(Request $request, \Closure $next)

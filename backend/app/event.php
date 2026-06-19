@@ -7,7 +7,9 @@ return [
     'listen' => [
         'AppInit' => [],
         'HttpRun' => [],
-        'HttpEnd' => [],
+        'HttpEnd' => [
+            app\listener\install\PlatformReportListener::class,
+        ],
         'LogLevel' => [],
         'LogWrite' => [],
 

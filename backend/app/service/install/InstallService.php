@@ -66,23 +66,12 @@ class InstallService extends BaseService
 
     public function isInstalled(): bool
     {
-        return file_exists($this->lockFilePath());
+        return app()->make(InstallLockService::class)->isInstalled();
     }
 
     public function getLockInfo(): ?array
     {
-        $path = $this->lockFilePath();
-        if (!file_exists($path)) {
-            return null;
-        }
-
-        $raw = file_get_contents($path);
-        if ($raw === false || $raw === '') {
-            return null;
-        }
-
-        $data = json_decode($raw, true);
-        return is_array($data) ? $data : null;
+        return app()->make(InstallLockService::class)->getLockInfo();
     }
 
     public function getInstallStatus(array $entries = []): array
@@ -1466,22 +1455,12 @@ class InstallService extends BaseService
 
     private function writeLockFile(): void
     {
-        $content = json_encode([
-            'installed_at' => date('Y-m-d H:i:s'),
-        ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
-
-        $path = $this->lockFilePath();
-        $dir = dirname($path);
-        if (!is_dir($dir) && !mkdir($dir, 0755, true) && !is_dir($dir)) {
-            throw new \RuntimeException('安装锁目录创建失败：' . $dir);
-        }
-
-        file_put_contents($path, $content);
+        app()->make(InstallLockService::class)->writeInstalledLock();
     }
 
     private function lockFilePath(): string
     {
-        return runtime_path() . 'install' . DIRECTORY_SEPARATOR . 'install.lock';
+        return app()->make(InstallLockService::class)->lockFilePath();
     }
 
     private function releaseFilePath(): string
