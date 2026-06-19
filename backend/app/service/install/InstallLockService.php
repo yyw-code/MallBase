@@ -272,10 +272,14 @@ final class InstallLockService
             }
         }
 
-        foreach (['last_report_at', 'next_report_after'] as $key) {
+        foreach (['last_report_at', 'next_report_after', 'last_report_error_at'] as $key) {
             if (isset($state[$key])) {
                 $normalized[$key] = max(0, (int) $state[$key]);
             }
+        }
+
+        if (array_key_exists('last_report_error', $state)) {
+            $normalized['last_report_error'] = substr(trim((string) $state['last_report_error']), 0, 180);
         }
 
         if (array_key_exists('disabled', $state)) {

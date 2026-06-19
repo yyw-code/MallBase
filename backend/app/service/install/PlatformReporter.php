@@ -18,6 +18,7 @@ final class PlatformReporter
     private const BASE_URL = 'https://platform.gosowong.cn';
     private const APP_CODE = 'mallbase';
     private const REPORT_INTERVAL = 86400;
+    private const RETRY_INTERVAL = 300;
     private const COMPONENT_ACTIVE_WINDOW = 1296000;
     private const CONNECT_TIMEOUT_MS = 500;
     private const TIMEOUT_MS = 1000;
@@ -42,9 +43,10 @@ final class PlatformReporter
             }
 
             $now = time();
+            $state = $this->repairPendingWindow($lock, $state, $now);
             $lock->markPlatformComponentSeen($componentType, $now);
 
-            if (!$lock->reservePlatformReportWindow($now, self::REPORT_INTERVAL)) {
+            if (!$lock->reservePlatformReportWindow($now, self::RETRY_INTERVAL)) {
                 return;
             }
 
@@ -80,17 +82,26 @@ final class PlatformReporter
         $response = $this->post('/api/v1/telemetry/activate', $payload);
         $data = is_array($response['data'] ?? null) ? $response['data'] : [];
         if (empty($data['instance_id'])) {
+            $this->recordFailure($lock, 'activate_failed', $response, $now);
+            return;
+        }
+
+        if (empty($data['token'])) {
+            $lock->savePlatformState([
+                'instance_id' => (string) $data['instance_id'],
+            ]);
+            $this->recordFailure($lock, 'activate_token_missing', $response, $now);
             return;
         }
 
         $next = [
             'instance_id' => (string) $data['instance_id'],
+            'token' => (string) $data['token'],
             'last_report_at' => $now,
             'next_report_after' => $now + self::REPORT_INTERVAL,
+            'last_report_error' => '',
+            'last_report_error_at' => 0,
         ];
-        if (!empty($data['token'])) {
-            $next['token'] = (string) $data['token'];
-        }
 
         $lock->savePlatformState($next);
     }
@@ -118,18 +129,61 @@ final class PlatformReporter
         ]);
 
         if (($response['data']['accepted'] ?? false) !== true) {
+            $this->recordFailure($lock, 'heartbeat_rejected', $response, $now);
             return;
         }
 
         $lock->savePlatformState([
             'last_report_at' => $now,
             'next_report_after' => $now + self::REPORT_INTERVAL,
+            'last_report_error' => '',
+            'last_report_error_at' => 0,
+        ]);
+    }
+
+    /**
+     * @param array<string, mixed> $response
+     */
+    private function recordFailure(
+        InstallLockService $lock,
+        string $fallbackReason,
+        array $response,
+        int $now,
+    ): void {
+        $reason = trim((string) ($response['_error'] ?? $fallbackReason));
+
+        $lock->savePlatformState([
+            'last_report_error' => $reason !== '' ? $reason : $fallbackReason,
+            'last_report_error_at' => $now,
+            'next_report_after' => $now + self::RETRY_INTERVAL,
+        ]);
+    }
+
+    /**
+     * @param array<string, mixed> $state
+     * @return array<string, mixed>
+     */
+    private function repairPendingWindow(InstallLockService $lock, array $state, int $now): array
+    {
+        $nextReportAfter = (int) ($state['next_report_after'] ?? 0);
+        if ($nextReportAfter <= $now + self::RETRY_INTERVAL) {
+            return $state;
+        }
+
+        $hasCredentials = !empty($state['instance_id']) && !empty($state['token']);
+        $hasSuccessfulReport = !empty($state['last_report_at']);
+        if ($hasCredentials && $hasSuccessfulReport) {
+            return $state;
+        }
+
+        return $lock->savePlatformState([
+            'next_report_after' => 0,
         ]);
     }
 
     /**
      * @param array<string, mixed> $payload
-     * @param array<int, string> $headers
+     * @param array<array-key, string> $headers
      * @return array<string, mixed>
      */
     private function post(string $path, array $payload, array $headers = []): array
@@ -142,22 +196,22 @@ final class PlatformReporter
         }
 
         if (!function_exists('curl_init')) {
-            return [];
+            return ['_error' => 'curl_missing'];
         }
 
         $body = json_encode($payload, JSON_UNESCAPED_UNICODE);
         if ($body === false) {
-            return [];
+            return ['_error' => 'payload_encode_failed'];
         }
 
         $requestHeaders = array_merge([
             'Content-Type: application/json',
             'Accept: application/json',
-        ], $headers);
+        ], $this->formatHeaders($headers));
 
         $ch = curl_init(rtrim(self::BASE_URL, '/') . $path);
         if ($ch === false) {
-            return [];
+            return ['_error' => 'curl_init_failed'];
         }
 
         curl_setopt_array($ch, [
@@ -170,16 +224,49 @@ final class PlatformReporter
         ]);
 
         $raw = curl_exec($ch);
+        $curlError = curl_error($ch);
         $status = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
         curl_close($ch);
 
-        if (!is_string($raw) || $raw === '' || $status < 200 || $status >= 300) {
-            return [];
+        if (!is_string($raw)) {
+            return ['_error' => $curlError !== '' ? $curlError : 'request_failed'];
+        }
+
+        if ($raw === '') {
+            return ['_error' => 'empty_response', '_status' => $status];
+        }
+
+        if ($status < 200 || $status >= 300) {
+            return ['_error' => 'http_' . $status, '_status' => $status];
         }
 
         $decoded = json_decode($raw, true);
 
-        return is_array($decoded) ? $decoded : [];
+        return is_array($decoded) ? $decoded : ['_error' => 'invalid_json', '_status' => $status];
+    }
+
+    /**
+     * @param array<array-key, string> $headers
+     * @return array<int, string>
+     */
+    private function formatHeaders(array $headers): array
+    {
+        $formatted = [];
+        foreach ($headers as $key => $value) {
+            $value = trim((string) $value);
+            if ($value === '') {
+                continue;
+            }
+
+            if (is_string($key)) {
+                $formatted[] = $key . ': ' . $value;
+                continue;
+            }
+
+            $formatted[] = $value;
+        }
+
+        return $formatted;
     }
 
     /**
