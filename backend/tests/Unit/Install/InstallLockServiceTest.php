@@ -80,6 +80,20 @@ final class InstallLockServiceTest extends TestCase
         $service->savePlatformState(['instance_id' => 'd3ec761b-c5d1-4663-8c76-7d2d351efad5']);
     }
 
+    public function testSavePlatformStateKeepsReportFailureMetadata(): void
+    {
+        $service = new InstallLockService($this->lockPath);
+        $service->writeInstalledLock('2026-06-19 12:00:00');
+
+        $saved = $service->savePlatformState([
+            'last_report_error' => ' http_500 ',
+            'last_report_error_at' => '200',
+        ]);
+
+        $this->assertSame('http_500', $saved['last_report_error'] ?? null);
+        $this->assertSame(200, $saved['last_report_error_at'] ?? null);
+    }
+
     public function testReservePlatformReportWindowOnlyAllowsOneReportInInterval(): void
     {
         $service = new InstallLockService($this->lockPath);
