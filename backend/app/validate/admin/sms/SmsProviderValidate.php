@@ -10,11 +10,10 @@ class SmsProviderValidate extends Validate
 {
     protected $rule = [
         'name|服务商名称' => 'require|max:60',
-        'driver|驱动'    => 'require|in:aliyun,aliyun_pnvs,tencent,mock',
+        'driver|驱动'    => 'require|in:aliyun',
         'access_key_id|AccessKeyId' => 'max:128',
         'access_key_secret|AccessKeySecret' => 'max:512',
         'region|区域' => 'max:40',
-        'scheme_name|认证方案名称' => 'max:60',
         'is_default|是否默认' => 'in:0,1',
         'status|状态' => 'in:0,1',
         'remark|备注' => 'max:255',
@@ -22,7 +21,7 @@ class SmsProviderValidate extends Validate
     ];
 
     protected $scene = [
-        'create' => ['name', 'driver', 'access_key_id', 'access_key_secret', 'region', 'scheme_name', 'is_default', 'status', 'remark', 'sort'],
-        'update' => ['name', 'driver', 'access_key_id', 'access_key_secret', 'region', 'scheme_name', 'is_default', 'status', 'remark', 'sort'],
+        'create' => ['name', 'driver', 'access_key_id', 'access_key_secret', 'region', 'is_default', 'status', 'remark', 'sort'],
+        'update' => ['name', 'driver', 'access_key_id', 'access_key_secret', 'region', 'is_default', 'status', 'remark', 'sort'],
     ];
 }

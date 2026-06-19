@@ -8,17 +8,25 @@ import { message } from 'ant-design-vue';
 import { createRegionApi, updateRegionApi } from '#/api/region';
 import RegionPicker from '#/components/region-picker/index.vue';
 
-const props = withDefaults(defineProps<{
-  visible?: boolean;
-  editData?: (RegionApi.RegionItem & { path?: RegionApi.RegionItem[] }) | null;
-}>(), {
-  visible: false,
-  editData: null,
-});
+const props = withDefaults(
+  defineProps<{
+    editData?:
+      | null
+      | (RegionApi.RegionItem & { path?: RegionApi.RegionItem[] });
+    visible?: boolean;
+  }>(),
+  {
+    editData: null,
+    visible: false,
+  },
+);
 
-const emit = defineEmits<{ (e: 'update:visible', value: boolean): void; (e: 'success'): void; }>();
+const emit = defineEmits<{
+  (e: 'update:visible', value: boolean): void;
+  (e: 'success'): void;
+}>();
 const isEdit = computed(() => !!props.editData?.id);
-const title = computed(() => isEdit.value ? '编辑地区' : '新增地区');
+const title = computed(() => (isEdit.value ? '编辑地区' : '新增地区'));
 const formRef = ref();
 const loading = ref(false);
 
@@ -35,21 +43,27 @@ const rules = {
   name: [{ required: true, message: '请输入地区名称' }],
 };
 
-watch(() => props.editData, (data) => {
-  formData.value = data ? {
-    parent_path: (data.path || []).slice(0, -1).map((item) => item.id),
-    code: data.code,
-    name: data.name,
-    status: data.status,
-    sort: data.sort,
-  } : {
-    parent_path: [],
-    code: '',
-    name: '',
-    status: 1,
-    sort: 0,
-  };
-}, { immediate: true });
+watch(
+  () => props.editData,
+  (data) => {
+    formData.value = data
+      ? {
+          parent_path: (data.path || []).slice(0, -1).map((item) => item.id),
+          code: data.code,
+          name: data.name,
+          status: data.status,
+          sort: data.sort,
+        }
+      : {
+          parent_path: [],
+          code: '',
+          name: '',
+          status: 1,
+          sort: 0,
+        };
+  },
+  { immediate: true },
+);
 
 async function handleSubmit() {
   await formRef.value?.validate();
@@ -82,10 +96,25 @@ async function handleSubmit() {
 </script>
 
 <template>
-  <a-modal :open="visible" :title="title" :confirm-loading="loading" @ok="handleSubmit" @cancel="() => emit('update:visible', false)">
-    <a-form ref="formRef" :model="formData" :rules="rules" :label-col="{ style: { width: '100px' } }" class="pt-4">
+  <a-modal
+    :open="visible"
+    :title="title"
+    :confirm-loading="loading"
+    @ok="handleSubmit"
+    @cancel="() => emit('update:visible', false)"
+  >
+    <a-form
+      ref="formRef"
+      :model="formData"
+      :rules="rules"
+      :label-col="{ style: { width: '100px' } }"
+      class="pt-4"
+    >
       <a-form-item label="父级地区">
-        <RegionPicker v-model:value="formData.parent_path" placeholder="为空表示省级地区" />
+        <RegionPicker
+          v-model:value="formData.parent_path"
+          placeholder="为空表示省级地区"
+        />
       </a-form-item>
       <a-form-item label="地区编码" name="code">
         <a-input v-model:value="formData.code" />
@@ -94,10 +123,18 @@ async function handleSubmit() {
         <a-input v-model:value="formData.name" />
       </a-form-item>
       <a-form-item label="排序">
-        <a-input-number v-model:value="formData.sort" :min="0" style="width: 100%" />
+        <a-input-number
+          v-model:value="formData.sort"
+          :min="0"
+          style="width: 100%"
+        />
       </a-form-item>
       <a-form-item label="状态">
-        <a-switch v-model:checked="formData.status" :checked-value="1" :un-checked-value="0" />
+        <a-switch
+          v-model:checked="formData.status"
+          :checked-value="1"
+          :un-checked-value="0"
+        />
       </a-form-item>
     </a-form>
   </a-modal>

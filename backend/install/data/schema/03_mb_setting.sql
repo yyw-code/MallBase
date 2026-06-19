@@ -18,6 +18,10 @@ CREATE TABLE `mb_setting_group` (
   `sort` int(11) NOT NULL DEFAULT 0 COMMENT '排序',
   `display_type` varchar(20) NOT NULL DEFAULT 'page' COMMENT '展示方式：category=目录 page=独立页面 tab=选项卡聚合',
   `status` tinyint(1) NOT NULL DEFAULT 1 COMMENT '状态：0=禁用 1=启用',
+  `permission_parent_code` varchar(100) DEFAULT NULL COMMENT '权限挂载父级编码（为空按设置分组层级）',
+  `permission_path` varchar(255) DEFAULT NULL COMMENT '权限菜单路由覆盖（为空自动生成）',
+  `permission_component` varchar(255) DEFAULT NULL COMMENT '权限菜单组件覆盖（为空使用系统设置表单）',
+  `permission_status` tinyint(1) DEFAULT NULL COMMENT '权限状态覆盖：0=禁用 1=启用 NULL=跟随分组状态',
   `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   PRIMARY KEY (`id`),
@@ -97,8 +101,9 @@ INSERT INTO `mb_setting_group` (`id`, `parent_id`, `permission_id`, `name`, `cod
 (106, 101, 0, '订单配置', 'OrderConfig', NULL, '待支付超时、自动确认收货等订单流程配置', 30, 'page', 1),
 (107, 101, 0, '售后配置', 'RefundConfig', NULL, '售后期限、退货收货信息与售后原因配置', 40, 'page', 1);
 
--- 短信配置已迁移至独立模块 mb_sms_provider / mb_sms_sign / mb_sms_template / mb_sms_scene_binding / mb_sms_config
--- 参见 09_mb_sms.sql 与 系统维护 → 短信配置 菜单
+-- 短信频控配置使用系统表单数据源，但由「短信配置 → 短信频控」专属菜单与权限入口展示
+INSERT INTO `mb_setting_group` (`id`, `parent_id`, `permission_id`, `name`, `code`, `icon`, `description`, `sort`, `display_type`, `status`, `permission_parent_code`, `permission_path`, `permission_component`, `permission_status`) VALUES
+(108, 0, 0, '短信频控', 'SmsRateLimit', 'lucide:gauge', '验证码有效期与发送频控阈值', 80, 'page', 1, 'SmsConfig', '/sms/config', '/sms/config/index', 1);
 
 -- 设置项：1011 SystemBasic 基础
 INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`, `rules`, `placeholder`, `remark`, `sort`) VALUES
@@ -161,9 +166,9 @@ INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`
 INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`, `rules`, `placeholder`, `remark`, `sort`) VALUES
 (1024, 'SecretId', 'cos_secret_id', '', 'input', NULL, '[{"type":"required","message":"启用该驱动必须填写"}]', NULL, NULL, 10),
 (1024, 'SecretKey', 'cos_secret_key', '', 'password', NULL, '[{"type":"required","message":"启用该驱动必须填写"}]', NULL, NULL, 20),
-(1024, 'Bucket', 'cos_bucket', '', 'input', NULL, '[{"type":"required","message":"启用该驱动必须填写"}]', 'appid-bucketname', NULL, 30),
+(1024, 'Bucket', 'cos_bucket', '', 'input', NULL, '[{"type":"required","message":"启用该驱动必须填写"}]', 'examplebucket-1250000000', NULL, 30),
 (1024, 'Region', 'cos_region', '', 'input', NULL, '[{"type":"required","message":"启用该驱动必须填写"}]', 'ap-shanghai', NULL, 40),
-(1024, '访问域名', 'cos_url_prefix', '', 'input', NULL, '[{"type":"required","message":"启用该驱动必须填写"}]', NULL, NULL, 50);
+(1024, '访问域名', 'cos_url_prefix', '', 'input', NULL, '[{"type":"required","message":"启用该驱动必须填写"}]', 'https://examplebucket-1250000000.cos.ap-shanghai.myqcloud.com', NULL, 50);
 
 -- 设置项：1031 WechatMiniProgram 微信小程序
 INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`, `rules`, `placeholder`, `remark`, `sort`) VALUES
@@ -218,7 +223,11 @@ INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`
 (1043, '支付宝根证书', 'pay_alipay_alipay_root_cert', '', 'file', NULL, '[{"type":"secure_upload","value":true},{"type":"accept_types","value":[".crt",".cer",".pem"]},{"type":"max_size","value":1}]', NULL, '上传 alipayRootCert.crt（支付宝控制台同一位置一同提供）。文件保存于服务器内部，不会公开。', 60),
 (1043, '网关地址', 'pay_alipay_gateway', 'https://openapi.alipay.com/gateway.do', 'input', NULL, NULL, NULL, NULL, 70);
 
--- 短信相关 setting 已迁移至独立模块（mb_sms_config / mb_sms_provider / mb_sms_template / mb_sms_sign / mb_sms_scene_binding）
+-- 设置项：108 SmsRateLimit 短信频控（由短信配置菜单专属页面使用）
+INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`, `rules`, `placeholder`, `remark`, `sort`) VALUES
+(108, '验证码有效期(秒)', 'sms_code_ttl', '300', 'number', NULL, '[{"type":"required","message":"请填写验证码有效期"},{"type":"integer","message":"验证码有效期必须是整数"},{"type":"min","value":30,"message":"验证码有效期不能小于 30 秒"},{"type":"max","value":3600,"message":"验证码有效期不能大于 3600 秒"}]', NULL, '建议 300 秒（5 分钟），范围 30 ~ 3600', 10),
+(108, '同手机号 24h 上限', 'sms_rate_mobile_daily', '5', 'number', NULL, '[{"type":"required","message":"请填写手机号日上限"},{"type":"integer","message":"手机号日上限必须是整数"},{"type":"min","value":1,"message":"手机号日上限不能小于 1 次"},{"type":"max","value":100,"message":"手机号日上限不能大于 100 次"}]', NULL, '同一手机号 24 小时内最多发送次数', 20),
+(108, '同 IP 每分钟上限', 'sms_rate_ip_minute', '3', 'number', NULL, '[{"type":"required","message":"请填写 IP 分钟上限"},{"type":"integer","message":"IP 分钟上限必须是整数"},{"type":"min","value":1,"message":"IP 分钟上限不能小于 1 次"},{"type":"max","value":100,"message":"IP 分钟上限不能大于 100 次"}]', NULL, '同一 IP 每分钟最多发送次数', 30);
 
 -- 设置项：105 ClientConfig 客户端配置
 INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`, `rules`, `placeholder`, `remark`, `sort`) VALUES

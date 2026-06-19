@@ -13,8 +13,6 @@ export namespace AuthApi {
     refresh_token: string;
     token_type?: string;
     expires_in?: number;
-    /** 是否必须强制改密（首次登录/未改过密码时为 true） */
-    must_change_password?: boolean;
   }
 
   /** 刷新token返回值 */
@@ -43,6 +41,7 @@ export namespace AuthApi {
     remark: string;
     last_login_time: string;
     last_login_ip: string;
+    home_path?: string;
   }
 
   /** 用户权限码返回值 */

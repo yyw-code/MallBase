@@ -20,6 +20,22 @@ class RefundOrder extends BaseModel
 
     protected array $append = ['status_text', 'type_text', 'receive_status_text', 'intercept_status_text'];
 
+    /**
+     * 关联主订单
+     */
+    public function mainOrder()
+    {
+        return $this->belongsTo(Order::class, 'order_id', 'id');
+    }
+
+    /**
+     * 关联订单项快照
+     */
+    public function orderItem()
+    {
+        return $this->belongsTo(OrderItem::class, 'order_item_id', 'id');
+    }
+
     public function getStatusTextAttr($value, $data): string
     {
         return RefundOrderStatus::textOf((int) ($data['status'] ?? 0));

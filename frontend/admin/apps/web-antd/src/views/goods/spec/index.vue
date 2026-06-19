@@ -155,92 +155,112 @@ onMounted(() => {
 
 <template>
   <div class="p-4">
-    <div class="mb-4">
-      <a-button type="primary" @click="handleCreate" v-access:code="'SystemGoodsSpecCreate'"> 新增规格 </a-button>
-      <a-button class="ml-2" @click="() => loadData(searchParams)">
-        刷新
-      </a-button>
+    <div class="mb-3 flex items-center justify-between gap-4">
+      <h2 class="m-0 text-lg font-semibold">商品规格</h2>
+      <div class="flex flex-wrap justify-end gap-2">
+        <a-button
+          type="primary"
+          @click="handleCreate"
+          v-access:code="'SystemGoodsSpecCreate'"
+        >
+          新增规格
+        </a-button>
+        <a-button @click="() => loadData(searchParams)"> 刷新 </a-button>
+      </div>
     </div>
 
     <!-- 搜索表单 -->
-    <a-form layout="inline" class="mb-4">
-      <a-form-item label="规格名称">
-        <a-input
-          v-model:value="searchParams.name"
-          placeholder="请输入规格名称"
-          allow-clear
-          style="width: 180px"
-        />
-      </a-form-item>
-      <a-form-item label="状态">
-        <a-select
-          v-model:value="searchParams.status"
-          placeholder="请选择"
-          allow-clear
-          style="width: 120px"
-        >
-          <a-select-option :value="1">启用</a-select-option>
-          <a-select-option :value="0">禁用</a-select-option>
-        </a-select>
-      </a-form-item>
-      <a-form-item>
-        <a-button
-          type="primary"
-          @click="
-            () => {
-              pagination.current = 1;
-              loadData(searchParams);
-            }
-          "
-        >
-          搜索
-        </a-button>
-        <a-button class="ml-2" @click="resetSearch"> 重置 </a-button>
-      </a-form-item>
-    </a-form>
+    <div class="mb-3 rounded-lg border bg-[hsl(var(--card))] p-4">
+      <a-form
+        class="grid grid-cols-1 gap-x-4 gap-y-3 md:grid-cols-3 xl:grid-cols-6"
+      >
+        <a-form-item label="规格名称" class="mb-0">
+          <a-input
+            v-model:value="searchParams.name"
+            placeholder="请输入规格名称"
+            allow-clear
+            class="w-full"
+          />
+        </a-form-item>
+        <a-form-item label="状态" class="mb-0">
+          <a-select
+            v-model:value="searchParams.status"
+            placeholder="请选择"
+            allow-clear
+            class="w-full"
+          >
+            <a-select-option :value="1"> 启用 </a-select-option>
+            <a-select-option :value="0"> 禁用 </a-select-option>
+          </a-select>
+        </a-form-item>
+        <a-form-item class="mb-0 md:col-span-3 xl:col-span-6">
+          <div class="flex justify-end gap-2">
+            <a-button
+              type="primary"
+              @click="
+                () => {
+                  pagination.current = 1;
+                  loadData(searchParams);
+                }
+              "
+            >
+              搜索
+            </a-button>
+            <a-button @click="resetSearch"> 重置 </a-button>
+          </div>
+        </a-form-item>
+      </a-form>
+    </div>
 
-    <a-table
-      :columns="columns"
-      :data-source="tableData"
-      :loading="loading"
-      :pagination="pagination"
-      :scroll="{ x: 1200 }"
-      row-key="id"
-      @change="
-        (newPagination) => {
-          pagination.current = newPagination.current;
-          pagination.pageSize = newPagination.pageSize;
-          loadData(searchParams);
-        }
-      "
-    >
-      <template #bodyCell="{ column, record }">
-        <template v-if="column.key === 'action'">
-          <a-space>
-            <a-button type="link" size="small" @click="handleEdit(record)" v-access:code="'SystemGoodsSpecUpdate'">
-              编辑
-            </a-button>
-            <a-button
-              type="link"
-              size="small"
-              @click="handleManageValues(record)"
-              v-access:code="'SystemGoodsSpecValueCreate'"
-            >
-              管理规格值
-            </a-button>
-            <a-button
-              type="link"
-              danger
-              size="small"
-              @click="handleDelete(record, 'name')"
-              v-access:code="'SystemGoodsSpecDelete'"
-            >
-              删除
-            </a-button>
-          </a-space>
+    <div class="overflow-hidden rounded-lg border bg-[hsl(var(--card))]">
+      <a-table
+        :columns="columns"
+        :data-source="tableData"
+        :loading="loading"
+        :pagination="pagination"
+        :scroll="{ x: 1200 }"
+        row-key="id"
+        @change="
+          (newPagination) => {
+            pagination.current = newPagination.current;
+            pagination.pageSize = newPagination.pageSize;
+            loadData(searchParams);
+          }
+        "
+      >
+        <template #bodyCell="{ column, record }">
+          <template v-if="column.key === 'action'">
+            <a-space>
+              <a-button
+                type="link"
+                size="small"
+                @click="handleEdit(record)"
+                v-access:code="'SystemGoodsSpecUpdate'"
+              >
+                编辑
+              </a-button>
+              <a-button
+                type="link"
+                size="small"
+                @click="handleManageValues(record)"
+                v-access:code="'SystemGoodsSpecValueCreate'"
+              >
+                管理规格值
+              </a-button>
+              <a-button
+                type="link"
+                danger
+                size="small"
+                @click="handleDelete(record, 'name')"
+                v-access:code="'SystemGoodsSpecDelete'"
+              >
+                删除
+              </a-button>
+            </a-space>
+          </template>
         </template>
-      </template>
-    </a-table>
+      </a-table>
+    </div>
 
     <!-- 规格组弹窗 -->
     <SpecModal

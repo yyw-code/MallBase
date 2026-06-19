@@ -95,9 +95,9 @@ class UserController extends BaseController
 
         /** @var SmsAuthService $smsAuth */
         $smsAuth = app(SmsAuthService::class);
-        $smsAuth->send($mobile, $scene, $this->request->ip());
+        $result = $smsAuth->send($mobile, $scene, $this->request->ip());
 
-        return $this->success(null, '验证码已发送');
+        return $this->success($result, '验证码已发送');
     }
 
     /**
@@ -307,7 +307,7 @@ class UserController extends BaseController
         /** @var WechatService $wechatService */
         $wechatService = app(WechatService::class);
         $result = $wechatService->miniappLogin((string) $code);
-        return $this->success($result, '登录成功');
+        return $this->success($result, $this->wechatLoginMessage($result));
     }
 
     /**
@@ -381,7 +381,7 @@ class UserController extends BaseController
         /** @var WechatService $wechatService */
         $wechatService = app(WechatService::class);
         $result = $wechatService->miniappBindUserInfo($bindToken, $nickname, $avatar);
-        return $this->success($result, '绑定成功');
+        return $this->success($result, $this->wechatLoginMessage($result, '绑定成功'));
     }
 
     /**
@@ -420,7 +420,7 @@ class UserController extends BaseController
         /** @var WechatService $wechatService */
         $wechatService = app(WechatService::class);
         $result = $wechatService->officialLogin($code);
-        return $this->success($result, '登录成功');
+        return $this->success($result, $this->wechatLoginMessage($result));
     }
 
     /**
@@ -443,5 +443,20 @@ class UserController extends BaseController
         $wechatService = app(WechatService::class);
         $result = $wechatService->officialBindMobile($bindToken, $mobile, $smsCode);
         return $this->success($result, '绑定成功');
+    }
+
+    /**
+     * @param array<string, mixed> $result
+     */
+    private function wechatLoginMessage(array $result, string $successMessage = '登录成功'): string
+    {
+        if (!empty($result['need_mobile'])) {
+            return '请绑定手机号以完成登录';
+        }
+        if (!empty($result['need_userinfo'])) {
+            return '请完善头像昵称以完成登录';
+        }
+
+        return $successMessage;
     }
 }

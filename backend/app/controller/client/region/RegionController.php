@@ -3,15 +3,15 @@ declare(strict_types=1);
 
 namespace app\controller\client\region;
 
-use app\service\client\RegionService;
+use app\service\RegionResolverService;
 use mall_base\base\BaseController;
 
 /**
- * @extends BaseController<RegionService>
+ * @extends BaseController<RegionResolverService>
  */
 class RegionController extends BaseController
 {
-    protected string $serviceClass = RegionService::class;
+    protected string $serviceClass = RegionResolverService::class;
 
     public function children()
     {

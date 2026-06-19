@@ -127,108 +127,123 @@ onMounted(() => {
 
 <template>
   <div class="p-4">
-    <div class="mb-4">
-      <a-button type="primary" @click="handleCreate"> 新增分组 </a-button>
-      <a-button class="ml-2" @click="loadData"> 刷新 </a-button>
+    <div class="mb-3 flex items-center justify-between gap-4">
+      <h2 class="m-0 text-lg font-semibold">设置分组</h2>
+      <div class="flex flex-wrap justify-end gap-2">
+        <a-button type="primary" @click="handleCreate"> 新增分组 </a-button>
+        <a-button @click="loadData"> 刷新 </a-button>
+      </div>
     </div>
 
     <!-- 搜索表单 -->
-    <a-form layout="inline" class="mb-4">
-      <a-form-item label="关键词">
-        <a-input
-          v-model:value="searchParams.keyword"
-          placeholder="分组名称/编码"
-          allow-clear
-          style="width: 200px"
-        />
-      </a-form-item>
-      <a-form-item label="状态">
-        <a-select
-          v-model:value="searchParams.status"
-          placeholder="请选择"
-          allow-clear
-          style="width: 150px"
-        >
-          <a-select-option :value="1">启用</a-select-option>
-          <a-select-option :value="0">禁用</a-select-option>
-        </a-select>
-      </a-form-item>
-      <a-form-item>
-        <a-button type="primary" @click="loadData"> 搜索 </a-button>
-        <a-button class="ml-2" @click="resetSearch"> 重置 </a-button>
-      </a-form-item>
-    </a-form>
-
-    <!-- 树形表格 -->
-    <a-table
-      :columns="columns"
-      :data-source="tableData"
-      :loading="loading"
-      :pagination="false"
-      :default-expand-all-rows="true"
-      row-key="id"
-      :scroll="{ x: 1100 }"
-    >
-      <template #bodyCell="{ column, record }">
-        <template v-if="column.dataIndex === 'name'">
-          <div class="flex items-center gap-1">
-            <IconifyIcon
-              v-if="record.icon"
-              :icon="record.icon"
-              class="text-base"
-            />
-            <span>{{ record.name }}</span>
-          </div>
-        </template>
-
-        <template v-if="column.dataIndex === 'display_type'">
-          <a-tag
-            :color="
-              record.display_type === 'category'
-                ? 'orange'
-                : record.display_type === 'tab'
-                  ? 'blue'
-                  : 'green'
-            "
+    <div class="mb-3 rounded-lg border bg-[hsl(var(--card))] p-4">
+      <a-form
+        class="grid grid-cols-1 gap-x-4 gap-y-3 md:grid-cols-3 xl:grid-cols-6"
+      >
+        <a-form-item label="关键词" class="mb-0">
+          <a-input
+            v-model:value="searchParams.keyword"
+            placeholder="分组名称/编码"
+            allow-clear
+            class="w-full"
+          />
+        </a-form-item>
+        <a-form-item label="状态" class="mb-0">
+          <a-select
+            v-model:value="searchParams.status"
+            placeholder="请选择"
+            allow-clear
+            class="w-full"
           >
-            {{
-              record.display_type === 'category'
-                ? '目录'
-                : record.display_type === 'tab'
-                  ? '选项卡'
-                  : '页面'
-            }}
-          </a-tag>
-        </template>
+            <a-select-option :value="1"> 启用 </a-select-option>
+            <a-select-option :value="0"> 禁用 </a-select-option>
+          </a-select>
+        </a-form-item>
+        <a-form-item class="mb-0 md:col-span-3 xl:col-span-6">
+          <div class="flex justify-end gap-2">
+            <a-button type="primary" @click="loadData"> 搜索 </a-button>
+            <a-button @click="resetSearch"> 重置 </a-button>
+          </div>
+        </a-form-item>
+      </a-form>
 
-        <template v-if="column.dataIndex === 'icon'">
-          <IconifyIcon v-if="record.icon" :icon="record.icon" class="text-lg" />
-          <span v-else class="text-gray-300">-</span>
-        </template>
+      <!-- 树形表格 -->
+      <div class="overflow-hidden rounded-lg border bg-[hsl(var(--card))]">
+        <a-table
+          :columns="columns"
+          :data-source="tableData"
+          :loading="loading"
+          :pagination="false"
+          :default-expand-all-rows="true"
+          row-key="id"
+          :scroll="{ x: 1100 }"
+        >
+          <template #bodyCell="{ column, record }">
+            <template v-if="column.dataIndex === 'name'">
+              <div class="flex items-center gap-1">
+                <IconifyIcon
+                  v-if="record.icon"
+                  :icon="record.icon"
+                  class="text-base"
+                />
+                <span>{{ record.name }}</span>
+              </div>
+            </template>
 
-        <template v-if="column.key === 'action'">
-          <a-space>
-            <a-button type="link" size="small" @click="handleEdit(record)">
-              编辑
-            </a-button>
-            <a-button
-              type="link"
-              danger
-              size="small"
-              @click="handleDelete(record)"
-            >
-              删除
-            </a-button>
-          </a-space>
-        </template>
-      </template>
-    </a-table>
+            <template v-if="column.dataIndex === 'display_type'">
+              <a-tag
+                :color="
+                  record.display_type === 'category'
+                    ? 'orange'
+                    : record.display_type === 'tab'
+                      ? 'blue'
+                      : 'green'
+                "
+              >
+                {{
+                  record.display_type === 'category'
+                    ? '目录'
+                    : record.display_type === 'tab'
+                      ? '选项卡'
+                      : '页面'
+                }}
+              </a-tag>
+            </template>
 
-    <!-- 分组弹窗 -->
-    <GroupModal
-      v-model:visible="groupModalVisible"
-      :edit-data="editingGroup"
-      @success="onModalSuccess"
-    />
+            <template v-if="column.dataIndex === 'icon'">
+              <IconifyIcon
+                v-if="record.icon"
+                :icon="record.icon"
+                class="text-lg"
+              />
+              <span v-else class="text-gray-300">-</span>
+            </template>
+
+            <template v-if="column.key === 'action'">
+              <a-space>
+                <a-button type="link" size="small" @click="handleEdit(record)">
+                  编辑
+                </a-button>
+                <a-button
+                  type="link"
+                  danger
+                  size="small"
+                  @click="handleDelete(record)"
+                >
+                  删除
+                </a-button>
+              </a-space>
+            </template>
+          </template>
+        </a-table>
+      </div>
+
+      <!-- 分组弹窗 -->
+      <GroupModal
+        v-model:visible="groupModalVisible"
+        :edit-data="editingGroup"
+        @success="onModalSuccess"
+      />
+    </div>
   </div>
 </template>

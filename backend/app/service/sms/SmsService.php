@@ -8,6 +8,7 @@ use app\model\sms\SmsProvider;
 use app\model\sms\SmsSceneBinding;
 use app\model\sms\SmsSign;
 use app\model\sms\SmsTemplate;
+use mall_base\base\BaseService;
 use mall_base\drivers\DriverManager;
 use mall_base\drivers\sms\BaseSmsDriver;
 use mall_base\exception\SmsException;
@@ -28,16 +29,20 @@ use mall_base\exception\SmsException;
  *
  * 兼容性硬约束:
  *  - sendCode 方法签名保持不变,uniapp 调用方零修改
+ *
+ * @extends BaseService<SmsSceneBinding>
  */
-class SmsService
+class SmsService extends BaseService
 {
     private const CODE_KEY_PREFIX = 'sms:code:';
+
+    protected string $modelClass = SmsSceneBinding::class;
 
     public function __construct(
         private readonly ?BaseSmsDriver $driver,
         private readonly SmsRateLimiter $rateLimiter,
         private readonly SmsCache $cache,
-        private readonly int $codeTtl = 300,
+        private readonly ?int $codeTtl = null,
     ) {
     }
 
@@ -63,17 +68,18 @@ class SmsService
 
         $this->rateLimiter->record($mobile, $ip);
 
-        // 平台侧校验的驱动(PNVS)自管验证码生命周期,不需要本地缓存
-        if (!$driver->supportsCodeVerification()) {
-            $this->cache->set($this->codeKey($mobile, $scene), $code, $this->codeTtl);
-        }
+        $this->cache->set($this->codeKey($mobile, $scene), $code, $this->codeTtl());
+    }
+
+    public function codeTtl(): int
+    {
+        return $this->codeTtl ?? SmsConfig::codeTtl();
     }
 
     /**
      * 校验验证码
      *
-     * - 平台侧校验驱动(PNVS):委托驱动调用平台 API 校验
-     * - 本地校验驱动(阿里云短信/Mock):从缓存比对,校验后删除防重放
+     * 从缓存比对验证码,校验后删除防重放。
      *
      * @throws SmsException 验证码不存在/过期/不匹配
      */
@@ -82,16 +88,6 @@ class SmsService
         $this->assertScene($scene);
         $this->assertMobile($mobile);
 
-        // 尝试解析驱动:优先走平台侧校验
-        $driver = $this->resolveDriverForVerify($scene);
-        if ($driver !== null && $driver->supportsCodeVerification()) {
-            if (!$driver->verifyCode($mobile, trim($code))) {
-                throw new SmsException($driver->getError() ?: '验证码错误');
-            }
-            return;
-        }
-
-        // 本地缓存校验
         $key = $this->codeKey($mobile, $scene);
         $stored = $this->cache->get($key);
         if (empty($stored)) {
@@ -127,14 +123,15 @@ class SmsService
             return [$this->driver, $extra];
         }
 
-        $binding = SmsSceneBinding::where('scene_code', $scene)
+        $binding = $this->model()
+            ->where('scene_code', $scene)
             ->where('status', 1)
             ->find();
         if ($binding === null) {
             throw new SmsException("场景 [{$scene}] 尚未绑定短信模板,请在后台短信配置中完成绑定");
         }
 
-        $provider = SmsProvider::find($binding->provider_id);
+        $provider = $this->model(SmsProvider::class)->find($binding->provider_id);
         if ($provider === null || (int) $provider->status !== 1) {
             throw new SmsException("场景 [{$scene}] 绑定的服务商不可用,请检查启用状态");
         }
@@ -143,56 +140,38 @@ class SmsService
             'access_key_id' => (string) $provider->access_key_id,
             'access_key_secret' => SmsSecret::decrypt((string) $provider->access_key_secret),
             'region' => (string) $provider->region,
-            'scheme_name' => (string) ($provider->scheme_name ?? ''),
         ]);
 
-        // PNVS 等平台侧校验驱动:接受 PASSED 或 LOCAL_ONLY 状态的签名/模板
-        // (PNVS 签名/模板由阿里云预置,本地登记后即为 LOCAL_ONLY,不会进入 PASSED 状态)
-        if ($driver->supportsCodeVerification()) {
-            $allowedStatuses = [SmsSign::AUDIT_PASSED, SmsSign::AUDIT_LOCAL_ONLY];
-            $pnvsTemplate = null;
-            if (!empty($binding->sign_id)) {
-                $sign = SmsSign::find($binding->sign_id);
-                if ($sign !== null && in_array($sign->audit_status, $allowedStatuses, true)) {
-                    $extra['sign_name'] = $sign->sign_name;
-                }
-            }
-            if (!empty($binding->template_id)) {
-                $template = SmsTemplate::find($binding->template_id);
-                if ($template !== null && in_array($template->audit_status, $allowedStatuses, true)) {
-                    $extra['template_code'] = $template->template_code;
-                    $pnvsTemplate = $template;
-                }
-            }
-            $extra['template_param'] = $this->buildTemplateParam(
-                $pnvsTemplate !== null ? (string) $pnvsTemplate->template_content : '',
-                $code,
-                true,
-            );
-            return [$driver, $extra];
-        }
-
-        // 传统短信驱动:签名/模板必填
-        $template = SmsTemplate::find($binding->template_id);
+        $template = $this->model(SmsTemplate::class)->find($binding->template_id);
         if ($template === null) {
             throw new SmsException("场景 [{$scene}] 绑定的模板不存在,请重新绑定");
         }
-        if ($template->audit_status !== SmsTemplate::AUDIT_PASSED) {
-            throw new SmsException("场景 [{$scene}] 绑定的模板尚未审核通过");
+        $templateCode = trim((string) $template->template_code);
+        if ($templateCode === '') {
+            throw new SmsException("场景 [{$scene}] 绑定的模板缺少平台模板编码,请重新配置");
         }
 
-        $sign = SmsSign::find($binding->sign_id);
+        $sign = $this->model(SmsSign::class)->find($binding->sign_id);
         if ($sign === null) {
             throw new SmsException("场景 [{$scene}] 绑定的签名不存在,请重新绑定");
         }
-        if ($sign->audit_status !== SmsSign::AUDIT_PASSED) {
-            throw new SmsException("场景 [{$scene}] 绑定的签名尚未审核通过");
+        $signName = trim((string) $sign->sign_name);
+        if ($signName === '') {
+            throw new SmsException("场景 [{$scene}] 绑定的签名名称为空,请重新配置");
         }
 
-        $extra['sign_name'] = $sign->sign_name;
-        $extra['template_code'] = $template->template_code;
+        $placeholders = SmsTemplate::extractPlaceholders((string) $template->template_content);
+        $unsupported = array_values(array_diff($placeholders, SmsScene::availableParamNames($scene)));
+        if (!empty($unsupported)) {
+            throw new SmsException(
+                '模板包含当前场景不支持的占位符: ' . implode(',', $unsupported)
+            );
+        }
+
+        $extra['sign_name'] = $signName;
+        $extra['template_code'] = $templateCode;
         $extra['template_param'] = $extra['template_param']
-            ?? $this->buildTemplateParam((string) $template->template_content, $code, false);
+            ?? $this->buildTemplateParam((string) $template->template_content, $code);
 
         return [$driver, $extra];
     }
@@ -201,59 +180,23 @@ class SmsService
      * 按模板内容里的 ${xxx} 占位符构造 templateParam
      *
      * 行为约束:
-     *  - PNVS 平台侧校验驱动:code 注入 ##code## 让平台自生成(否则后续 CheckSmsVerifyCode 无法校验)
-     *  - 普通驱动:code 注入 SmsService 本地生成的 6 位码
-     *  - min: 从 codeTtl 派生分钟数,避免 magic number
+     *  - code: SmsService 本地生成的 6 位码
      *  - 未识别的占位符在 SmsSceneService::bind() 阶段已被拦截,此处不会出现;
      *    防御性兜底为空字符串,阿里云会返回模板校验失败便于排障
-     *  - PNVS 兜底:即使模板没有占位符,也回填 {"code":"##code##"} 满足阿里云 TemplateParam 必填要求
      *
      * @return array<string, string>
      */
-    private function buildTemplateParam(string $templateContent, string $code, bool $isPlatformManaged): array
+    private function buildTemplateParam(string $templateContent, string $code): array
     {
         $placeholders = SmsTemplate::extractPlaceholders($templateContent);
         $result = [];
         foreach ($placeholders as $key) {
             $result[$key] = match ($key) {
-                'code'  => $isPlatformManaged ? '##code##' : $code,
-                'min'   => (string) max(1, (int) ($this->codeTtl / 60)),
+                'code' => $code,
                 default => '',
             };
         }
-        if ($isPlatformManaged && $result === []) {
-            $result['code'] = '##code##';
-        }
         return $result;
-    }
-
-    /**
-     * 解析校验阶段的驱动(仅用于 verifyCode 判断是否走平台侧校验)
-     */
-    private function resolveDriverForVerify(string $scene): ?BaseSmsDriver
-    {
-        if ($this->driver !== null) {
-            return $this->driver;
-        }
-
-        $binding = SmsSceneBinding::where('scene_code', $scene)
-            ->where('status', 1)
-            ->find();
-        if ($binding === null) {
-            return null;
-        }
-
-        $provider = SmsProvider::find($binding->provider_id);
-        if ($provider === null || (int) $provider->status !== 1) {
-            return null;
-        }
-
-        return DriverManager::create('sms', (string) $provider->driver, [
-            'access_key_id' => (string) $provider->access_key_id,
-            'access_key_secret' => SmsSecret::decrypt((string) $provider->access_key_secret),
-            'region' => (string) $provider->region,
-            'scheme_name' => (string) ($provider->scheme_name ?? ''),
-        ]);
     }
 
     private function codeKey(string $mobile, string $scene): string

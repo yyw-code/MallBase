@@ -44,11 +44,11 @@ class SmsScene
      * 以及未来不同场景占位符差异化扩展。
      */
     private const SCENE_PARAMS = [
-        self::LOGIN                => ['code', 'min'],
-        self::REGISTER             => ['code', 'min'],
-        self::RESET_PASSWORD       => ['code', 'min'],
-        self::BIND_MOBILE          => ['code', 'min'],
-        self::WECHAT_OFFICIAL_BIND => ['code', 'min'],
+        self::LOGIN                => ['code'],
+        self::REGISTER             => ['code'],
+        self::RESET_PASSWORD       => ['code'],
+        self::BIND_MOBILE          => ['code'],
+        self::WECHAT_OFFICIAL_BIND => ['code'],
     ];
 
     public static function isValid(string $scene): bool
@@ -72,8 +72,7 @@ class SmsScene
     /**
      * 场景能向短信模板提供的参数白名单(占位符名称)
      *
-     *  - code: 验证码本体(PNVS 注入 ##code## 由平台生成;企业版注入本地生成的 6 位码)
-     *  - min:  验证码有效期分钟数(取自 SmsService::codeTtl/60)
+     *  - code: 验证码本体,由 SmsService 生成 6 位数字码
      *
      * 用于:
      *  - SmsSceneService::bind() 校验模板占位符是否被场景覆盖

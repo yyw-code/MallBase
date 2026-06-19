@@ -2,6 +2,8 @@
 
 namespace mall_base\drivers\upload;
 
+use OSS\OssClient;
+
 /**
  * 阿里云 OSS 上传驱动
  * 
@@ -25,44 +27,42 @@ namespace mall_base\drivers\upload;
  */
 class OssUploadDriver extends BaseUploadDriver
 {
+    private const REQUIRED_CONFIG = [
+        'access_key_id' => 'AccessKeyId',
+        'access_key_secret' => 'AccessKeySecret',
+        'bucket' => 'Bucket',
+        'endpoint' => 'Endpoint',
+    ];
+
     /**
      * OSS 客户端实例
-     * @var mixed
      */
-    protected $ossClient;
+    protected ?OssClient $ossClient = null;
 
     /**
      * Bucket 名称
-     * @var string
      */
     protected string $bucket;
 
     /**
      * 外网访问域名
-     * @var string
      */
     protected string $domain;
-
-    /**
-     * CDN 域名
-     * @var string|null
-     */
-    protected ?string $cdnDomain;
 
     /**
      * 初始化
      */
     protected function init(): void
     {
-        $this->bucket = $this->getConfig('bucket', '');
-        $endpoint = $this->getConfig('endpoint', '');
-        $accessKeyId = $this->getConfig('access_key_id', '');
-        $accessKeySecret = $this->getConfig('access_key_secret', '');
-        $this->domain = $this->getConfig('domain', '');
-        $this->cdnDomain = $this->getConfig('cdn_domain', null);
+        $this->assertRequiredConfig();
 
-        // 实际使用时需要初始化 OSS 客户端
-        // $this->ossClient = new \OSS\OssClient($accessKeyId, $accessKeySecret, $endpoint);
+        $this->bucket = trim((string) $this->getConfig('bucket', ''));
+        $this->domain = trim((string) (
+            $this->getConfig('url_prefix', '')
+            ?: $this->getConfig('domain', '')
+            ?: $this->getConfig('cdn_domain', '')
+        ));
+        $this->ossClient = $this->createClient();
     }
 
     /**
@@ -80,18 +80,39 @@ class OssUploadDriver extends BaseUploadDriver
         }
 
         try {
-            // 调用 OSS 上传接口
-            // $this->ossClient->uploadFile($this->bucket, $objectName, $filePath);
-            
-            // 示例代码，实际使用时需要替换为真实的 OSS 调用
-            $this->log("上传文件到 OSS: {$objectName}");
-            
+            $this->client()->uploadFile($this->bucket, $objectName, $filePath);
+
             // 返回文件 URL
             return $this->getUrl($objectName);
-            
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             $this->setError('上传失败: ' . $e->getMessage());
             throw $e;
+        }
+    }
+
+    /**
+     * 下载 OSS 对象到本地路径。
+     *
+     * @param string $objectName 存储对象名称
+     * @param string $targetPath 本地目标路径
+     * @return bool
+     */
+    public function download(string $objectName, string $targetPath): bool
+    {
+        try {
+            $directory = dirname($targetPath);
+            if (!is_dir($directory)) {
+                mkdir($directory, 0755, true);
+            }
+
+            $this->client()->getObject($this->bucket, ltrim($objectName, '/'), [
+                OssClient::OSS_FILE_DOWNLOAD => $targetPath,
+            ]);
+
+            return is_file($targetPath);
+        } catch (\Throwable $e) {
+            $this->setError('下载失败: ' . $e->getMessage());
+            return false;
         }
     }
 
@@ -104,15 +125,9 @@ class OssUploadDriver extends BaseUploadDriver
     public function delete(string $objectName): bool
     {
         try {
-            // 调用 OSS 删除接口
-            // $this->ossClient->deleteObject($this->bucket, $objectName);
-            
-            // 示例代码，实际使用时需要替换为真实的 OSS 调用
-            $this->log("删除 OSS 文件: {$objectName}");
-            
+            $this->client()->deleteObject($this->bucket, $objectName);
             return true;
-            
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             $this->setError('删除失败: ' . $e->getMessage());
             return false;
         }
@@ -126,12 +141,7 @@ class OssUploadDriver extends BaseUploadDriver
      */
     public function getUrl(string $objectName): string
     {
-        // 优先使用 CDN 域名
-        if ($this->cdnDomain) {
-            return rtrim($this->cdnDomain, '/') . '/' . ltrim($objectName, '/');
-        }
-
-        // 使用 OSS 域名
+        // 使用后台 UploadOss.oss_url_prefix，允许配置为 OSS 公网域名或 CDN 域名
         if ($this->domain) {
             return rtrim($this->domain, '/') . '/' . ltrim($objectName, '/');
         }
@@ -149,14 +159,8 @@ class OssUploadDriver extends BaseUploadDriver
     public function exists(string $objectName): bool
     {
         try {
-            // 调用 OSS 检查接口
-            // $exists = $this->ossClient->doesObjectExist($this->bucket, $objectName);
-            // return $exists;
-            
-            // 示例代码，实际使用时需要替换为真实的 OSS 调用
-            return false;
-            
-        } catch (\Exception $e) {
+            return (bool) $this->client()->doesObjectExist($this->bucket, $objectName);
+        } catch (\Throwable $e) {
             $this->setError('检查失败: ' . $e->getMessage());
             return false;
         }
@@ -171,25 +175,39 @@ class OssUploadDriver extends BaseUploadDriver
     public function getFileInfo(string $objectName): ?array
     {
         try {
-            // 调用 OSS 获取文件元数据接口
-            // $meta = $this->ossClient->getObjectMeta($this->bucket, $objectName);
-            // return [
-            //     'size' => $meta['content-length'] ?? 0,
-            //     'type' => $meta['content-type'] ?? '',
-            //     'last_modified' => $meta['last-modified'] ?? '',
-            // ];
-            
-            // 示例代码，实际使用时需要替换为真实的 OSS 调用
+            $meta = $this->client()->getObjectMeta($this->bucket, $objectName) ?? [];
+
             return [
-                'size' => 0,
-                'type' => '',
-                'last_modified' => '',
+                'name' => basename($objectName),
+                'path' => $this->getPath($objectName),
+                'url' => $this->getUrl($objectName),
+                'full_url' => $this->getFullUrl($objectName),
+                'size' => (int) ($meta['content-length'] ?? $meta['Content-Length'] ?? 0),
+                'mime' => (string) ($meta['content-type'] ?? $meta['Content-Type'] ?? ''),
+                'modified' => $this->normalizeModifiedTime(
+                    $meta['last-modified'] ?? $meta['Last-Modified'] ?? ''
+                ),
             ];
-            
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             $this->setError('获取文件信息失败: ' . $e->getMessage());
             return null;
         }
+    }
+
+    /**
+     * 获取相对路径
+     */
+    public function getPath(string $objectName): string
+    {
+        return ltrim($objectName, '/');
+    }
+
+    /**
+     * 获取完整 URL
+     */
+    public function getFullUrl(string $objectName): string
+    {
+        return $this->getUrl($objectName);
     }
 
     /**
@@ -220,5 +238,52 @@ class OssUploadDriver extends BaseUploadDriver
         }
 
         return $results;
+    }
+
+    private function assertRequiredConfig(): void
+    {
+        $missing = [];
+        foreach (self::REQUIRED_CONFIG as $key => $label) {
+            $value = trim((string) $this->getConfig($key, ''));
+            if ($value === '') {
+                $missing[] = $label;
+            }
+        }
+
+        if ($missing !== []) {
+            throw new \InvalidArgumentException('OSS 配置缺失: ' . implode('、', $missing));
+        }
+    }
+
+    protected function createClient(): OssClient
+    {
+        return new OssClient(
+            trim((string) $this->getConfig('access_key_id', '')),
+            trim((string) $this->getConfig('access_key_secret', '')),
+            trim((string) $this->getConfig('endpoint', ''))
+        );
+    }
+
+    private function client(): OssClient
+    {
+        if ($this->ossClient === null) {
+            $this->ossClient = $this->createClient();
+        }
+
+        return $this->ossClient;
+    }
+
+    private function normalizeModifiedTime(mixed $value): string
+    {
+        if (!is_string($value) || trim($value) === '') {
+            return '';
+        }
+
+        $timestamp = strtotime($value);
+        if ($timestamp === false) {
+            return $value;
+        }
+
+        return date('Y-m-d H:i:s', $timestamp);
     }
 }

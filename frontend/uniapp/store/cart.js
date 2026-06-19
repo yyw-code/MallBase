@@ -6,6 +6,7 @@ import {
   deleteCartItems,
   toggleCartSelected,
 } from '@/api/order/cart'
+import { multiplyPrice, sumPrices } from '@/utils/price'
 
 export const useCartStore = defineStore('cart', {
   state: () => ({
@@ -23,9 +24,10 @@ export const useCartStore = defineStore('cart', {
     allSelected: (state) => state.list.length > 0 && state.list.every((item) => item.selected),
 
     totalPrice(state) {
-      return state.list
+      const subtotals = state.list
         .filter((item) => item.selected)
-        .reduce((sum, item) => sum + Number(item.unit_price) * item.quantity, 0)
+        .map((item) => multiplyPrice(item.unit_price, item.quantity))
+      return sumPrices(subtotals)
     },
   },
 

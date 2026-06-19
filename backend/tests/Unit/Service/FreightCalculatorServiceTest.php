@@ -144,6 +144,52 @@ final class FreightCalculatorServiceTest extends TestCase
         $this->assertSame(8.0, $result->fee);
     }
 
+    public function testFeeCalculationUsesCentPrecisionForDecimalFees(): void
+    {
+        // 0.10 + ceil(2 / 1) * 0.20 = 0.50；费用部分必须按分计算，避免 float 累加误差。
+        $template = $this->baseTemplate();
+        $rules = [$this->makeRule(
+            id: 15,
+            matchLevel: 4,
+            regionIds: [4001],
+            firstAmount: 1.0,
+            firstFee: 0.10,
+            continueAmount: 1.0,
+            continueFee: 0.20,
+        )];
+        $result = $this->service->calculateWithRules(
+            $template,
+            $rules,
+            $this->beijingPath(),
+            3,
+        );
+
+        $this->assertSame(0.5, $result->fee);
+    }
+
+    public function testCountBoundaryUsesFixedScalePrecision(): void
+    {
+        // float 下 0.1 + 0.2 可能略大于 0.3，阶梯边界必须仍按 0.3 处理，不能多收续费。
+        $template = $this->baseTemplate();
+        $rules = [$this->makeRule(
+            id: 16,
+            matchLevel: 4,
+            regionIds: [4001],
+            firstAmount: 0.3,
+            firstFee: 1.00,
+            continueAmount: 0.1,
+            continueFee: 1.00,
+        )];
+        $result = $this->service->calculateWithRules(
+            $template,
+            $rules,
+            $this->beijingPath(),
+            0.1 + 0.2,
+        );
+
+        $this->assertSame(1.0, $result->fee);
+    }
+
     public function testBelowFirstAmountOnlyChargesFirstFee(): void
     {
         $template = $this->baseTemplate();

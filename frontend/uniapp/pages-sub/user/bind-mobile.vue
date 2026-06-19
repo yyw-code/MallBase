@@ -50,6 +50,7 @@
             {{ countdown > 0 ? `${countdown}s` : '获取验证码' }}
           </text>
         </view>
+        <text v-if="smsExpireText" class="sms-expire-hint">{{ smsExpireText }}</text>
 
         <!-- Bind button -->
         <view
@@ -65,8 +66,8 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
-import { onLoad } from '@dcloudio/uni-app'
+import { computed, ref } from 'vue'
+import { onLoad, onUnload } from '@dcloudio/uni-app'
 import { useUserStore } from '@/store/user'
 import { sendSmsCode, wechatBindMobile } from '@/api/user/auth'
 
@@ -77,8 +78,10 @@ const phone = ref('')
 const smsCode = ref('')
 const loading = ref(false)
 const countdown = ref(0)
+const smsExpireCountdown = ref(0)
 
 let countdownTimer = null
+let smsExpireTimer = null
 
 onLoad((query) => {
   if (query?.openid) {
@@ -86,7 +89,22 @@ onLoad((query) => {
   }
 })
 
+onUnload(() => {
+  if (countdownTimer) {
+    clearInterval(countdownTimer)
+    countdownTimer = null
+  }
+  if (smsExpireTimer) {
+    clearInterval(smsExpireTimer)
+    smsExpireTimer = null
+  }
+})
+
 function startCountdown() {
+  if (countdownTimer) {
+    clearInterval(countdownTimer)
+    countdownTimer = null
+  }
   countdown.value = 60
   countdownTimer = setInterval(() => {
     countdown.value -= 1
@@ -96,6 +114,36 @@ function startCountdown() {
     }
   }, 1000)
 }
+
+function startSmsExpireCountdown(ttl) {
+  if (smsExpireTimer) {
+    clearInterval(smsExpireTimer)
+    smsExpireTimer = null
+  }
+  smsExpireCountdown.value = Math.max(0, Number(ttl) || 0)
+  if (smsExpireCountdown.value <= 0) return
+
+  smsExpireTimer = setInterval(() => {
+    smsExpireCountdown.value -= 1
+    if (smsExpireCountdown.value <= 0) {
+      clearInterval(smsExpireTimer)
+      smsExpireTimer = null
+    }
+  }, 1000)
+}
+
+function formatSmsExpire(seconds) {
+  const minute = Math.floor(seconds / 60)
+  const second = seconds % 60
+  return `${String(minute).padStart(2, '0')}:${String(second).padStart(2, '0')}`
+}
+
+const smsExpireText = computed(() => {
+  if (smsExpireCountdown.value > 0) {
+    return `验证码 ${formatSmsExpire(smsExpireCountdown.value)} 内有效`
+  }
+  return smsCode.value ? '验证码已过期，请重新获取' : ''
+})
 
 function validatePhone() {
   if (!/^1\d{10}$/.test(phone.value)) {
@@ -110,8 +158,9 @@ async function handleSendCode() {
   if (!validatePhone()) return
 
   try {
-    await sendSmsCode(phone.value, 'bind_mobile')
+    const data = await sendSmsCode(phone.value, 'bind_mobile')
     startCountdown()
+    startSmsExpireCountdown(data?.code_ttl || 300)
     uni.showToast({ title: '验证码已发送', icon: 'none' })
   } catch (_) {
     /* request.js shows toast */
@@ -334,6 +383,14 @@ $glass-accent: #4fe3d7;
 
 .sms-btn--off {
   color: rgba(255, 255, 255, 0.35);
+}
+
+.sms-expire-hint {
+  display: block;
+  margin-top: -16rpx;
+  padding: 0 12rpx;
+  font-size: 22rpx;
+  color: rgba(255, 255, 255, 0.58);
 }
 
 // ---- Primary button ----

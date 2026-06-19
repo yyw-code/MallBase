@@ -44,25 +44,9 @@ class UserWalletService extends BaseService
      */
     public function logs(int $userId, array $where, int $page, int $limit): array
     {
-        $direction = (string) ($where['type'] ?? '');
-        $bizType = (string) ($where['biz_type'] ?? '');
-        $range = (string) ($where['range'] ?? 'month');
+        $query = $this->buildLogListQuery($userId, $where);
 
-        $query = $this->model(UserWalletLog::class)
-            ->where('user_id', $userId)
-            ->when(in_array($direction, [UserWalletLog::DIRECTION_INCOME, UserWalletLog::DIRECTION_EXPENSE], true), function ($q) use ($direction) {
-                $q->where('direction', $direction);
-            })
-            ->when($bizType !== '', function ($q) use ($bizType) {
-                $q->where('biz_type', $bizType);
-            });
-
-        $startTime = $this->rangeStartTime($range);
-        if ($startTime !== null) {
-            $query->where('create_time', '>=', $startTime);
-        }
-
-        $total = (int) $query->count();
+        $total = (int) (clone $query)->count();
         $rows = $query
             ->order('id', 'desc')
             ->page($page, $limit)
@@ -72,6 +56,26 @@ class UserWalletService extends BaseService
         $list = array_map(fn (array $row): array => $this->formatLog($row), $rows);
 
         return compact('total', 'list');
+    }
+
+    protected function buildLogListQuery(int $userId, array $where)
+    {
+        $direction = (string) ($where['type'] ?? '');
+        $bizType = (string) ($where['biz_type'] ?? '');
+        $range = (string) ($where['range'] ?? 'month');
+        $startTime = $this->rangeStartTime($range);
+
+        return $this->model(UserWalletLog::class)
+            ->where('user_id', $userId)
+            ->when(in_array($direction, [UserWalletLog::DIRECTION_INCOME, UserWalletLog::DIRECTION_EXPENSE], true), function ($q) use ($direction) {
+                $q->where('direction', $direction);
+            })
+            ->when($bizType !== '', function ($q) use ($bizType) {
+                $q->where('biz_type', $bizType);
+            })
+            ->when($startTime !== null, function ($q) use ($startTime) {
+                $q->where('create_time', '>=', $startTime);
+            });
     }
 
     public function ensureWallet(int $userId): UserWallet

@@ -146,4 +146,3 @@ final class UploadConfigSystemLimitTest extends TestCase
         return $decoded;
     }
 }
-

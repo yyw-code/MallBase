@@ -8,56 +8,85 @@
       <text class="addr-list__subtitle">管理您的默认配送信息</text>
     </view>
 
-    <view v-if="loading" class="addr-list__loading">
-      <mb-skeleton type="card" />
-      <mb-skeleton type="card" />
-    </view>
+    <scroll-view scroll-y class="addr-list__scroll">
+      <view v-if="loading" class="addr-list__loading">
+        <mb-skeleton type="card" />
+        <mb-skeleton type="card" />
+      </view>
 
-    <mb-empty-state
-      v-else-if="list.length === 0"
-      icon=""
-      text="还没有收货地址"
-      action-text="新增地址"
-      @action="goAdd"
-    />
+      <mb-empty-state
+        v-else-if="list.length === 0"
+        icon=""
+        text="还没有收货地址"
+        action-text="新增地址"
+        padding-top="180rpx"
+        @action="goAdd"
+      />
 
-    <scroll-view v-else scroll-y class="addr-list__scroll">
-      <view
-        v-for="item in list"
-        :key="item.id"
-        class="addr-card"
-        @tap="onTapCard(item)"
-      >
-        <view class="addr-card__body">
-          <view class="addr-card__info">
-            <view class="addr-card__header">
-              <text class="addr-card__name">{{ item.receiver_name }}</text>
-              <text class="addr-card__phone">{{ item.receiver_mobile }}</text>
-              <view v-if="item.is_default" class="addr-card__badge">
-                <text class="addr-card__badge-text">默认</text>
+      <block v-else>
+        <view
+          v-for="item in list"
+          :key="item.id"
+          class="addr-card"
+          @tap="onTapCard(item)"
+        >
+          <view class="addr-card__body">
+            <view class="addr-card__location">
+              <view class="addr-pin">
+                <view class="addr-pin__head" />
+                <view class="addr-pin__body" />
               </view>
             </view>
 
-            <text class="addr-card__detail">
-              {{ regionText(item) }}
-            </text>
-            <text v-if="item.region_status === 0" class="addr-card__warn">
-              {{ item.region_invalid_reason || '地区已失效，请编辑更新' }}
-            </text>
-          </view>
+            <view class="addr-card__info">
+              <view class="addr-card__header">
+                <text class="addr-card__name">{{ item.receiver_name }}</text>
+                <text class="addr-card__phone">{{ item.receiver_mobile }}</text>
+                <view v-if="item.is_default" class="addr-card__badge">
+                  <text class="addr-card__badge-text">默认</text>
+                </view>
+              </view>
 
-          <view class="addr-card__edit" @tap.stop="goEdit(item.id)">
-            <view class="addr-card__edit-icon" />
+              <text class="addr-card__detail">
+                {{ regionText(item) }}
+              </text>
+              <text v-if="item.region_status === 0" class="addr-card__warn">
+                {{ item.region_invalid_reason || '地区已失效，请编辑更新' }}
+              </text>
+            </view>
+
+            <view class="addr-card__action" @tap.stop="stopCardTap">
+              <mb-button
+                class="addr-card__edit-btn"
+                type="secondary"
+                size="small"
+                label="编辑"
+                @click="goEdit(item.id)"
+              />
+            </view>
           </view>
         </view>
-      </view>
+      </block>
 
       <view class="addr-list__bottom-spacer" />
     </scroll-view>
 
     <view class="addr-list__footer">
-      <view class="addr-list__add-btn" @tap="goAdd">
-        <text class="addr-list__add-btn-text">新增收货地址</text>
+      <view class="addr-list__footer-actions">
+        <mb-button
+          class="addr-list__smart-btn"
+          type="secondary"
+          size="large"
+          label="智能解析"
+          @click="goSmartAdd"
+        />
+        <mb-button
+          class="addr-list__add-btn"
+          type="primary"
+          size="large"
+          label="新增地址"
+          @click="goAdd"
+        />
       </view>
     </view>
   </view>
@@ -116,9 +145,15 @@ function goAdd() {
   uni.navigateTo({ url: '/pages-sub/address/edit' })
 }
 
+function goSmartAdd() {
+  uni.navigateTo({ url: '/pages-sub/address/edit?smart=1' })
+}
+
 function goEdit(id) {
   uni.navigateTo({ url: `/pages-sub/address/edit?id=${id}` })
 }
+
+function stopCardTap() {}
 
 </script>
 
@@ -129,7 +164,7 @@ function goEdit(id) {
 }
 
 .addr-list__loading {
-  padding: $mb-spacing-lg;
+  padding: $mb-spacing-sm 0;
   display: flex;
   flex-direction: column;
   gap: $mb-spacing-md;
@@ -145,7 +180,7 @@ function goEdit(id) {
   font-size: $mb-font-xxl;
   font-weight: 800;
   color: $mb-color-text-title;
-  letter-spacing: 0.02em;
+  letter-spacing: 0;
 }
 
 .addr-list__subtitle {
@@ -153,7 +188,7 @@ function goEdit(id) {
   margin-top: $mb-spacing-xs;
   font-size: $mb-font-sm;
   color: $mb-color-text-tertiary;
-  letter-spacing: 0.01em;
+  letter-spacing: 0;
 }
 
 // ---- Scroll area ----
@@ -174,6 +209,59 @@ function goEdit(id) {
 .addr-card__body {
   display: flex;
   align-items: flex-start;
+  gap: $mb-spacing-md;
+}
+
+.addr-card__location {
+  flex-shrink: 0;
+  width: 58rpx;
+  height: 58rpx;
+  border-radius: 16rpx;
+  background: rgba($mb-color-primary, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 4rpx;
+}
+
+.addr-pin {
+  position: relative;
+  width: 28rpx;
+  height: 36rpx;
+}
+
+.addr-pin__head {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 28rpx;
+  height: 28rpx;
+  border-radius: 50% 50% 50% 0;
+  background: $mb-color-primary;
+  transform: rotate(-45deg);
+
+  &::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 10rpx;
+    height: 10rpx;
+    border-radius: 50%;
+    background: $mb-color-bg;
+    transform: translate(-50%, -50%);
+  }
+}
+
+.addr-pin__body {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  width: 4rpx;
+  height: 10rpx;
+  border-radius: 0 0 2rpx 2rpx;
+  background: $mb-color-primary;
+  transform: translateX(-50%);
 }
 
 .addr-card__info {
@@ -227,56 +315,21 @@ function goEdit(id) {
   color: $mb-color-error;
 }
 
-// ---- Edit button (pencil icon) ----
-.addr-card__edit {
+.addr-card__action {
   flex-shrink: 0;
-  width: 72rpx;
-  height: 72rpx;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-left: $mb-spacing-sm;
+  padding-top: 2rpx;
 }
 
-.addr-card__edit-icon {
-  position: relative;
-  width: 32rpx;
-  height: 32rpx;
-
-  // Pencil body (diagonal bar)
-  &::before {
-    content: '';
-    position: absolute;
-    width: 8rpx;
-    height: 24rpx;
-    background: $mb-color-text-secondary;
-    border-radius: 2rpx;
-    top: 0;
-    left: 50%;
-    transform-origin: center;
-    transform: translateX(-50%) rotate(-45deg);
-    top: 2rpx;
-    left: 14rpx;
-  }
-
-  // Pencil tip
-  &::after {
-    content: '';
-    position: absolute;
-    width: 0;
-    height: 0;
-    border-left: 4rpx solid transparent;
-    border-right: 4rpx solid transparent;
-    border-top: 8rpx solid $mb-color-text-secondary;
-    bottom: 2rpx;
-    left: 6rpx;
-    transform: rotate(-45deg);
-  }
+.addr-card__edit-btn {
+  min-width: 104rpx;
 }
 
 // ---- Footer ----
 .addr-list__bottom-spacer {
-  height: 180rpx;
+  height: 188rpx;
 }
 
 .addr-list__footer {
@@ -291,24 +344,16 @@ function goEdit(id) {
   box-shadow: $mb-shadow-bar;
 }
 
-.addr-list__add-btn {
-  height: 96rpx;
-  border-radius: $mb-radius-sm;
-  background: $mb-color-primary;
+.addr-list__footer-actions {
   display: flex;
-  align-items: center;
-  justify-content: center;
-
-  &:active {
-    opacity: 0.85;
-    transform: scale(0.98);
-  }
+  gap: $mb-spacing-md;
 }
 
-.addr-list__add-btn-text {
-  font-size: $mb-font-md;
-  font-weight: 600;
-  color: $mb-color-text-inverse;
-  letter-spacing: 0;
+.addr-list__smart-btn {
+  flex: 1;
+}
+
+.addr-list__add-btn {
+  flex: 1.2;
 }
 </style>

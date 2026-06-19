@@ -33,40 +33,30 @@ class TemplateController extends BaseController
 
     public function create()
     {
-        $data = $this->request->param(['provider_id', 'sign_id', 'template_name', 'template_type', 'template_content', 'template_code', 'remark']);
+        $data = $this->request->param([
+            'provider_id', 'sign_id', 'template_name', 'template_type', 'template_content',
+            'template_code', 'submit_to_platform', 'remark',
+        ]);
         $this->validate($data, SmsTemplateValidate::class . '.create');
         $id = $this->service()->create($data);
-        return $this->success(['id' => $id], '已创建,正在后台提交阿里云,稍后刷新查看审核状态');
+        return $this->success(['id' => $id], '保存成功');
     }
 
     public function update($id)
     {
-        $data = $this->request->param(['provider_id', 'sign_id', 'template_name', 'template_type', 'template_content', 'template_code', 'remark']);
+        $data = $this->request->param([
+            'provider_id', 'sign_id', 'template_name', 'template_type', 'template_content',
+            'template_code', 'submit_to_platform', 'remark',
+        ]);
         $this->validate($data, SmsTemplateValidate::class . '.update');
         $this->service()->update((int) $id, $data);
-        return $this->success(null, '已更新,正在后台同步阿里云,稍后刷新查看审核状态');
+        return $this->success(null, '保存成功');
     }
 
     public function delete($id)
     {
         $this->service()->delete((int) $id);
         return $this->success(null, '删除成功');
-    }
-
-    /**
-     * 从阿里云导入已审核模板(只调 QuerySmsTemplate,不调 AddSmsTemplate)
-     */
-    public function import()
-    {
-        $data = $this->request->param(['provider_id', 'template_code']);
-        if (empty($data['provider_id']) || empty($data['template_code'])) {
-            return $this->error('服务商和模板编码必填');
-        }
-        $id = $this->service()->importFromRemote(
-            (int) $data['provider_id'],
-            trim((string) $data['template_code']),
-        );
-        return $this->success(['id' => $id], '导入成功');
     }
 
     public function syncStatus($id)
@@ -101,12 +91,13 @@ class TemplateController extends BaseController
 
     /**
      * 按内置场景批量创建模板(仅支持普通阿里云驱动)
-     * body: { provider_id: 1, sign_id: 2, items: [{ scene_code, template_name, template_content, template_type }] }
+     * body: { provider_id: 1, sign_id: 2, submit_to_platform: 0/1, items: [{ scene_code, template_name, template_content, template_type, template_code }] }
      */
     public function createByScenes()
     {
         $providerId = (int) $this->request->param('provider_id', 0);
         $signId = (int) $this->request->param('sign_id', 0);
+        $submitToPlatform = $this->request->param('submit_to_platform', 1);
         $items = (array) $this->request->param('items', []);
         if ($providerId <= 0) {
             return $this->error('服务商必填');
@@ -114,7 +105,12 @@ class TemplateController extends BaseController
         if (empty($items)) {
             return $this->error('请至少选择一个场景');
         }
-        $stat = $this->service()->createByScenes($providerId, $signId, $items);
-        return $this->success($stat, "已创建 {$stat['created']} 个模板,正在后台批量提交阿里云;失败 {$stat['failed']} 个");
+        $stat = $this->service()->createByScenes(
+            $providerId,
+            $signId,
+            $items,
+            in_array($submitToPlatform, [true, 1, '1', 'true', 'on'], true)
+        );
+        return $this->success($stat, "已创建 {$stat['created']} 个模板;失败 {$stat['failed']} 个");
     }
 }

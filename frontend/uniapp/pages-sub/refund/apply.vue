@@ -1,17 +1,16 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
-import { applyRefund, getRefundReasonOptions } from '@/api/order/refund'
+import { applyRefundBatch, getRefundReasonOptions } from '@/api/order/refund'
 import { getOrderDetail } from '@/api/order/order'
 
 const orderId = ref('')
-const orderItemId = ref('')
-const goodsName = ref('')
-const goodsImage = ref('')
-const skuSpecText = ref('')
-const price = ref(0)
-const quantity = ref(1)
+const selectedItemInputs = ref([])
+const refundItems = ref([])
 const refundableAmount = ref('')
+const refundableLoading = ref(false)
+const refundableLoaded = ref(false)
+const orderStatus = ref(null)
 const receiveStatus = ref('not_received')
 const refundType = ref(0)
 
@@ -26,15 +25,7 @@ const MAX_DESC_LENGTH = 200
 
 onLoad((query) => {
   orderId.value = query?.order_id || ''
-  orderItemId.value = query?.order_item_id || ''
-  goodsName.value = decodeURIComponent(query?.goods_name || '')
-  goodsImage.value = decodeURIComponent(query?.goods_image || '')
-  skuSpecText.value = decodeURIComponent(query?.sku_spec_text || '')
-  price.value = Number(query?.price) || 0
-  quantity.value = Number(query?.quantity) || 1
-  refundableAmount.value = normalizeAmount(query?.refundable_amount || '')
-  receiveStatus.value = query?.receive_status || 'not_received'
-  refundType.value = Number(query?.type) === 1 ? 1 : 0
+  selectedItemInputs.value = parseSelectedItems(query)
   fetchReasonOptions()
   fetchRefundableInfo()
 })
@@ -49,46 +40,127 @@ async function fetchReasonOptions() {
 }
 
 async function fetchRefundableInfo() {
-  if (!orderId.value || !orderItemId.value) return
+  if (!orderId.value || selectedItemInputs.value.length === 0) return
+  refundableLoading.value = true
   try {
     const detail = await getOrderDetail(orderId.value)
+    orderStatus.value = Number(detail?.status)
     const items = Array.isArray(detail?.items)
       ? detail.items
       : Array.isArray(detail?.order_items)
         ? detail.order_items
         : []
-    const item = items.find((row) => String(row?.id || row?.order_item_id || '') === String(orderItemId.value))
-    if (!item) return
+    const itemMap = {}
+    items.forEach((row) => {
+      const id = getOrderItemId(row)
+      if (id) itemMap[String(id)] = row
+    })
 
-    goodsName.value = item.goods_name || item.name || goodsName.value
-    goodsImage.value = normalizeImageUrl(
-      item.goods_image_full_url
-        || item.goods_image_url
-        || item.goods_image
-        || goodsImage.value,
-    )
-    skuSpecText.value = item.sku_spec_text || item.sku_spec || item.spec_text || skuSpecText.value
-    price.value = Number(item.unit_price) || price.value
+    const nextItems = []
+    for (const input of selectedItemInputs.value) {
+      const item = itemMap[String(input.order_item_id)]
+      if (!item) continue
 
-    const serverQuantity = Number(item.refundable_quantity)
-    if (Number.isFinite(serverQuantity) && serverQuantity > 0) {
-      quantity.value = serverQuantity
+      const refundableQuantity = getRefundableQuantity(item)
+      if (refundableQuantity <= 0) continue
+
+      nextItems.push({
+        order_item_id: getOrderItemId(item),
+        goods_name: item.goods_name || item.name || '商品',
+        goods_image: normalizeImageUrl(
+          item.goods_image_full_url
+            || item.goods_image_url
+            || item.goods_image
+            || '',
+        ),
+        sku_spec_text: item.sku_spec_text || item.sku_spec || item.spec_text || '',
+        price: Number(item.unit_price) || 0,
+        quantity: Math.min(refundableQuantity, Math.max(1, Number(input.quantity || 1))),
+        refundable_quantity: refundableQuantity,
+        refundable_amount: normalizeAmount(item.refundable_amount || ''),
+      })
     }
 
-    const serverAmount = normalizeAmount(item.refundable_amount || '')
-    if (serverAmount) {
-      refundableAmount.value = serverAmount
+    if (nextItems.length === 0) {
+      uni.showToast({ title: '售后商品信息不存在或暂无可退数量', icon: 'none' })
+      return
     }
+
+    refundItems.value = nextItems
+    refundableAmount.value = exactBackendAmount(nextItems)
+    initRefundScenario()
+    refundableLoaded.value = true
   } catch {
-    // 旧入口兜底：继续使用 query 参数展示，不阻断用户填写。
+    refundableLoaded.value = false
+    uni.showToast({ title: '退款金额获取失败，请稍后重试', icon: 'none' })
+  } finally {
+    refundableLoading.value = false
   }
 }
 
-const refundAmount = computed(() => {
-  if (refundableAmount.value) return refundableAmount.value
-  const total = price.value * quantity.value
-  return total.toFixed(2)
+const receiveStatusOptions = computed(() => {
+  if (orderStatus.value === 10) {
+    return [{ label: '未收到货', value: 'not_received' }]
+  }
+  if (orderStatus.value === 30 || orderStatus.value === 40) {
+    return [{ label: '已收到货', value: 'received' }]
+  }
+  return [
+    { label: '未收到货', value: 'not_received' },
+    { label: '已收到货', value: 'received' },
+  ]
 })
+
+const refundTypeOptions = computed(() => {
+  if (receiveStatus.value !== 'received') {
+    return [{ label: '仅退款', value: 0 }]
+  }
+  return [
+    { label: '仅退款', value: 0 },
+    { label: '退货退款', value: 1 },
+  ]
+})
+
+const refundAmountText = computed(() => {
+  if (refundableLoading.value) return '计算中'
+  if (!refundableLoaded.value) return '以提交后计算为准'
+  return refundableAmount.value || '提交后计算'
+})
+
+const showRefundAmountSymbol = computed(() => Boolean(refundableAmount.value) && !refundableLoading.value)
+
+const receiveStatusText = computed(() =>
+  receiveStatusOptions.value.find((item) => item.value === receiveStatus.value)?.label || '未收到货',
+)
+
+const refundTypeText = computed(() =>
+  refundTypeOptions.value.find((item) => item.value === refundType.value)?.label || '仅退款',
+)
+
+const selectedGoodsCount = computed(() => refundItems.value.length)
+
+const selectedQuantityTotal = computed(() =>
+  refundItems.value.reduce((sum, item) => sum + Number(item.quantity || 0), 0),
+)
+
+function initRefundScenario() {
+  const firstReceive = receiveStatusOptions.value[0]?.value || 'not_received'
+  receiveStatus.value = firstReceive
+  refundType.value = refundTypeOptions.value[0]?.value || 0
+}
+
+function setReceiveStatus(value) {
+  if (!receiveStatusOptions.value.some((item) => item.value === value)) return
+  receiveStatus.value = value
+  if (!refundTypeOptions.value.some((item) => item.value === refundType.value)) {
+    refundType.value = refundTypeOptions.value[0]?.value || 0
+  }
+}
+
+function setRefundType(value) {
+  if (!refundTypeOptions.value.some((item) => item.value === value)) return
+  refundType.value = value
+}
 
 const selectedReasonLabel = computed(() => {
   const option = reasonOptions.value.find((item) => {
@@ -98,6 +170,44 @@ const selectedReasonLabel = computed(() => {
   if (!option) return ''
   return typeof option === 'string' ? option : option.label || option.name || option.value || ''
 })
+
+function parseSelectedItems(query) {
+  const raw = query?.selected_items || ''
+  if (raw) {
+    try {
+      const decoded = decodeURIComponent(String(raw))
+      const rows = JSON.parse(decoded)
+      if (Array.isArray(rows)) {
+        const parsed = rows
+          .map((row) => ({
+            order_item_id: row?.order_item_id || row?.id || '',
+            quantity: Math.max(1, Number(row?.quantity || 1)),
+          }))
+          .filter((row) => row.order_item_id)
+        if (parsed.length > 0) return parsed
+      }
+    } catch {
+      // fallback below
+    }
+  }
+
+  const fallbackId = query?.order_item_id || ''
+  if (!fallbackId) return []
+  return [{
+    order_item_id: fallbackId,
+    quantity: Math.max(1, Number(query?.quantity || 1)),
+  }]
+}
+
+function getOrderItemId(item) {
+  return item?.id || item?.order_item_id || ''
+}
+
+function getRefundableQuantity(item) {
+  const explicit = Number(item?.refundable_quantity)
+  if (Number.isFinite(explicit)) return Math.max(0, explicit)
+  return Math.max(0, Number(item?.quantity || 0) - Number(item?.refunded_quantity || 0))
+}
 
 function formatPrice(val) {
   const num = Number(val)
@@ -109,6 +219,29 @@ function normalizeAmount(val) {
   const decoded = decodeURIComponent(String(val || ''))
   if (!/^\d+(\.\d{1,2})?$/.test(decoded)) return ''
   return Number(decoded).toFixed(2)
+}
+
+function exactBackendAmount(items) {
+  let cents = 0
+  for (const item of items) {
+    if (Number(item.quantity) !== Number(item.refundable_quantity)) return ''
+    const amountCents = decimalToCents(item.refundable_amount)
+    if (amountCents === null) return ''
+    cents += amountCents
+  }
+  return centsToDecimal(cents)
+}
+
+function decimalToCents(amount) {
+  const value = String(amount || '').trim()
+  if (!/^\d+(\.\d{1,2})?$/.test(value)) return null
+  const [yuan, cent = '0'] = value.split('.')
+  return Number(yuan) * 100 + Number(cent.padEnd(2, '0').slice(0, 2))
+}
+
+function centsToDecimal(cents) {
+  const value = Math.max(0, Number(cents || 0))
+  return `${Math.floor(value / 100)}.${String(value % 100).padStart(2, '0')}`
 }
 
 function normalizeImageUrl(url) {
@@ -165,7 +298,7 @@ function onPreviewImage(idx) {
 }
 
 async function onSubmit() {
-  if (!orderItemId.value) {
+  if (refundItems.value.length === 0) {
     uni.showToast({ title: '请选择要申请售后的商品', icon: 'none' })
     return
   }
@@ -173,13 +306,19 @@ async function onSubmit() {
     uni.showToast({ title: '请选择退款原因', icon: 'none' })
     return
   }
+  if (refundableLoading.value || !refundableLoaded.value) {
+    uni.showToast({ title: '退款信息加载中，请稍后', icon: 'none' })
+    return
+  }
   if (submitting.value) return
   submitting.value = true
 
   try {
-    await applyRefund({
-      order_item_id: orderItemId.value,
-      quantity: quantity.value,
+    const result = await applyRefundBatch({
+      items: refundItems.value.map((item) => ({
+        order_item_id: item.order_item_id,
+        quantity: item.quantity,
+      })),
       type: refundType.value,
       receive_status: receiveStatus.value === 'received' ? 1 : 0,
       reason: selectedReason.value,
@@ -187,13 +326,22 @@ async function onSubmit() {
     })
     uni.showToast({ title: '退款申请已提交', icon: 'success' })
     setTimeout(() => {
-      uni.navigateBack()
-    }, 1500)
+      redirectAfterSubmit(result)
+    }, 900)
   } catch {
     // error handled by request interceptor
   } finally {
     submitting.value = false
   }
+}
+
+function redirectAfterSubmit(result) {
+  const list = Array.isArray(result?.list) ? result.list : []
+  if (list.length === 1 && list[0]?.id) {
+    uni.redirectTo({ url: `/pages-sub/refund/detail?id=${list[0].id}` })
+    return
+  }
+  uni.redirectTo({ url: '/pages-sub/refund/list' })
 }
 </script>
 
@@ -203,38 +351,75 @@ async function onSubmit() {
 
     <!-- Product info card -->
     <view class="product-card">
-      <image
-        v-if="goodsImage"
-        class="product-card__image"
-        :src="goodsImage"
-        mode="aspectFill"
-      />
-      <view v-else class="product-card__image product-card__image--placeholder">
-        <view class="product-card__placeholder-box" />
+      <view class="product-card__header">
+        <text class="product-card__title">售后商品</text>
+        <text class="product-card__summary">已选 {{ selectedGoodsCount }} 种，共 {{ selectedQuantityTotal }} 件</text>
       </view>
-      <view class="product-card__info">
-        <text class="product-card__name">{{ goodsName || '商品' }}</text>
-        <text v-if="skuSpecText" class="product-card__spec">{{ skuSpecText }}</text>
-        <view class="product-card__bottom">
-          <text class="product-card__price">{{ '¥' }}{{ formatPrice(price) }}</text>
-          <text class="product-card__qty">{{ '×' }}{{ quantity }}</text>
+      <view
+        v-for="item in refundItems"
+        :key="item.order_item_id"
+        class="product-card__item"
+      >
+        <image
+          v-if="item.goods_image"
+          class="product-card__image"
+          :src="item.goods_image"
+          mode="aspectFill"
+        />
+        <view v-else class="product-card__image product-card__image--placeholder">
+          <view class="product-card__placeholder-box" />
+        </view>
+        <view class="product-card__info">
+          <text class="product-card__name">{{ item.goods_name || '商品' }}</text>
+          <text v-if="item.sku_spec_text" class="product-card__spec">{{ item.sku_spec_text }}</text>
+          <view class="product-card__bottom">
+            <text class="product-card__price">{{ '¥' }}{{ formatPrice(item.price) }}</text>
+            <text class="product-card__qty">{{ '×' }}{{ item.quantity }}</text>
+          </view>
         </view>
       </view>
     </view>
 
     <!-- Form fields -->
     <view class="form-section">
-      <view class="form-item">
-        <text class="form-item__label">收货状态</text>
-        <text class="form-item__value">
-          {{ receiveStatus === 'received' ? '已收到货' : '未收到货' }}
-        </text>
+      <view class="form-section__header">
+        <text class="form-section__title">申请信息</text>
       </view>
-      <view class="form-item">
+      <view class="form-item form-item--column">
+        <text class="form-item__label">收货状态</text>
+        <view v-if="receiveStatusOptions.length <= 1" class="readonly-box">
+          <text class="readonly-box__value">{{ receiveStatusText }}</text>
+          <text class="readonly-box__hint">由当前订单状态确定</text>
+        </view>
+        <view v-else class="option-grid">
+          <view
+            v-for="item in receiveStatusOptions"
+            :key="item.value"
+            class="option-grid__item"
+            :class="{ 'option-grid__item--active': receiveStatus === item.value }"
+            @tap="setReceiveStatus(item.value)"
+          >
+            <text class="option-grid__text">{{ item.label }}</text>
+          </view>
+        </view>
+      </view>
+      <view class="form-item form-item--column">
         <text class="form-item__label">售后类型</text>
-        <text class="form-item__value">
-          {{ refundType === 1 ? '退货退款' : '仅退款' }}
-        </text>
+        <view v-if="refundTypeOptions.length <= 1" class="readonly-box">
+          <text class="readonly-box__value">{{ refundTypeText }}</text>
+          <text class="readonly-box__hint">由收货状态自动匹配</text>
+        </view>
+        <view v-else class="option-grid">
+          <view
+            v-for="item in refundTypeOptions"
+            :key="item.value"
+            class="option-grid__item"
+            :class="{ 'option-grid__item--active': refundType === item.value }"
+            @tap="setRefundType(item.value)"
+          >
+            <text class="option-grid__text">{{ item.label }}</text>
+          </view>
+        </view>
       </view>
       <!-- Reason picker -->
       <view class="form-item" @tap="onPickReason">
@@ -251,6 +436,7 @@ async function onSubmit() {
       <!-- Description -->
       <view class="form-item form-item--column">
         <text class="form-item__label">退款说明</text>
+        <view class="textarea-wrap">
         <textarea
           v-model="description"
           class="form-textarea"
@@ -258,9 +444,10 @@ async function onSubmit() {
           :maxlength="MAX_DESC_LENGTH"
           placeholder-style="color: #737686"
         />
-        <text class="form-textarea__count">
-          {{ description.length }}/{{ MAX_DESC_LENGTH }}
-        </text>
+          <text class="form-textarea__count">
+            {{ description.length }}/{{ MAX_DESC_LENGTH }}
+          </text>
+        </view>
       </view>
 
       <!-- Image upload -->
@@ -293,17 +480,19 @@ async function onSubmit() {
       </view>
     </view>
 
-    <!-- Refund amount display -->
-    <view class="amount-card">
-      <text class="amount-card__label">预计退款金额</text>
-      <view class="amount-card__value-wrap">
-        <text class="amount-card__symbol">{{ '¥' }}</text>
-        <text class="amount-card__value">{{ refundAmount }}</text>
+    <view class="bottom-spacer" />
+    <view class="submit-bar">
+      <view class="submit-bar__amount">
+        <text class="submit-bar__label">预计退款</text>
+        <view class="submit-bar__value-wrap">
+          <text v-if="showRefundAmountSymbol" class="submit-bar__symbol">{{ '¥' }}</text>
+          <text
+            class="submit-bar__value"
+            :class="{ 'submit-bar__value--pending': !showRefundAmountSymbol }"
+          >{{ refundAmountText }}</text>
+        </view>
+        <text class="submit-bar__hint">以后端实时计算为准</text>
       </view>
-    </view>
-
-    <!-- Submit button -->
-    <view class="submit-wrap">
       <view
         class="submit-btn"
         :class="{ 'submit-btn--disabled': submitting }"
@@ -320,29 +509,58 @@ async function onSubmit() {
 <style lang="scss" scoped>
 .page {
   min-height: 100vh;
-  background: $mb-color-bg-secondary;
-  padding: 0 $mb-spacing-page $mb-spacing-xl;
+  background: #f6f8fb;
+  padding: 0 24rpx;
 }
 
 // ---- Product card ----
 .product-card {
-  display: flex;
-  gap: $mb-spacing-md;
-  padding: $mb-spacing-lg;
-  margin: $mb-spacing-sm 0 0;
+  margin-top: 18rpx;
   background: $mb-color-bg;
-  border-radius: $mb-radius-lg;
-  border: 1rpx solid $mb-color-divider;
-  margin-left: 0;
-  margin-right: 0;
+  border-radius: 16rpx;
+  border: 1rpx solid rgba(25, 27, 35, 0.06);
+  overflow: hidden;
+}
+
+.product-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: $mb-spacing-md;
+  padding: 22rpx 24rpx;
+  background: #fff;
+  border-bottom: 1rpx solid rgba(25, 27, 35, 0.06);
+}
+
+.product-card__title {
+  font-size: 30rpx;
+  font-weight: 700;
+  color: $mb-color-text-title;
+}
+
+.product-card__summary {
+  flex-shrink: 0;
+  font-size: 24rpx;
+  color: $mb-color-text-secondary;
+}
+
+.product-card__item {
+  display: flex;
+  gap: 20rpx;
+  padding: 22rpx 24rpx;
+  border-top: 1rpx solid rgba(25, 27, 35, 0.06);
+}
+
+.product-card__header + .product-card__item {
+  border-top: 0;
 }
 
 .product-card__image {
   flex-shrink: 0;
-  width: 120rpx;
-  height: 120rpx;
-  border-radius: $mb-radius-md;
-  background: $mb-color-bg;
+  width: 104rpx;
+  height: 104rpx;
+  border-radius: 12rpx;
+  background: #f2f5fa;
 }
 
 .product-card__image--placeholder {
@@ -353,9 +571,9 @@ async function onSubmit() {
 
 .product-card__placeholder-box {
   width: 44rpx;
-  height: 36rpx;
-  border: 4rpx solid $mb-color-primary;
+  height: 32rpx;
   border-radius: 8rpx;
+  background: rgba(13, 80, 213, 0.12);
   position: relative;
 
   &::after {
@@ -367,7 +585,7 @@ async function onSubmit() {
     height: 4rpx;
     border-radius: $mb-radius-full;
     background: $mb-color-primary;
-    opacity: 0.5;
+    opacity: 0.32;
   }
 }
 
@@ -380,20 +598,28 @@ async function onSubmit() {
 }
 
 .product-card__name {
-  font-size: $mb-font-md;
-  font-weight: 500;
+  font-size: 28rpx;
+  font-weight: 600;
   color: $mb-color-text-title;
-  line-height: 1.4;
+  line-height: 1.36;
   display: -webkit-box;
-  -webkit-line-clamp: 1;
+  -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
 
 .product-card__spec {
-  font-size: $mb-font-sm;
+  display: inline-block;
+  max-width: 100%;
+  margin-top: 8rpx;
+  padding: 4rpx 10rpx;
+  overflow: hidden;
+  border-radius: 8rpx;
+  background: #f4f6fa;
+  font-size: 22rpx;
   color: $mb-color-text-tertiary;
-  margin-top: 6rpx;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .product-card__bottom {
@@ -404,31 +630,48 @@ async function onSubmit() {
 }
 
 .product-card__price {
-  font-size: $mb-font-md;
-  font-weight: 600;
+  font-size: 26rpx;
+  font-weight: 700;
   color: $mb-color-text-title;
 }
 
 .product-card__qty {
-  font-size: $mb-font-sm;
-  color: $mb-color-text-tertiary;
+  padding: 3rpx 12rpx;
+  border-radius: $mb-radius-full;
+  background: #f4f6fa;
+  font-size: 22rpx;
+  color: $mb-color-text-secondary;
 }
 
 // ---- Form section ----
 .form-section {
-  margin-top: $mb-spacing-lg;
+  margin-top: 18rpx;
   background: $mb-color-bg;
-  border: 1rpx solid $mb-color-divider;
-  border-radius: $mb-radius-lg;
-  padding: 0 $mb-spacing-lg;
+  border: 1rpx solid rgba(25, 27, 35, 0.06);
+  border-radius: 16rpx;
+  padding: 0 24rpx;
+}
+
+.form-section__header {
+  padding: 24rpx 0 6rpx;
+}
+
+.form-section__title {
+  font-size: 30rpx;
+  font-weight: 700;
+  color: $mb-color-text-title;
 }
 
 .form-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: $mb-spacing-lg 0;
-  border-bottom: 1rpx solid $mb-color-divider;
+  padding: 24rpx 0;
+  border-bottom: 1rpx solid rgba(25, 27, 35, 0.06);
+}
+
+.form-item:last-child {
+  border-bottom: 0;
 }
 
 .form-item--column {
@@ -437,9 +680,9 @@ async function onSubmit() {
 }
 
 .form-item__label {
-  font-size: $mb-font-md;
-  font-weight: 500;
-  color: $mb-color-text;
+  font-size: 28rpx;
+  font-weight: 700;
+  color: $mb-color-text-title;
   flex-shrink: 0;
   margin-bottom: 0;
 }
@@ -458,7 +701,7 @@ async function onSubmit() {
 }
 
 .form-item__value {
-  font-size: $mb-font-md;
+  font-size: 28rpx;
   color: $mb-color-text;
   overflow: hidden;
   white-space: nowrap;
@@ -470,46 +713,115 @@ async function onSubmit() {
 }
 
 .form-item__arrow {
-  font-size: $mb-font-lg;
+  font-size: 34rpx;
   color: $mb-color-text-tertiary;
   font-weight: 300;
 }
 
+.readonly-box {
+  width: 100%;
+  min-height: 64rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: $mb-spacing-md;
+  padding: 0 18rpx;
+  border-radius: 14rpx;
+  background: #f7f9fc;
+}
+
+.readonly-box__value {
+  font-size: 28rpx;
+  font-weight: 700;
+  color: $mb-color-text-title;
+}
+
+.readonly-box__hint {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 22rpx;
+  color: $mb-color-text-tertiary;
+}
+
+// ---- Option buttons ----
+.option-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220rpx, 1fr));
+  gap: 16rpx;
+  width: 100%;
+}
+
+.option-grid__item {
+  height: 72rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14rpx;
+  border: 1rpx solid rgba(25, 27, 35, 0.08);
+  background: #f7f9fc;
+  transition: opacity 0.15s;
+
+  &:active {
+    opacity: 0.82;
+  }
+}
+
+.option-grid__item--active {
+  border-color: rgba(13, 80, 213, 0.5);
+  background: rgba(13, 80, 213, 0.09);
+}
+
+.option-grid__text {
+  font-size: 26rpx;
+  font-weight: 600;
+  color: $mb-color-text-secondary;
+}
+
+.option-grid__item--active .option-grid__text {
+  color: $mb-color-primary;
+}
+
 // ---- Textarea ----
+.textarea-wrap {
+  position: relative;
+  width: 100%;
+}
+
 .form-textarea {
   width: 100%;
-  height: 200rpx;
-  padding: $mb-spacing-md;
-  font-size: $mb-font-md;
+  height: 176rpx;
+  padding: 20rpx 20rpx 44rpx;
+  font-size: 26rpx;
   color: $mb-color-text;
-  background: $mb-color-bg-secondary;
-  border-radius: $mb-radius-md;
+  background: #f7f9fc;
+  border-radius: 14rpx;
   line-height: 1.6;
   box-sizing: border-box;
 }
 
 .form-textarea__count {
-  display: block;
-  text-align: right;
-  font-size: $mb-font-xs;
+  position: absolute;
+  right: 20rpx;
+  bottom: 14rpx;
+  font-size: 22rpx;
   color: $mb-color-text-tertiary;
-  margin-top: $mb-spacing-xs;
-  width: 100%;
 }
 
 // ---- Image grid ----
 .image-grid {
   display: flex;
   flex-wrap: wrap;
-  gap: $mb-spacing-md;
+  gap: 16rpx;
   width: 100%;
 }
 
 .image-grid__item {
   position: relative;
-  width: 200rpx;
-  height: 200rpx;
-  border-radius: $mb-radius-md;
+  width: 144rpx;
+  height: 144rpx;
+  border-radius: 14rpx;
   overflow: hidden;
 }
 
@@ -537,73 +849,100 @@ async function onSubmit() {
 }
 
 .image-grid__add {
-  width: 200rpx;
-  height: 200rpx;
+  width: 144rpx;
+  height: 144rpx;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: $mb-color-bg-secondary;
-  border-radius: $mb-radius-md;
+  background: #f7f9fc;
+  border-radius: 14rpx;
   border: 2rpx dashed $mb-color-border;
 }
 
 .image-grid__add-icon {
-  font-size: 64rpx;
+  font-size: 48rpx;
   color: $mb-color-text-tertiary;
   font-weight: 300;
   line-height: 1;
 }
 
-// ---- Amount card ----
-.amount-card {
-  margin-top: $mb-spacing-xl;
-  padding: $mb-spacing-lg;
-  background: $mb-color-bg;
-  border-radius: $mb-radius-lg;
-  border: 1rpx solid $mb-color-divider;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+// ---- Submit bar ----
+.bottom-spacer {
+  height: 180rpx;
 }
 
-.amount-card__label {
-  font-size: $mb-font-md;
+.submit-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+  padding: 16rpx 24rpx;
+  padding-bottom: calc(16rpx + env(safe-area-inset-bottom));
+  border-top: 1rpx solid rgba(25, 27, 35, 0.08);
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 -8rpx 24rpx rgba(25, 27, 35, 0.06);
+}
+
+.submit-bar__amount {
+  flex: 1;
+  min-width: 0;
+}
+
+.submit-bar__label {
+  display: block;
+  font-size: 22rpx;
+  color: $mb-color-text-tertiary;
+}
+
+.submit-bar__value-wrap {
+  display: flex;
+  align-items: baseline;
+  min-height: 44rpx;
+}
+
+.submit-bar__symbol {
+  margin-right: 3rpx;
+  font-size: 24rpx;
+  font-weight: 700;
+  color: $mb-color-primary;
+}
+
+.submit-bar__value {
+  overflow: hidden;
+  font-size: 38rpx;
+  font-weight: 800;
+  line-height: 1.1;
+  color: $mb-color-primary;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.submit-bar__value--pending {
+  font-size: 24rpx;
+  font-weight: 600;
   color: $mb-color-text-secondary;
 }
 
-.amount-card__value-wrap {
-  display: flex;
-  align-items: baseline;
-}
-
-.amount-card__symbol {
-  font-size: $mb-font-md;
-  font-weight: 700;
-  color: $mb-color-text-title;
-  margin-right: 4rpx;
-}
-
-.amount-card__value {
-  font-size: $mb-font-xxl;
-  font-weight: 700;
-  color: $mb-color-text-title;
-  line-height: 1.2;
-}
-
-// ---- Submit button ----
-.submit-wrap {
-  margin-top: $mb-spacing-xl;
-  padding-bottom: calc(#{$mb-spacing-xl} + env(safe-area-inset-bottom));
+.submit-bar__hint {
+  display: block;
+  margin-top: 2rpx;
+  font-size: 20rpx;
+  color: $mb-color-text-tertiary;
 }
 
 .submit-btn {
-  width: 100%;
-  height: 96rpx;
+  flex-shrink: 0;
+  width: 248rpx;
+  height: 84rpx;
   display: flex;
   align-items: center;
   justify-content: center;
   background: $mb-color-primary;
-  border-radius: $mb-radius-sm;
+  border-radius: $mb-radius-full;
   transition: opacity 0.15s;
 
   &:active {
@@ -617,7 +956,7 @@ async function onSubmit() {
 }
 
 .submit-btn__text {
-  font-size: $mb-font-lg;
+  font-size: 28rpx;
   font-weight: 600;
   color: $mb-color-text-inverse;
 }

@@ -19,7 +19,7 @@
  *    - _type           : 权限类型（可选），支持：
  *                        * 'menu' 或 1   - 菜单
  *                        * 'button' 或 2 - 按钮
- *                        * 'api' 或 3    - 接口（默认）
+ *                        * 'api'         - 历史兼容写法，按菜单权限处理
  *    - _parent         : 父级权限 code（可选），用于建立父子关系
  *    - _auth           : 是否需要认证（可选），默认 true
  *
@@ -27,7 +27,7 @@
  *    - _group_name     : 路由组名称（必填），用于创建路由组菜单的名称
  *    - _group_code     : 路由组代码（必填），用于创建路由组菜单的唯一标识
  *    - _group_name_desc: 路由组描述（可选），映射到数据库的 remark 字段
- *                        示例：_group_name_desc => '管理员管理模块的菜单和接口权限'
+ *                        示例：_group_name_desc => '管理员管理模块的菜单和操作权限'
  *
  * 3. 菜单专用字段（type=1）
  *    - _path           : 菜单路径（可选），前端路由路径
@@ -49,12 +49,12 @@
  *     Route::get('list', 'list')->name('SystemAdminList')->option([
  *         '_alias' => '列表',
  *         '_desc' => '管理员列表',
- *         '_type' => 'api',  // 或 3
+ *         '_type' => 'menu',
  *     ]);
  * })->option([
  *     '_group_name' => '管理员管理',
  *     '_group_code' => 'SystemAdmin',
- *     '_group_name_desc' => '管理员管理模块的菜单和接口权限',
+ *     '_group_name_desc' => '管理员管理模块的菜单和操作权限',
  *     '_parent' => 'SystemPermissionManagement',
  *     '_icon' => 'lucide:users',
  *     '_path' => '/admin',
@@ -63,7 +63,7 @@
  * ```
  *
  * 注意事项：
- * 1. type=2（按钮）和 type=3（接口）时，_path _icon、_component、_redirect 字段不会被设置，使用数据库默认值（NULL）
+ * 1. type=2（按钮）时，_path _icon、_component、_redirect 字段不会被设置，使用数据库默认值（NULL）
  * 2. _group_code 和 _group_name 用于自动创建路由组菜单，路由组的子路由会自动挂在该菜单下
  * 3. 子路由的 option 优先级高于父级，避免父级 option 覆盖子级 option
  */
@@ -152,6 +152,23 @@ return [
             'remark' => null,
         ],
         [
+            // 隐藏页面路由：供商品列表新增/编辑跳转使用，不在侧边栏显示。
+            'name' => '商品编辑',
+            'code' => 'SystemGoodsEdit',
+            'type' => 1,
+            'path' => '/goods/edit',
+            'icon' => null,
+            'component' => '/goods/goods/goods-edit',
+            'redirect' => null,
+            'sort' => 0,
+            'status' => 1,
+            'is_show' => 0,
+            'affix_tab' => 0,
+            'no_basic_layout' => 0,
+            'remark' => '商品新增/编辑页面',
+            'parent' => 'SystemGoodsList',
+        ],
+        [
             'name' => '订单管理',
             'code' => 'SystemOrderManagement',
             'type' => 1,
@@ -227,6 +244,21 @@ return [
                     'remark' => null,
                 ],
                 [
+                    'name' => '素材管理',
+                    'code' => 'SystemUploadAssetManagement',
+                    'type' => 1,
+                    'path' => '/system/upload-asset-management',
+                    'icon' => 'lucide:images',
+                    'component' => null,
+                    'redirect' => '/upload/asset',
+                    'sort' => 5,
+                    'status' => 1,
+                    'is_show' => 1,
+                    'affix_tab' => 0,
+                    'no_basic_layout' => 0,
+                    'remark' => null,
+                ],
+                [
                     'name' => '短信配置',
                     'code' => 'SmsConfig',
                     'type' => 1,
@@ -240,24 +272,23 @@ return [
                     'affix_tab' => 0,
                     'no_basic_layout' => 0,
                     'remark' => '服务商 / 签名 / 模板 / 场景绑定 / 频控设置',
+                ],
+                [
+                    'name' => '物流管理',
+                    'code' => 'SystemLogistics',
+                    'type' => 1,
+                    'path' => '/logistics',
+                    'icon' => 'lucide:truck',
+                    'component' => null,
+                    'redirect' => '/logistics/platform',
+                    'sort' => 20,
+                    'status' => 1,
+                    'is_show' => 1,
+                    'affix_tab' => 0,
+                    'no_basic_layout' => 0,
+                    'remark' => '物流平台与公司目录',
                 ]
             ]
-        ],
-        [
-            'name' => '商品编辑',
-            'code' => 'SystemGoodsEdit',
-            'type' => 1,
-            'path' => '/goods/edit',
-            'icon' => null,
-            'component' => '/goods/goods/goods-edit',
-            'redirect' => null,
-            'sort' => 0,
-            'status' => 1,
-            'is_show' => 0,
-            'affix_tab' => 0,
-            'no_basic_layout' => 0,
-            'remark' => '商品新增/编辑页面',
-            'parent' => 'SystemGoodsList',
         ],
         [
             'name' => '关于',
@@ -267,7 +298,7 @@ return [
             'icon' => 'lucide:copyright',
             'component' => '/_core/about/index',
             'redirect' => null,
-            'sort' => 0,
+            'sort' => 9999,
             'status' => 1,
             'is_show' => 1,
             'affix_tab' => 0,

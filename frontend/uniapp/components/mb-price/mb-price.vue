@@ -8,6 +8,7 @@
 
 <script setup>
 import { computed } from 'vue'
+import { splitPrice } from '@/utils/price'
 
 const props = defineProps({
   value: { type: [Number, String], default: 0 },
@@ -16,16 +17,13 @@ const props = defineProps({
   showDecimal: { type: Boolean, default: true },
 })
 
+const priceParts = computed(() => splitPrice(props.value))
 const integer = computed(() => {
-  const num = Number(props.value)
-  if (Number.isNaN(num)) return '0'
-  return Math.floor(num).toLocaleString('zh-CN')
+  return priceParts.value.integer
 })
 
 const decimal = computed(() => {
-  const num = Number(props.value)
-  if (Number.isNaN(num)) return '00'
-  return num.toFixed(2).split('.')[1]
+  return priceParts.value.decimal
 })
 </script>
 

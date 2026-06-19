@@ -5,11 +5,10 @@ declare(strict_types=1);
 namespace app\controller\admin\sms;
 
 use app\service\admin\sms\SmsConfigService;
-use app\validate\admin\sms\SmsConfigValidate;
 use mall_base\base\BaseController;
 
 /**
- * 短信全局频控配置控制器(单行)
+ * 短信全局频控配置控制器.
  *
  * @extends BaseController<SmsConfigService>
  */
@@ -25,8 +24,7 @@ class ConfigController extends BaseController
 
     public function save()
     {
-        $data = $this->request->param(['code_ttl', 'rate_mobile_daily', 'rate_ip_minute']);
-        $this->validate($data, SmsConfigValidate::class . '.save');
+        $data = $this->request->param();
         $this->service()->save($data);
         return $this->success(null, '保存成功');
     }

@@ -4,6 +4,7 @@ const AUTH_PAGES = [
   '/pages-sub/order/confirm',
   '/pages-sub/order/detail',
   '/pages-sub/order/pay-result',
+  '/pages-sub/logistics/detail',
   '/pages-sub/address/list',
   '/pages-sub/address/edit',
   '/pages-sub/user/edit-profile',

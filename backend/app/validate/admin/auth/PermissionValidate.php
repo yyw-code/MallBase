@@ -19,8 +19,8 @@ class PermissionValidate extends Validate
     protected $rule = [
         'parent_id|父级ID' => 'number|egt:0',
         'name|权限名称' => 'require|max:50',
-        'code|权限编码' => 'require|alphaNum|max:50|min:2',
-        'type|权限类型' => 'in:1,2,3',
+        'code|权限编码' => 'require|regex:/^[A-Za-z0-9:]+$/|max:50|min:2',
+        'type|权限类型' => 'in:1,2',
         'path|路径' => 'max:255',
         'icon|图标' => 'max:100',
         'component|组件' => 'max:255',
@@ -38,5 +38,9 @@ class PermissionValidate extends Validate
     protected $scene = [
         'create' => ['parent_id', 'name', 'code', 'type', 'path', 'icon', 'component', 'sort', 'status', 'is_show', 'remark'],
         'update' => ['parent_id', 'name', 'code', 'type', 'path', 'icon', 'component', 'sort', 'status', 'is_show', 'remark'],
+    ];
+
+    protected $message = [
+        'code.regex' => '权限编码只能包含字母、数字和冒号',
     ];
 }

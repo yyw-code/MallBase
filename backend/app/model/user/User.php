@@ -33,22 +33,6 @@ class User extends BaseModel
     }
 
     /**
-     * 自动追加头像完整URL
-     */
-    protected array $append = ['avatar_full_url'];
-
-    public function getAvatarFullUrlAttr($value, $data): string
-    {
-        if (empty($data['avatar'])) {
-            return '';
-        }
-        if (strpos($data['avatar'], 'http') === 0) {
-            return $data['avatar'];
-        }
-        return buildUploadUrl((string) $data['avatar']);
-    }
-
-    /**
      * 用户分组关联（多对多）
      */
     public function userGroups()

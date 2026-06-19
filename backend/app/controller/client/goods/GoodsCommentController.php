@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace app\controller\client\goods;
 
 use app\service\client\goods\ClientGoodsCommentService;
+use app\validate\client\goods\GoodsCommentValidate;
 use mall_base\base\BaseController;
 
 /**
@@ -30,5 +31,25 @@ class GoodsCommentController extends BaseController
         $result = $this->service()->listByGoods($goodsId, $page, $limit);
 
         return $this->success($result, '获取成功');
+    }
+
+    /**
+     * 发布商品评价
+     */
+    public function create()
+    {
+        $userId = (int) ($this->request->user_id ?? 0);
+        $data = $this->request->param([
+            'order_item_id',
+            'rating',
+            'content',
+            'images',
+            'is_anonymous',
+        ]);
+        $this->validate($data, GoodsCommentValidate::class . '.create');
+
+        $id = $this->service()->create($userId, $data);
+
+        return $this->success(['id' => $id], '评价发布成功');
     }
 }

@@ -1,20 +1,11 @@
+import type { SettingApi } from '#/api/setting';
+
 import { requestClient } from '#/api/request';
 
 export namespace SmsConfigApi {
-  export interface ConfigItem {
-    id: number;
-    code_ttl: number;
-    rate_mobile_daily: number;
-    rate_ip_minute: number;
-    create_time?: string;
-    update_time?: string;
-  }
+  export type ConfigItem = SettingApi.ConfigResponse;
 
-  export interface SaveParams {
-    code_ttl: number;
-    rate_mobile_daily: number;
-    rate_ip_minute: number;
-  }
+  export type SaveParams = SettingApi.SaveConfigParams;
 }
 
 export async function getSmsConfigApi() {

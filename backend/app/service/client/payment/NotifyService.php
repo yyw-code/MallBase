@@ -9,6 +9,7 @@ use app\model\order\Order;
 use app\model\order\PaymentLog;
 use app\service\admin\order\RefundOrderAdminService;
 use app\service\client\order\OrderService;
+use EasyWeChat\Kernel\Message as EasyWechatMessage;
 use EasyWeChat\Pay\Application as PayApplication;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
@@ -70,6 +71,9 @@ class NotifyService extends BaseService
         try {
             $app = $this->factory->build();
         } catch (BusinessException $e) {
+            Logger::instance()
+                ->withData(['error' => $e->getMessage()])
+                ->critical('微信支付回调配置缺失');
             $this->fireAlert(self::EVENT_VERIFY_FAILED, ['reason' => 'config_missing', 'message' => $e->getMessage()]);
             return $this->respond(500, 'FAIL', '支付配置缺失');
         }
@@ -97,7 +101,7 @@ class NotifyService extends BaseService
             return $this->respond(500, 'FAIL', '报文解密失败');
         }
 
-        $attributes = $message->getOriginalAttributes() ?: [];
+        $attributes = $this->decryptedAttributes($message);
         // 解密后明文字段
         $outTradeNo    = (string) ($attributes['out_trade_no']    ?? '');
         $transactionId = (string) ($attributes['transaction_id']  ?? '');
@@ -105,6 +109,16 @@ class NotifyService extends BaseService
         $payerOpenid   = (string) ($attributes['payer']['openid'] ?? '');
         $amountTotal   = (int)    ($attributes['amount']['total'] ?? 0);
         $successTime   = (string) ($attributes['success_time']    ?? '');
+
+        Logger::instance()
+            ->withData([
+                'out_trade_no'   => $outTradeNo,
+                'transaction_id' => $transactionId,
+                'trade_state'    => $tradeState,
+                'amount_total'   => $amountTotal,
+                'success_time'   => $successTime,
+            ])
+            ->info('微信支付回调报文已解密');
 
         // Step 3: Redis nonce 防重放
         $nonce = $this->headerValue($psrRequest, 'Wechatpay-Nonce');
@@ -121,6 +135,13 @@ class NotifyService extends BaseService
         }
 
         if ($outTradeNo === '') {
+            Logger::instance()
+                ->withData([
+                    'transaction_id' => $transactionId,
+                    'trade_state'    => $tradeState,
+                    'amount_total'   => $amountTotal,
+                ])
+                ->critical('微信支付回调缺少 out_trade_no');
             return $this->respond(500, 'FAIL', 'out_trade_no 缺失');
         }
 
@@ -180,11 +201,10 @@ class NotifyService extends BaseService
                     $paidLog->paid_at       = $successTime !== '' ? date('Y-m-d H:i:s', strtotime($successTime)) : date('Y-m-d H:i:s');
                     $paidLog->save();
                 } catch (Throwable $e) {
-                    // 唯一索引冲突 = 已处理过的回调，直接放行
-                    if ($this->isDuplicateKey($e)) {
-                        return;
+                    // 唯一索引冲突 = 已处理过的回调，仍继续幂等确认订单状态
+                    if (!$this->isDuplicateKey($e)) {
+                        throw $e;
                     }
-                    throw $e;
                 }
 
                 // 状态机转 PAID（OrderStatusMachine 内部对「已 PAID 重复流转」是幂等的）
@@ -225,6 +245,9 @@ class NotifyService extends BaseService
         try {
             $app = $this->factory->build();
         } catch (BusinessException $e) {
+            Logger::instance()
+                ->withData(['error' => $e->getMessage()])
+                ->critical('微信退款回调配置缺失');
             $this->fireAlert(self::EVENT_VERIFY_FAILED, ['reason' => 'config_missing', 'message' => $e->getMessage()]);
             return $this->respond(500, 'FAIL', '支付配置缺失');
         }
@@ -244,11 +267,20 @@ class NotifyService extends BaseService
             return $this->respond(500, 'FAIL', '报文解密失败');
         }
 
-        $attributes = $message->getOriginalAttributes() ?: [];
+        $attributes = $this->decryptedAttributes($message);
         $outRefundNo = (string) ($attributes['out_refund_no'] ?? '');
         $refundStatus = (string) ($attributes['refund_status'] ?? $attributes['status'] ?? '');
         $refundAmount = (int) ($attributes['amount']['refund'] ?? $attributes['amount']['payer_refund'] ?? 0);
         $successTime = (string) ($attributes['success_time'] ?? '');
+
+        Logger::instance()
+            ->withData([
+                'out_refund_no' => $outRefundNo,
+                'refund_status' => $refundStatus,
+                'refund_amount' => $refundAmount,
+                'success_time'  => $successTime,
+            ])
+            ->info('微信退款回调报文已解密');
 
         $nonce = $this->headerValue($psrRequest, 'Wechatpay-Nonce');
         if ($nonce !== '' && !$this->markNonce($nonce)) {
@@ -264,6 +296,12 @@ class NotifyService extends BaseService
         }
 
         if ($outRefundNo === '') {
+            Logger::instance()
+                ->withData([
+                    'refund_status' => $refundStatus,
+                    'refund_amount' => $refundAmount,
+                ])
+                ->critical('微信退款回调缺少 out_refund_no');
             return $this->respond(500, 'FAIL', 'out_refund_no 缺失');
         }
 
@@ -282,7 +320,13 @@ class NotifyService extends BaseService
         } catch (Throwable $e) {
             Logger::instance()->critical('微信退款回调落库失败', [
                 'out_refund_no' => $outRefundNo,
+                'refund_status' => $refundStatus,
+                'refund_amount' => $refundAmount,
+                'success_time'  => $successTime,
+                'exception'     => get_class($e),
                 'error'         => $e->getMessage(),
+                'file'          => $e->getFile(),
+                'line'          => $e->getLine(),
             ]);
             return $this->respond(500, 'FAIL', '处理异常');
         }
@@ -356,6 +400,17 @@ class NotifyService extends BaseService
     {
         $value = $request->getHeaderLine($name);
         return $value;
+    }
+
+    /**
+     * EasyWeChat Pay\Message::getOriginalAttributes() 返回微信 V3 外层事件包
+     * （resource/ciphertext），业务字段必须从 SDK 解密后的 attributes 读取。
+     *
+     * @return array<string, mixed>
+     */
+    private function decryptedAttributes(EasyWechatMessage $message): array
+    {
+        return $message->toArray();
     }
 
     /**

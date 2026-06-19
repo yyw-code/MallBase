@@ -1,4 +1,5 @@
-import { post, uploadFile } from '@/api/request'
+import { post } from '@/api/request'
+import { uploadWechatAvatar } from '@/api/upload'
 
 export const sendSmsCode = (mobile, scene = 'login') =>
   post('/client/api/user/auth/sms/send', { mobile, scene })
@@ -15,33 +16,43 @@ export const loginByUsername = (username, password) =>
 export const register = (mobile, password, nickname) =>
   post('/client/api/user/auth/register', { mobile, password, nickname })
 
-export const wechatLogin = (code) =>
-  post('/client/api/user/auth/wechat', { code })
+export const wechatLogin = (code) => post('/client/api/user/auth/wechat', { code })
 
 export const wechatBindMobile = (bindToken, mobile, code, profile = {}) =>
-  post('/client/api/user/auth/wechat/bindMobile', { bind_token: bindToken, mobile, code, ...profile })
+  post('/client/api/user/auth/wechat/bindMobile', {
+    bind_token: bindToken,
+    mobile,
+    code,
+    ...profile
+  })
 
 export const wechatBindByPhoneCode = (bindToken, phoneCode, profile = {}) =>
   post('/client/api/user/auth/wechat/bindMobileByPhoneCode', {
     bind_token: bindToken,
     phone_code: phoneCode,
-    ...profile,
+    ...profile
   })
 
 export const wechatBindUserInfo = (bindToken, profile = {}) =>
-  post('/client/api/user/auth/wechat/bindUserInfo', { bind_token: bindToken, ...profile })
+  post('/client/api/user/auth/wechat/bindUserInfo', {
+    bind_token: bindToken,
+    ...profile
+  })
 
 export const uploadWechatBindAvatar = (bindToken, filePath) =>
-  uploadFile('/client/api/upload/wechat-avatar', filePath, 'file', { bind_token: bindToken })
+  uploadWechatAvatar(bindToken, filePath)
 
-export const wechatOfficialLogin = (code) =>
-  post('/client/api/user/auth/wechat/official', { code })
+export const wechatOfficialLogin = (code) => post('/client/api/user/auth/wechat/official', { code })
 
 export const getWechatOfficialOauthUrl = (redirectUri, state = 'login') =>
   post('/client/api/user/auth/wechat/official/oauthUrl', {
     redirect_uri: redirectUri,
-    state,
+    state
   })
 
 export const wechatOfficialBindMobile = (bindToken, mobile, code) =>
-  post('/client/api/user/auth/wechat/official/bindMobile', { bind_token: bindToken, mobile, code })
+  post('/client/api/user/auth/wechat/official/bindMobile', {
+    bind_token: bindToken,
+    mobile,
+    code
+  })

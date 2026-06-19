@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace app\controller\client;
 
 use app\service\client\ConfigService;
+use app\service\UploadService;
 use mall_base\base\BaseController;
 
 /**
@@ -57,5 +58,15 @@ class ConfigController extends BaseController
     {
         $data = $this->service()->getRechargeMethods();
         return $this->success($data, '获取成功');
+    }
+
+    /**
+     * 获取客户端上传配置（仅返回安全展示字段）
+     * GET /client/api/setting/uploadConfig?type=image
+     */
+    public function uploadConfig()
+    {
+        $type = (string) $this->request->param('type', 'image');
+        return $this->success(app()->make(UploadService::class)->getClientUploadConfig($type), '获取成功');
     }
 }

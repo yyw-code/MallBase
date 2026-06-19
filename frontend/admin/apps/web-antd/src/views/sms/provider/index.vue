@@ -7,7 +7,7 @@ import { useAccess } from '@vben/access';
 
 import { message } from 'ant-design-vue';
 
-import { isPnvsDriver, SMS_DRIVER } from '#/api/sms/constants';
+import { SMS_DRIVER } from '#/api/sms/constants';
 import {
   createSmsProviderApi,
   deleteSmsProviderApi,
@@ -22,14 +22,7 @@ defineOptions({ name: 'SmsProvider' });
 
 const { hasAccessByCodes } = useAccess();
 
-const driverOptions = [
-  { label: '阿里云短信', value: SMS_DRIVER.ALIYUN },
-  { label: '阿里云短信认证(PNVS)', value: SMS_DRIVER.ALIYUN_PNVS },
-  { label: '腾讯云短信', value: SMS_DRIVER.TENCENT },
-  { label: '模拟（开发用）', value: SMS_DRIVER.MOCK },
-];
-
-const isPnvs = computed(() => isPnvsDriver(formData.value.driver));
+const driverOptions = [{ label: '阿里云短信', value: SMS_DRIVER.ALIYUN }];
 
 const searchParams = ref<SmsProviderApi.ListParams>({
   keyword: '',
@@ -66,7 +59,6 @@ const handleCreate = () => {
     access_key_id: '',
     access_key_secret: '',
     region: 'cn-hangzhou',
-    scheme_name: '',
     is_default: 0,
     status: 1,
     remark: '',
@@ -112,7 +104,12 @@ const columns = [
   { title: 'ID', dataIndex: 'id', width: 80 },
   { title: '名称', dataIndex: 'name', width: 160 },
   { title: '驱动', dataIndex: 'driver', width: 120 },
-  { title: 'AccessKeyId', dataIndex: 'access_key_id', width: 220, ellipsis: true },
+  {
+    title: 'AccessKeyId',
+    dataIndex: 'access_key_id',
+    width: 220,
+    ellipsis: true,
+  },
   { title: '区域', dataIndex: 'region', width: 120 },
   { title: '默认', dataIndex: 'is_default', width: 80 },
   { title: '状态', dataIndex: 'status', width: 80 },
@@ -128,127 +125,139 @@ if (hasAccessByCodes(['SmsProviderList'])) {
 
 <template>
   <div class="p-4">
-    <div class="mb-4">
-      <a-button
-        type="primary"
-        @click="handleCreate"
-        v-access:code="'SmsProviderCreate'"
-      >
-        新增服务商
-      </a-button>
-      <a-button class="ml-2" @click="refresh" v-access:code="'SmsProviderList'">
-        刷新
-      </a-button>
-    </div>
-
-    <a-form layout="inline" class="mb-4" v-access:code="'SmsProviderList'">
-      <a-form-item label="关键词">
-        <a-input
-          v-model:value="searchParams.keyword"
-          placeholder="服务商名称"
-          allow-clear
-          style="width: 200px"
-        />
-      </a-form-item>
-      <a-form-item label="驱动">
-        <a-select
-          v-model:value="searchParams.driver"
-          placeholder="全部"
-          allow-clear
-          :options="driverOptions"
-          style="width: 160px"
-        />
-      </a-form-item>
-      <a-form-item label="状态">
-        <a-select
-          v-model:value="searchParams.status"
-          placeholder="全部"
-          allow-clear
-          style="width: 120px"
-        >
-          <a-select-option :value="1">启用</a-select-option>
-          <a-select-option :value="0">禁用</a-select-option>
-        </a-select>
-      </a-form-item>
-      <a-form-item>
+    <div class="mb-3 flex items-center justify-between gap-4">
+      <h2 class="m-0 text-lg font-semibold">短信服务商</h2>
+      <div class="flex flex-wrap justify-end gap-2">
         <a-button
           type="primary"
-          @click="
-            () => {
-              pagination.current = 1;
-              loadData(searchParams);
-            }
-          "
+          @click="handleCreate"
+          v-access:code="'SmsProviderCreate'"
         >
-          搜索
+          新增服务商
         </a-button>
-        <a-button class="ml-2" @click="resetSearch">重置</a-button>
-      </a-form-item>
-    </a-form>
+        <a-button @click="refresh" v-access:code="'SmsProviderList'">
+          刷新
+        </a-button>
+      </div>
+    </div>
 
-    <a-table
-      :columns="columns"
-      :data-source="tableData"
-      :loading="loading"
-      :pagination="pagination"
-      :scroll="{ x: 1300 }"
-      row-key="id"
-      @change="
-        (newPagination) => {
-          pagination.current = newPagination.current;
-          pagination.pageSize = newPagination.pageSize;
-          loadData(searchParams);
-        }
-      "
-      v-access:code="'SmsProviderList'"
-    >
-      <template #bodyCell="{ column, record }">
-        <template v-if="column.dataIndex === 'driver'">
-          <a-tag color="blue">{{ driverLabel(record.driver) }}</a-tag>
-        </template>
-
-        <template v-if="column.dataIndex === 'is_default'">
-          <a-tag v-if="record.is_default === 1" color="green">默认</a-tag>
-          <span v-else>-</span>
-        </template>
-
-        <template v-if="column.dataIndex === 'status'">
-          <a-tag :color="record.status === 1 ? 'green' : 'default'">
-            {{ record.status === 1 ? '启用' : '禁用' }}
-          </a-tag>
-        </template>
-
-        <template v-if="column.key === 'action'">
-          <a-space>
+    <div class="mb-3 rounded-lg border bg-[hsl(var(--card))] p-4">
+      <a-form
+        class="grid grid-cols-1 gap-x-4 gap-y-3 md:grid-cols-3 xl:grid-cols-6"
+        v-access:code="'SmsProviderList'"
+      >
+        <a-form-item label="关键词" class="mb-0">
+          <a-input
+            v-model:value="searchParams.keyword"
+            placeholder="服务商名称"
+            allow-clear
+            class="w-full"
+          />
+        </a-form-item>
+        <a-form-item label="驱动" class="mb-0">
+          <a-select
+            v-model:value="searchParams.driver"
+            placeholder="全部"
+            allow-clear
+            :options="driverOptions"
+            class="w-full"
+          />
+        </a-form-item>
+        <a-form-item label="状态" class="mb-0">
+          <a-select
+            v-model:value="searchParams.status"
+            placeholder="全部"
+            allow-clear
+            class="w-full"
+          >
+            <a-select-option :value="1"> 启用 </a-select-option>
+            <a-select-option :value="0"> 禁用 </a-select-option>
+          </a-select>
+        </a-form-item>
+        <a-form-item class="mb-0 md:col-span-3 xl:col-span-6">
+          <div class="flex justify-end gap-2">
             <a-button
-              type="link"
-              size="small"
-              @click="handleTest(record)"
-              v-access:code="'SmsProviderTest'"
+              type="primary"
+              @click="
+                () => {
+                  pagination.current = 1;
+                  loadData(searchParams);
+                }
+              "
             >
-              测试
+              搜索
             </a-button>
-            <a-button
-              type="link"
-              size="small"
-              @click="handleEdit(record)"
-              v-access:code="'SmsProviderUpdate'"
-            >
-              编辑
-            </a-button>
-            <a-button
-              type="link"
-              danger
-              size="small"
-              @click="handleDelete(record, 'name')"
-              v-access:code="'SmsProviderDelete'"
-            >
-              删除
-            </a-button>
-          </a-space>
+            <a-button @click="resetSearch">重置</a-button>
+          </div>
+        </a-form-item>
+      </a-form>
+    </div>
+
+    <div class="overflow-hidden rounded-lg border bg-[hsl(var(--card))]">
+      <a-table
+        :columns="columns"
+        :data-source="tableData"
+        :loading="loading"
+        :pagination="pagination"
+        :scroll="{ x: 1300 }"
+        row-key="id"
+        @change="
+          (newPagination) => {
+            pagination.current = newPagination.current;
+            pagination.pageSize = newPagination.pageSize;
+            loadData(searchParams);
+          }
+        "
+        v-access:code="'SmsProviderList'"
+      >
+        <template #bodyCell="{ column, record }">
+          <template v-if="column.dataIndex === 'driver'">
+            <a-tag color="blue">{{ driverLabel(record.driver) }}</a-tag>
+          </template>
+
+          <template v-if="column.dataIndex === 'is_default'">
+            <a-tag v-if="record.is_default === 1" color="green">默认</a-tag>
+            <span v-else>-</span>
+          </template>
+
+          <template v-if="column.dataIndex === 'status'">
+            <a-tag :color="record.status === 1 ? 'green' : 'default'">
+              {{ record.status === 1 ? '启用' : '禁用' }}
+            </a-tag>
+          </template>
+
+          <template v-if="column.key === 'action'">
+            <a-space>
+              <a-button
+                type="link"
+                size="small"
+                @click="handleTest(record)"
+                v-access:code="'SmsProviderTest'"
+              >
+                测试
+              </a-button>
+              <a-button
+                type="link"
+                size="small"
+                @click="handleEdit(record)"
+                v-access:code="'SmsProviderUpdate'"
+              >
+                编辑
+              </a-button>
+              <a-button
+                type="link"
+                danger
+                size="small"
+                @click="handleDelete(record, 'name')"
+                v-access:code="'SmsProviderDelete'"
+              >
+                删除
+              </a-button>
+            </a-space>
+          </template>
         </template>
-      </template>
-    </a-table>
+      </a-table>
+    </div>
 
     <a-modal
       v-model:open="modalVisible"
@@ -267,7 +276,10 @@ if (hasAccessByCodes(['SmsProviderList'])) {
           name="name"
           :rules="[{ required: true, message: '请输入名称' }]"
         >
-          <a-input v-model:value="formData.name" placeholder="如：阿里云短信-生产" />
+          <a-input
+            v-model:value="formData.name"
+            placeholder="如：阿里云短信-生产"
+          />
         </a-form-item>
         <a-form-item
           label="驱动"
@@ -281,7 +293,10 @@ if (hasAccessByCodes(['SmsProviderList'])) {
           />
         </a-form-item>
         <a-form-item label="AccessKeyId" name="access_key_id">
-          <a-input v-model:value="formData.access_key_id" placeholder="LTAI..." />
+          <a-input
+            v-model:value="formData.access_key_id"
+            placeholder="LTAI..."
+          />
         </a-form-item>
         <a-form-item label="AccessKeySecret">
           <a-input-password
@@ -296,9 +311,6 @@ if (hasAccessByCodes(['SmsProviderList'])) {
         </a-form-item>
         <a-form-item label="区域" name="region">
           <a-input v-model:value="formData.region" placeholder="cn-hangzhou" />
-        </a-form-item>
-        <a-form-item v-if="isPnvs" label="认证方案" name="scheme_name">
-          <a-input v-model:value="formData.scheme_name" placeholder="可选，PNVS 控制台创建的方案名称" />
         </a-form-item>
         <a-form-item label="设为默认">
           <a-radio-group v-model:value="formData.is_default">

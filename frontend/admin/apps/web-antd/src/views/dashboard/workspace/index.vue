@@ -1,23 +1,12 @@
 <script lang="ts" setup>
-import type {
-  WorkbenchProjectItem,
-  WorkbenchQuickNavItem,
-  WorkbenchTodoItem,
-  WorkbenchTrendItem,
-} from '@vben/common-ui';
+import type { WorkspaceApi } from '#/api/workspace';
 
-import { computed, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
 import { useAccess } from '@vben/access';
-import {
-  AnalysisChartCard,
-  WorkbenchHeader,
-  WorkbenchProject,
-  WorkbenchQuickNav,
-  WorkbenchTodo,
-  WorkbenchTrends,
-} from '@vben/common-ui';
+import { WorkbenchHeader } from '@vben/common-ui';
+import { IconifyIcon } from '@vben/icons';
 import { preferences } from '@vben/preferences';
 import { useUserStore } from '@vben/stores';
 import { openWindow } from '@vben/utils';
@@ -28,206 +17,114 @@ import {
   getPublicDemoResetStatusApi,
   resetDemoDataApi,
 } from '#/api/demo/reset';
+import {
+  getWorkspaceMenuOptionsApi,
+  getWorkspaceShortcutsApi,
+  getWorkspaceTodoLogisticsConfigApi,
+  getWorkspaceTodoPendingShipmentApi,
+  getWorkspaceTodoRefundPendingApi,
+  getWorkspaceTodoSmsProviderConfigApi,
+  getWorkspaceTodoStockWarningApi,
+  updateWorkspaceShortcutsApi,
+} from '#/api/workspace';
+import { useAccessStore } from '#/modules/access';
 
-import AnalyticsVisitsSource from '../analytics/analytics-visits-source.vue';
+const MAX_SHORTCUTS = 8;
 
 const userStore = useUserStore();
+const accessStore = useAccessStore();
 const { hasAccessByCodes } = useAccess();
+const router = useRouter();
+
+const loading = ref(false);
+const saving = ref(false);
 const resetting = ref(false);
+const shortcutModalOpen = ref(false);
+const hasTodoAccess = ref(false);
+const hasShortcutAccess = ref(false);
+const hasMenuOptionsAccess = ref(false);
+const hasShortcutUpdateAccess = ref(false);
+const todos = ref<WorkspaceApi.Todo[]>([]);
+const shortcuts = ref<WorkspaceApi.Shortcut[]>([]);
+const menuOptions = ref<WorkspaceApi.Shortcut[]>([]);
+const shortcutDraftPaths = ref<string[]>([]);
+
 const canResetDemo = computed(() =>
   hasAccessByCodes(['SystemDemoResetExecute']),
 );
+const pendingTodoCount = computed(() =>
+  todos.value.reduce((total, item) => total + Number(item.count || 0), 0),
+);
+const canEditShortcuts = computed(
+  () =>
+    hasShortcutAccess.value &&
+    hasMenuOptionsAccess.value &&
+    hasShortcutUpdateAccess.value,
+);
+const hasWorkspaceBlocks = computed(
+  () => hasTodoAccess.value || hasShortcutAccess.value,
+);
+const workspaceStats = computed(() => {
+  const stats: Array<{ label: string; value: number | string }> = [];
 
-// 这是一个示例数据，实际项目中需要根据实际情况进行调整
-// url 也可以是内部路由，在 navTo 方法中识别处理，进行内部跳转
-// 例如：url: /dashboard/workspace
-const projectItems: WorkbenchProjectItem[] = [
-  {
-    color: '',
-    content: '不要等待机会，而要创造机会。',
-    date: '2021-04-01',
-    group: '开源组',
-    icon: 'carbon:logo-github',
-    title: 'Github',
-    url: 'https://github.com',
-  },
-  {
-    color: '#3fb27f',
-    content: '现在的你决定将来的你。',
-    date: '2021-04-01',
-    group: '算法组',
-    icon: 'ion:logo-vue',
-    title: 'Vue',
-    url: 'https://vuejs.org',
-  },
-  {
-    color: '#e18525',
-    content: '没有什么才能比努力更重要。',
-    date: '2021-04-01',
-    group: '上班摸鱼',
-    icon: 'ion:logo-html5',
-    title: 'Html5',
-    url: 'https://developer.mozilla.org/zh-CN/docs/Web/HTML',
-  },
-  {
-    color: '#bf0c2c',
-    content: '热情和欲望可以突破一切难关。',
-    date: '2021-04-01',
-    group: 'UI',
-    icon: 'ion:logo-angular',
-    title: 'Angular',
-    url: 'https://angular.io',
-  },
-  {
-    color: '#00d8ff',
-    content: '健康的身体是实现目标的基石。',
-    date: '2021-04-01',
-    group: '技术牛',
-    icon: 'bx:bxl-react',
-    title: 'React',
-    url: 'https://reactjs.org',
-  },
-  {
-    color: '#EBD94E',
-    content: '路是走出来的，而不是空想出来的。',
-    date: '2021-04-01',
-    group: '架构组',
-    icon: 'ion:logo-javascript',
-    title: 'Js',
-    url: 'https://developer.mozilla.org/zh-CN/docs/Web/JavaScript',
-  },
-];
+  if (hasTodoAccess.value) {
+    stats.push({
+      label: '待办',
+      value: `${pendingTodoCount.value} 项`,
+    });
+  }
 
-// 同样，这里的 url 也可以使用以 http 开头的外部链接
-const quickNavItems: WorkbenchQuickNavItem[] = [
-  {
-    color: '#1fdaca',
-    icon: 'ion:home-outline',
-    title: '首页',
-    url: '/',
-  },
-  {
-    color: '#bf0c2c',
-    icon: 'ion:grid-outline',
-    title: '仪表盘',
-    url: '/dashboard',
-  },
-  {
-    color: '#e18525',
-    icon: 'ion:layers-outline',
-    title: '组件',
-    url: '/demos/features/icons',
-  },
-  {
-    color: '#3fb27f',
-    icon: 'ion:settings-outline',
-    title: '系统管理',
-    url: '/demos/features/login-expired', // 这里的 URL 是示例，实际项目中需要根据实际情况进行调整
-  },
-  {
-    color: '#4daf1bc9',
-    icon: 'ion:key-outline',
-    title: '权限管理',
-    url: '/demos/access/page-control',
-  },
-  {
-    color: '#00d8ff',
-    icon: 'ion:bar-chart-outline',
-    title: '图表',
-    url: '/analytics',
-  },
-];
+  if (hasShortcutAccess.value) {
+    stats.push({
+      label: '快捷入口',
+      value: shortcuts.value.length,
+    });
+  }
 
-const todoItems = ref<WorkbenchTodoItem[]>([
-  {
-    completed: false,
-    content: `审查最近提交到Git仓库的前端代码，确保代码质量和规范。`,
-    date: '2024-07-30 11:00:00',
-    title: '审查前端代码提交',
-  },
-  {
-    completed: true,
-    content: `检查并优化系统性能，降低CPU使用率。`,
-    date: '2024-07-30 11:00:00',
-    title: '系统性能优化',
-  },
-  {
-    completed: false,
-    content: `进行系统安全检查，确保没有安全漏洞或未授权的访问。 `,
-    date: '2024-07-30 11:00:00',
-    title: '安全检查',
-  },
-  {
-    completed: false,
-    content: `更新项目中的所有npm依赖包，确保使用最新版本。`,
-    date: '2024-07-30 11:00:00',
-    title: '更新项目依赖',
-  },
-  {
-    completed: false,
-    content: `修复用户报告的页面UI显示问题，确保在不同浏览器中显示一致。 `,
-    date: '2024-07-30 11:00:00',
-    title: '修复UI显示问题',
-  },
-]);
-const trendItems: WorkbenchTrendItem[] = [
-  {
-    avatar: 'svg:avatar-1',
-    content: `在 <a>开源组</a> 创建了项目 <a>Vue</a>`,
-    date: '刚刚',
-    title: '威廉',
-  },
-  {
-    avatar: 'svg:avatar-2',
-    content: `关注了 <a>威廉</a> `,
-    date: '1个小时前',
-    title: '艾文',
-  },
-  {
-    avatar: 'svg:avatar-3',
-    content: `发布了 <a>个人动态</a> `,
-    date: '1天前',
-    title: '克里斯',
-  },
-  {
-    avatar: 'svg:avatar-4',
-    content: `发表文章 <a>如何编写一个Vite插件</a> `,
-    date: '2天前',
-    title: 'Vben',
-  },
-  {
-    avatar: 'svg:avatar-1',
-    content: `回复了 <a>杰克</a> 的问题 <a>如何进行项目优化？</a>`,
-    date: '3天前',
-    title: '皮特',
-  },
-  {
-    avatar: 'svg:avatar-2',
-    content: `关闭了问题 <a>如何运行项目</a> `,
-    date: '1周前',
-    title: '杰克',
-  },
-  {
-    avatar: 'svg:avatar-3',
-    content: `发布了 <a>个人动态</a> `,
-    date: '1周前',
-    title: '威廉',
-  },
-  {
-    avatar: 'svg:avatar-4',
-    content: `推送了代码到 <a>Github</a>`,
-    date: '2021-04-01 20:00',
-    title: '威廉',
-  },
-  {
-    avatar: 'svg:avatar-4',
-    content: `发表文章 <a>如何编写使用 Admin Vben</a> `,
-    date: '2021-03-01 20:00',
-    title: 'Vben',
-  },
-];
+  return stats;
+});
+const headerDescription = computed(() => {
+  if (hasTodoAccess.value) {
+    return `当前有 ${pendingTodoCount.value} 项待处理，建议优先处理订单、售后和库存风险。`;
+  }
 
-const router = useRouter();
+  if (hasShortcutAccess.value) {
+    return '可以通过快捷导航进入常用功能。';
+  }
+
+  return '暂无可访问的工作台模块。';
+});
+
+const menuSelectOptions = computed(() =>
+  menuOptions.value.map((item) => ({
+    label: `${item.title}（${item.path}）`,
+    value: item.path,
+  })),
+);
+
+const levelClassMap: Record<WorkspaceApi.Todo['level'], string> = {
+  danger:
+    'border-red-200 bg-red-50 text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300',
+  info: 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-300',
+  warning:
+    'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300',
+};
+
+function isPermissionDenied(error: unknown): boolean {
+  const response = (error as any)?.response;
+  const code = (error as any)?.code;
+  const errorMessage = (error as any)?.message || response?.data?.message;
+  return (
+    response?.status === 403 ||
+    response?.data?.code === 403 ||
+    code === 403 ||
+    errorMessage === '没有权限访问该接口'
+  );
+}
+
+function hasAccess(code: string): boolean {
+  return hasAccessByCodes([code]);
+}
 
 async function waitDemoResetDone() {
   for (let i = 0; i < 60; i++) {
@@ -242,22 +139,6 @@ async function waitDemoResetDone() {
   }
 
   throw new Error('演示数据恢复仍在执行，请稍后刷新后重试');
-}
-
-// 这是一个示例方法，实际项目中需要根据实际情况进行调整
-// This is a sample method, adjust according to the actual project requirements
-function navTo(nav: WorkbenchProjectItem | WorkbenchQuickNavItem) {
-  if (nav.url?.startsWith('http')) {
-    openWindow(nav.url);
-    return;
-  }
-  if (nav.url?.startsWith('/')) {
-    router.push(nav.url).catch((error) => {
-      console.error('Navigation failed:', error);
-    });
-  } else {
-    console.warn(`Unknown URL for navigation item: ${nav.title} -> ${nav.url}`);
-  }
 }
 
 function handleResetDemoData() {
@@ -284,6 +165,142 @@ function handleResetDemoData() {
     },
   });
 }
+
+async function loadWorkspaceData() {
+  loading.value = true;
+  hasTodoAccess.value = false;
+  hasShortcutAccess.value = false;
+  hasMenuOptionsAccess.value = false;
+  hasShortcutUpdateAccess.value = hasAccess('SystemWorkspaceShortcutsUpdate');
+  todos.value = [];
+  shortcuts.value = [];
+  menuOptions.value = [];
+
+  try {
+    if (hasAccess('SystemWorkspaceShortcuts')) {
+      hasShortcutAccess.value = true;
+      try {
+        shortcuts.value = await getWorkspaceShortcutsApi();
+      } catch (error) {
+        if (!isPermissionDenied(error)) {
+          console.error('加载快捷导航失败:', error);
+        }
+      }
+    }
+
+    if (hasAccess('SystemWorkspaceMenuOptions')) {
+      hasMenuOptionsAccess.value = true;
+      try {
+        menuOptions.value = await getWorkspaceMenuOptionsApi();
+      } catch (error) {
+        if (!isPermissionDenied(error)) {
+          console.error('加载菜单选项失败:', error);
+        }
+      }
+    }
+
+    const todoLoaders = [
+      {
+        code: 'SystemWorkspaceTodos',
+        request: getWorkspaceTodoPendingShipmentApi,
+      },
+      {
+        code: 'SystemWorkspaceTodos',
+        request: getWorkspaceTodoRefundPendingApi,
+      },
+      {
+        code: 'SystemWorkspaceTodos',
+        request: getWorkspaceTodoStockWarningApi,
+      },
+      {
+        code: 'SystemWorkspaceTodos',
+        request: getWorkspaceTodoLogisticsConfigApi,
+      },
+      {
+        code: 'SystemWorkspaceTodos',
+        request: getWorkspaceTodoSmsProviderConfigApi,
+      },
+    ].filter((loader) => hasAccess(loader.code));
+    hasTodoAccess.value = todoLoaders.length > 0;
+
+    const todoResults = await Promise.allSettled(
+      todoLoaders.map((loader) => loader.request()),
+    );
+
+    const mergedTodos: WorkspaceApi.Todo[] = [];
+    todoResults.forEach((result, index) => {
+      if (result.status === 'fulfilled') {
+        mergedTodos.push(...(result.value ?? []));
+        return;
+      }
+
+      const denied = isPermissionDenied(result.reason);
+      if (!denied) {
+        console.error(`加载待办项(${index})失败:`, result.reason);
+      }
+    });
+    todos.value = mergedTodos;
+  } catch (error: any) {
+    if (!isPermissionDenied(error)) {
+      message.error(error?.message || '工作台数据加载失败');
+    }
+  } finally {
+    loading.value = false;
+  }
+}
+
+function navTo(path: string, query?: Record<string, number | string>) {
+  if (path.startsWith('http')) {
+    openWindow(path);
+    return;
+  }
+
+  if (!accessStore.getMenuByPath(path)) {
+    message.warning('暂无访问权限');
+    return;
+  }
+
+  router.push({ path, query }).catch((error) => {
+    console.error('Navigation failed:', error);
+  });
+}
+
+function openShortcutModal() {
+  if (!canEditShortcuts.value) {
+    return;
+  }
+
+  shortcutDraftPaths.value = shortcuts.value.map((item) => item.path);
+  shortcutModalOpen.value = true;
+}
+
+async function saveShortcuts() {
+  if (!canEditShortcuts.value) {
+    return;
+  }
+
+  if (shortcutDraftPaths.value.length > MAX_SHORTCUTS) {
+    message.warning(`最多选择 ${MAX_SHORTCUTS} 个快捷入口`);
+    return;
+  }
+
+  saving.value = true;
+  try {
+    shortcuts.value = await updateWorkspaceShortcutsApi(
+      shortcutDraftPaths.value.map((path) => ({ path })),
+    );
+    shortcutModalOpen.value = false;
+    message.success('快捷导航已保存');
+  } catch (error: any) {
+    message.error(error?.message || '保存失败');
+  } finally {
+    saving.value = false;
+  }
+}
+
+onMounted(() => {
+  loadWorkspaceData();
+});
 </script>
 
 <template>
@@ -306,30 +323,177 @@ function handleResetDemoData() {
 
     <WorkbenchHeader
       :avatar="userStore.userInfo?.avatar || preferences.app.defaultAvatar"
+      :stats="workspaceStats"
     >
       <template #title>
         早安, {{ userStore.userInfo?.realName }}, 开始您一天的工作吧！
       </template>
-      <template #description> 今日晴，20℃ - 32℃！ </template>
+      <template #description>
+        {{ headerDescription }}
+      </template>
     </WorkbenchHeader>
 
-    <div class="mt-5 flex flex-col lg:flex-row">
-      <div class="mr-4 w-full lg:w-3/5">
-        <WorkbenchProject :items="projectItems" title="项目" @click="navTo" />
-        <WorkbenchTrends :items="trendItems" class="mt-5" title="最新动态" />
+    <a-spin :spinning="loading">
+      <div
+        class="mt-5 grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(360px,0.65fr)]"
+      >
+        <section
+          v-if="hasTodoAccess"
+          class="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))]"
+        >
+          <div
+            class="flex items-center justify-between border-b border-[hsl(var(--border))] px-5 py-4"
+          >
+            <div>
+              <h2 class="text-base font-semibold text-[hsl(var(--foreground))]">
+                待办事项
+              </h2>
+              <p class="mt-1 text-sm text-[hsl(var(--muted-foreground))]">
+                根据当前业务数据自动生成
+              </p>
+            </div>
+            <a-button size="small" @click="loadWorkspaceData">刷新</a-button>
+          </div>
+
+          <div
+            v-if="todos.length > 0"
+            class="divide-y divide-[hsl(var(--border))]"
+          >
+            <button
+              v-for="item in todos"
+              :key="item.key"
+              class="grid w-full grid-cols-[44px_minmax(0,1fr)_auto] items-center gap-4 px-5 py-5 text-left transition hover:bg-[hsl(var(--accent))]"
+              type="button"
+              @click="navTo(item.link, item.query)"
+            >
+              <span
+                class="flex h-11 w-11 items-center justify-center rounded-md border text-base font-semibold"
+                :class="levelClassMap[item.level] || levelClassMap.info"
+              >
+                {{ item.count }}
+              </span>
+              <span class="min-w-0">
+                <span
+                  class="block text-sm font-semibold text-[hsl(var(--foreground))]"
+                >
+                  {{ item.title }}
+                </span>
+                <span
+                  class="mt-1 block text-sm text-[hsl(var(--muted-foreground))]"
+                >
+                  {{ item.description }}
+                </span>
+              </span>
+              <a-button size="small" type="link">
+                {{ item.action_text }}
+              </a-button>
+            </button>
+          </div>
+
+          <div v-else class="px-5 py-12">
+            <a-empty description="暂无待处理事项" />
+          </div>
+        </section>
+
+        <section
+          v-if="hasShortcutAccess"
+          class="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))]"
+        >
+          <div
+            class="flex items-center justify-between border-b border-[hsl(var(--border))] px-5 py-4"
+          >
+            <div>
+              <h2 class="text-base font-semibold text-[hsl(var(--foreground))]">
+                我的快捷导航
+              </h2>
+              <p class="mt-1 text-sm text-[hsl(var(--muted-foreground))]">
+                从可访问菜单中选择，最多 {{ MAX_SHORTCUTS }} 个
+              </p>
+            </div>
+            <a-button
+              v-if="canEditShortcuts"
+              v-access:code="'SystemWorkspaceShortcutsUpdate'"
+              size="small"
+              type="primary"
+              @click="openShortcutModal"
+            >
+              编辑
+            </a-button>
+          </div>
+
+          <div v-if="shortcuts.length > 0" class="grid grid-cols-2 gap-3 p-5">
+            <button
+              v-for="item in shortcuts"
+              :key="item.path"
+              class="flex min-h-24 flex-col items-start justify-between rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-4 text-left transition hover:border-[hsl(var(--primary))] hover:bg-[hsl(var(--accent))]"
+              type="button"
+              @click="navTo(item.path)"
+            >
+              <IconifyIcon
+                :icon="item.icon || 'lucide:circle'"
+                class="h-6 w-6 text-[hsl(var(--primary))]"
+              />
+              <span class="mt-4 min-w-0">
+                <span
+                  class="block truncate text-sm font-semibold text-[hsl(var(--foreground))]"
+                >
+                  {{ item.title }}
+                </span>
+                <span
+                  class="mt-1 block truncate text-xs text-[hsl(var(--muted-foreground))]"
+                >
+                  {{ item.path }}
+                </span>
+              </span>
+            </button>
+          </div>
+
+          <div v-else class="px-5 py-12">
+            <a-empty description="暂无快捷入口">
+              <template #description>
+                <span>暂无快捷入口</span>
+              </template>
+              <a-button
+                v-if="canEditShortcuts"
+                v-access:code="'SystemWorkspaceShortcutsUpdate'"
+                type="primary"
+                @click="openShortcutModal"
+              >
+                设置快捷入口
+              </a-button>
+            </a-empty>
+          </div>
+        </section>
       </div>
-      <div class="w-full lg:w-2/5">
-        <WorkbenchQuickNav
-          :items="quickNavItems"
-          class="mt-5 lg:mt-0"
-          title="快捷导航"
-          @click="navTo"
-        />
-        <WorkbenchTodo :items="todoItems" class="mt-5" title="待办事项" />
-        <AnalysisChartCard class="mt-5" title="访问来源">
-          <AnalyticsVisitsSource />
-        </AnalysisChartCard>
+
+      <div
+        v-if="!hasWorkspaceBlocks && !loading"
+        class="mt-5 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-5 py-12"
+      >
+        <a-empty description="暂无可访问的工作台模块" />
       </div>
-    </div>
+    </a-spin>
+
+    <a-modal
+      v-if="canEditShortcuts"
+      v-model:open="shortcutModalOpen"
+      title="编辑快捷导航"
+      :confirm-loading="saving"
+      ok-text="保存"
+      cancel-text="取消"
+      @ok="saveShortcuts"
+    >
+      <a-select
+        v-model:value="shortcutDraftPaths"
+        mode="multiple"
+        :max-tag-count="4"
+        :options="menuSelectOptions"
+        placeholder="选择常用菜单"
+        class="w-full"
+      />
+      <p class="mt-3 text-sm text-[hsl(var(--muted-foreground))]">
+        已选择 {{ shortcutDraftPaths.length }} / {{ MAX_SHORTCUTS }} 个
+      </p>
+    </a-modal>
   </div>
 </template>

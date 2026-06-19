@@ -4,6 +4,9 @@ declare(strict_types=1);
 namespace app\service\admin\goods;
 
 use app\model\goods\GoodsBrand;
+use app\service\upload\AssetHydrator;
+use app\service\upload\AssetIdNormalizer;
+use app\service\upload\AssetService;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
 
@@ -39,7 +42,9 @@ class GoodsBrandService extends BaseService
 
         $total = $this->buildListQuery($where)->count();
 
-        $list = $list->toArray();
+        $list = app()->make(AssetHydrator::class)->hydrateFields($list->toArray(), [
+            'logo' => 'logo_full_url',
+        ]);
 
         return compact('total', 'list');
     }
@@ -55,7 +60,9 @@ class GoodsBrandService extends BaseService
             ->order('id', 'asc')
             ->select();
 
-        return $list->toArray();
+        return app()->make(AssetHydrator::class)->hydrateFields($list->toArray(), [
+            'logo' => 'logo_full_url',
+        ]);
     }
 
     /**
@@ -69,7 +76,10 @@ class GoodsBrandService extends BaseService
             throw new BusinessException('品牌不存在');
         }
 
-        return $info->toArray();
+        $rows = app()->make(AssetHydrator::class)->hydrateFields([$info->toArray()], [
+            'logo' => 'logo_full_url',
+        ]);
+        return $rows[0] ?? $info->toArray();
     }
 
     /**
@@ -77,10 +87,13 @@ class GoodsBrandService extends BaseService
      */
     public function create(array $data): int
     {
+        $data['logo'] = $this->normalizeLogoField($data['logo'] ?? '');
+
         // 校验名称唯一（事务外）
         $this->validateUniqueName($data['name']);
 
         $brand = $this->model()->create($data);
+        app()->make(AssetService::class)->syncUsage('goods_brand', (int) $brand->id, 'logo', [$data['logo']]);
 
         return $brand->id;
     }
@@ -96,12 +109,17 @@ class GoodsBrandService extends BaseService
             throw new BusinessException('品牌不存在');
         }
 
+        if (array_key_exists('logo', $data)) {
+            $data['logo'] = $this->normalizeLogoField($data['logo']);
+        }
+
         // 校验名称唯一
         if (isset($data['name'])) {
             $this->validateUniqueName($data['name'], $id);
         }
 
         $brand->save($data);
+        app()->make(AssetService::class)->syncUsage('goods_brand', $id, 'logo', [$data['logo'] ?? '']);
 
         return true;
     }
@@ -169,5 +187,15 @@ class GoodsBrandService extends BaseService
         if ($exists) {
             throw new BusinessException('品牌名称已存在');
         }
+    }
+
+    protected function normalizeLogoField(mixed $value): int|string
+    {
+        $normalized = app()->make(AssetIdNormalizer::class)->normalizeSingle($value);
+        if (is_int($normalized)) {
+            app()->make(AssetService::class)->assertUsableImageAssets([$normalized]);
+        }
+
+        return $normalized;
     }
 }

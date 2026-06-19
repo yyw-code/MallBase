@@ -23,9 +23,22 @@ class AdminOperationLogService extends BaseService
      */
     public function getList(array $where = [], int $page = 1, int $limit = 10): array
     {
-        $query = $this->model()->with(['admin']);
+        $query = $this->buildListQuery($where);
 
-        // 搜索条件
+        $total = (int) (clone $query)->count();
+        $list = $query->with(['admin'])
+            ->order('id', 'desc')
+            ->page($page, $limit)
+            ->select()
+            ->toArray();
+
+        return compact('total', 'list');
+    }
+
+    protected function buildListQuery(array $where)
+    {
+        $query = $this->model();
+
         if (!empty($where['admin_id'])) {
             $query->where('admin_id', $where['admin_id']);
         }
@@ -43,15 +56,12 @@ class AdminOperationLogService extends BaseService
         }
         if (!empty($where['time_range'])) {
             $times = explode(' - ', $where['time_range']);
-            if (count($times) == 2) {
+            if (count($times) === 2) {
                 $query->whereBetweenTime('create_time', $times[0], $times[1]);
             }
         }
 
-        return $query->order('id', 'desc')
-            ->page($page, $limit)
-            ->select()
-            ->toArray();
+        return $query;
     }
 
     /**
@@ -99,7 +109,8 @@ class AdminOperationLogService extends BaseService
             'duration' => $duration,
         ];
 
-        $log = AdminOperationLog::create($logData);
+        $log = $this->model();
+        $log->save($logData);
         return (int)$log->id;
     }
 
@@ -141,18 +152,10 @@ class AdminOperationLogService extends BaseService
      */
     public function getStatistics(array $where = []): array
     {
-        $query = $this->model();
-
-        // 搜索条件
-        if (!empty($where['start_time'])) {
-            $query->where('create_time', '>=', $where['start_time']);
-        }
-        if (!empty($where['end_time'])) {
-            $query->where('create_time', '<=', $where['end_time']);
-        }
+        $query = $this->buildStatisticsQuery($where);
 
         // 总操作次数
-        $total = $query->count();
+        $total = (int) (clone $query)->count();
 
         // 成功次数
         $successCount = (clone $query)->where('status', 200)->count();
@@ -179,5 +182,19 @@ class AdminOperationLogService extends BaseService
             'avg_duration' => round($avgDuration, 2),
             'daily_stats' => $dailyStats,
         ];
+    }
+
+    protected function buildStatisticsQuery(array $where)
+    {
+        $query = $this->model();
+
+        if (!empty($where['start_time'])) {
+            $query->where('create_time', '>=', $where['start_time']);
+        }
+        if (!empty($where['end_time'])) {
+            $query->where('create_time', '<=', $where['end_time']);
+        }
+
+        return $query;
     }
 }

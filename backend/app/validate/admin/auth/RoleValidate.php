@@ -23,7 +23,6 @@ class RoleValidate extends Validate
         'sort|排序' => 'number|between:0,9999',
         'remark|备注' => 'max:500',
         'menu_permission_ids|菜单权限ID' => 'array',
-        'api_permission_ids|接口权限ID' => 'array',
         'button_permission_ids|按钮权限ID' => 'array',
     ];
 
@@ -33,7 +32,7 @@ class RoleValidate extends Validate
      * @var array
      */
     protected $scene = [
-        'create' => ['name', 'code', 'status', 'sort', 'remark', 'menu_permission_ids', 'api_permission_ids', 'button_permission_ids'],
-        'update' => ['name', 'code', 'status', 'sort', 'remark', 'menu_permission_ids', 'api_permission_ids', 'button_permission_ids'],
+        'create' => ['name', 'code', 'status', 'sort', 'remark', 'menu_permission_ids', 'button_permission_ids'],
+        'update' => ['name', 'code', 'status', 'sort', 'remark', 'menu_permission_ids', 'button_permission_ids'],
     ];
 }

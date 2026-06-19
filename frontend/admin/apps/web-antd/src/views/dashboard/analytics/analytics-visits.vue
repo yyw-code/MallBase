@@ -1,53 +1,68 @@
 <script lang="ts" setup>
 import type { EchartsUIType } from '@vben/plugins/echarts';
 
-import { onMounted, ref } from 'vue';
+import type { AnalyticsApi } from '#/api/analytics';
+
+import { onMounted, ref, watch } from 'vue';
 
 import { EchartsUI, useEcharts } from '@vben/plugins/echarts';
 
+const props = defineProps<{
+  data?: AnalyticsApi.MonthlyOrders;
+}>();
 const chartRef = ref<EchartsUIType>();
 const { renderEcharts } = useEcharts(chartRef);
 
-onMounted(() => {
+function render() {
   renderEcharts({
     grid: {
       bottom: 0,
       containLabel: true,
       left: '1%',
       right: '1%',
-      top: '2 %',
+      top: '2%',
     },
     series: [
       {
         barMaxWidth: 80,
-        // color: '#4f69fd',
-        data: [
-          3000, 2000, 3333, 5000, 3200, 4200, 3200, 2100, 3000, 5100, 6000,
-          3200, 4800,
-        ],
+        data: props.data?.orders ?? [],
+        itemStyle: {
+          color: '#6366f1',
+        },
+        name: '支付订单',
         type: 'bar',
       },
     ],
     tooltip: {
       axisPointer: {
         lineStyle: {
-          // color: '#4f69fd',
+          color: '#6366f1',
           width: 1,
         },
       },
       trigger: 'axis',
     },
     xAxis: {
-      data: Array.from({ length: 12 }).map((_item, index) => `${index + 1}月`),
+      data: props.data?.labels ?? [],
       type: 'category',
     },
     yAxis: {
-      max: 8000,
+      minInterval: 1,
       splitNumber: 4,
       type: 'value',
     },
   });
+}
+
+onMounted(() => {
+  render();
 });
+
+watch(
+  () => props.data,
+  () => render(),
+  { deep: true },
+);
 </script>
 
 <template>

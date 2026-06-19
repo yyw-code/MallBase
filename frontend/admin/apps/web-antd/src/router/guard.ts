@@ -1,4 +1,4 @@
-import type { Router } from 'vue-router';
+import type { Router, RouteRecordRaw } from 'vue-router';
 
 import { LOGIN_PATH } from '@vben/constants';
 import { preferences } from '@vben/preferences';
@@ -11,6 +11,51 @@ import { accessRoutes, coreRouteNames } from '#/router/routes';
 import { useAuthStore } from '#/store';
 
 import { generateAccess } from './access';
+
+function normalizePath(path: string): string {
+  return path.length > 1 ? path.replace(/\/+$/, '') : path;
+}
+
+function canAccessRoute(
+  path: string,
+  name: null | string | symbol | undefined,
+  routes: RouteRecordRaw[],
+): boolean {
+  const targetPath = normalizePath(path);
+  const targetName = name ? String(name) : '';
+
+  function search(items: RouteRecordRaw[]): boolean {
+    return items.some((route) => {
+      if (targetName && String(route.name || '') === targetName) {
+        return true;
+      }
+
+      const routePath = normalizePath(String(route.path || ''));
+      if (routePath === targetPath) {
+        return true;
+      }
+      return Array.isArray(route.children) && search(route.children);
+    });
+  }
+
+  return search(routes);
+}
+
+function findFirstAccessiblePath(routes: RouteRecordRaw[]): string | undefined {
+  for (const route of routes) {
+    const routePath = String(route.path || '');
+    if (routePath.startsWith('/')) {
+      return routePath;
+    }
+
+    if (Array.isArray(route.children)) {
+      const childPath = findFirstAccessiblePath(route.children);
+      if (childPath) {
+        return childPath;
+      }
+    }
+  }
+}
 
 /**
  * 通用守卫配置
@@ -51,29 +96,6 @@ function setupAccessGuard(router: Router) {
     const accessStore = useAccessStore();
     const userStore = useUserStore();
     const authStore = useAuthStore();
-    const changePasswordPath = '/auth/change-password';
-
-    if (!accessStore.accessToken && accessStore.mustChangePassword) {
-      accessStore.setMustChangePassword(false);
-    }
-
-    if (accessStore.mustChangePassword && accessStore.accessToken) {
-      if (to.path === LOGIN_PATH) {
-        return {
-          path: changePasswordPath,
-          replace: true,
-        };
-      }
-
-      if (to.path !== changePasswordPath) {
-        return {
-          path: changePasswordPath,
-          replace: true,
-        };
-      }
-
-      return true;
-    }
 
     // 基本路由，这些路由不需要进入权限拦截
     if (coreRouteNames.includes(to.name as string)) {
@@ -124,6 +146,16 @@ function setupAccessGuard(router: Router) {
 
     // 是否已经生成过动态路由
     if (accessStore.isAccessChecked) {
+      if (!canAccessRoute(to.path, to.name, accessStore.accessRoutes)) {
+        const fallbackPath =
+          findFirstAccessiblePath(accessStore.accessRoutes) ||
+          userStore.userInfo?.homePath ||
+          preferences.app.defaultHomePath;
+
+        return normalizePath(fallbackPath) === normalizePath(to.path)
+          ? true
+          : fallbackPath;
+      }
       return true;
     }
 
@@ -170,11 +202,13 @@ function setupAccessGuard(router: Router) {
     accessStore.setAccessRoutes(accessibleRoutes);
     accessStore.setIsAccessChecked(true);
 
-    // 使用后端返回的 home_path（已在 access.ts 中设置到 preferences.app.defaultHomePath）
+    const userHomePath =
+      userStore.userInfo?.homePath || preferences.app.defaultHomePath;
     const redirectPath = (from.query.redirect ||
-      to.fullPath ||
-      userStore.userInfo?.homePath ||
-      preferences.app.defaultHomePath) as string;
+      (to.fullPath === preferences.app.defaultHomePath
+        ? userHomePath
+        : to.fullPath) ||
+      userHomePath) as string;
 
     return {
       ...router.resolve(decodeURIComponent(redirectPath)),

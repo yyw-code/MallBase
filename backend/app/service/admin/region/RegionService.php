@@ -59,16 +59,6 @@ class RegionService extends BaseService
         return $data;
     }
 
-    public function getChildren(int $parentId): array
-    {
-        return app()->make(RegionResolverService::class)->getChildren($parentId);
-    }
-
-    public function getPath(int $id): array
-    {
-        return app()->make(RegionResolverService::class)->getPath($id);
-    }
-
     public function create(array $data): int
     {
         $this->assertParentAndLevel($data);

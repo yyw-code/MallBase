@@ -6,6 +6,7 @@ namespace app\service\admin\goods;
 use app\model\goods\Goods;
 use app\model\goods\GoodsComment;
 use app\model\user\User;
+use app\service\upload\AssetHydrator;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
 
@@ -68,7 +69,11 @@ class GoodsCommentService extends BaseService
             foreach ($listArray as &$item) {
                 $item['user_nickname'] = $users[$item['user_id']] ?? '已注销用户';
                 $item['goods_name'] = $goodsList[$item['goods_id']] ?? '已删除商品';
+                $item['sku_spec_text'] = (string) ($item['sku_spec'] ?? '');
             }
+            unset($item);
+
+            $listArray = app()->make(AssetHydrator::class)->hydrateComments($listArray);
         }
 
         $list = $listArray;
@@ -99,8 +104,10 @@ class GoodsCommentService extends BaseService
         // 获取商品信息
         $goods = $this->model(Goods::class)->find($result['goods_id']);
         $result['goods_name'] = $goods ? $goods->name : '已删除商品';
+        $result['sku_spec_text'] = (string) ($result['sku_spec'] ?? '');
 
-        return $result;
+        $hydrated = app()->make(AssetHydrator::class)->hydrateComments([$result]);
+        return $hydrated[0] ?? $result;
     }
 
     /**

@@ -44,13 +44,13 @@ class CheckPermission
         $permissionCode = $this->getPermissionCode($request);
 
         if (empty($permissionCode)) {
-            // 如果没有权限标识，直接通过（可能是公共接口）
+            // 如果没有权限标识，直接通过（可能是公共接口或登录态基础接口）
             return $next($request);
         }
 
         // 检查用户是否有该权限
         if (!$this->hasPermission($adminId, $permissionCode)) {
-            throw new AuthException('没有权限访问该接口', 400);
+            throw new AuthException('没有权限访问该接口', 403);
         }
 
         return $next($request);
@@ -68,6 +68,15 @@ class CheckPermission
         $route = $request->rule();
 
         if ($route) {
+            $option = $route->getOption();
+            if (($option['_auth'] ?? true) === false) {
+                return null;
+            }
+
+            if (!empty($option['_permission'])) {
+                return (string) $option['_permission'];
+            }
+
             return $route->getName();
         }
 

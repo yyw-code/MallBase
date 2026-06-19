@@ -32,6 +32,10 @@ export namespace SettingApi {
     description?: string;
     sort: number;
     status: number;
+    permission_parent_code?: string;
+    permission_path?: string;
+    permission_component?: string;
+    permission_status?: null | number;
     create_time?: string;
     update_time?: string;
     children?: SettingGroup[];
@@ -197,6 +201,7 @@ export namespace SettingApi {
 
   /** 配置响应（动态表单页面使用） */
   export interface ConfigResponse {
+    display_type?: 'category' | 'page' | 'tab';
     group: {
       code: string;
       display_type?: 'category' | 'page' | 'tab';

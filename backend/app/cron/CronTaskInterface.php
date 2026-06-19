@@ -7,5 +7,5 @@ interface CronTaskInterface
     /**
      * 注册定时任务（只做 Timer::tick / after）
      */
-    public function register(): void;
+    public function register(callable $runInSandbox): void;
 }

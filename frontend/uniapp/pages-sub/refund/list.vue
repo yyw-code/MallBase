@@ -19,8 +19,10 @@ const limit = 10
 const loading = ref(false)
 const noMore = ref(false)
 const initialized = ref(false)
+const filterOrderId = ref('')
 
-onLoad(() => {
+onLoad((query) => {
+  filterOrderId.value = query?.order_id || ''
   fetchList(true)
 })
 
@@ -44,7 +46,11 @@ async function fetchList(reset = false) {
   }
 
   try {
-    const data = await getRefundList({ page: page.value, limit })
+    const params = { page: page.value, limit }
+    if (filterOrderId.value) {
+      params.order_id = filterOrderId.value
+    }
+    const data = await getRefundList(params)
     const items = Array.isArray(data?.list)
       ? data.list
       : (Array.isArray(data) ? data : [])

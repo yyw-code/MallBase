@@ -8,9 +8,14 @@
       </view>
     </view>
     <text class="mb-empty__text">{{ text }}</text>
-    <view v-if="actionText" class="mb-empty__action" @tap="$emit('action')">
-      <text class="mb-empty__action-text">{{ actionText }}</text>
-    </view>
+    <mb-button
+      v-if="actionText"
+      class="mb-empty__action"
+      type="primary"
+      size="medium"
+      :label="actionText"
+      @click="$emit('action')"
+    />
   </view>
 </template>
 
@@ -114,18 +119,5 @@ const iconClass = computed(() => (normalizedIcon.value ? 'mb-empty__icon--text' 
 
 .mb-empty__action {
   min-width: 224rpx;
-  height: 80rpx;
-  padding: 0 48rpx;
-  border-radius: 999rpx;
-  background: var(--color-primary, #0d50d5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.mb-empty__action-text {
-  font-size: 26rpx;
-  font-weight: 600;
-  color: #ffffff;
 }
 </style>

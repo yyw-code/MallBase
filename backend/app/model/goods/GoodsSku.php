@@ -11,10 +11,4 @@ use mall_base\base\BaseModel;
 class GoodsSku extends BaseModel
 {
     protected $name = 'goods_sku';
-    protected array $append = ['image_full_url'];
-
-    public function getImageFullUrlAttr($value, $data): string
-    {
-        return buildUploadUrl($data['image'] ?? '');
-    }
 }

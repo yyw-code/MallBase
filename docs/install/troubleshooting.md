@@ -217,20 +217,7 @@ export NODE_OPTIONS=--max-old-space-size=4096
 pnpm run build --filter=@vben/web-antd
 ```
 
-## 权限菜单与首次改密
-
-### 打开 `/admin/` 不跳改密页
-
-原因：
-
-- 旧环境数据库中 `mb_admin.password_changed_at` 已有值
-
-处理：
-
-```bash
-PREFIX=${MALLBASE_CONTAINER_PREFIX:-mallbase}
-docker exec -it ${PREFIX}-mysql sh -c 'mysql -u root -p"${MYSQL_ROOT_PASSWORD}" "${MYSQL_DATABASE}" -e "UPDATE mb_admin SET password_changed_at=NULL WHERE id=1"'
-```
+## 权限菜单
 
 ### 登录后菜单是空的
 

@@ -7,9 +7,17 @@ export namespace GoodsCommentApi {
     goods_id: number;
     user_id: number;
     order_id?: number;
+    order_item_id?: number;
     sku_id?: number;
+    sku_spec?: string;
+    sku_spec_text?: string;
     content: string;
     images?: string[];
+    images_full_urls?: string[];
+    append_content?: string;
+    append_images?: string[];
+    append_images_full_urls?: string[];
+    append_time?: string;
     rating: number;
     is_anonymous: number;
     reply_content?: string;

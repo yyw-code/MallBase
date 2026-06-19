@@ -1,9 +1,11 @@
 import { requestClient } from '#/api/request';
 
 export namespace GoodsApi {
+  export type MediaValue = number | string;
+
   export interface SpecMetaValueItem {
     value: string;
-    pic?: string;
+    pic?: MediaValue;
     pic_full_url?: string;
   }
 
@@ -22,9 +24,9 @@ export namespace GoodsApi {
     freight_template_id?: number;
     name: string;
     subtitle?: string;
-    main_image?: string;
+    main_image?: MediaValue;
     main_image_full_url?: string;
-    main_video?: string;
+    main_video?: MediaValue;
     main_video_full_url?: string;
     description?: string;
     price: number;
@@ -59,7 +61,7 @@ export namespace GoodsApi {
   export interface ImageItem {
     id: number;
     goods_id: number;
-    url: string;
+    url: MediaValue;
     full_url?: string;
     sort: number;
   }
@@ -74,7 +76,7 @@ export namespace GoodsApi {
     cost_price?: number;
     stock: number;
     sku_code?: string;
-    image?: string;
+    image?: MediaValue;
     image_full_url?: string;
     weight?: number;
     volume?: number;
@@ -82,14 +84,34 @@ export namespace GoodsApi {
   }
 
   /** 列表参数 */
+  export type ListView =
+    | 'all'
+    | 'disabled'
+    | 'off_sale'
+    | 'on_sale'
+    | 'recycle';
+
   export interface ListParams {
     keyword?: string;
     category_id?: number;
     brand_id?: number;
     is_on_sale?: number;
     status?: number;
+    stock_warning?: 0 | 1;
+    view?: ListView;
     page?: number;
     limit?: number;
+  }
+
+  export interface StatsTab {
+    key: ListView;
+    label: string;
+    count: number;
+  }
+
+  export interface StatsResponse {
+    tabs: StatsTab[];
+    total: number;
   }
 
   /** 创建参数 */
@@ -100,8 +122,8 @@ export namespace GoodsApi {
     brand_id?: number;
     freight_template_id?: number;
     subtitle?: string;
-    main_image?: string;
-    main_video?: string;
+    main_image?: MediaValue;
+    main_video?: MediaValue;
     spec_meta?: SpecMetaItem[];
     description?: string;
     price?: number;
@@ -114,7 +136,7 @@ export namespace GoodsApi {
     is_hot?: number;
     sort?: number;
     status?: number;
-    images?: { url: string; sort: number }[];
+    images?: MediaValue[];
     skus?: SkuCreateParams[];
     tag_ids?: number[];
   }
@@ -127,7 +149,7 @@ export namespace GoodsApi {
     cost_price?: number;
     stock: number;
     sku_code?: string;
-    image?: string;
+    image?: MediaValue;
     weight?: number;
     volume?: number;
     status?: number;
@@ -141,8 +163,8 @@ export namespace GoodsApi {
     brand_id?: number;
     freight_template_id?: number;
     subtitle?: string;
-    main_image?: string;
-    main_video?: string;
+    main_image?: MediaValue;
+    main_video?: MediaValue;
     spec_meta?: SpecMetaItem[];
     description?: string;
     price?: number;
@@ -155,7 +177,7 @@ export namespace GoodsApi {
     is_hot?: number;
     sort?: number;
     status?: number;
-    images?: { url: string; sort: number }[];
+    images?: MediaValue[];
     skus?: SkuCreateParams[];
     tag_ids?: number[];
   }
@@ -169,6 +191,16 @@ export async function getGoodsListApi(params?: GoodsApi.ListParams) {
     list: GoodsApi.GoodsItem[];
     total: number;
   }>('/goods/list/list', { params });
+}
+
+export async function getGoodsStatsApi(params?: GoodsApi.ListParams) {
+  return requestClient.get<GoodsApi.StatsResponse>('/goods/list/stats', {
+    params,
+  });
+}
+
+export async function exportGoodsCsvApi(params?: GoodsApi.ListParams) {
+  return requestClient.download<Blob>('/goods/list/export', { params });
 }
 
 /**
@@ -188,10 +220,7 @@ export async function createGoodsApi(data: GoodsApi.CreateParams) {
 /**
  * 更新商品
  */
-export async function updateGoodsApi(
-  id: number,
-  data: GoodsApi.UpdateParams,
-) {
+export async function updateGoodsApi(id: number, data: GoodsApi.UpdateParams) {
   return requestClient.put(`/goods/list/update/${id}`, data);
 }
 
@@ -200,6 +229,14 @@ export async function updateGoodsApi(
  */
 export async function deleteGoodsApi(id: number) {
   return requestClient.delete(`/goods/list/delete/${id}`);
+}
+
+export async function restoreGoodsApi(id: number) {
+  return requestClient.put(`/goods/list/restore/${id}`);
+}
+
+export async function purgeGoodsApi(id: number) {
+  return requestClient.delete(`/goods/list/purge/${id}`);
 }
 
 /**
@@ -212,9 +249,6 @@ export async function updateGoodsStatusApi(id: number, status: number) {
 /**
  * 更新商品上架/下架状态
  */
-export async function updateGoodsOnSaleApi(
-  id: number,
-  is_on_sale: number,
-) {
+export async function updateGoodsOnSaleApi(id: number, is_on_sale: number) {
   return requestClient.put(`/goods/list/updateOnSale/${id}`, { is_on_sale });
 }

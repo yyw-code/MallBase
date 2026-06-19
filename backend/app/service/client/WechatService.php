@@ -264,7 +264,8 @@ class WechatService extends BaseService
             $updates['nickname'] = mb_substr($nickname, 0, 50);
         }
         if ($avatar !== '' && (string) $user->avatar === '' && !preg_match('#^(https?:)?//#i', $avatar)) {
-            $updates['avatar'] = $this->normalizeAvatar($avatar);
+            $updates['avatar'] = app()->make(UploadService::class)
+                ->normalizeStoredImagePath($avatar);
         }
         if ($updates !== []) {
             $user->save($updates);
@@ -513,17 +514,12 @@ class WechatService extends BaseService
             $updates['nickname'] = mb_substr($nickname, 0, 50);
         }
         if ($avatar !== '' && (string) $user->avatar === '') {
-            $updates['avatar'] = $this->normalizeAvatar($avatar);
+            $updates['avatar'] = app()->make(UploadService::class)
+                ->normalizeStoredImagePath($avatar);
         }
         if ($updates !== []) {
             $user->save($updates);
         }
-    }
-
-    private function normalizeAvatar(string $avatar): string
-    {
-        return app()->make(UploadService::class)
-            ->normalizeStoredImagePath($avatar);
     }
 
     private function settingBool(string $code): bool

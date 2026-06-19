@@ -8,17 +8,20 @@ import { useAccess } from '@vben/access';
 import { message, Modal, Switch, Tag } from 'ant-design-vue';
 
 import {
-  deleteClientUserApi,
   adjustClientUserWalletApi,
-  getClientUserWalletLogsApi,
+  deleteClientUserApi,
+  exportClientUserCsvApi,
   getClientUserInfoApi,
   getClientUserListApi,
+  getClientUserStatsApi,
+  getClientUserWalletLogsApi,
   getUserGroupListApi,
   getUserTagListApi,
   resetClientUserPasswordApi,
   updateClientUserStatusApi,
 } from '#/api/user';
 import { useTableCrud } from '#/composables/useTableCrud';
+import { downloadBlob } from '#/utils/download';
 
 import UserModal from './user-modal.vue';
 
@@ -44,7 +47,7 @@ const groupOptions = ref<UserGroupApi.GroupItem[]>([]);
 const tagOptions = ref<UserTagApi.TagItem[]>([]);
 
 /* ---------------- 表格 CRUD ---------------- */
-const { tableData, loading, pagination, loadData, handleDelete } = useTableCrud<
+const { tableData, loading, pagination, loadData } = useTableCrud<
   ClientUserApi.UserItem,
   ClientUserApi.ListParams
 >(
@@ -63,6 +66,10 @@ const searchParams = ref({
   group_ids: [] as number[],
   tag_ids: [] as number[],
 });
+const activeStatusTab = ref('all');
+const statsTabs = ref<ClientUserApi.StatsTab[]>([]);
+
+const buildQuery = (): ClientUserApi.ListParams => ({ ...searchParams.value });
 
 const resetSearch = () => {
   searchParams.value = {
@@ -72,8 +79,39 @@ const resetSearch = () => {
     group_ids: [],
     tag_ids: [],
   };
+  activeStatusTab.value = 'all';
   pagination.current = 1;
-  loadData(searchParams.value);
+  refreshData();
+};
+
+const submitSearch = () => {
+  pagination.current = 1;
+  refreshData();
+};
+
+const loadStats = async () => {
+  const res = await getClientUserStatsApi(buildQuery());
+  statsTabs.value = res?.tabs ?? [];
+};
+
+const refreshData = async () => {
+  await Promise.all([loadData(buildQuery()), loadStats()]);
+};
+
+const handleStatusTabChange = (key: string) => {
+  activeStatusTab.value = key;
+  searchParams.value.status = key === 'all' ? undefined : Number(key);
+  pagination.current = 1;
+  refreshData();
+};
+
+const handleExport = async () => {
+  try {
+    const blob = await exportClientUserCsvApi(buildQuery());
+    downloadBlob(blob, 'users.csv');
+  } catch (error: any) {
+    message.error(error?.message || '导出失败');
+  }
 };
 
 /* ---------------- 弹窗 ---------------- */
@@ -97,7 +135,7 @@ const handleEdit = async (record: ClientUserApi.UserItem) => {
 };
 
 const onModalSuccess = () => {
-  loadData(searchParams.value);
+  refreshData();
 };
 
 /* ---------------- 余额记录 / 调整 ---------------- */
@@ -117,7 +155,7 @@ const walletAdjustSubmitting = ref(false);
 const walletAdjustMaxAmount = 999_999.99;
 const walletAdjustForm = ref({
   user_id: 0,
-  direction: 'income' as 'income' | 'expense',
+  direction: 'income' as 'expense' | 'income',
   amount: '',
   remark: '',
 });
@@ -196,7 +234,7 @@ const submitWalletAdjust = async () => {
     await adjustClientUserWalletApi(walletAdjustForm.value);
     message.success('余额调整成功');
     walletAdjustVisible.value = false;
-    await loadData(searchParams.value);
+    await refreshData();
     if (walletDrawerVisible.value) {
       await loadWalletLogs();
     }
@@ -221,16 +259,30 @@ const handleResetPassword = (record: ClientUserApi.UserItem) => {
 /* ---------------- 状态切换 ---------------- */
 const handleStatusChange = async (
   record: ClientUserApi.UserItem,
-  checked: boolean | string | number,
+  checked: boolean | number | string,
 ) => {
   try {
-    await updateClientUserStatusApi(record.id, { status: checked === true ? 1 : 0 });
+    await updateClientUserStatusApi(record.id, {
+      status: checked === true ? 1 : 0,
+    });
     message.success('状态更新成功');
-    await loadData(searchParams.value);
+    await refreshData();
   } catch {
     // 失败后刷新列表恢复状态
-    await loadData(searchParams.value);
+    await refreshData();
   }
+};
+
+const handleDelete = (record: ClientUserApi.UserItem) => {
+  const title = record.nickname || record.mobile || record.email || '该用户';
+  Modal.confirm({
+    content: `确定要删除"${title}"吗？`,
+    onOk: async () => {
+      await deleteClientUserApi(record.id);
+      message.success('删除成功');
+      await refreshData();
+    },
+  });
 };
 
 /* ---------------- 表格列 ---------------- */
@@ -254,7 +306,8 @@ const columns = [
     title: '余额',
     dataIndex: 'wallet',
     width: 120,
-    customRender: ({ record }: { record: ClientUserApi.UserItem }) => `¥${record.wallet?.balance || '0.00'}`,
+    customRender: ({ record }: { record: ClientUserApi.UserItem }) =>
+      `¥${record.wallet?.balance || '0.00'}`,
   },
   { title: '邮箱', dataIndex: 'email', width: 180, ellipsis: true },
   {
@@ -301,7 +354,7 @@ const columns = [
         checked: record.status === 1,
         checkedChildren: '启用',
         unCheckedChildren: '禁用',
-        onChange: (checked: boolean | string | number) =>
+        onChange: (checked: boolean | number | string) =>
           handleStatusChange(record, checked),
       });
     },
@@ -313,10 +366,12 @@ const columns = [
     customRender: ({ record }: { record: ClientUserApi.UserItem }) => {
       if (!record.groups || record.groups.length === 0) return '-';
 
-      return h('div', { class: 'flex flex-wrap gap-1' },
+      return h(
+        'div',
+        { class: 'flex flex-wrap gap-1' },
         record.groups.map((group: UserGroupApi.GroupItem) =>
-          h(Tag, { color: group.color || 'default' }, () => group.name)
-        )
+          h(Tag, { color: group.color || 'default' }, () => group.name),
+        ),
       );
     },
   },
@@ -327,10 +382,12 @@ const columns = [
     customRender: ({ record }: { record: ClientUserApi.UserItem }) => {
       if (!record.tags || record.tags.length === 0) return '-';
 
-      return h('div', { class: 'flex flex-wrap gap-1' },
+      return h(
+        'div',
+        { class: 'flex flex-wrap gap-1' },
         record.tags.map((tag: UserTagApi.TagItem) =>
-          h(Tag, { color: tag.color || 'default' }, () => tag.name)
-        )
+          h(Tag, { color: tag.color || 'default' }, () => tag.name),
+        ),
       );
     },
   },
@@ -357,145 +414,175 @@ onMounted(async () => {
     console.error('加载分组和标签失败:', error);
   }
 
-  loadData(searchParams.value);
+  refreshData();
 });
 </script>
 
 <template>
-  <div class="p-4">
-    <div class="mb-4">
-      <a-button type="primary" @click="handleCreate" v-access:code="'SystemUserCreate'"> 新增用户 </a-button>
-      <a-button class="ml-2" @click="() => loadData(searchParams)">
-        刷新
-      </a-button>
+  <div class="user-page p-4">
+    <div class="user-header">
+      <div>
+        <h2 class="user-title">用户列表</h2>
+      </div>
+      <div class="user-header-actions">
+        <a-button
+          type="primary"
+          @click="handleCreate"
+          v-access:code="'SystemUserCreate'"
+        >
+          新增用户
+        </a-button>
+        <a-button @click="refreshData">刷新</a-button>
+        <a-button v-access:code="'SystemUserExport'" @click="handleExport">
+          导出
+        </a-button>
+      </div>
     </div>
 
     <!-- 搜索表单 -->
-    <a-form layout="inline" class="mb-4">
-      <a-form-item label="关键词">
-        <a-input
-          v-model:value="searchParams.keyword"
-          placeholder="手机号/邮箱/昵称"
-          allow-clear
-          style="width: 200px"
-        />
-      </a-form-item>
-      <a-form-item label="状态">
-        <a-select
-          v-model:value="searchParams.status"
-          placeholder="请选择"
-          allow-clear
-          style="width: 120px"
+    <div class="user-filter-panel">
+      <a-form>
+        <div
+          class="grid grid-cols-1 gap-x-4 gap-y-3 md:grid-cols-3 xl:grid-cols-6"
         >
-          <a-select-option :value="1">启用</a-select-option>
-          <a-select-option :value="0">禁用</a-select-option>
-        </a-select>
-      </a-form-item>
-      <a-form-item label="注册方式">
-        <a-select
-          v-model:value="searchParams.register_type"
-          placeholder="请选择"
-          allow-clear
-          style="width: 120px"
-        >
-          <a-select-option value="mobile">手机</a-select-option>
-          <a-select-option value="email">邮箱</a-select-option>
-        </a-select>
-      </a-form-item>
-      <a-form-item label="分组">
-        <a-select
-          v-model:value="searchParams.group_ids"
-          mode="multiple"
-          placeholder="请选择分组"
-          allow-clear
-          style="width: 200px"
-          :options="groupOptions.map((g) => ({ label: g.name, value: g.id }))"
-        />
-      </a-form-item>
-      <a-form-item label="标签">
-        <a-select
-          v-model:value="searchParams.tag_ids"
-          mode="multiple"
-          placeholder="请选择标签"
-          allow-clear
-          style="width: 200px"
-          :options="tagOptions.map((t) => ({ label: t.name, value: t.id }))"
-        />
-      </a-form-item>
-      <a-form-item>
-        <a-button
-          type="primary"
-          @click="
-            () => {
-              pagination.current = 1;
-              loadData(searchParams);
-            }
-          "
-        >
-          搜索
-        </a-button>
-        <a-button class="ml-2" @click="resetSearch"> 重置 </a-button>
-      </a-form-item>
-    </a-form>
+          <div>
+            <a-form-item class="mb-0" label="关键词">
+              <a-input
+                v-model:value="searchParams.keyword"
+                placeholder="手机号/邮箱/昵称"
+                allow-clear
+                class="w-full"
+                @press-enter="submitSearch"
+              />
+            </a-form-item>
+          </div>
+          <div>
+            <a-form-item class="mb-0" label="注册方式">
+              <a-select
+                v-model:value="searchParams.register_type"
+                placeholder="请选择"
+                allow-clear
+                class="w-full"
+              >
+                <a-select-option value="mobile">手机</a-select-option>
+                <a-select-option value="email">邮箱</a-select-option>
+              </a-select>
+            </a-form-item>
+          </div>
+          <div>
+            <a-form-item class="mb-0" label="分组">
+              <a-select
+                v-model:value="searchParams.group_ids"
+                mode="multiple"
+                placeholder="请选择分组"
+                allow-clear
+                class="w-full"
+                :options="
+                  groupOptions.map((g) => ({ label: g.name, value: g.id }))
+                "
+              />
+            </a-form-item>
+          </div>
+          <div>
+            <a-form-item class="mb-0" label="标签">
+              <a-select
+                v-model:value="searchParams.tag_ids"
+                mode="multiple"
+                placeholder="请选择标签"
+                allow-clear
+                class="w-full"
+                :options="
+                  tagOptions.map((t) => ({ label: t.name, value: t.id }))
+                "
+              />
+            </a-form-item>
+          </div>
+        </div>
+        <div class="mt-3 flex justify-end gap-2">
+          <a-button type="primary" @click="submitSearch">搜索</a-button>
+          <a-button @click="resetSearch">重置</a-button>
+        </div>
+      </a-form>
+    </div>
 
-    <a-table
-      :columns="columns"
-      :data-source="tableData"
-      :loading="loading"
-      :pagination="pagination"
-      :scroll="{ x: 1900 }"
-      row-key="id"
-      @change="
-        (newPagination: any) => {
-          pagination.current = newPagination.current;
-          pagination.pageSize = newPagination.pageSize;
-          loadData(searchParams);
-        }
-      "
-    >
-      <template #bodyCell="{ column, record }">
-        <template v-if="column.key === 'action'">
-          <a-space>
-            <a-button type="link" size="small" @click="handleEdit(record)" v-access:code="'SystemUserUpdate'">
-              编辑
-            </a-button>
-            <a-button
-              type="link"
-              size="small"
-              @click="handleWalletLogs(record)"
-              v-access:code="'SystemUserWalletLog'"
-            >
-              余额记录
-            </a-button>
-            <a-button
-              type="link"
-              size="small"
-              @click="handleWalletAdjust(record)"
-              v-access:code="'SystemUserWalletAdjust'"
-            >
-              调整余额
-            </a-button>
-            <a-button
-              type="link"
-              size="small"
-              @click="handleResetPassword(record)"
-              v-access:code="'SystemUserResetPassword'"
-            >
-              重置密码
-            </a-button>
-            <a-button
-              type="link"
-              danger
-              size="small"
-              @click="handleDelete(record, 'nickname')"
-              v-access:code="'SystemUserDelete'"
-            >
-              删除
-            </a-button>
-          </a-space>
+    <div class="user-table-panel">
+      <a-tabs
+        :active-key="activeStatusTab"
+        class="user-status-tabs"
+        size="small"
+        @change="handleStatusTabChange"
+      >
+        <a-tab-pane v-for="tab in statsTabs" :key="tab.key">
+          <template #tab>
+            <span>{{ tab.label }} {{ tab.count }}</span>
+          </template>
+        </a-tab-pane>
+      </a-tabs>
+
+      <a-table
+        :columns="columns"
+        :data-source="tableData"
+        :loading="loading"
+        :pagination="pagination"
+        :scroll="{ x: 1900 }"
+        row-key="id"
+        @change="
+          (newPagination: any) => {
+            pagination.current = newPagination.current;
+            pagination.pageSize = newPagination.pageSize;
+            loadData(buildQuery());
+          }
+        "
+      >
+        <template #bodyCell="{ column, record }">
+          <template v-if="column.key === 'action'">
+            <a-space>
+              <a-button
+                type="link"
+                size="small"
+                @click="handleEdit(record)"
+                v-access:code="'SystemUserUpdate'"
+              >
+                编辑
+              </a-button>
+              <a-button
+                type="link"
+                size="small"
+                @click="handleWalletLogs(record)"
+                v-access:code="'SystemUserWalletLog'"
+              >
+                余额记录
+              </a-button>
+              <a-button
+                type="link"
+                size="small"
+                @click="handleWalletAdjust(record)"
+                v-access:code="'SystemUserWalletAdjust'"
+              >
+                调整余额
+              </a-button>
+              <a-button
+                type="link"
+                size="small"
+                @click="handleResetPassword(record)"
+                v-access:code="'SystemUserResetPassword'"
+              >
+                重置密码
+              </a-button>
+              <a-button
+                type="link"
+                danger
+                size="small"
+                @click="handleDelete(record)"
+                v-access:code="'SystemUserDelete'"
+              >
+                删除
+              </a-button>
+            </a-space>
+          </template>
         </template>
-      </template>
-    </a-table>
+      </a-table>
+    </div>
 
     <!-- 用户表单弹窗 -->
     <UserModal
@@ -539,7 +626,9 @@ onMounted(async () => {
         class="pt-4"
       >
         <a-form-item label="用户">
-          <span>{{ walletUser?.nickname || walletUser?.mobile || walletUser?.id }}</span>
+          <span>{{
+            walletUser?.nickname || walletUser?.mobile || walletUser?.id
+          }}</span>
         </a-form-item>
         <a-form-item label="调整方向" required>
           <a-radio-group v-model:value="walletAdjustForm.direction">
@@ -574,3 +663,64 @@ onMounted(async () => {
     </a-modal>
   </div>
 </template>
+
+<style scoped>
+.user-page {
+  min-height: 100%;
+}
+
+.user-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.user-title {
+  margin: 0;
+  color: hsl(var(--foreground));
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 32px;
+}
+
+.user-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.user-filter-panel,
+.user-table-panel {
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+}
+
+.user-filter-panel {
+  padding: 16px;
+  margin-bottom: 12px;
+}
+
+.user-table-panel {
+  overflow: hidden;
+}
+
+.user-status-tabs {
+  padding: 0 16px;
+  margin-bottom: 0;
+}
+
+.user-status-tabs :deep(.ant-tabs-nav) {
+  margin-bottom: 0;
+}
+
+.user-status-tabs :deep(.ant-tabs-tab) {
+  padding: 14px 0 12px;
+}
+
+.user-table-panel :deep(.ant-table-wrapper) {
+  border-top: 1px solid hsl(var(--border));
+}
+</style>

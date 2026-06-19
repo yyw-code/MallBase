@@ -30,7 +30,8 @@
         "firebase/php-jwt": "^7.0",
         "w7corp/easywechat": "^6.17",
         "alibabacloud/dysmsapi-20170525": "^4.0",
-        "alibabacloud/dypnsapi-20170525": "^2.0"
+        "aliyuncs/oss-sdk-php": "^2.7",
+        "qcloud/cos-sdk-v5": "^2.6"
     },
     "require-dev": {
         "phpunit/phpunit": "^10.5",

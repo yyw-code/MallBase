@@ -54,6 +54,7 @@ const formRef = ref();
 
 const loading = ref(false);
 const iconPrefix = ref('ant-design');
+const fileNameFromValue = (value: unknown) => String(value || '').split('/').pop() || '';
 
 /* ---------------- 树形分类数据 ---------------- */
 const categoryTreeData = ref<{ title: string; value: number; key: number; children?: any[] }[]>([]);
@@ -95,10 +96,10 @@ watch(
           name: props.editData.name || '',
           icon: props.editData.icon || '',
           image: imageUrl
-            ? {
-                url: imageUrl,
-                full_url: imageFullUrl,
-                name: imageUrl.split('/').pop() || '',
+              ? {
+                url: String(imageUrl),
+                full_url: imageFullUrl || String(imageUrl),
+                name: fileNameFromValue(imageUrl),
               }
             : undefined,
           description: props.editData.description || '',

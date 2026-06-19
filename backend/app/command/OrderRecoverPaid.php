@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace app\command;
 
-use app\common\enum\PayMethod;
 use app\model\order\PaymentLog;
 use app\service\client\order\OrderService;
 use app\service\client\payment\WechatPayClient;
@@ -14,11 +13,13 @@ use think\console\Input;
 use think\console\input\Argument;
 use think\console\input\Option;
 use think\console\Output;
+use think\facade\Db;
+use Throwable;
 
 /**
  * 微信支付主动查单 + 补单
  *
- * 适用场景：nginx 漏配回调反代导致 notify 404，订单停留在 PENDING_PAY
+ * 适用场景：notify 丢失或处理异常，微信已支付但订单停留在 PENDING_PAY
  *
  * 用法：
  *  php think order:recover-paid 2605200000000007             # dry-run（默认）
@@ -65,7 +66,7 @@ class OrderRecoverPaid extends Command
 
         try {
             $result = $client->queryByOutTradeNo($app, $mchId, $outTradeNo);
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             $output->writeln(sprintf('<error>微信查单失败: %s</error>', $e->getMessage()));
             return 1;
         }
@@ -81,6 +82,11 @@ class OrderRecoverPaid extends Command
         if ($tradeState !== 'SUCCESS') {
             $output->writeln(sprintf('<comment>微信侧状态为 %s，不执行补单</comment>', $tradeState));
             return 0;
+        }
+
+        if ($transactionId === '') {
+            $output->writeln('<error>微信查单未返回 transaction_id，拒绝补单</error>');
+            return 1;
         }
 
         if ($amountTotal !== (int) $prepay->amount_cents) {
@@ -103,18 +109,70 @@ class OrderRecoverPaid extends Command
         $orderService = app()->make(OrderService::class);
 
         try {
-            $ret = $orderService->confirmPaid(
-                sn: $sn,
-                transactionId: $transactionId,
-                payMethod: (int) $prepay->pay_method,
-                payScene: (int) $prepay->scene,
-            );
+            [$ret, $paidLogCreated] = Db::transaction(function () use ($orderService, $prepay, $result, $transactionId, $tradeState, $sn): array {
+                $paidLogCreated = $this->persistPaidLog($prepay, $result, $transactionId, $tradeState);
+
+                $ret = $orderService->confirmPaid(
+                    sn: $sn,
+                    transactionId: $transactionId,
+                    payMethod: (int) $prepay->pay_method,
+                    payScene: (int) $prepay->scene,
+                );
+
+                return [$ret, $paidLogCreated];
+            });
+            $output->writeln($paidLogCreated ? '<info>  PAID 流水已补写</info>' : '<comment>  PAID 流水已存在，跳过重复写入</comment>');
             $output->writeln(sprintf('<info>  补单完成：order_id=%d, status=%d</info>', $ret['order_id'], $ret['status']));
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             $output->writeln(sprintf('<error>补单失败: %s</error>', $e->getMessage()));
             return 1;
         }
 
         return 0;
+    }
+
+    /**
+     * @param array<string, mixed> $result
+     */
+    private function persistPaidLog(PaymentLog $prepay, array $result, string $transactionId, string $tradeState): bool
+    {
+        $successTime = (string) ($result['success_time'] ?? '');
+        $successTimestamp = $successTime !== '' ? strtotime($successTime) : false;
+        $payerOpenid = (string) ($result['payer']['openid'] ?? $prepay->payer_openid ?? '');
+
+        try {
+            $paidLog = new PaymentLog();
+            $paidLog->order_id       = (int) $prepay->order_id;
+            $paidLog->order_sn       = (string) $prepay->order_sn;
+            $paidLog->out_trade_no   = $this->derivedPaidOutTradeNo((string) $prepay->out_trade_no);
+            $paidLog->transaction_id = $transactionId;
+            $paidLog->pay_method     = (int) $prepay->pay_method;
+            $paidLog->scene          = (int) $prepay->scene;
+            $paidLog->event_type     = PaymentLog::EVENT_PAID;
+            $paidLog->trade_state    = $tradeState;
+            $paidLog->amount_cents   = (int) $prepay->amount_cents;
+            $paidLog->payer_openid   = $payerOpenid !== '' ? $payerOpenid : $prepay->payer_openid;
+            $paidLog->raw_notify     = $result;
+            $paidLog->paid_at        = $successTimestamp !== false ? date('Y-m-d H:i:s', $successTimestamp) : date('Y-m-d H:i:s');
+            $paidLog->save();
+        } catch (Throwable $e) {
+            if ($this->isDuplicateKey($e)) {
+                return false;
+            }
+            throw $e;
+        }
+
+        return true;
+    }
+
+    private function derivedPaidOutTradeNo(string $original): string
+    {
+        return mb_substr($original . '#PAID', 0, 32);
+    }
+
+    private function isDuplicateKey(Throwable $e): bool
+    {
+        $msg = $e->getMessage();
+        return str_contains($msg, '1062') || str_contains($msg, 'Duplicate entry');
     }
 }

@@ -47,6 +47,7 @@ const {
   openEditModal,
   handleSubmit,
 } = useFormModal<AdminApi.AdminItem>();
+void formRef;
 
 const isEdit = computed(() => modalTitle.value.includes('编辑'));
 
@@ -144,6 +145,20 @@ const resetSearch = () => {
   loadData(searchParams.value);
 };
 
+const handleSearch = () => {
+  pagination.current = 1;
+  loadData(searchParams.value);
+};
+
+const handleTableChange = (newPagination: {
+  current?: number;
+  pageSize?: number;
+}) => {
+  pagination.current = newPagination.current ?? pagination.current;
+  pagination.pageSize = newPagination.pageSize ?? pagination.pageSize;
+  loadData(searchParams.value);
+};
+
 /* ---------------- 表格列 ---------------- */
 
 const columns = [
@@ -172,6 +187,7 @@ const columns = [
       }
       return h(Switch, {
         checked: record.status === 1,
+        disabled: record.id === 1,
         onChange: async (checked: any) => {
           await updateAdminStatusApi(record.id, {
             status: checked ? 1 : 0,
@@ -201,117 +217,116 @@ if (hasAccessByCodes(['SystemAdminList'])) {
 
 <template>
   <div class="p-4">
-    <div class="mb-4">
-      <a-button
-        type="primary"
-        @click="handleCreate"
-        v-access:code="'SystemAdminCreate'"
-      >
-        新增管理员
-      </a-button>
-      <a-button class="ml-2" @click="refresh" v-access:code="'SystemAdminList'">
-        刷新
-      </a-button>
+    <div class="mb-3 flex items-center justify-between gap-4">
+      <div>
+        <h2 class="m-0 text-lg font-semibold">管理员列表</h2>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        <a-button
+          type="primary"
+          @click="handleCreate"
+          v-access:code="'SystemAdminCreate'"
+        >
+          新增管理员
+        </a-button>
+        <a-button @click="refresh" v-access:code="'SystemAdminList'">
+          刷新
+        </a-button>
+      </div>
     </div>
 
     <!-- 搜索表单 -->
-    <a-form layout="inline" class="mb-4" v-access:code="'SystemAdminList'">
-      <a-form-item label="关键词">
-        <a-input
-          v-model:value="searchParams.keyword"
-          placeholder="用户名/昵称/手机号/邮箱"
-          allow-clear
-          style="width: 200px"
-        />
-      </a-form-item>
-      <a-form-item label="状态">
-        <a-select
-          v-model:value="searchParams.status"
-          placeholder="请选择"
-          allow-clear
-          style="width: 150px"
-        >
-          <a-select-option :value="1">启用</a-select-option>
-          <a-select-option :value="0">禁用</a-select-option>
-        </a-select>
-      </a-form-item>
-      <a-form-item>
-        <a-button
-          type="primary"
-          @click="
-            () => {
-              pagination.current = 1;
-              loadData(searchParams.value);
-            }
-          "
-        >
-          搜索
-        </a-button>
-        <a-button class="ml-2" @click="resetSearch"> 重置 </a-button>
-      </a-form-item>
-    </a-form>
-
-    <a-table
-      :columns="columns"
-      :data-source="tableData"
-      :loading="loading"
-      :pagination="pagination"
-      :scroll="{ x: 1200 }"
-      row-key="id"
-      @change="
-        (newPagination) => {
-          pagination.current = newPagination.current;
-          pagination.pageSize = newPagination.pageSize;
-          loadData(searchParams.value);
-        }
-      "
-      v-access:code="'SystemAdminList'"
-    >
-      <template #bodyCell="{ column, record }">
-        <template v-if="column.title === '头像'">
-          <a-image
-            v-if="record.avatar_full_url"
-            :src="record.avatar_full_url"
-            :width="60"
-            :height="60"
-            :style="{ objectFit: 'cover', borderRadius: '50%' }"
+    <div class="mb-3 rounded-lg border bg-[hsl(var(--card))] p-4">
+      <a-form
+        class="grid grid-cols-1 gap-x-4 gap-y-3 md:grid-cols-3 xl:grid-cols-6"
+        v-access:code="'SystemAdminList'"
+      >
+        <a-form-item label="关键词" class="mb-0">
+          <a-input
+            v-model:value="searchParams.keyword"
+            placeholder="用户名/昵称/手机号/邮箱"
+            allow-clear
+            class="w-full"
           />
-          <span v-else>-</span>
+        </a-form-item>
+        <a-form-item label="状态" class="mb-0">
+          <a-select
+            v-model:value="searchParams.status"
+            placeholder="请选择"
+            allow-clear
+            class="w-full"
+          >
+            <a-select-option :value="1">启用</a-select-option>
+            <a-select-option :value="0">禁用</a-select-option>
+          </a-select>
+        </a-form-item>
+        <a-form-item class="mb-0 md:col-span-3 xl:col-span-6">
+          <div class="flex justify-end gap-2">
+            <a-button type="primary" @click="handleSearch">搜索</a-button>
+            <a-button @click="resetSearch">重置</a-button>
+          </div>
+        </a-form-item>
+      </a-form>
+    </div>
+
+    <div class="overflow-hidden rounded-lg border bg-[hsl(var(--card))]">
+      <a-table
+        :columns="columns"
+        :data-source="tableData"
+        :loading="loading"
+        :pagination="pagination"
+        :scroll="{ x: 1200 }"
+        row-key="id"
+        @change="handleTableChange"
+        v-access:code="'SystemAdminList'"
+      >
+        <template #bodyCell="{ column, record }">
+          <template v-if="column.title === '头像'">
+            <a-image
+              v-if="record.avatar_full_url"
+              :src="record.avatar_full_url"
+              :width="60"
+              :height="60"
+              :style="{ objectFit: 'cover', borderRadius: '50%' }"
+            />
+            <span v-else>-</span>
+          </template>
+
+          <template v-if="column.key === 'action'">
+            <a-space v-if="record.id !== 1">
+              <a-button
+                type="link"
+                size="small"
+                @click="handleEdit(record)"
+                v-access:code="'SystemAdminUpdate'"
+              >
+                编辑
+              </a-button>
+
+              <a-button
+                type="link"
+                size="small"
+                @click="handleResetPassword(record)"
+                v-access:code="'SystemAdminResetPassword'"
+              >
+                重置密码
+              </a-button>
+
+              <a-button
+                type="link"
+                danger
+                size="small"
+                @click="handleDelete(record, 'nickname')"
+                v-access:code="'SystemAdminDelete'"
+              >
+                删除
+              </a-button>
+            </a-space>
+            <span v-else>-</span>
+          </template>
         </template>
-
-        <template v-if="column.key === 'action'">
-          <a-space>
-            <a-button
-              type="link"
-              size="small"
-              @click="handleEdit(record)"
-              v-access:code="'SystemAdminUpdate'"
-            >
-              编辑
-            </a-button>
-
-            <a-button
-              type="link"
-              size="small"
-              @click="handleResetPassword(record)"
-              v-access:code="'SystemAdminResetPassword'"
-            >
-              重置密码
-            </a-button>
-
-            <a-button
-              type="link"
-              danger
-              size="small"
-              @click="handleDelete(record, 'nickname')"
-              v-access:code="'SystemAdminDelete'"
-            >
-              删除
-            </a-button>
-          </a-space>
-        </template>
-      </template>
-    </a-table>
+      </a-table>
+    </div>
 
     <!-- 表单弹窗 -->
 
@@ -324,8 +339,8 @@ if (hasAccessByCodes(['SystemAdminList'])) {
       <a-form
         ref="formRef"
         :model="formData"
-        :label-col="{ span: 6 }"
-        :wrapper-col="{ span: 16 }"
+        :label-col="{ style: { width: '100px' } }"
+        class="pt-4"
       >
         <a-form-item
           label="用户名"

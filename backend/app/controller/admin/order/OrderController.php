@@ -27,17 +27,40 @@ class OrderController extends BaseController
     /**
      * 订单列表（分页 + 筛选）
      *
-     * 筛选字段：sn / status / user_id / logistics_sn / created_start / created_end / has_after_sale
+     * 筛选字段：sn / status / user_id / buyer_keyword / logistics_sn / created_start / created_end / has_after_sale
      */
     public function list()
     {
         $filter = $this->request->param([
-            'sn', 'status', 'user_id', 'logistics_sn',
+            'sn', 'status', 'user_id', 'buyer_keyword', 'logistics_sn',
             'created_start', 'created_end', 'has_after_sale',
         ]);
         [$page, $pageSize] = $this->getPagination(1, 15);
 
         return $this->success($this->service()->adminList($filter, $page, $pageSize), '获取成功');
+    }
+
+    public function stats()
+    {
+        $filter = $this->request->param([
+            'sn', 'status', 'user_id', 'buyer_keyword', 'logistics_sn',
+            'created_start', 'created_end', 'has_after_sale',
+        ]);
+
+        return $this->success($this->service()->adminStats($filter), '获取成功');
+    }
+
+    public function export()
+    {
+        $filter = $this->request->param([
+            'sn', 'status', 'user_id', 'buyer_keyword', 'ids', 'logistics_sn',
+            'created_start', 'created_end', 'has_after_sale',
+        ]);
+
+        return response($this->service()->exportCsv($filter), 200, [
+            'Content-Type' => 'text/csv; charset=utf-8',
+            'Content-Disposition' => 'attachment; filename="orders.csv"',
+        ]);
     }
 
     /**
@@ -49,7 +72,7 @@ class OrderController extends BaseController
     }
 
     /**
-     * 发货（PAID → SHIPPED）
+     * 发货或修改已发货订单物流信息。
      */
     public function ship($id)
     {
@@ -57,15 +80,24 @@ class OrderController extends BaseController
         if ($adminId <= 0) {
             throw new BusinessException('管理员身份无效');
         }
-        $data = $this->request->param(['logistics_company', 'logistics_sn']);
+        $data = $this->request->param([
+            'logistics_platform',
+            'logistics_company_id',
+            'logistics_company_code',
+            'logistics_company',
+            'logistics_sn',
+        ]);
 
-        $this->service()->ship(
+        $message = $this->service()->ship(
             orderId: (int) $id,
+            logisticsPlatform: (string) ($data['logistics_platform'] ?? ''),
+            logisticsCompanyId: (int) ($data['logistics_company_id'] ?? 0),
+            logisticsCompanyCode: (string) ($data['logistics_company_code'] ?? ''),
             logisticsCompany: (string) ($data['logistics_company'] ?? ''),
             logisticsSn: (string) ($data['logistics_sn'] ?? ''),
             adminId: $adminId,
         );
-        return $this->success(null, '发货成功');
+        return $this->success(null, $message);
     }
 
     /**
@@ -91,7 +123,8 @@ class OrderController extends BaseController
      * 订单改价（仅 PENDING_PAY）
      *
      * 校验后由 Service 在事务内：
-     *  - 重算 pay_amount = total + freight - discount
+     *  - 将商品优惠落到订单项快照
+     *  - 重算 pay_amount = sum(item.pay_amount) + freight
      *  - 将该订单旧 PREPAY 流水标记为 SUPERSEDED，避免复用过期金额的 prepay_id
      *  - 写入 OrderLog（同状态 → 同状态，仅作审计）
      */
@@ -101,15 +134,17 @@ class OrderController extends BaseController
         if ($adminId <= 0) {
             throw new BusinessException('管理员身份无效');
         }
-        $data = $this->request->param(['freight_amount', 'discount_amount', 'reason']);
+        $data = $this->request->param(['freight_amount', 'adjust_mode', 'items', 'pay_percent', 'reason']);
         $this->validate($data, OrderAdjustValidate::class . '.adjust');
 
         $this->service()->adjustPrice(
-            orderId:  (int) $id,
-            freight:  (string) ($data['freight_amount'] ?? '0'),
-            discount: (string) ($data['discount_amount'] ?? '0'),
-            adminId:  $adminId,
-            reason:   isset($data['reason']) && $data['reason'] !== '' ? (string) $data['reason'] : null,
+            orderId:       (int) $id,
+            freight:       (string) ($data['freight_amount'] ?? '0'),
+            adjustMode:    (string) ($data['adjust_mode'] ?? ''),
+            adminId:       $adminId,
+            itemDiscounts: is_array($data['items'] ?? null) ? $data['items'] : [],
+            payPercent:    isset($data['pay_percent']) ? (string) $data['pay_percent'] : null,
+            reason:        isset($data['reason']) && $data['reason'] !== '' ? (string) $data['reason'] : null,
         );
         return $this->success(null, '改价成功');
     }
@@ -126,4 +161,5 @@ class OrderController extends BaseController
             'pay_method' => PayMethod::options(),
         ], '获取成功');
     }
+
 }

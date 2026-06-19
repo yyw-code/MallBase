@@ -3,14 +3,19 @@ import { VbenAvatar } from '@vben-core/shadcn-ui';
 
 interface Props {
   avatar?: string;
+  stats?: {
+    label: string;
+    value: string | number;
+  }[];
 }
 
 defineOptions({
   name: 'WorkbenchHeader',
 });
 
-withDefaults(defineProps<Props>(), {
+const props = withDefaults(defineProps<Props>(), {
   avatar: '',
+  stats: () => [],
 });
 </script>
 <template>
@@ -27,20 +32,21 @@ withDefaults(defineProps<Props>(), {
         <slot name="description"></slot>
       </span>
     </div>
-    <div class="mt-4 flex flex-1 justify-end md:mt-0">
-      <div class="flex flex-col justify-center text-right">
-        <span class="text-foreground/80"> 待办 </span>
-        <span class="text-2xl">2/10</span>
-      </div>
-
-      <div class="mx-12 flex flex-col justify-center text-right md:mx-16">
-        <span class="text-foreground/80"> 项目 </span>
-        <span class="text-2xl">8</span>
-      </div>
-      <div class="mr-4 flex flex-col justify-center text-right md:mr-10">
-        <span class="text-foreground/80"> 团队 </span>
-        <span class="text-2xl">300</span>
-      </div>
+    <div
+      v-if="$slots.stats || props.stats.length > 0"
+      class="mt-4 flex flex-1 justify-end md:mt-0"
+    >
+      <slot v-if="$slots.stats" name="stats"></slot>
+      <template v-else>
+        <div
+          v-for="(item, index) in props.stats"
+          :key="item.label"
+          :class="[ 'flex flex-col justify-center text-right', index ? 'mx-12 md:mx-16' : '' ]"
+        >
+          <span class="text-foreground/80"> {{ item.label }} </span>
+          <span class="text-2xl">{{ item.value }}</span>
+        </div>
+      </template>
     </div>
   </div>
 </template>

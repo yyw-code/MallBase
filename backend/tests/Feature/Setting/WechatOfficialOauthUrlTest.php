@@ -16,6 +16,45 @@ final class WechatOfficialOauthUrlTest extends TestCase
 {
     use ApiClientTrait;
 
+    public function testOfficialOauthUrlRouteDoesNotFallThroughToWechatLogin(): void
+    {
+        $body = $this->dispatchClientUserAuthPost('wechat/official/oauthUrl');
+
+        $this->assertIsArray($body);
+        $this->assertSame('redirect_uri 不能为空', $body['message'] ?? null);
+        $this->assertNotSame('code 不能为空', $body['message'] ?? null);
+    }
+
+    /**
+     * @dataProvider userAuthRouteProvider
+     */
+    public function testUserAuthRoutesDoNotFallThroughToShortPrefixRoutes(string $path, string $expectedMessage): void
+    {
+        $body = $this->dispatchClientUserAuthPost($path);
+
+        $this->assertIsArray($body);
+        $this->assertSame($expectedMessage, $body['message'] ?? null, $path);
+    }
+
+    /**
+     * @return array<string, array{path: string, expectedMessage: string}>
+     */
+    public static function userAuthRouteProvider(): array
+    {
+        return [
+            'login' => ['path' => 'login', 'expectedMessage' => '请输入手机号'],
+            'login username' => ['path' => 'login/username', 'expectedMessage' => '请输入用户名'],
+            'login sms' => ['path' => 'login/sms', 'expectedMessage' => '请输入手机号'],
+            'wechat miniapp' => ['path' => 'wechat', 'expectedMessage' => 'code 不能为空'],
+            'wechat bind mobile' => ['path' => 'wechat/bindMobile', 'expectedMessage' => '参数不完整'],
+            'wechat bind mobile by phone code' => ['path' => 'wechat/bindMobileByPhoneCode', 'expectedMessage' => '参数不完整'],
+            'wechat bind user info' => ['path' => 'wechat/bindUserInfo', 'expectedMessage' => '参数不完整'],
+            'wechat official oauth url' => ['path' => 'wechat/official/oauthUrl', 'expectedMessage' => 'redirect_uri 不能为空'],
+            'wechat official bind mobile' => ['path' => 'wechat/official/bindMobile', 'expectedMessage' => '参数不完整'],
+            'wechat official login' => ['path' => 'wechat/official', 'expectedMessage' => 'code 不能为空'],
+        ];
+    }
+
     public function testFactoryBuildsOfficialOauthUrlFromCachedSettings(): void
     {
         if (gethostbyname('redis') === 'redis' && getenv('REDIS_HOST') === false) {
@@ -215,5 +254,26 @@ final class WechatOfficialOauthUrlTest extends TestCase
         }
 
         return $values;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function dispatchClientUserAuthPost(string $path): array
+    {
+        $app = new App(dirname(__DIR__, 3));
+
+        $request = $app->make(\think\Request::class);
+        $request->setPathinfo('client/api/user/auth/' . ltrim($path, '/'));
+        $request->withServer([
+            'REQUEST_METHOD' => 'POST',
+            'HTTP_HOST' => 'localhost',
+            'SERVER_NAME' => 'localhost',
+        ]);
+
+        $response = $app->http->run($request);
+        $body = json_decode($response->getContent(), true);
+
+        return is_array($body) ? $body : [];
     }
 }

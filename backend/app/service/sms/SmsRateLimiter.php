@@ -35,8 +35,8 @@ class SmsRateLimiter
 
     public function __construct(
         private readonly SmsCache $cache,
-        private readonly int $mobileDailyLimit = 5,
-        private readonly int $ipMinuteLimit = 3,
+        private readonly ?int $mobileDailyLimit = null,
+        private readonly ?int $ipMinuteLimit = null,
     ) {
     }
 
@@ -54,17 +54,19 @@ class SmsRateLimiter
         }
 
         // 2. 同手机号 24h
+        $mobileDailyLimit = $this->mobileDailyLimit();
         $dailyKey = self::KEY_PREFIX . 'mobile_daily:' . $mobile . ':' . date('Ymd');
         $dailyCount = (int) $this->cache->get($dailyKey, 0);
-        if ($dailyCount >= $this->mobileDailyLimit) {
-            throw new SmsException(sprintf('该手机号今日已超过 %d 次验证码上限', $this->mobileDailyLimit));
+        if ($dailyCount >= $mobileDailyLimit) {
+            throw new SmsException(sprintf('该手机号今日已超过 %d 次验证码上限', $mobileDailyLimit));
         }
 
         // 3. 同 IP 1min
         if ($ip !== '') {
+            $ipMinuteLimit = $this->ipMinuteLimit();
             $ipKey = self::KEY_PREFIX . 'ip_minute:' . $ip;
             $ipCount = (int) $this->cache->get($ipKey, 0);
-            if ($ipCount >= $this->ipMinuteLimit) {
+            if ($ipCount >= $ipMinuteLimit) {
                 throw new SmsException('该 IP 验证码请求过于频繁,请稍后再试');
             }
         }
@@ -87,5 +89,15 @@ class SmsRateLimiter
             $current = (int) $this->cache->get($ipKey, 0);
             $this->cache->set($ipKey, $current + 1, self::IP_MINUTE_TTL);
         }
+    }
+
+    private function mobileDailyLimit(): int
+    {
+        return $this->mobileDailyLimit ?? SmsConfig::mobileDailyLimit();
+    }
+
+    private function ipMinuteLimit(): int
+    {
+        return $this->ipMinuteLimit ?? SmsConfig::ipMinuteLimit();
     }
 }

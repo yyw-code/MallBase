@@ -188,6 +188,30 @@
                 @tap="previewReviewImage(review, imageIndex)"
               />
             </view>
+            <view
+              v-if="review.appendContent || review.appendImages.length > 0"
+              class="goods-detail__review-append"
+            >
+              <view class="goods-detail__review-append-header">
+                <text class="goods-detail__review-append-label">追评</text>
+                <text v-if="review.appendTimeText" class="goods-detail__review-append-time">
+                  {{ review.appendTimeText }}
+                </text>
+              </view>
+              <text v-if="review.appendContent" class="goods-detail__review-append-content">
+                {{ review.appendContent }}
+              </text>
+              <view v-if="review.appendImages.length > 0" class="goods-detail__review-images">
+                <image
+                  v-for="(image, imageIndex) in review.appendImages"
+                  :key="image"
+                  class="goods-detail__review-image"
+                  :src="image"
+                  mode="aspectFill"
+                  @tap="previewReviewAppendImage(review, imageIndex)"
+                />
+              </view>
+            </view>
             <view v-if="review.replyContent" class="goods-detail__review-reply">
               <text class="goods-detail__review-reply-prefix">商家回复：</text>
               <text class="goods-detail__review-reply-text">{{ review.replyContent }}</text>
@@ -545,6 +569,9 @@ function normalizeReview(review) {
     rating: Math.max(1, Math.min(5, Number(review.rating || 5))),
     content: review.content || '',
     images: normalizeReviewImages(review.images_full_urls || review.images),
+    appendContent: review.append_content || '',
+    appendImages: normalizeReviewImages(review.append_images_full_urls || review.append_images),
+    appendTimeText: formatReviewTime(review.append_time),
     replyContent: review.reply_content || '',
     createTimeText,
     skuSpecText,
@@ -639,6 +666,15 @@ function previewReviewImage(review, imageIndex) {
   uni.previewImage({
     urls: review.images,
     current: review.images[imageIndex],
+  })
+}
+
+function previewReviewAppendImage(review, imageIndex) {
+  if (!review?.appendImages?.length) return
+
+  uni.previewImage({
+    urls: review.appendImages,
+    current: review.appendImages[imageIndex],
   })
 }
 
@@ -1266,6 +1302,41 @@ function onBuyNow({ sku, quantity }) {
   height: 168rpx;
   border-radius: $mb-radius-md;
   background: $mb-color-bg-secondary;
+}
+
+.goods-detail__review-append {
+  margin-top: $mb-spacing-md;
+  padding: $mb-spacing-md;
+  border-radius: $mb-radius-md;
+  background: $mb-color-bg-secondary;
+}
+
+.goods-detail__review-append-header {
+  display: flex;
+  align-items: center;
+  gap: $mb-spacing-sm;
+}
+
+.goods-detail__review-append-label {
+  font-size: $mb-font-sm;
+  font-weight: 700;
+  color: $mb-color-text-title;
+  line-height: 1.4;
+}
+
+.goods-detail__review-append-time {
+  font-size: $mb-font-xs;
+  color: $mb-color-text-tertiary;
+  line-height: 1.4;
+}
+
+.goods-detail__review-append-content {
+  display: block;
+  margin-top: $mb-spacing-sm;
+  font-size: $mb-font-sm;
+  color: $mb-color-text-secondary;
+  line-height: 1.6;
+  word-break: break-word;
 }
 
 .goods-detail__review-reply {

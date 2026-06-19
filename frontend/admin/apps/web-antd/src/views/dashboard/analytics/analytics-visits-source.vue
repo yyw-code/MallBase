@@ -1,14 +1,23 @@
 <script lang="ts" setup>
 import type { EchartsUIType } from '@vben/plugins/echarts';
 
-import { onMounted, ref } from 'vue';
+import type { AnalyticsApi } from '#/api/analytics';
+
+import { computed, onMounted, ref, watch } from 'vue';
 
 import { EchartsUI, useEcharts } from '@vben/plugins/echarts';
 
+const props = defineProps<{
+  data?: AnalyticsApi.PieItem[];
+}>();
 const chartRef = ref<EchartsUIType>();
 const { renderEcharts } = useEcharts(chartRef);
 
-onMounted(() => {
+const chartData = computed(() =>
+  props.data?.length ? props.data : [{ name: '暂无订单', value: 0 }],
+);
+
+function render() {
   renderEcharts({
     legend: {
       bottom: '2%',
@@ -22,13 +31,8 @@ onMounted(() => {
         animationEasing: 'exponentialInOut',
         animationType: 'scale',
         avoidLabelOverlap: false,
-        color: ['#5ab1ef', '#b6a2de', '#67e0e3', '#2ec7c9'],
-        data: [
-          { name: '搜索引擎', value: 1048 },
-          { name: '直接访问', value: 735 },
-          { name: '邮件营销', value: 580 },
-          { name: '联盟广告', value: 484 },
-        ],
+        color: ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444'],
+        data: chartData.value,
         emphasis: {
           label: {
             fontSize: '12',
@@ -37,7 +41,6 @@ onMounted(() => {
           },
         },
         itemStyle: {
-          // borderColor: '#fff',
           borderRadius: 10,
           borderWidth: 2,
         },
@@ -48,7 +51,7 @@ onMounted(() => {
         labelLine: {
           show: false,
         },
-        name: '访问来源',
+        name: '订单来源',
         radius: ['40%', '65%'],
         type: 'pie',
       },
@@ -57,7 +60,17 @@ onMounted(() => {
       trigger: 'item',
     },
   });
+}
+
+onMounted(() => {
+  render();
 });
+
+watch(
+  () => props.data,
+  () => render(),
+  { deep: true },
+);
 </script>
 
 <template>

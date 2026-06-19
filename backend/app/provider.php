@@ -1,6 +1,5 @@
 <?php
 use app\ExceptionHandle;
-use app\model\sms\SmsConfig;
 use app\Request;
 use app\service\sms\CacheBackedSmsCache;
 use app\service\sms\SmsCache;
@@ -16,24 +15,19 @@ return [
     // 缓存层:默认走 think\facade\Cache(项目默认 Redis)
     SmsCache::class => CacheBackedSmsCache::class,
 
-    // 频控:从 mb_sms_config 单行表读阈值(替代旧 sms_setting 项)
+    // 频控:阈值由 SmsRateLimiter 按需读取系统表单 SmsRateLimit 分组
     SmsRateLimiter::class => function (\think\App $app) {
-        $cfg = SmsConfig::singleton();
         return new SmsRateLimiter(
             cache: $app->make(SmsCache::class),
-            mobileDailyLimit: (int) $cfg->rate_mobile_daily,
-            ipMinuteLimit: (int) $cfg->rate_ip_minute,
         );
     },
 
-    // 业务入口:驱动由 SmsService 按场景绑定动态解析(支持多服务商)
+    // 业务入口:驱动由 SmsService 按场景绑定动态解析,验证码 TTL 按需读取设置表
     SmsService::class => function (\think\App $app) {
-        $cfg = SmsConfig::singleton();
         return new SmsService(
             driver: null,
             rateLimiter: $app->make(SmsRateLimiter::class),
             cache: $app->make(SmsCache::class),
-            codeTtl: (int) $cfg->code_ttl,
         );
     },
 ];

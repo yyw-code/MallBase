@@ -87,17 +87,20 @@
         </view>
 
         <!-- Action buttons -->
-        <view v-if="getActions(order).length > 0" class="order-card__actions">
-          <view
+        <view
+          v-if="getActions(order).length > 0"
+          class="order-card__actions"
+          @tap.stop
+        >
+          <mb-button
             v-for="act in getActions(order)"
             :key="act.key"
-            :class="['order-card__btn', { 'order-card__btn--primary': act.primary }]"
-            @tap.stop="handleAction(act.key, order)"
-          >
-            <text
-              :class="['order-card__btn-text', { 'order-card__btn-text--primary': act.primary }]"
-            >{{ act.label }}</text>
-          </view>
+            class="order-card__action-button"
+            :type="act.primary ? 'primary' : 'secondary'"
+            size="small"
+            :label="act.label"
+            @click="handleAction(act.key, order)"
+          />
         </view>
       </view>
 
@@ -128,6 +131,14 @@
       @select="onPayMethodSelect"
       @close="closeSheet"
     />
+
+    <!-- 售后商品选择 -->
+    <mb-refund-item-sheet
+      :visible="refundSheetVisible"
+      :items="refundSheetItems"
+      @confirm="onRefundItemsConfirm"
+      @close="closeRefundSheet"
+    />
   </view>
 </template>
 
@@ -149,6 +160,9 @@ const {
 } = usePayFlow()
 
 const pendingPayOrder = ref(null)
+const refundSheetVisible = ref(false)
+const refundSheetOrder = ref(null)
+const refundSheetItems = ref([])
 
 function redirectToPayResult(order, payResult) {
   if (!order) return
@@ -157,8 +171,17 @@ function redirectToPayResult(order, payResult) {
     : payResult.status === 'pending'
       ? 'pending'
       : 'fail'
+  const query = [
+    `sn=${encodeURIComponent(order.sn || '')}`,
+    `order_id=${encodeURIComponent(order.id || '')}`,
+    `status=${status}`,
+  ]
+  const message = String(payResult.message || '').trim()
+  if (message) {
+    query.push(`message=${encodeURIComponent(message.slice(0, 160))}`)
+  }
   uni.navigateTo({
-    url: `/pages-sub/order/pay-result?sn=${order.sn}&order_id=${order.id}&status=${status}`,
+    url: `/pages-sub/order/pay-result?${query.join('&')}`,
   })
 }
 
@@ -263,50 +286,51 @@ function getOrderItemId(item) {
   return item?.id || item?.order_item_id || ''
 }
 
-function getRefundItemLabel(item) {
-  const name = item?.goods_name || item?.name || '商品'
-  const spec = getItemSpec(item)
-  return spec ? `${name} ${spec}` : name
-}
-
 function getRefundableQuantity(item) {
   const explicit = Number(item?.refundable_quantity)
   if (Number.isFinite(explicit)) return Math.max(0, explicit)
   return Math.max(0, Number(item?.quantity || 0) - Number(item?.refunded_quantity || 0))
 }
 
-function getRefundableAmount(item) {
-  const amount = item?.refundable_amount
-  return amount !== undefined && amount !== null && amount !== ''
-    ? String(amount)
-    : ''
-}
+function navigateToRefund(order, selections) {
+  const selectedItems = (Array.isArray(selections) ? selections : [])
+    .map((row) => {
+      const item = row?.item || row
+      const orderItemId = row?.order_item_id || getOrderItemId(item)
+      const quantity = Math.max(1, Number(row?.quantity || 1))
+      return orderItemId ? { order_item_id: orderItemId, quantity } : null
+    })
+    .filter(Boolean)
 
-function navigateToRefund(order, item, receiveStatus = 'not_received', type = 0) {
-  const orderItemId = getOrderItemId(item)
-  if (!orderItemId) {
+  if (selectedItems.length === 0) {
     uni.showToast({ title: '请选择要申请售后的商品', icon: 'none' })
     return
   }
-  const refundableQuantity = getRefundableQuantity(item)
-  if (refundableQuantity <= 0) {
-    uni.showToast({ title: '该商品暂无可退数量', icon: 'none' })
-    return
-  }
-  const refundableAmount = getRefundableAmount(item)
+
   const query = [
     `order_id=${order.id}`,
-    `order_item_id=${orderItemId}`,
-    `receive_status=${receiveStatus}`,
-    `type=${type}`,
-    item?.goods_name ? `goods_name=${encodeURIComponent(item.goods_name)}` : '',
-    getOrderItemImage(item) ? `goods_image=${encodeURIComponent(getOrderItemImage(item))}` : '',
-    getItemSpec(item) ? `sku_spec_text=${encodeURIComponent(getItemSpec(item))}` : '',
-    item?.unit_price ? `price=${encodeURIComponent(item.unit_price)}` : '',
-    `quantity=${encodeURIComponent(refundableQuantity)}`,
-    refundableAmount ? `refundable_amount=${encodeURIComponent(refundableAmount)}` : '',
+    `selected_items=${encodeURIComponent(JSON.stringify(selectedItems))}`,
   ].filter(Boolean).join('&')
   uni.navigateTo({ url: `/pages-sub/refund/apply?${query}` })
+}
+
+function openRefundSheet(order, items) {
+  refundSheetOrder.value = order
+  refundSheetItems.value = items
+  refundSheetVisible.value = true
+}
+
+function closeRefundSheet() {
+  refundSheetVisible.value = false
+  refundSheetOrder.value = null
+  refundSheetItems.value = []
+}
+
+function onRefundItemsConfirm(selections) {
+  const order = refundSheetOrder.value
+  closeRefundSheet()
+  if (!order) return
+  navigateToRefund(order, selections)
 }
 
 function getStoreName(order) {
@@ -348,8 +372,12 @@ function canApplyRefund(order) {
   return order?.can_refund !== false
 }
 
+function isActiveAfterSaleStatus(status) {
+  return [0, 1, 2].includes(Number(status))
+}
+
 function hasActiveAfterSale(order) {
-  return order?.can_refund === false && !!order?.after_sale_tag_text
+  return isActiveAfterSaleStatus(order?.after_sale?.status)
 }
 
 function afterSaleTip(order) {
@@ -485,7 +513,7 @@ async function handleAction(key, order) {
   } else if (key === 'refund') {
     if (!canApplyRefund(order)) {
       uni.showToast({
-        title: hasActiveAfterSale(order) ? '已有进行中的售后申请' : '订单已超过售后申请期限',
+        title: hasActiveAfterSale(order) ? '剩余商品暂无可申请售后' : '订单已超过售后申请期限',
         icon: 'none',
       })
       return
@@ -495,45 +523,11 @@ async function handleAction(key, order) {
       uni.showToast({ title: '请选择要申请售后的商品', icon: 'none' })
       return
     }
-    const chooseItem = (item) => {
-      if (Number(order.status) === 20) {
-        chooseReceiveStatus(order, item)
-        return
-      }
-      navigateToRefund(order, item, Number(order.status) >= 30 ? 'received' : 'not_received', 0)
-    }
-    if (items.length === 1) {
-      chooseItem(items[0])
-      return
-    }
-    uni.showActionSheet({
-      itemList: items.map(getRefundItemLabel),
-      success(res) {
-        chooseItem(items[res.tapIndex])
-      },
-    })
+    openRefundSheet(order, items)
   } else if (key === 'rebuy') {
     // Re-add items to cart
     uni.showToast({ title: '已加入购物车', icon: 'none' })
   }
-}
-
-function chooseReceiveStatus(order, item) {
-  uni.showActionSheet({
-    itemList: ['未收到货', '已收到货'],
-    success(res) {
-      if (res.tapIndex === 0) {
-        navigateToRefund(order, item, 'not_received', 0)
-        return
-      }
-      uni.showActionSheet({
-        itemList: ['仅退款', '退货退款'],
-        success(typeRes) {
-          navigateToRefund(order, item, 'received', typeRes.tapIndex === 1 ? 1 : 0)
-        },
-      })
-    },
-  })
 }
 
 function goDetail(id) {
@@ -901,35 +895,7 @@ onUnmounted(() => {
   margin-top: 18rpx;
 }
 
-.order-card__btn {
+.order-card__action-button {
   min-width: 132rpx;
-  height: 58rpx;
-  padding: 0 24rpx;
-  border-radius: 18rpx;
-  border: 1rpx solid rgba(13, 80, 213, 0.45);
-  background: $mb-color-bg;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  &:active {
-    opacity: 0.7;
-  }
-}
-
-.order-card__btn--primary {
-  background: $mb-color-primary;
-  border-color: $mb-color-primary;
-}
-
-.order-card__btn-text {
-  font-size: $mb-font-sm;
-  font-weight: 500;
-  color: $mb-color-primary;
-  line-height: 1;
-}
-
-.order-card__btn-text--primary {
-  color: $mb-color-text-inverse;
 }
 </style>

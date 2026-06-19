@@ -15,8 +15,8 @@ Route::group('auth/admin', function () {
     ])->withoutMiddleware([JwtAuth::class, CheckPermission::class]);
 
     Route::post('logout', 'logout')->name('SystemAdminLogout')->option(['_alias' => '登出', '_desc' => '管理员登出', '_auth' => false])->withoutMiddleware([CheckPermission::class]);
-    Route::get('list', 'list')->name('SystemAdminList')->option(['_alias' => '列表', '_desc' => '管理员列表', '_auth' => true]);
-    Route::get('info/:id', 'info')->name('SystemAdminInfo')->option(['_alias' => '详情', '_desc' => '管理员详情', '_auth' => true]);
+    Route::get('list', 'list')->name('SystemAdminList')->option(['_alias' => '列表', '_desc' => '管理员列表', '_auth' => true, '_type' => Permission::TYPE_MENU]);
+    Route::get('info/:id', 'info')->name('SystemAdminInfo')->option(['_alias' => '详情', '_desc' => '管理员详情', '_auth' => true, '_type' => Permission::TYPE_MENU]);
     Route::get('adminInfo', 'adminInfo')->name('SystemLoginAdminInfo')->option(['_alias' => '当前登录详情', '_desc' => '当前登录管理员详情', '_auth' => false]);
     Route::post('create', 'create')->name('SystemAdminCreate')->option(['_alias' => '创建', '_desc' => '创建管理员', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::put('update/:id', 'update')->name('SystemAdminUpdate')->option(['_alias' => '更新', '_desc' => '更新管理员', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);

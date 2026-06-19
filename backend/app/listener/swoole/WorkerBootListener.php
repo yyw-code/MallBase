@@ -2,8 +2,9 @@
 
 namespace app\listener\swoole;
 
-use think\swoole\Manager;
 use app\cron\CronManager;
+use Closure;
+use think\swoole\Manager;
 
 class WorkerBootListener
 {
@@ -13,6 +14,10 @@ class WorkerBootListener
         // 启动定时任务（只会在 worker 0 生效）
         // 获取 workerId
         $workerId = $manager->getWorkerId();
-        app()->make(CronManager::class)->boot($workerId);
+        $runInSandbox = static function (callable $callback) use ($manager): void {
+            $manager->runInSandbox($callback instanceof Closure ? $callback : Closure::fromCallable($callback));
+        };
+
+        app()->make(CronManager::class)->boot($workerId, $runInSandbox);
     }
 }

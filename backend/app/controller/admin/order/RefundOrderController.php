@@ -38,6 +38,31 @@ class RefundOrderController extends BaseController
         return $this->success($this->service()->adminList($filter, $page, $pageSize), '获取成功');
     }
 
+    public function stats()
+    {
+        $filter = $this->request->param([
+            'sn', 'order_sn', 'status', 'type', 'user_phone',
+            'created_start', 'created_end',
+            'reviewed_start', 'reviewed_end',
+        ]);
+
+        return $this->success($this->service()->adminStats($filter), '获取成功');
+    }
+
+    public function export()
+    {
+        $filter = $this->request->param([
+            'sn', 'order_sn', 'status', 'type', 'user_phone',
+            'created_start', 'created_end',
+            'reviewed_start', 'reviewed_end',
+        ]);
+
+        return response($this->service()->exportCsv($filter), 200, [
+            'Content-Type' => 'text/csv; charset=utf-8',
+            'Content-Disposition' => 'attachment; filename="refund-orders.csv"',
+        ]);
+    }
+
     /**
      * 售后详情
      */

@@ -1,40 +1,35 @@
 <script lang="ts" setup>
 import type { EchartsUIType } from '@vben/plugins/echarts';
 
-import { onMounted, ref } from 'vue';
+import type { AnalyticsApi } from '#/api/analytics';
+
+import { onMounted, ref, watch } from 'vue';
 
 import { EchartsUI, useEcharts } from '@vben/plugins/echarts';
 
+const props = defineProps<{
+  data?: AnalyticsApi.Health;
+}>();
 const chartRef = ref<EchartsUIType>();
 const { renderEcharts } = useEcharts(chartRef);
 
-onMounted(() => {
+function render() {
+  const indicators = props.data?.indicators ?? [
+    '商品上新',
+    '库存维护',
+    '订单履约',
+    '售后响应',
+    '用户增长',
+    '营销转化',
+  ];
+
   renderEcharts({
     legend: {
       bottom: 0,
-      data: ['访问', '趋势'],
+      data: ['本周', '上周'],
     },
     radar: {
-      indicator: [
-        {
-          name: '网页',
-        },
-        {
-          name: '移动端',
-        },
-        {
-          name: 'Ipad',
-        },
-        {
-          name: '客户端',
-        },
-        {
-          name: '第三方',
-        },
-        {
-          name: '其它',
-        },
-      ],
+      indicator: indicators.map((name) => ({ max: 100, name })),
       radius: '60%',
       splitNumber: 8,
     },
@@ -50,21 +45,20 @@ onMounted(() => {
         data: [
           {
             itemStyle: {
-              color: '#b6a2de',
+              color: '#8b5cf6',
             },
-            name: '访问',
-            value: [90, 50, 86, 40, 50, 20],
+            name: '本周',
+            value: props.data?.current ?? indicators.map(() => 0),
           },
           {
             itemStyle: {
-              color: '#5ab1ef',
+              color: '#0ea5e9',
             },
-            name: '趋势',
-            value: [70, 75, 70, 76, 20, 85],
+            name: '上周',
+            value: props.data?.previous ?? indicators.map(() => 0),
           },
         ],
         itemStyle: {
-          // borderColor: '#fff',
           borderRadius: 10,
           borderWidth: 2,
         },
@@ -74,7 +68,17 @@ onMounted(() => {
     ],
     tooltip: {},
   });
+}
+
+onMounted(() => {
+  render();
 });
+
+watch(
+  () => props.data,
+  () => render(),
+  { deep: true },
+);
 </script>
 
 <template>

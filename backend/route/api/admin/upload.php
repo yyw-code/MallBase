@@ -6,13 +6,13 @@ Route::group('upload', function () {
     Route::post('single', 'single')->name('UploadSingle')->option([
         '_alias' => '单文件上传',
         '_desc'  => '单文件上传（图片/文件通用）',
-        '_auth'  => true,
+        '_auth'  => false,
     ]);
 
     Route::post('batch', 'batch')->name('UploadBatch')->option([
         '_alias' => '批量上传',
         '_desc'  => '批量文件上传（图片/文件通用）',
-        '_auth'  => true,
+        '_auth'  => false,
     ]);
 })->prefix('admin.UploadController/')
     ->name('Upload')

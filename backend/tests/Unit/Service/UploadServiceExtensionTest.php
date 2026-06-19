@@ -72,6 +72,29 @@ final class UploadServiceExtensionTest extends TestCase
         ]);
     }
 
+    public function testApplySystemLimitsWarnsWhenMaxSizeTouchesPhpLimit(): void
+    {
+        $limits = UploadService::getSystemUploadLimits();
+        $effectiveMb = $limits['effective_max_size_mb'] ?? null;
+
+        if (!is_numeric($effectiveMb) || (float)$effectiveMb <= 0) {
+            $this->markTestSkipped('当前环境未提供有效 PHP 上传上限，跳过触顶提示断言。');
+        }
+
+        $result = UploadService::applySystemLimits([
+            'max_size' => (float)$effectiveMb,
+            'max_count' => 1,
+            'accept_types' => ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
+        ], 'image');
+
+        $this->assertFalse($result['clamped']);
+        $this->assertEquals((float)$effectiveMb, $result['rule']['max_size'], '', 0.0001);
+
+        $warningText = implode(' ', $result['warnings']);
+        $this->assertStringContainsString('上传类型 image的 max_size 已受 PHP 上限限制', $warningText);
+        $this->assertStringContainsString('client_max_body_size', $warningText);
+    }
+
     private function validate(object $file): void
     {
         $this->invoke('validateUploadFile', [$file, $this->imageRules()]);

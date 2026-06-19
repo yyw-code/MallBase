@@ -31,6 +31,7 @@
 | [troubleshooting.md](./troubleshooting.md) | 安装、Docker、前端静态资源与运行时的故障排查 |
 | [env-files.md](./env-files.md) | 根 `.env`、`backend/.env` 与安装运行时配置职责 |
 | [nginx-reverse-proxy.md](./nginx-reverse-proxy.md) | `/`、`/client/`、`/admin/`、`/client/api/`、`/admin/api/` 等路径的代理与静态托管规则 |
+| [cloud-storage-upload.md](./cloud-storage-upload.md) | 本地存储、阿里云 OSS、腾讯云 COS 上传驱动配置与验证 |
 | [issues/docker-fullstack-first-run.md](./issues/docker-fullstack-first-run.md) | 方式三首次启动的密码错位、时序问题专题记录 |
 
 ## 命令分册

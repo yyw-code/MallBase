@@ -42,6 +42,16 @@ const searchParams = ref({
   source: undefined as number | undefined,
 });
 
+const sourceOptions = [
+  { value: 1, label: '手动添加', color: 'orange' },
+  { value: 2, label: '路由同步', color: 'cyan' },
+  { value: 3, label: '设置模块同步', color: 'blue' },
+];
+
+const getSourceOption = (source?: number) => {
+  return sourceOptions.find((item) => item.value === source);
+};
+
 // 加载数据
 const loadData = async () => {
   loading.value = true;
@@ -74,6 +84,7 @@ const resetSearch = () => {
     keyword: '',
     type: undefined,
     status: undefined,
+    source: undefined,
   };
   loadData();
 };
@@ -88,6 +99,7 @@ const {
   openEditModal,
   handleSubmit,
 } = useFormModal();
+void formRef;
 
 // 打开新增弹窗
 const handleCreate = () => {
@@ -208,7 +220,7 @@ const columns = [
     dataIndex: 'source',
     width: 120,
     customRender: ({ record }: any) => {
-      return record.source === 1 ? '手动添加' : '路由同步';
+      return getSourceOption(record.source)?.label || '-';
     },
   },
   { title: '路由路径', dataIndex: 'path', width: 200 },
@@ -236,13 +248,14 @@ const columns = [
       }
       return h(Switch, {
         checked: record.status === 1,
-        onChange: async (checked: boolean) => {
+        onChange: async (checked: any) => {
+          const enabled = checked === true;
           const hasChildren = record.children && record.children.length > 0;
 
           if (hasChildren) {
             Modal.confirm({
               title: '确认操作',
-              content: checked
+              content: enabled
                 ? '是否同时启用所有子权限？'
                 : '是否同时禁用所有子权限？',
               okText: '是',
@@ -250,7 +263,7 @@ const columns = [
               onOk: async () => {
                 await batchUpdatePermissionApi(record.id, {
                   field: 'status',
-                  value: checked ? 1 : 0,
+                  value: enabled ? 1 : 0,
                   include_children: true,
                 });
                 message.success('更新成功');
@@ -259,7 +272,7 @@ const columns = [
               onCancel: async () => {
                 await batchUpdatePermissionApi(record.id, {
                   field: 'status',
-                  value: checked ? 1 : 0,
+                  value: enabled ? 1 : 0,
                   include_children: false,
                 });
                 message.success('更新成功');
@@ -269,7 +282,7 @@ const columns = [
           } else {
             await batchUpdatePermissionApi(record.id, {
               field: 'status',
-              value: checked ? 1 : 0,
+              value: enabled ? 1 : 0,
               include_children: false,
             });
             message.success('更新成功');
@@ -289,13 +302,14 @@ const columns = [
       }
       return h(Switch, {
         checked: record.is_show === 1,
-        onChange: async (checked: boolean) => {
+        onChange: async (checked: any) => {
+          const enabled = checked === true;
           const hasChildren = record.children && record.children.length > 0;
 
           if (hasChildren) {
             Modal.confirm({
               title: '确认操作',
-              content: checked
+              content: enabled
                 ? '是否同时显示所有子菜单？'
                 : '是否同时隐藏所有子菜单？',
               okText: '是',
@@ -303,7 +317,7 @@ const columns = [
               onOk: async () => {
                 await batchUpdatePermissionApi(record.id, {
                   field: 'is_show',
-                  value: checked ? 1 : 0,
+                  value: enabled ? 1 : 0,
                   include_children: true,
                 });
                 message.success('更新成功');
@@ -312,7 +326,7 @@ const columns = [
               onCancel: async () => {
                 await batchUpdatePermissionApi(record.id, {
                   field: 'is_show',
-                  value: checked ? 1 : 0,
+                  value: enabled ? 1 : 0,
                   include_children: false,
                 });
                 message.success('更新成功');
@@ -322,7 +336,7 @@ const columns = [
           } else {
             await batchUpdatePermissionApi(record.id, {
               field: 'is_show',
-              value: checked ? 1 : 0,
+              value: enabled ? 1 : 0,
               include_children: false,
             });
             message.success('更新成功');
@@ -391,135 +405,148 @@ if (hasAccessByCodes(['SystemPermissionTree'])) {
 
 <template>
   <div class="p-4">
-    <div class="mb-4">
-      <a-button
-        type="primary"
-        @click="handleCreate"
-        v-access:code="'SystemPermissionCreate'"
-      >
-        新增权限
-      </a-button>
-      <a-button
-        class="ml-2"
-        @click="loadData"
-        v-access:code="'SystemPermissionTree'"
-      >
-        刷新
-      </a-button>
+    <div class="mb-3 flex items-center justify-between gap-4">
+      <h2 class="m-0 text-lg font-semibold">权限设置</h2>
+      <div class="flex flex-wrap justify-end gap-2">
+        <a-button
+          type="primary"
+          @click="handleCreate"
+          v-access:code="'SystemPermissionCreate'"
+        >
+          新增权限
+        </a-button>
+        <a-button @click="loadData" v-access:code="'SystemPermissionTree'">
+          刷新
+        </a-button>
+      </div>
     </div>
 
     <!-- 搜索表单 -->
-    <a-form layout="inline" class="mb-4" v-access:code="'SystemPermissionTree'">
-      <a-form-item label="关键词">
-        <a-input
-          v-model:value="searchParams.keyword"
-          placeholder="权限名称/编码"
-          allow-clear
-          style="width: 200px"
-        />
-      </a-form-item>
-      <a-form-item label="类型">
-        <a-select
-          v-model:value="searchParams.type"
-          placeholder="请选择"
-          allow-clear
-          style="width: 150px"
-        >
-          <a-select-option :value="1">菜单</a-select-option>
-          <a-select-option :value="2">按钮</a-select-option>
-          <a-select-option :value="3">接口</a-select-option>
-        </a-select>
-      </a-form-item>
-      <a-form-item label="状态">
-        <a-select
-          v-model:value="searchParams.status"
-          placeholder="请选择"
-          allow-clear
-          style="width: 150px"
-        >
-          <a-select-option :value="1">启用</a-select-option>
-          <a-select-option :value="0">禁用</a-select-option>
-        </a-select>
-      </a-form-item>
-      <a-form-item label="来源">
-        <a-select
-          v-model:value="searchParams.source"
-          placeholder="请选择"
-          allow-clear
-          style="width: 150px"
-        >
-          <a-select-option :value="1">手动添加</a-select-option>
-          <a-select-option :value="2">路由同步</a-select-option>
-        </a-select>
-      </a-form-item>
-      <a-form-item>
-        <a-button type="primary" @click="loadData"> 搜索</a-button>
-        <a-button class="ml-2" @click="resetSearch"> 重置</a-button>
-      </a-form-item>
-    </a-form>
-
-    <a-table
-      :columns="columns"
-      :data-source="tableData"
-      :loading="loading"
-      :pagination="false"
-      :scroll="{ x: 1400 }"
-      :default-expanded-row-keys="treeExpandedKeys"
-      row-key="id"
-      v-access:code="'SystemPermissionTree'"
-    >
-      <template #bodyCell="{ column, record }">
-        <template v-if="column.dataIndex === 'type'">
-          <a-tag v-if="record.type === 1" color="blue">
-            <span class="mr-1">📋</span>菜单
-          </a-tag>
-          <a-tag v-else-if="record.type === 2" color="green">
-            <span class="mr-1">🔘</span>按钮
-          </a-tag>
-          <a-tag v-else-if="record.type === 3" color="purple">
-            <span class="mr-1">🔗</span>接口
-          </a-tag>
-          <span v-else>-</span>
-        </template>
-        <template v-if="column.dataIndex === 'code'">
-          <span
-            class="cursor-pointer select-none"
-            style="color: #1890ff"
-            @click="handleCopyCode(record.code)"
+    <div class="mb-3 rounded-lg border bg-[hsl(var(--card))] p-4">
+      <a-form
+        class="grid grid-cols-1 gap-x-4 gap-y-3 md:grid-cols-3 xl:grid-cols-6"
+        v-access:code="'SystemPermissionTree'"
+      >
+        <a-form-item label="关键词" class="mb-0">
+          <a-input
+            v-model:value="searchParams.keyword"
+            placeholder="权限名称/编码"
+            allow-clear
+            class="w-full"
+          />
+        </a-form-item>
+        <a-form-item label="类型" class="mb-0">
+          <a-select
+            v-model:value="searchParams.type"
+            placeholder="请选择"
+            allow-clear
+            class="w-full"
           >
-            {{ record.code }}
-          </span>
-        </template>
-
-        <template v-if="column.dataIndex === 'source'">
-          <a-tag v-if="record.source === 1" color="orange">手动添加</a-tag>
-          <a-tag v-else-if="record.source === 2" color="cyan">路由同步</a-tag>
-          <span v-else>-</span>
-        </template>
-
-        <template v-if="column.key === 'action'">
-          <a-space>
-            <a-button
-              type="link"
-              size="small"
-              @click="handleEdit(record)"
-              v-access:code="'SystemPermissionUpdate'"
+            <a-select-option :value="1"> 菜单 </a-select-option>
+            <a-select-option :value="2"> 按钮 </a-select-option>
+          </a-select>
+        </a-form-item>
+        <a-form-item label="状态" class="mb-0">
+          <a-select
+            v-model:value="searchParams.status"
+            placeholder="请选择"
+            allow-clear
+            class="w-full"
+          >
+            <a-select-option :value="1"> 启用 </a-select-option>
+            <a-select-option :value="0"> 禁用 </a-select-option>
+          </a-select>
+        </a-form-item>
+        <a-form-item label="来源" class="mb-0">
+          <a-select
+            v-model:value="searchParams.source"
+            placeholder="请选择"
+            allow-clear
+            class="w-full"
+          >
+            <a-select-option
+              v-for="item in sourceOptions"
+              :key="item.value"
+              :value="item.value"
             >
-              编辑
-            </a-button>
-            <a-button
-              type="link"
-              danger
-              size="small"
-              @click="handleDelete(record)"
-              v-access:code="'SystemPermissionDelete'"
+              {{ item.label }}
+            </a-select-option>
+          </a-select>
+        </a-form-item>
+        <a-form-item class="mb-0 md:col-span-3 xl:col-span-6">
+          <div class="flex justify-end gap-2">
+            <a-button type="primary" @click="loadData"> 搜索</a-button>
+            <a-button @click="resetSearch"> 重置</a-button>
+          </div>
+        </a-form-item>
+      </a-form>
+    </div>
+
+    <div class="overflow-hidden rounded-lg border bg-[hsl(var(--card))]">
+      <a-table
+        :columns="columns"
+        :data-source="tableData"
+        :loading="loading"
+        :pagination="false"
+        :scroll="{ x: 1400 }"
+        :default-expanded-row-keys="treeExpandedKeys"
+        row-key="id"
+        v-access:code="'SystemPermissionTree'"
+      >
+        <template #bodyCell="{ column, record }">
+          <template v-if="column.dataIndex === 'type'">
+            <a-tag v-if="record.type === 1" color="blue">
+              <span class="mr-1">📋</span>菜单
+            </a-tag>
+            <a-tag v-else-if="record.type === 2" color="green">
+              <span class="mr-1">🔘</span>按钮
+            </a-tag>
+            <span v-else>-</span>
+          </template>
+          <template v-if="column.dataIndex === 'code'">
+            <span
+              class="cursor-pointer select-none"
+              style="color: #1890ff"
+              @click="handleCopyCode(record.code)"
             >
-              删除
-            </a-button>
-          </a-space>
+              {{ record.code }}
+            </span>
+          </template>
+
+          <template v-if="column.dataIndex === 'source'">
+            <a-tag
+              v-if="getSourceOption(record.source)"
+              :color="getSourceOption(record.source)?.color"
+            >
+              {{ getSourceOption(record.source)?.label }}
+            </a-tag>
+            <span v-else>-</span>
+          </template>
+
+          <template v-if="column.key === 'action'">
+            <a-space>
+              <a-button
+                type="link"
+                size="small"
+                @click="handleEdit(record)"
+                v-access:code="'SystemPermissionUpdate'"
+              >
+                编辑
+              </a-button>
+              <a-button
+                type="link"
+                danger
+                size="small"
+                @click="handleDelete(record)"
+                v-access:code="'SystemPermissionDelete'"
+              >
+                删除
+              </a-button>
+            </a-space>
+          </template>
         </template>
-      </template>
-    </a-table>
+      </a-table>
+    </div>
 
     <!-- 新增/编辑弹窗 -->
     <a-modal
@@ -567,7 +594,6 @@ if (hasAccessByCodes(['SystemPermissionTree'])) {
           <a-radio-group v-model:value="formData.type">
             <a-radio :value="1">菜单</a-radio>
             <a-radio :value="2">按钮</a-radio>
-            <a-radio :value="3">接口</a-radio>
           </a-radio-group>
         </a-form-item>
         <a-form-item label="路由路径" name="path">

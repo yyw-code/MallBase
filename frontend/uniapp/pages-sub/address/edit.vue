@@ -13,6 +13,38 @@
         <text class="addr-edit__section-desc">请填写准确的联系方式以确保准时送达</text>
       </view>
 
+      <!-- 智能解析 -->
+      <view class="smart-parse">
+        <view class="smart-parse__header">
+          <view class="smart-parse__icon">
+            <view class="smart-parse__spark smart-parse__spark--main" />
+            <view class="smart-parse__spark smart-parse__spark--sub" />
+          </view>
+          <view class="smart-parse__copy">
+            <text class="smart-parse__title">智能解析</text>
+            <text class="smart-parse__desc">粘贴姓名、手机号和地址，自动填入表单</text>
+          </view>
+        </view>
+        <textarea
+          v-model="smartText"
+          class="smart-parse__textarea"
+          :focus="smartFocus"
+          :maxlength="300"
+          auto-height
+          placeholder="例如：张三 13800138000 浙江省杭州市西湖区文三路 138 号"
+          placeholder-class="smart-parse__placeholder"
+        />
+        <mb-button
+          class="smart-parse__button"
+          type="secondary"
+          size="medium"
+          block
+          :loading="parsing"
+          label="解析并填入"
+          @click="handleSmartParse"
+        />
+      </view>
+
       <!-- Form fields -->
       <view class="form-group">
         <!-- 收货人 -->
@@ -27,7 +59,7 @@
               placeholder="输入姓名"
               placeholder-class="form-placeholder"
             />
-            <view class="form-field__icon form-field__icon--pen" />
+            <view class="form-field__icon form-field__icon--user" />
           </view>
           <view class="form-field__line" />
         </view>
@@ -73,6 +105,7 @@
               placeholder="街道、门牌号等具体信息"
               placeholder-class="form-placeholder"
             />
+            <view class="form-field__icon form-field__icon--home" />
           </view>
           <view class="form-field__line" />
         </view>
@@ -95,20 +128,23 @@
 
     <!-- 底部操作 -->
     <view v-if="!pageLoading" class="addr-edit__footer">
-      <view
+      <mb-button
         v-if="isEdit"
         class="addr-edit__delete-btn"
-        @tap="confirmDelete"
-      >
-        <text class="addr-edit__delete-text">删除地址</text>
-      </view>
-      <view
+        type="danger"
+        size="large"
+        label="删除地址"
+        @click="confirmDelete"
+      />
+      <mb-button
         class="addr-edit__save-btn"
         :class="{ 'addr-edit__save-btn--full': !isEdit }"
-        @tap="handleSave"
-      >
-        <text class="addr-edit__save-text">{{ saving ? '保存中...' : '保存并使用' }}</text>
-      </view>
+        type="primary"
+        size="large"
+        :loading="saving"
+        :label="saving ? '保存中...' : '保存并使用'"
+        @click="handleSave"
+      />
     </view>
 
     <!-- Region picker popup -->
@@ -117,7 +153,7 @@
         <view class="region-panel__header">
           <text class="region-panel__title">选择地区</text>
           <view class="region-panel__close" @tap="closePicker">
-            <text class="region-panel__close-icon">✕</text>
+            <view class="region-panel__close-icon" />
           </view>
         </view>
 
@@ -154,7 +190,7 @@
             @tap="selectRegion(r)"
           >
             <text class="region-item__text">{{ r.name }}</text>
-            <text v-if="isRegionSelected(r.id)" class="region-item__check">✓</text>
+            <view v-if="isRegionSelected(r.id)" class="region-item__check" />
           </view>
         </scroll-view>
       </view>
@@ -179,6 +215,10 @@ const isEdit = ref(false)
 const addressId = ref('')
 const pageLoading = ref(false)
 const saving = ref(false)
+const parsing = ref(false)
+const smartText = ref('')
+const smartFocus = ref(false)
+const regionCache = new Map()
 
 const form = reactive({
   receiver_name: '',
@@ -326,8 +366,218 @@ function closePicker() {
   setTimeout(() => { showPicker.value = false }, 300)
 }
 
+function findMobileInfo(value) {
+  const matched = String(value || '').match(/1[3-9]\d[\s-]?\d{4}[\s-]?\d{4}/)
+  if (!matched) return { mobile: '', raw: '' }
+  return {
+    mobile: matched[0].replace(/\D/g, ''),
+    raw: matched[0],
+  }
+}
+
+function cleanSmartText(value) {
+  return String(value || '')
+    .replace(/\r/g, '\n')
+    .replace(/[，,；;|]/g, ' ')
+    .replace(/[：:]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function stripSmartLabels(value) {
+  return cleanSmartText(value)
+    .replace(/(收货地址|详细地址|联系电话|手机号码|收货人|收件人|联系人|手机号|电话|手机|姓名|地址)\s*/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function splitSmartTokens(value) {
+  return String(value || '')
+    .replace(/[，,；;|/\\\n\r]/g, ' ')
+    .split(/\s+/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+}
+
+function normalizeNameCandidate(value) {
+  const cleaned = String(value || '').replace(/[^\u4e00-\u9fa5A-Za-z·]/g, '')
+  if (cleaned.length < 2 || cleaned.length > 8) return ''
+  if (/[省市区县镇乡街道路号室楼栋单元村苑园座幢弄巷]/.test(cleaned)) return ''
+  return cleaned
+}
+
+function extractReceiverName(value, mobileRaw) {
+  const source = String(value || '')
+  const beforeMobile = mobileRaw ? source.split(mobileRaw)[0] : source
+  const beforeTokens = splitSmartTokens(beforeMobile)
+
+  for (let i = beforeTokens.length - 1; i >= 0; i--) {
+    const name = normalizeNameCandidate(beforeTokens[i])
+    if (name) return name
+  }
+
+  const tokens = splitSmartTokens(source)
+  for (const token of tokens) {
+    const name = normalizeNameCandidate(token)
+    if (name) return name
+  }
+
+  return ''
+}
+
+function removeFirst(value, chunk) {
+  if (!chunk) return value
+  return String(value || '').replace(chunk, ' ')
+}
+
+function shortRegionName(name) {
+  const value = String(name || '').trim()
+  const suffixes = ['维吾尔自治区', '壮族自治区', '回族自治区', '特别行政区', '自治区', '自治州', '地区', '街道', '省', '市', '区', '县', '镇', '乡', '村']
+  const suffix = suffixes.find((item) => value.endsWith(item) && value.length > item.length + 1)
+  return suffix ? value.slice(0, -suffix.length) : value
+}
+
+function regionNameTokens(name) {
+  const full = String(name || '').trim()
+  const short = shortRegionName(full)
+  return [full, short]
+    .filter((item, index, arr) => item && arr.indexOf(item) === index)
+    .sort((a, b) => b.length - a.length)
+}
+
+function matchRegionOption(options, text) {
+  let best = null
+
+  options.forEach((option) => {
+    regionNameTokens(option.name).forEach((token) => {
+      const index = text.indexOf(token)
+      if (index < 0) return
+
+      const score = token.length
+      if (!best || index < best.index || (index === best.index && score > best.score)) {
+        best = {
+          option,
+          index,
+          score,
+          endIndex: index + token.length,
+        }
+      }
+    })
+  })
+
+  return best
+}
+
+async function loadRegionOptions(parentId = 0) {
+  const key = String(parentId || 0)
+  if (regionCache.has(key)) return regionCache.get(key)
+
+  const data = await getRegionChildren(parentId || 0)
+  const list = Array.isArray(data?.list) ? data.list : (Array.isArray(data) ? data : [])
+  regionCache.set(key, list)
+  return list
+}
+
+async function resolveRegionFromText(text) {
+  const breadcrumbsResult = []
+  let parentId = 0
+  let endIndex = 0
+
+  for (let level = 0; level < 4; level++) {
+    const options = await loadRegionOptions(parentId)
+    const matched = matchRegionOption(options, text)
+    if (!matched) break
+
+    breadcrumbsResult.push({
+      id: matched.option.id,
+      name: matched.option.name,
+    })
+    parentId = matched.option.id
+    endIndex = Math.max(endIndex, matched.endIndex)
+  }
+
+  return { breadcrumbs: breadcrumbsResult, endIndex }
+}
+
+function buildSmartDetail(addressText, regionEndIndex) {
+  const source = String(addressText || '')
+  const detailSource = regionEndIndex > 0 ? source.slice(regionEndIndex) : source
+  return cleanSmartText(detailSource).replace(/^[\s，,；;：:-]+/, '')
+}
+
+async function parseSmartAddress(value) {
+  const mobileInfo = findMobileInfo(value)
+  const readable = stripSmartLabels(value)
+  const withoutMobile = mobileInfo.raw ? readable.replace(mobileInfo.raw, ' ') : readable
+  const receiverName = extractReceiverName(readable, mobileInfo.raw)
+  const addressText = cleanSmartText(removeFirst(withoutMobile, receiverName))
+  const regionResult = addressText
+    ? await resolveRegionFromText(addressText)
+    : { breadcrumbs: [], endIndex: 0 }
+
+  return {
+    mobile: mobileInfo.mobile,
+    receiverName,
+    breadcrumbs: regionResult.breadcrumbs,
+    addressDetail: buildSmartDetail(addressText, regionResult.endIndex),
+  }
+}
+
+async function handleSmartParse() {
+  if (parsing.value) return
+
+  if (!String(smartText.value || '').trim()) {
+    uni.showToast({ title: '请先粘贴收货信息', icon: 'none' })
+    return
+  }
+
+  parsing.value = true
+  try {
+    const result = await parseSmartAddress(smartText.value)
+    let filledCount = 0
+
+    if (result.receiverName) {
+      form.receiver_name = result.receiverName
+      filledCount++
+    }
+    if (result.mobile) {
+      form.receiver_mobile = result.mobile
+      filledCount++
+    }
+    if (result.breadcrumbs.length > 0) {
+      breadcrumbs.value = result.breadcrumbs
+      applyBreadcrumbsToForm()
+      currentLevel.value = Math.min(result.breadcrumbs.length, 3)
+      filledCount++
+    }
+    if (result.addressDetail) {
+      form.address_detail = result.addressDetail
+      filledCount++
+    }
+
+    if (!filledCount) {
+      uni.showToast({ title: '未识别到有效信息', icon: 'none' })
+      return
+    }
+
+    const title = result.breadcrumbs.length >= 4
+      ? '已解析并填入'
+      : '已解析，请补全地区'
+    uni.showToast({ title, icon: 'none' })
+  } catch {
+    uni.showToast({ title: '解析失败，请手动填写', icon: 'none' })
+  } finally {
+    parsing.value = false
+    smartFocus.value = false
+  }
+}
+
 // --- Page lifecycle ---
 onLoad(async (query) => {
+  if (query?.smart === '1') {
+    nextTick(() => { smartFocus.value = true })
+  }
+
   if (query?.id) {
     isEdit.value = true
     addressId.value = query.id
@@ -444,11 +694,126 @@ function confirmDelete() {
 .addr-edit__section-header { padding: $mb-spacing-xl 0 $mb-spacing-lg; }
 .addr-edit__section-title {
   display: block; font-size: $mb-font-xxl; font-weight: 800;
-  color: $mb-color-text-title; letter-spacing: 0.02em;
+  color: $mb-color-text-title; letter-spacing: 0;
 }
 .addr-edit__section-desc {
   display: block; margin-top: $mb-spacing-xs; font-size: $mb-font-sm;
-  color: $mb-color-text-tertiary; letter-spacing: 0.01em;
+  color: $mb-color-text-tertiary; letter-spacing: 0;
+}
+
+// Smart parser
+.smart-parse {
+  background: $mb-color-bg;
+  border-radius: $mb-radius-lg;
+  padding: $mb-spacing-lg;
+  border: 1rpx solid rgba($mb-color-primary, 0.14);
+  margin-bottom: $mb-spacing-lg;
+}
+
+.smart-parse__header {
+  display: flex;
+  align-items: center;
+  gap: $mb-spacing-md;
+  margin-bottom: $mb-spacing-md;
+}
+
+.smart-parse__icon {
+  flex-shrink: 0;
+  width: 58rpx;
+  height: 58rpx;
+  border-radius: 18rpx;
+  background: rgba($mb-color-primary, 0.08);
+  position: relative;
+}
+
+.smart-parse__spark {
+  position: absolute;
+
+  &::before,
+  &::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    border-radius: 999rpx;
+    background: $mb-color-primary;
+    transform: translate(-50%, -50%);
+  }
+
+  &::before {
+    width: 4rpx;
+    height: 28rpx;
+  }
+
+  &::after {
+    width: 28rpx;
+    height: 4rpx;
+  }
+}
+
+.smart-parse__spark--main {
+  left: 17rpx;
+  top: 14rpx;
+  width: 28rpx;
+  height: 28rpx;
+  transform: rotate(45deg);
+}
+
+.smart-parse__spark--sub {
+  right: 11rpx;
+  bottom: 10rpx;
+  width: 16rpx;
+  height: 16rpx;
+  transform: rotate(45deg);
+
+  &::before {
+    height: 16rpx;
+  }
+
+  &::after {
+    width: 16rpx;
+  }
+}
+
+.smart-parse__copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.smart-parse__title {
+  display: block;
+  font-size: $mb-font-lg;
+  font-weight: 700;
+  color: $mb-color-text-title;
+  letter-spacing: 0;
+}
+
+.smart-parse__desc {
+  display: block;
+  margin-top: 4rpx;
+  font-size: $mb-font-sm;
+  color: $mb-color-text-tertiary;
+  line-height: 1.4;
+}
+
+.smart-parse__textarea {
+  width: 100%;
+  min-height: 128rpx;
+  box-sizing: border-box;
+  padding: $mb-spacing-md;
+  border-radius: $mb-radius-md;
+  background: $mb-color-bg-secondary;
+  color: $mb-color-text;
+  font-size: $mb-font-md;
+  line-height: 1.5;
+}
+
+.smart-parse__placeholder {
+  color: $mb-color-text-tertiary;
+}
+
+.smart-parse__button {
+  margin-top: $mb-spacing-md;
 }
 
 // Form group
@@ -460,7 +825,7 @@ function confirmDelete() {
 .form-field { padding-top: $mb-spacing-md; }
 .form-field__label {
   display: block; font-size: $mb-font-sm; color: $mb-color-text-tertiary;
-  margin-bottom: $mb-spacing-xs; letter-spacing: 0.03em;
+  margin-bottom: $mb-spacing-xs; letter-spacing: 0;
 }
 .form-field__row { display: flex; align-items: center; min-height: 72rpx; }
 .form-field__row--tap { cursor: pointer; }
@@ -480,17 +845,17 @@ function confirmDelete() {
   display: flex; align-items: center; justify-content: center;
   margin-left: $mb-spacing-sm; position: relative;
 }
-.form-field__icon--pen {
+.form-field__icon--user {
   &::before {
-    content: ''; position: absolute; width: 6rpx; height: 20rpx;
-    background: $mb-color-text-tertiary; border-radius: 2rpx;
-    transform: rotate(-45deg); top: 4rpx; right: 12rpx;
+    content: ''; position: absolute; width: 16rpx; height: 16rpx;
+    border: 3rpx solid $mb-color-text-tertiary; border-radius: 50%;
+    top: 5rpx; left: 50%; transform: translateX(-50%);
   }
   &::after {
-    content: ''; position: absolute; width: 0; height: 0;
-    border-left: 4rpx solid transparent; border-right: 4rpx solid transparent;
-    border-top: 7rpx solid $mb-color-text-tertiary;
-    transform: rotate(-45deg); bottom: 6rpx; right: 10rpx;
+    content: ''; position: absolute; width: 24rpx; height: 12rpx;
+    border: 3rpx solid $mb-color-text-tertiary; border-top: 0;
+    border-radius: 0 0 16rpx 16rpx;
+    left: 50%; bottom: 5rpx; transform: translateX(-50%);
   }
 }
 .form-field__icon--phone {
@@ -511,6 +876,20 @@ function confirmDelete() {
   border-bottom: 3rpx solid $mb-color-text-tertiary;
   transform: rotate(-45deg); top: 50%; left: 50%;
   margin-top: -6rpx; margin-left: -8rpx;
+}
+.form-field__icon--home {
+  &::before {
+    content: ''; position: absolute; width: 22rpx; height: 18rpx;
+    border: 3rpx solid $mb-color-text-tertiary; border-top: 0;
+    border-radius: 0 0 4rpx 4rpx;
+    left: 50%; bottom: 6rpx; transform: translateX(-50%);
+  }
+  &::after {
+    content: ''; position: absolute; width: 18rpx; height: 18rpx;
+    border-left: 3rpx solid $mb-color-text-tertiary;
+    border-top: 3rpx solid $mb-color-text-tertiary;
+    top: 7rpx; left: 50%; transform: translateX(-50%) rotate(45deg);
+  }
 }
 
 // Default address toggle
@@ -549,19 +928,12 @@ function confirmDelete() {
   box-shadow: $mb-shadow-bar;
 }
 .addr-edit__delete-btn {
-  height: 96rpx; flex: 1; border-radius: $mb-radius-sm;
-  background: $mb-color-bg-secondary; border: 2rpx solid $mb-color-border;
-  display: flex; align-items: center; justify-content: center;
-  &:active { opacity: 0.85; }
+  flex: 1;
 }
-.addr-edit__delete-text { font-size: $mb-font-md; font-weight: 600; color: $mb-color-error; }
 .addr-edit__save-btn {
-  height: 96rpx; flex: 2; border-radius: $mb-radius-sm;
-  background: $mb-color-primary; display: flex; align-items: center; justify-content: center;
-  &:active { opacity: 0.85; transform: scale(0.98); }
+  flex: 2;
 }
 .addr-edit__save-btn--full { flex: 1; }
-.addr-edit__save-text { font-size: $mb-font-md; font-weight: 600; color: $mb-color-text-inverse; letter-spacing: 0; }
 
 // Region picker
 .region-mask {
@@ -580,8 +952,36 @@ function confirmDelete() {
   padding: $mb-spacing-lg; flex-shrink: 0;
 }
 .region-panel__title { font-size: $mb-font-lg; font-weight: 700; color: $mb-color-text-title; }
-.region-panel__close { width: 48rpx; height: 48rpx; display: flex; align-items: center; justify-content: center; }
-.region-panel__close-icon { font-size: $mb-font-md; color: $mb-color-text-tertiary; }
+.region-panel__close {
+  width: 56rpx; height: 56rpx; border-radius: 50%;
+  background: $mb-color-bg-secondary;
+  display: flex; align-items: center; justify-content: center;
+}
+.region-panel__close-icon {
+  position: relative;
+  width: 24rpx;
+  height: 24rpx;
+
+  &::before,
+  &::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 24rpx;
+    height: 3rpx;
+    border-radius: 999rpx;
+    background: $mb-color-text-tertiary;
+  }
+
+  &::before {
+    transform: translate(-50%, -50%) rotate(45deg);
+  }
+
+  &::after {
+    transform: translate(-50%, -50%) rotate(-45deg);
+  }
+}
 
 // Region tabs
 .region-tabs {
@@ -609,5 +1009,11 @@ function confirmDelete() {
 }
 .region-item--selected .region-item__text { color: $mb-color-primary; font-weight: 600; }
 .region-item__text { font-size: $mb-font-md; color: $mb-color-text; }
-.region-item__check { font-size: $mb-font-md; color: $mb-color-primary; font-weight: 700; }
+.region-item__check {
+  width: 22rpx;
+  height: 12rpx;
+  border-left: 4rpx solid $mb-color-primary;
+  border-bottom: 4rpx solid $mb-color-primary;
+  transform: rotate(-45deg);
+}
 </style>

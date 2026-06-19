@@ -3,8 +3,6 @@
 namespace app\cron;
 
 use mall_base\log\Logger;
-use Swoole\Timer;
-use think\facade\Log;
 
 class CronManager
 {
@@ -18,7 +16,7 @@ class CronManager
         $this->onlyWorkerId = (int)config('cron.only_worker_id', 0);
     }
 
-    public function boot(int $workerId): void
+    public function boot(int $workerId, callable $runInSandbox): void
     {
         // Worker 限制
         if ($workerId !== $this->onlyWorkerId) {
@@ -53,7 +51,7 @@ class CronManager
             try {
                 /** @var CronTaskInterface $task */
                 $task = app()->make($taskClass);
-                $task->register();
+                $task->register($runInSandbox);
 
                 $log->withData([
                     'task' => $taskClass,

@@ -17,16 +17,23 @@ class OrderMaintenanceCron implements CronTaskInterface
     private const LOCK_KEY = 'cron:order-maintenance:dispatch';
     private const LOCK_TTL = 55;
 
-    public function register(): void
+    public function register(callable $runInSandbox): void
     {
-        Timer::tick(60000, function (): void {
-            if (!$this->acquireLock()) {
-                return;
-            }
-
-            JobQueue::push(CloseExpiredOrdersJob::class, ['limit' => 500]);
-            JobQueue::push(AutoReceiveOrdersJob::class, ['limit' => 500]);
+        Timer::tick(60000, function () use ($runInSandbox): void {
+            $runInSandbox(function (): void {
+                $this->dispatchJobs();
+            });
         });
+    }
+
+    private function dispatchJobs(): void
+    {
+        if (!$this->acquireLock()) {
+            return;
+        }
+
+        JobQueue::push(CloseExpiredOrdersJob::class, ['limit' => 500]);
+        JobQueue::push(AutoReceiveOrdersJob::class, ['limit' => 500]);
     }
 
     private function acquireLock(): bool

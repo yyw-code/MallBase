@@ -10,6 +10,7 @@ use app\model\order\RefundOrder;
 use app\service\order\OrderSettingService;
 use app\service\order\RefundOrderStatusMachine;
 use app\service\order\RefundSnGenerator;
+use app\service\upload\AssetHydrator;
 use app\common\enum\OperatorType;
 use app\common\enum\OrderStatus;
 use app\common\enum\RefundOrderStatus;
@@ -132,6 +133,125 @@ class RefundService extends BaseService
     }
 
     /**
+     * 买家批量发起售后申请
+     *
+     * 批量只聚合请求与事务边界，仍保持“一条订单明细一张售后单”。
+     *
+     * @param int                  $userId
+     * @param array<string, mixed> $payload 请求参数：items / type / receive_status / reason / remark
+     *
+     * @return array{total:int, list:array<int, array{id:int, sn:string, status:int, refund_amount:string}>}
+     */
+    public function applyBatch(int $userId, array $payload): array
+    {
+        $this->assertUserId($userId);
+
+        $items = $this->normalizeBatchItems($payload['items'] ?? null);
+        $type = (int) ($payload['type'] ?? RefundOrderStatus::TYPE_REFUND_ONLY);
+        $receiveStatus = (int) ($payload['receive_status'] ?? RefundOrderStatus::RECEIVE_NOT_RECEIVED);
+        $reason = (string) ($payload['reason'] ?? '');
+        $remark = isset($payload['remark']) && $payload['remark'] !== ''
+            ? mb_substr((string) $payload['remark'], 0, 255)
+            : null;
+
+        if (!in_array($type, [RefundOrderStatus::TYPE_REFUND_ONLY, RefundOrderStatus::TYPE_RETURN_REFUND], true)) {
+            throw new BusinessException('售后类型不合法');
+        }
+        if (!in_array($receiveStatus, [RefundOrderStatus::RECEIVE_NOT_RECEIVED, RefundOrderStatus::RECEIVE_RECEIVED], true)) {
+            throw new BusinessException('收货状态不合法');
+        }
+        if (!RefundReason::isValid($reason)) {
+            throw new BusinessException('售后原因不合法');
+        }
+
+        $prepared = [];
+        $batchOrderId = null;
+        $remainingCentsByOrder = [];
+
+        foreach ($items as $row) {
+            $orderItemId = $row['order_item_id'];
+            $quantity = $row['quantity'];
+
+            [$order, $item] = $this->assertOwnedOrderItem($userId, $orderItemId);
+            $orderId = (int) ($order['id'] ?? 0);
+            if ($batchOrderId === null) {
+                $batchOrderId = $orderId;
+            } elseif ($batchOrderId !== $orderId) {
+                throw new BusinessException('售后商品必须属于同一订单');
+            }
+
+            $this->assertOrderRefundable($order);
+            $this->assertRefundScenario($order, $type, $receiveStatus);
+            $this->assertQuantityLimit($item, $quantity);
+            $this->assertNoActiveRefund($orderItemId);
+
+            if (!isset($remainingCentsByOrder[$orderId])) {
+                $remainingCentsByOrder[$orderId] = $this->remainingRefundableCents(
+                    $orderId,
+                    $this->orderGoodsPaidCents($order),
+                );
+            }
+
+            $refundCents = $this->decimalToCents($this->calcRefundAmount($order, $item, $quantity));
+            $refundCents = min($refundCents, $remainingCentsByOrder[$orderId]);
+            $remainingCentsByOrder[$orderId] = max(0, $remainingCentsByOrder[$orderId] - $refundCents);
+
+            $prepared[] = [
+                'order_id'      => $orderId,
+                'order_item_id' => $orderItemId,
+                'quantity'      => $quantity,
+                'refund_amount' => $this->centsToDecimal($refundCents),
+                'intercept_status' => $this->defaultInterceptStatus((int) $order['status'], $type, $receiveStatus),
+            ];
+        }
+
+        /** @var RefundSnGenerator $snGen */
+        $snGen = app()->make(RefundSnGenerator::class);
+        foreach ($prepared as &$row) {
+            $row['sn'] = $snGen->next();
+        }
+        unset($row);
+
+        /** @var array<int, RefundOrder> $refunds */
+        $refunds = $this->transaction(function () use (
+            $prepared, $userId, $type, $receiveStatus, $reason, $remark
+        ) {
+            $rows = [];
+            foreach ($prepared as $row) {
+                /** @var RefundOrder $refund */
+                $refund = $this->model()->create([
+                    'sn'            => $row['sn'],
+                    'order_id'      => $row['order_id'],
+                    'order_item_id' => $row['order_item_id'],
+                    'user_id'       => $userId,
+                    'type'          => $type,
+                    'receive_status'=> $receiveStatus,
+                    'status'        => RefundOrderStatus::PENDING,
+                    'quantity'      => $row['quantity'],
+                    'refund_amount' => $row['refund_amount'],
+                    'reason'        => $reason,
+                    'remark'        => $remark,
+                    'intercept_status' => $row['intercept_status'],
+                ]);
+                $rows[] = $refund;
+            }
+            return $rows;
+        });
+
+        $list = array_map(static fn(RefundOrder $refund): array => [
+            'id'            => (int) $refund->id,
+            'sn'            => (string) $refund->sn,
+            'status'        => (int) $refund->status,
+            'refund_amount' => (string) $refund->refund_amount,
+        ], $refunds);
+
+        return [
+            'total' => count($list),
+            'list'  => $list,
+        ];
+    }
+
+    /**
      * 买家取消（撤销）售后申请（仅 PENDING 可撤销）
      */
     public function cancel(int $userId, int $refundId): void
@@ -183,35 +303,31 @@ class RefundService extends BaseService
      *
      * 条件同源：先 count 再 select，builder 通过 clone 复用
      *
-     * @param array{status?:int|null, start_time?:string|null, end_time?:string|null} $filter
+     * @param array{status?:int|null, order_id?:int|null, start_time?:string|null, end_time?:string|null} $filter
      * @return array{total:int, list:array<int, array<string, mixed>>}
      */
     public function list(int $userId, array $filter = [], int $page = 1, int $pageSize = 10): array
     {
         $this->assertUserId($userId);
 
-        $query = $this->model()
-            ->where('user_id', $userId)
-            ->whereNull('delete_time');
-
-        if (isset($filter['status']) && $filter['status'] !== null && $filter['status'] !== '') {
-            $query->where('status', (int) $filter['status']);
-        }
-        if (!empty($filter['start_time'])) {
-            $query->where('create_time', '>=', (string) $filter['start_time']);
-        }
-        if (!empty($filter['end_time'])) {
-            $query->where('create_time', '<=', (string) $filter['end_time']);
-        }
+        $query = $this->buildListQuery($userId, $filter);
 
         $total = (clone $query)->count();
         $list  = $query
+            ->with([
+                'mainOrder' => static function ($q): void {
+                    $q->field('id, sn, status');
+                },
+                'orderItem' => static function ($q): void {
+                    $q->field('id, goods_id, sku_id, goods_name, goods_image, sku_spec, unit_price, quantity, refunded_quantity');
+                },
+            ])
             ->order('id', 'desc')
             ->page($page, $pageSize)
             ->select()
             ->toArray();
 
-        $this->hydrateListRelations($list);
+        $this->hydrateRefundRows($list);
 
         return compact('total', 'list');
     }
@@ -222,42 +338,74 @@ class RefundService extends BaseService
     public function detail(int $userId, int $refundId): array
     {
         $this->assertUserId($userId);
-        $refund = $this->findOwnedRefund($userId, $refundId);
+        /** @var RefundOrder|null $refund */
+        $refund = $this->model()
+            ->with([
+                'mainOrder' => static function ($q): void {
+                    $q->field('id, sn, status, pay_amount, receiver_name, receiver_phone, create_time, paid_at, shipped_at, received_at');
+                },
+                'orderItem' => static function ($q): void {
+                    $q->field('id, goods_id, sku_id, goods_name, goods_image, sku_spec, unit_price, quantity, refunded_quantity');
+                },
+            ])
+            ->where('id', $refundId)
+            ->where('user_id', $userId)
+            ->whereNull('delete_time')
+            ->find();
+        if ($refund === null) {
+            throw new BusinessException('售后单不存在');
+        }
 
         $data = $refund->toArray();
-
-        // 关联主订单摘要
-        $orderModel = $this->model(Order::class)
-            ->where('id', (int) $refund->order_id)
-            ->field('id, sn, status, pay_amount, receiver_name, receiver_phone, create_time, paid_at, shipped_at, received_at')
-            ->find();
-        $order = $orderModel?->toArray();
-        if ($order !== null) {
-            $order['status_text'] = OrderStatus::textOf((int) $order['status']);
-        }
-        $data['order'] = $order;
-
-        // 关联订单项快照
-        $orderItemId = (int) ($refund->order_item_id ?? 0);
-        if ($orderItemId > 0) {
-            $itemModel = $this->model(OrderItem::class)->where('id', $orderItemId)->find();
-            $item = $itemModel?->toArray();
-            if ($item !== null) {
-                $item['goods_image_full_url'] = buildUploadUrl((string) ($item['goods_image'] ?? ''));
-            }
-            $data['order_item'] = $item;
-        } else {
-            $data['order_item'] = null;
-        }
-
-        // 原因文案（前端展示用）
-        $data['reason_text'] = RefundReason::textOf((string) ($refund->reason ?? ''));
+        $this->hydrateRefundRows($data);
         $data['return_receiver'] = $this->returnReceiver();
 
         return $data;
     }
 
     // ---------------- 内部：校验 / 装配 ----------------
+
+    /**
+     * @param mixed $items
+     * @return array<int, array{order_item_id:int, quantity:int}>
+     */
+    private function normalizeBatchItems(mixed $items): array
+    {
+        if (!is_array($items) || $items === []) {
+            throw new BusinessException('请选择要申请售后的商品');
+        }
+        if (count($items) > 50) {
+            throw new BusinessException('单次最多选择 50 个售后商品');
+        }
+
+        $seen = [];
+        $normalized = [];
+        foreach ($items as $row) {
+            if (!is_array($row)) {
+                throw new BusinessException('售后商品参数不合法');
+            }
+
+            $orderItemId = (int) ($row['order_item_id'] ?? $row['id'] ?? 0);
+            $quantity = (int) ($row['quantity'] ?? 0);
+            if ($orderItemId <= 0) {
+                throw new BusinessException('订单项参数不合法');
+            }
+            if ($quantity <= 0) {
+                throw new BusinessException('申请数量必须大于 0');
+            }
+            if (isset($seen[$orderItemId])) {
+                throw new BusinessException('同一订单商品不能重复选择');
+            }
+
+            $seen[$orderItemId] = true;
+            $normalized[] = [
+                'order_item_id' => $orderItemId,
+                'quantity' => $quantity,
+            ];
+        }
+
+        return $normalized;
+    }
 
     /**
      * 校验订单项归属并返回 [订单, 订单项]
@@ -417,45 +565,82 @@ class RefundService extends BaseService
     }
 
     /**
-     * 退款金额 = 下单快照单价 × 申请数量
-     *
-     * MVP 不做优惠分摊；真实渠道结算时再细化
+     * 退款金额按订单项实付快照计算，并受整单剩余可退金额封顶。
      *
      * @param array<string, mixed> $item
      */
     private function calcRefundAmount(array $order, array $item, int $quantity): string
     {
-        $orderGoodsTotalCents = $this->decimalToCents((string) ($order['total_amount'] ?? '0.00'));
-        if ($orderGoodsTotalCents <= 0) {
+        $goodsPaidCents = $this->orderGoodsPaidCents($order);
+        if ($goodsPaidCents <= 0) {
+            return '0.00';
+        }
+
+        $itemPaidCents = $this->decimalToCents((string) ($item['pay_amount'] ?? '0.00'));
+        $itemQuantity = (int) ($item['quantity'] ?? 0);
+        if ($itemQuantity <= 0) {
+            throw new BusinessException('退款金额不合法');
+        }
+        if ($itemPaidCents <= 0) {
+            return '0.00';
+        }
+
+        $itemOccupiedCents = $this->itemRefundOccupiedCents((int) ($item['id'] ?? 0));
+        $itemRemainingCents = max(0, $itemPaidCents - $itemOccupiedCents);
+        if ($itemRemainingCents <= 0) {
+            return '0.00';
+        }
+
+        $remainingQuantity = max(0, $itemQuantity - (int) ($item['refunded_quantity'] ?? 0));
+        if ($quantity >= $remainingQuantity) {
+            $baseRefundCents = $itemRemainingCents;
+        } else {
+            $baseRefundCents = intdiv($itemPaidCents * $quantity, $itemQuantity);
+            if ($baseRefundCents <= 0) {
+                $baseRefundCents = min($itemRemainingCents, 1);
+            }
+        }
+
+        $remainingCents = $this->remainingRefundableCents((int) ($order['id'] ?? 0), $goodsPaidCents);
+        $refundCents = min($baseRefundCents, $itemRemainingCents, $remainingCents);
+        if ($refundCents <= 0) {
+            return '0.00';
+        }
+
+        return $this->centsToDecimal($refundCents);
+    }
+
+    private function orderGoodsPaidCents(array $order): int
+    {
+        $totalCents = $this->decimalToCents((string) ($order['total_amount'] ?? '0.00'));
+        if ($totalCents <= 0) {
             throw new BusinessException('订单商品金额不合法');
         }
 
         $discountCents = $this->decimalToCents((string) ($order['discount_amount'] ?? '0.00'));
         $payCents = $this->decimalToCents((string) ($order['pay_amount'] ?? '0.00'));
-        $goodsPaidCents = max(0, $orderGoodsTotalCents - $discountCents);
-        $goodsPaidCents = min($goodsPaidCents, $payCents);
-        if ($goodsPaidCents <= 0) {
-            throw new BusinessException('订单可退金额不足');
+        return min(max(0, $totalCents - $discountCents), $payCents);
+    }
+
+    private function itemRefundOccupiedCents(int $orderItemId): int
+    {
+        if ($orderItemId <= 0) {
+            return 0;
         }
 
-        $unitPriceCents = $this->decimalToCents((string) ($item['unit_price'] ?? '0.00'));
-        $requestSubtotalCents = $unitPriceCents * $quantity;
-        if ($requestSubtotalCents <= 0) {
-            throw new BusinessException('退款金额不合法');
-        }
+        $rows = $this->model()
+            ->where('order_item_id', $orderItemId)
+            ->whereIn('status', $this->refundOccupiedStatuses())
+            ->whereNull('delete_time')
+            ->field('refund_amount')
+            ->select()
+            ->toArray();
 
-        $baseRefundCents = intdiv($goodsPaidCents * $requestSubtotalCents, $orderGoodsTotalCents);
-        if ($baseRefundCents <= 0) {
-            $baseRefundCents = min($requestSubtotalCents, $goodsPaidCents);
+        $occupiedCents = 0;
+        foreach ($rows as $row) {
+            $occupiedCents += $this->decimalToCents((string) ($row['refund_amount'] ?? '0.00'));
         }
-
-        $remainingCents = $this->remainingRefundableCents((int) ($order['id'] ?? 0), $goodsPaidCents);
-        $refundCents = min($baseRefundCents, $remainingCents);
-        if ($refundCents <= 0) {
-            throw new BusinessException('订单可退金额不足');
-        }
-
-        return $this->centsToDecimal($refundCents);
+        return $occupiedCents;
     }
 
     private function remainingRefundableCents(int $orderId, int $goodsPaidCents): int
@@ -522,62 +707,72 @@ class RefundService extends BaseService
     }
 
     /**
-     * 列表数据补齐订单号与订单项快照（N+1 一次聚合掉）
-     *
-     * @param array<int, array<string, mixed>> $list 按引用修改
+     * @param array{status?:int|null, order_id?:int|null, start_time?:string|null, end_time?:string|null} $filter
      */
-    private function hydrateListRelations(array &$list): void
+    private function buildListQuery(int $userId, array $filter = [])
     {
-        if ($list === []) {
+        $query = $this->model()
+            ->where('user_id', $userId)
+            ->whereNull('delete_time');
+
+        if (isset($filter['status']) && $filter['status'] !== null && $filter['status'] !== '') {
+            $query->where('status', (int) $filter['status']);
+        }
+        if (isset($filter['order_id']) && $filter['order_id'] !== null && $filter['order_id'] !== '') {
+            $query->where('order_id', (int) $filter['order_id']);
+        }
+        if (!empty($filter['start_time'])) {
+            $query->where('create_time', '>=', (string) $filter['start_time']);
+        }
+        if (!empty($filter['end_time'])) {
+            $query->where('create_time', '<=', (string) $filter['end_time']);
+        }
+
+        return $query;
+    }
+
+    /**
+     * @param array<string, mixed>|array<int, array<string, mixed>> $rows
+     */
+    private function hydrateRefundRows(array &$rows): void
+    {
+        if ($rows === []) {
             return;
         }
 
-        $orderIds = array_values(array_unique(array_map(
-            static fn(array $r): int => (int) ($r['order_id'] ?? 0),
-            $list,
-        )));
-        $orderItemIds = array_values(array_filter(array_map(
-            static fn(array $r): int => (int) ($r['order_item_id'] ?? 0),
-            $list,
-        )));
+        $isSingle = array_is_list($rows) === false;
+        $list = $isSingle ? [$rows] : $rows;
 
-        $orderMap = [];
-        if ($orderIds !== []) {
-            $rows = $this->model(Order::class)
-                ->whereIn('id', $orderIds)
-                ->field('id, sn, status')
-                ->select()
-                ->toArray();
-            foreach ($rows as $row) {
-                $orderMap[(int) $row['id']] = [
-                    'sn'          => (string) $row['sn'],
-                    'status'      => (int) $row['status'],
-                    'status_text' => OrderStatus::textOf((int) $row['status']),
-                ];
+        $items = [];
+        $itemIndexes = [];
+        foreach ($list as $index => $row) {
+            if (!is_array($row['order_item'] ?? null)) {
+                continue;
             }
+            $items[] = $row['order_item'];
+            $itemIndexes[] = $index;
         }
 
-        $itemMap = [];
-        if ($orderItemIds !== []) {
-            $rows = $this->model(OrderItem::class)
-                ->whereIn('id', $orderItemIds)
-                ->field('id, goods_id, sku_id, goods_name, goods_image, sku_spec, unit_price, quantity, refunded_quantity')
-                ->select()
-                ->toArray();
-            foreach ($rows as $row) {
-                $row['goods_image_full_url'] = buildUploadUrl((string) ($row['goods_image'] ?? ''));
-                $itemMap[(int) $row['id']]   = $row;
+        if ($items !== []) {
+            $items = app()->make(AssetHydrator::class)->hydrateFields($items, [
+                'goods_image' => 'goods_image_full_url',
+            ]);
+            foreach ($items as $itemIndex => $item) {
+                $list[$itemIndexes[$itemIndex]]['order_item'] = $item;
             }
         }
 
         foreach ($list as &$row) {
-            $orderId     = (int) ($row['order_id'] ?? 0);
-            $orderItemId = (int) ($row['order_item_id'] ?? 0);
-            $row['order']       = $orderMap[$orderId] ?? null;
-            $row['order_item']  = $itemMap[$orderItemId] ?? null;
+            $row['order'] = $row['main_order'] ?? null;
+            unset($row['main_order']);
+            if (is_array($row['order'] ?? null)) {
+                $row['order']['status_text'] = OrderStatus::textOf((int) ($row['order']['status'] ?? 0));
+            }
             $row['reason_text'] = RefundReason::textOf((string) ($row['reason'] ?? ''));
         }
         unset($row);
+
+        $rows = $isSingle ? $list[0] : $list;
     }
 
     private function assertUserId(int $userId): void

@@ -5,6 +5,7 @@ use think\facade\Route;
 
 Route::group('refund', function () {
     Route::post('apply', 'apply');
+    Route::post('batchApply', 'batchApply');
     Route::post('cancel/:id', 'cancel');
     Route::post('return/:id', 'submitReturn');
     Route::get('list', 'list');

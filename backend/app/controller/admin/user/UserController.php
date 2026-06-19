@@ -33,6 +33,22 @@ class UserController extends BaseController
         return $this->success($result, '获取成功');
     }
 
+    public function stats()
+    {
+        $where = $this->request->param(['keyword', 'status', 'register_type', 'group_ids', 'tag_ids']);
+        return $this->success($this->service()->stats($where), '获取成功');
+    }
+
+    public function export()
+    {
+        $where = $this->request->param(['keyword', 'status', 'register_type', 'group_ids', 'tag_ids']);
+
+        return response($this->service()->exportCsv($where), 200, [
+            'Content-Type' => 'text/csv; charset=utf-8',
+            'Content-Disposition' => 'attachment; filename="users.csv"',
+        ]);
+    }
+
     /**
      * 获取用户详情
      */

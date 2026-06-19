@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace app\controller\admin\region;
 
 use app\service\admin\region\RegionService;
+use app\service\RegionResolverService;
 use app\validate\admin\region\RegionValidate;
 use mall_base\base\BaseController;
 
@@ -24,12 +25,12 @@ class RegionController extends BaseController
     public function children()
     {
         $parentId = (int) $this->request->param('parent_id', 0);
-        return $this->success($this->service()->getChildren($parentId), '获取成功');
+        return $this->success(app()->make(RegionResolverService::class)->getChildren($parentId), '获取成功');
     }
 
     public function path($id)
     {
-        return $this->success($this->service()->getPath((int) $id), '获取成功');
+        return $this->success(app()->make(RegionResolverService::class)->getPath((int) $id), '获取成功');
     }
 
     public function info($id)

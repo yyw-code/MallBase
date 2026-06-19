@@ -7,6 +7,7 @@ namespace Tests\Unit\Service\Order;
 use app\common\enum\OrderStatus;
 use app\model\order\OrderLog;
 use app\model\order\Order;
+use app\model\order\OrderItem;
 use app\model\order\PaymentLog;
 use app\service\admin\order\OrderAdminService;
 use app\service\order\WechatPrepayCloseService;
@@ -31,7 +32,7 @@ final class AdjustableOrderStub extends Order
  *  - adjustPrice() 在事务前有三道关键守卫，必须在不访问 DB 的前提下被锁死：
  *      1) 仅 PENDING_PAY 允许改价
  *      2) 运费不能为负
- *      3) bcmath 重算后的 pay_amount 必须 > 0
+ *      3) 按订单项优惠快照重算后的 pay_amount 必须 > 0
  *  - 一旦守卫被绕过，事务体内才会触发 PaymentLog 顶替、OrderLog 写入；
  *    在生产环境可能造成订单金额异常或重复支付，因此必须单独兜底。
  *
@@ -58,7 +59,7 @@ final class OrderAdminServiceAdjustPriceTest extends TestCase
         $service->adjustPrice(
             orderId: 1,
             freight: '10.00',
-            discount: '0',
+            adjustMode: OrderAdminService::ADJUST_MODE_ITEM_DISCOUNT,
             adminId: 1,
         );
     }
@@ -72,7 +73,12 @@ final class OrderAdminServiceAdjustPriceTest extends TestCase
         $this->expectException(BusinessException::class);
         $this->expectExceptionMessage('仅待支付订单允许改价');
 
-        $service->adjustPrice(orderId: 1, freight: '0', discount: '0', adminId: 1);
+        $service->adjustPrice(
+            orderId: 1,
+            freight: '0',
+            adjustMode: OrderAdminService::ADJUST_MODE_ITEM_DISCOUNT,
+            adminId: 1,
+        );
     }
 
     /**
@@ -90,7 +96,7 @@ final class OrderAdminServiceAdjustPriceTest extends TestCase
         $service->adjustPrice(
             orderId: 1,
             freight: '-0.01',
-            discount: '0',
+            adjustMode: OrderAdminService::ADJUST_MODE_ITEM_DISCOUNT,
             adminId: 1,
         );
     }
@@ -100,9 +106,7 @@ final class OrderAdminServiceAdjustPriceTest extends TestCase
      */
     public function testAdjustPriceRejectsZeroPayAmount(): void
     {
-        $service = $this->makeServiceReturning(
-            $this->makeOrder(OrderStatus::PENDING_PAY, '100.00')
-        );
+        $service = $this->makeServiceReturning($this->makeOrder(OrderStatus::PENDING_PAY, '100.00'));
 
         $this->expectException(BusinessException::class);
         $this->expectExceptionMessage('改价后应付金额必须大于 0');
@@ -110,34 +114,54 @@ final class OrderAdminServiceAdjustPriceTest extends TestCase
         $service->adjustPrice(
             orderId: 1,
             freight: '0',
-            discount: '100.00',
+            adjustMode: OrderAdminService::ADJUST_MODE_PAY_PERCENT,
             adminId: 1,
+            payPercent: '0',
         );
     }
 
     /**
-     * 守卫 3：负 pay_amount（优惠超过总额 + 运费）拒绝
+     * 守卫 3：商品优惠超过该订单项小计时拒绝
      */
-    public function testAdjustPriceRejectsNegativePayAmount(): void
+    public function testAdjustPriceRejectsItemDiscountOverSubtotal(): void
     {
-        $service = $this->makeServiceReturning(
-            $this->makeOrder(OrderStatus::PENDING_PAY, '50.00')
-        );
+        $service = $this->makeServiceReturning($this->makeOrder(OrderStatus::PENDING_PAY, '50.00'));
 
         $this->expectException(BusinessException::class);
-        $this->expectExceptionMessage('改价后应付金额必须大于 0');
+        $this->expectExceptionMessage('商品优惠不能超过商品小计');
 
         $service->adjustPrice(
             orderId: 1,
             freight: '0',
-            discount: '60.00', // 50 + 0 - 60 = -10
+            adjustMode: OrderAdminService::ADJUST_MODE_ITEM_DISCOUNT,
             adminId: 1,
+            itemDiscounts: [
+                ['order_item_id' => 101, 'discount_amount' => '60.01'],
+            ],
         );
     }
 
     public function testAdjustPriceUpdatesAmountsAndWritesAuditLog(): void
     {
         $order = $this->makeOrder(OrderStatus::PENDING_PAY, '100.00');
+        $itemModel = new class {
+            /** @var array<int, array<string, mixed>> */
+            public array $updates = [];
+
+            public function where(string $field, mixed $operator = null, mixed $value = null): self
+            {
+                return $this;
+            }
+
+            /**
+             * @param array<string, mixed> $data
+             */
+            public function update(array $data): int
+            {
+                $this->updates[] = $data;
+                return 1;
+            }
+        };
         $paymentLogModel = new class {
             /** @var array<int, array<string, mixed>> */
             public array $updates = [];
@@ -202,6 +226,7 @@ final class OrderAdminServiceAdjustPriceTest extends TestCase
         $service = $this->makeServiceReturning(
             $order,
             [
+                OrderItem::class  => $itemModel,
                 PaymentLog::class => $paymentLogModel,
                 OrderLog::class   => $orderLogModel,
             ],
@@ -211,22 +236,119 @@ final class OrderAdminServiceAdjustPriceTest extends TestCase
         $service->adjustPrice(
             orderId: 1,
             freight: '8.00',
-            discount: '3.50',
+            adjustMode: OrderAdminService::ADJUST_MODE_ITEM_DISCOUNT,
             adminId: 9,
+            itemDiscounts: [
+                ['order_item_id' => 101, 'discount_amount' => '10.00'],
+                ['order_item_id' => 102, 'discount_amount' => '15.00'],
+            ],
             reason: '客服协商',
         );
 
         $this->assertSame('8.00', (string) $order->freight_amount);
-        $this->assertSame('3.50', (string) $order->discount_amount);
-        $this->assertSame('104.50', (string) $order->pay_amount);
+        $this->assertSame('25.00', (string) $order->discount_amount);
+        $this->assertSame('83.00', (string) $order->pay_amount);
+        $this->assertSame([
+            ['discount_amount' => '10.00', 'pay_amount' => '50.00'],
+            ['discount_amount' => '15.00', 'pay_amount' => '25.00'],
+        ], $itemModel->updates);
         $this->assertSame([['event_type' => PaymentLog::EVENT_SUPERSEDED]], $paymentLogModel->updates);
         $this->assertTrue($prepayClose->closed);
         $this->assertSame(1, $orderLogModel->saved['order_id']);
         $this->assertSame(OrderStatus::PENDING_PAY, $orderLogModel->saved['from_status']);
         $this->assertSame(OrderStatus::PENDING_PAY, $orderLogModel->saved['to_status']);
         $this->assertSame(9, $orderLogModel->saved['operator_id']);
-        $this->assertStringContainsString('应付 100.00→104.50', $orderLogModel->saved['remark']);
+        $this->assertStringContainsString('应付 100.00→83.00', $orderLogModel->saved['remark']);
+        $this->assertStringContainsString('方式:商品优惠', $orderLogModel->saved['remark']);
         $this->assertStringContainsString('原因:客服协商', $orderLogModel->saved['remark']);
+    }
+
+    public function testAdjustPriceAllocatesPayPercentToOrderItems(): void
+    {
+        $order = $this->makeOrder(OrderStatus::PENDING_PAY, '100.00');
+        $itemModel = new class {
+            /** @var array<int, array<string, mixed>> */
+            public array $updates = [];
+
+            public function where(string $field, mixed $operator = null, mixed $value = null): self
+            {
+                return $this;
+            }
+
+            /**
+             * @param array<string, mixed> $data
+             */
+            public function update(array $data): int
+            {
+                $this->updates[] = $data;
+                return 1;
+            }
+        };
+        $paymentLogModel = new class {
+            public function where(string $field, mixed $operator = null, mixed $value = null): self
+            {
+                return $this;
+            }
+
+            public function update(array $data): int
+            {
+                return 1;
+            }
+        };
+        $orderLogModel = new class {
+            /** @var array<string, mixed> */
+            public array $saved = [];
+
+            public function save(array|object $data = [], $where = [], bool $refresh = false): bool
+            {
+                $this->saved = (array) $data;
+                return true;
+            }
+        };
+        $prepayClose = new class extends WechatPrepayCloseService {
+            public function __construct()
+            {
+            }
+
+            public function activePrepayLogs(int $orderId, ?int $excludeScene = null): array
+            {
+                return [];
+            }
+
+            public function closeLogs(array $logs): void
+            {
+            }
+
+            public function idsOf(array $logs): array
+            {
+                return [];
+            }
+        };
+        $service = $this->makeServiceReturning(
+            $order,
+            [
+                OrderItem::class  => $itemModel,
+                PaymentLog::class => $paymentLogModel,
+                OrderLog::class   => $orderLogModel,
+            ],
+            $prepayClose,
+        );
+
+        $service->adjustPrice(
+            orderId: 1,
+            freight: '0.01',
+            adjustMode: OrderAdminService::ADJUST_MODE_PAY_PERCENT,
+            adminId: 9,
+            payPercent: '9.00',
+        );
+
+        $this->assertSame('91.00', (string) $order->discount_amount);
+        $this->assertSame('9.01', (string) $order->pay_amount);
+        $this->assertSame([
+            ['discount_amount' => '54.60', 'pay_amount' => '5.40'],
+            ['discount_amount' => '36.40', 'pay_amount' => '3.60'],
+        ], $itemModel->updates);
+        $this->assertStringContainsString('方式:整单实付9.00%', $orderLogModel->saved['remark']);
     }
 
     // ----------------- 测试基础设施 -----------------
@@ -295,14 +417,19 @@ final class OrderAdminServiceAdjustPriceTest extends TestCase
     private function makeServiceReturning(
         Order $order,
         array $models = [],
-        ?WechatPrepayCloseService $prepayClose = null
+        ?WechatPrepayCloseService $prepayClose = null,
+        array $items = [
+            ['id' => 101, 'goods_name' => '测试商品 A', 'subtotal' => '60.00', 'subtotal_cents' => 6000],
+            ['id' => 102, 'goods_name' => '测试商品 B', 'subtotal' => '40.00', 'subtotal_cents' => 4000],
+        ],
     ): OrderAdminService
     {
-        return new class ($order, $models, $prepayClose) extends OrderAdminService {
+        return new class ($order, $models, $prepayClose, $items) extends OrderAdminService {
             public function __construct(
                 private Order $stub,
                 private array $models,
-                private ?WechatPrepayCloseService $prepayClose
+                private ?WechatPrepayCloseService $prepayClose,
+                private array $items,
             )
             {
                 // 不调用父构造：BaseService 默认不依赖容器；保持空体更安全
@@ -324,6 +451,11 @@ final class OrderAdminServiceAdjustPriceTest extends TestCase
             protected function transaction(callable $callback)
             {
                 return $callback();
+            }
+
+            protected function loadAdjustableOrderItems(int $orderId): array
+            {
+                return $this->items;
             }
 
             protected function prepayCloseService(): WechatPrepayCloseService

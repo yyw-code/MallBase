@@ -7,25 +7,7 @@ import { getLogisticsDetail } from '@/api/order/logistics'
 const orderId = ref('')
 const loading = ref(true)
 const logistics = ref(null)
-
-// ---------- mock data ----------
-const MOCK_DATA = {
-  status: '运输中',
-  company: '顺丰速运',
-  tracking_no: 'SF1234567890123',
-  receiver: {
-    name: '张三',
-    phone: '13812345678',
-    address: '浙江省杭州市西湖区文三路 138 号',
-  },
-  tracks: [
-    { content: '快件已到达杭州西湖区网点，派件员正在派送中', time: '2025-04-27 14:30:00' },
-    { content: '快件已到达杭州转运中心', time: '2025-04-27 08:15:00' },
-    { content: '快件已从深圳转运中心发出', time: '2025-04-26 22:00:00' },
-    { content: '快件已到达深圳转运中心', time: '2025-04-26 18:45:00' },
-    { content: '商家已发货，快件揽收成功', time: '2025-04-26 15:20:00' },
-  ],
-}
+const errorText = ref('')
 
 onLoad((query) => {
   orderId.value = query?.order_id || ''
@@ -34,29 +16,33 @@ onLoad((query) => {
 
 async function fetchLogistics() {
   loading.value = true
+  errorText.value = ''
   try {
     const res = await getLogisticsDetail(orderId.value)
-    if (res && res.tracks && res.tracks.length > 0) {
-      logistics.value = res
-    } else {
-      logistics.value = MOCK_DATA
-    }
-  } catch {
-    logistics.value = MOCK_DATA
+    logistics.value = res || null
+  } catch (error) {
+    logistics.value = null
+    errorText.value = error?.message || '物流信息加载失败'
   } finally {
     loading.value = false
   }
 }
 
 // ---------- computed ----------
-const statusText = computed(() => logistics.value?.status || '')
+const statusText = computed(() => logistics.value?.status || '暂无物流')
 const company = computed(() => logistics.value?.company || '')
 const trackingNo = computed(() => logistics.value?.tracking_no || '')
 const receiver = computed(() => logistics.value?.receiver || {})
 const tracks = computed(() => logistics.value?.tracks || [])
+const queryError = computed(() => logistics.value?.query_error || '')
+const isAvailable = computed(() => logistics.value && logistics.value.available !== false)
+const hasTracks = computed(() => tracks.value.length > 0)
+const emptyText = computed(() => errorText.value || logistics.value?.status || '暂无物流信息')
+const trackEmptyText = computed(() => queryError.value || '暂无物流轨迹')
 
 const maskedPhone = computed(() => {
-  const phone = receiver.value?.phone || ''
+  const phone = receiver.value?.phone_masked || receiver.value?.phone || ''
+  if (phone.includes('*')) return phone
   if (phone.length < 7) return phone
   return phone.slice(0, 3) + '****' + phone.slice(-4)
 })
@@ -71,6 +57,7 @@ function copyTrackingNo() {
     },
   })
 }
+
 </script>
 
 <template>
@@ -89,7 +76,7 @@ function copyTrackingNo() {
     </view>
 
     <!-- Main content -->
-    <template v-else-if="logistics">
+    <template v-else-if="isAvailable">
       <!-- Status header -->
       <view class="status-header">
         <text class="status-header__label">当前状态</text>
@@ -123,16 +110,10 @@ function copyTrackingNo() {
         </view>
       </view>
 
-      <!-- Map placeholder -->
-      <view class="map-placeholder">
-        <view class="map-placeholder__dot" />
-        <text class="map-placeholder__text">物流地图</text>
-      </view>
-
       <!-- Timeline section -->
       <view class="section">
         <text class="section__title">物流轨迹</text>
-        <view class="timeline">
+        <view v-if="hasTracks" class="timeline">
           <view
             v-for="(track, index) in tracks"
             :key="index"
@@ -158,11 +139,20 @@ function copyTrackingNo() {
             </view>
           </view>
         </view>
+        <mb-empty-state v-else :text="trackEmptyText" padding-top="80rpx" />
       </view>
 
       <!-- Bottom spacer -->
       <view class="bottom-spacer" />
     </template>
+
+    <!-- Empty / error -->
+    <mb-empty-state
+      v-else
+      :text="emptyText"
+      action-text="重新加载"
+      @action="fetchLogistics"
+    />
   </view>
 </template>
 
@@ -301,34 +291,6 @@ function copyTrackingNo() {
   font-size: $mb-font-md;
   color: $mb-color-text-secondary;
   line-height: 1.5;
-}
-
-// ---- Map placeholder ----
-.map-placeholder {
-  height: 300rpx;
-  margin: 0 $mb-spacing-md $mb-spacing-md;
-  background: $mb-color-bg;
-  border-radius: $mb-radius-lg;
-  border: 1rpx solid $mb-color-border;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: $mb-spacing-sm;
-}
-
-.map-placeholder__dot {
-  width: 20rpx;
-  height: 20rpx;
-  border-radius: 50%;
-  background: $mb-color-primary;
-  border: 8rpx solid rgba($mb-color-primary, 0.12);
-  box-sizing: content-box;
-}
-
-.map-placeholder__text {
-  font-size: $mb-font-sm;
-  color: $mb-color-text-tertiary;
 }
 
 // ---- Section ----

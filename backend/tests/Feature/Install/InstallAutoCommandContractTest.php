@@ -41,7 +41,7 @@ final class InstallAutoCommandContractTest extends TestCase
         $this->assertStringContainsString('演示数据：', $source);
         $this->assertStringContainsString('管理后台：', $source);
         $this->assertStringContainsString('客户端入口：', $source);
-        $this->assertStringContainsString('首次登录后请修改默认管理员密码。', $source);
+        $this->assertStringContainsString('安装完成后请尽快修改默认管理员密码。', $source);
         $this->assertStringContainsString('安装完成后请重启 Swoole，让新配置和安装锁生效。', $source);
     }
 }

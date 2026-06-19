@@ -4,10 +4,12 @@ import type { SettingApi } from '#/api/setting';
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 
+import { useAccess } from '@vben/access';
 import { JsonViewer } from '@vben/common-ui';
 
 import { message, Spin } from 'ant-design-vue';
 
+import { invalidateUploadConfig } from '#/api/core/upload-config-cache';
 import { getSettingConfigApi, saveSettingConfigApi } from '#/api/setting';
 import RichTextEditor from '#/components/rich-text-editor/index.vue';
 import Upload from '#/components/upload/index.vue';
@@ -16,7 +18,26 @@ import { sanitizeEditorHtml } from './editor-html-sanitize';
 
 defineOptions({ name: 'SettingDynamicForm' });
 
+const props = withDefaults(
+  defineProps<{
+    groupCode?: string;
+    loadConfigApi?: (groupCode: string) => Promise<SettingApi.ConfigResponse>;
+    saveAccessCode?: string;
+    saveConfigApi?: (
+      groupCode: string,
+      data: SettingApi.SaveConfigParams,
+    ) => Promise<unknown>;
+  }>(),
+  {
+    groupCode: undefined,
+    loadConfigApi: undefined,
+    saveAccessCode: undefined,
+    saveConfigApi: undefined,
+  },
+);
+
 const route = useRoute();
+const { hasAccessByCodes } = useAccess();
 const loading = ref(false);
 const saving = ref(false);
 const groupInfo = ref<SettingApi.ConfigResponse['group']>();
@@ -43,16 +64,23 @@ const apiBaseUrl = import.meta.env.VITE_GLOB_API_URL || '';
 /** 将相对路径转为完整 URL（兜底用，优先使用后端返回的 full_url） */
 const toFullUrl = (path: string) => {
   if (!path) return '';
+  if (/^\d+$/.test(path)) return '';
   if (path.startsWith('http://') || path.startsWith('https://')) return path;
   return `${apiBaseUrl}${path}`;
 };
 
 /** 从路由路径中提取 groupCode */
-const groupCode = computed(() => {
+const routeGroupCode = computed(() => {
   const path = route.path;
   const segments = path.split('/').filter(Boolean);
   return segments[segments.length - 1] || '';
 });
+
+const groupCode = computed(() => props.groupCode || routeGroupCode.value);
+
+const canSave = computed(
+  () => !props.saveAccessCode || hasAccessByCodes([props.saveAccessCode]),
+);
 
 /** 获取当前激活选项卡的设置项 */
 const activeTabConfig = computed(() =>
@@ -278,6 +306,18 @@ const buildSubmitData = (items: SettingApi.SettingItem[]) => {
   return submitData;
 };
 
+const isUploadRelatedSetting = (item: SettingApi.SettingItem): boolean => {
+  const code = item.code || '';
+  return (
+    code === 'upload_driver' ||
+    code.startsWith('upload_') ||
+    code.startsWith('mime_') ||
+    code.startsWith('local_') ||
+    code.startsWith('oss_') ||
+    code.startsWith('cos_')
+  );
+};
+
 /** 获取字段的错误信息 */
 const getFieldError = (code: string): string => {
   return formErrors[code] || '';
@@ -291,7 +331,9 @@ const loadConfig = async () => {
 
   loading.value = true;
   try {
-    const res = await getSettingConfigApi(groupCode.value);
+    const res = props.loadConfigApi
+      ? await props.loadConfigApi(groupCode.value)
+      : await getSettingConfigApi(groupCode.value);
     groupInfo.value = res.group;
 
     // 判断是否为选项卡模式（tab 类型分组）
@@ -342,6 +384,14 @@ const loadConfig = async () => {
     loading.value = false;
   }
 };
+
+const saveConfig = (
+  targetGroupCode: string,
+  data: SettingApi.SaveConfigParams,
+) =>
+  props.saveConfigApi
+    ? props.saveConfigApi(targetGroupCode, data)
+    : saveSettingConfigApi(targetGroupCode, data);
 
 /** 根据类型转换值 */
 const convertValue = (value: string, type: string, fullUrl?: string) => {
@@ -659,28 +709,27 @@ const handleSave = async () => {
         message.warning('请先选择要保存的选项卡');
         return;
       }
-      await saveSettingConfigApi(
+      await saveConfig(
         activeTabConfig.value.code,
         buildSubmitData(activeTabConfig.value.settings),
       );
     } else if (hasTabs.value) {
       if (pageSettings.value.length > 0) {
-        await saveSettingConfigApi(
-          groupCode.value,
-          buildSubmitData(pageSettings.value),
-        );
+        await saveConfig(groupCode.value, buildSubmitData(pageSettings.value));
       }
       if (activeTabConfig.value) {
-        await saveSettingConfigApi(
+        await saveConfig(
           activeTabConfig.value.code,
           buildSubmitData(activeTabConfig.value.settings),
         );
       }
     } else {
-      await saveSettingConfigApi(
-        groupCode.value,
-        buildSubmitData(settings.value),
-      );
+      await saveConfig(groupCode.value, buildSubmitData(settings.value));
+    }
+    if (
+      currentSaveSettings.value.some((item) => isUploadRelatedSetting(item))
+    ) {
+      invalidateUploadConfig();
     }
     message.success('保存成功');
   } catch (error: any) {
@@ -704,7 +753,7 @@ const handleSave = async () => {
   }
 };
 
-watch(() => route.path, loadConfig);
+watch([() => route.path, () => props.groupCode], loadConfig);
 
 onMounted(loadConfig);
 </script>
@@ -1554,7 +1603,7 @@ onMounted(loadConfig);
       </div>
 
       <!-- 底部保存栏 -->
-      <div v-if="settings.length > 0" class="save-bar">
+      <div v-if="settings.length > 0 && canSave" class="save-bar">
         <div class="save-bar-inner">
           <span class="save-tip">修改后请点击保存</span>
           <a-button

@@ -193,4 +193,16 @@ final class RefundOrderAdminServiceTest extends TestCase
         $this->assertStringContainsString('OperatorType::SYSTEM', $source);
         $this->assertStringContainsString('微信退款金额与售后单金额不一致', $source);
     }
+
+    public function testZeroAmountRefundCompletesWithoutPaymentAdapter(): void
+    {
+        $source = (string) file_get_contents(
+            dirname(__DIR__, 4) . '/app/service/admin/order/RefundOrderAdminService.php',
+        );
+
+        $this->assertStringContainsString('completeZeroAmountRefund', $source);
+        $this->assertStringContainsString('$amountCents <= 0', $source);
+        $this->assertStringContainsString('toStatus: RefundOrderStatus::COMPLETED', $source);
+        $this->assertStringContainsString('refunded_quantity + ? <= quantity', $source);
+    }
 }

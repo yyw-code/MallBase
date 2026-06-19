@@ -17,12 +17,20 @@ interface OrderRecord {
   discount_amount: string;
   freight_amount: string;
   id: number;
+  items?: OrderItem[];
   pay_amount: string;
   sn: string;
   status: number;
   status_text?: string;
   total_amount: string;
   user_id: number;
+}
+
+interface OrderItem {
+  discount_amount: string;
+  id: number;
+  pay_amount: string;
+  subtotal: string;
 }
 
 interface OrderListResponse {
@@ -197,22 +205,39 @@ test.describe('Order admin page', () => {
     // 后端直接校验：缺失必填字段应报错
     const emptyRes = await page.request.post(
       `${backendBaseUrl}/admin/api/order/adjustPrice/${pending!.id}`,
-      { data: { discount_amount: '', freight_amount: '' }, headers },
+      { data: { adjust_mode: '', freight_amount: '' }, headers },
     );
     const emptyJson = (await emptyRes.json()) as ApiResponse<unknown>;
     expect(emptyJson.code).not.toBe(200);
 
-    // 后端直接校验：合法改价按 total + freight - discount 重算应付金额
+    const beforeDetailRes = await page.request.get(
+      `${backendBaseUrl}/admin/api/order/detail/${pending!.id}`,
+      { headers },
+    );
+    const beforeDetailJson =
+      (await beforeDetailRes.json()) as ApiResponse<OrderRecord>;
+    expect(beforeDetailJson.code).toBe(200);
+    const items = beforeDetailJson.data.items ?? [];
+    test.skip(items.length === 0, '当前待支付订单无商品明细，跳过改价断言');
+
+    // 后端直接校验：合法改价按商品项实付 + freight 重算应付金额
     const currentFreight = Number(pending!.freight_amount ?? 0);
-    const currentDiscount = Number(pending!.discount_amount ?? 0);
+    const currentDiscount = items.reduce(
+      (sum, item) => sum + Number(item.discount_amount ?? 0),
+      0,
+    );
     const expectedPay =
       Number(pending!.total_amount ?? 0) + currentFreight - currentDiscount;
     const validRes = await page.request.post(
       `${backendBaseUrl}/admin/api/order/adjustPrice/${pending!.id}`,
       {
         data: {
-          discount_amount: currentDiscount.toFixed(2),
+          adjust_mode: 'item_discount',
           freight_amount: currentFreight.toFixed(2),
+          items: items.map((item) => ({
+            order_item_id: item.id,
+            discount_amount: item.discount_amount,
+          })),
           reason: 'E2E 改价回归',
         },
         headers,
@@ -254,13 +279,12 @@ test.describe('Order admin page', () => {
       modal.getByText(`¥${Number(detailJson.data.total_amount).toFixed(2)}`),
     ).toBeVisible();
 
+    await expect(modal.getByText('商品优惠')).toBeVisible();
+    await expect(modal.getByText('整单折扣')).toBeVisible();
+
     const amountInputs = modal.locator('.ant-input-number-input');
     expect(Number(await amountInputs.nth(0).inputValue())).toBeCloseTo(
       currentFreight,
-      2,
-    );
-    expect(Number(await amountInputs.nth(1).inputValue())).toBeCloseTo(
-      currentDiscount,
       2,
     );
     await modal.locator('textarea').fill('E2E 页面改价回归');

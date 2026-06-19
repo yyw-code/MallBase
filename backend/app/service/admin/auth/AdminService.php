@@ -7,6 +7,7 @@ namespace app\service\admin\auth;
 use app\model\auth\Admin as AdminModel;
 use app\model\auth\AdminRole;
 use app\service\cache\PermissionCacheService;
+use app\service\upload\AssetHydrator;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
 use mall_base\service\JwtCacheService;
@@ -45,18 +46,12 @@ class AdminService extends BaseService
         $admin->last_login_ip = Request::ip();
         $admin->save();
 
-        // password_changed_at=NULL 表示该账号从未改过密码（由 install:auto 或初始化 SQL 创建），
-        // 前端据此将首次登录用户强制跳转到改密页；同时该标记写进 JWT 载荷，
-        // 用于后端强制拦截——避免用户绕过前端直接访问业务接口。
-        $mustChangePassword = $admin->password_changed_at === null;
-
         // 生成 JWT Token（encode 自动生成 access_token + refresh_token）
         $jwtService = app()->make(JwtService::class);
         $token = $jwtService->encode([
-            'admin_id'             => $admin->id,
-            'username'             => $admin->username,
-            'nickname'             => $admin->nickname,
-            'must_change_password' => $mustChangePassword,
+            'admin_id' => $admin->id,
+            'username' => $admin->username,
+            'nickname' => $admin->nickname,
         ]);
 
         // 存储 refresh_token 到 Redis
@@ -67,8 +62,6 @@ class AdminService extends BaseService
             $jwtService->getRefreshExpire()
         );
 
-        $token['must_change_password'] = $mustChangePassword;
-
         return $token;
     }
 
@@ -77,15 +70,9 @@ class AdminService extends BaseService
      */
     public function getList(array $where = [], int $page = 1, int $limit = 10): array
     {
-        $query = $this->model()
-            ->when(!empty($where['keyword']), function ($q) use ($where) {
-                $q->whereLike('username|nickname|mobile|email', "%{$where['keyword']}%");
-            })
-            ->when(($where['status'] ?? null) !== null, function ($q) use ($where) {
-                $q->where('status', $where['status']);
-            });
+        $query = $this->buildListQuery($where);
 
-        $total = $query->count();
+        $total = (int) (clone $query)->count();
         $list = $query->order('id', 'desc')
             ->page($page, $limit)->select()
             ->toArray();
@@ -126,8 +113,24 @@ class AdminService extends BaseService
             $admin['roles'] = $adminRoles;
             $admin['role_ids'] = array_column($adminRoles, 'id');
         }
+        unset($admin);
+
+        $list = app()->make(AssetHydrator::class)->hydrateFields($list, [
+            'avatar' => 'avatar_full_url',
+        ]);
 
         return compact('total', 'list');
+    }
+
+    protected function buildListQuery(array $where)
+    {
+        return $this->model()
+            ->when(!empty($where['keyword']), function ($q) use ($where) {
+                $q->whereLike('username|nickname|mobile|email', "%{$where['keyword']}%");
+            })
+            ->when(($where['status'] ?? null) !== null && $where['status'] !== '', function ($q) use ($where) {
+                $q->where('status', $where['status']);
+            });
     }
 
     /**
@@ -143,6 +146,10 @@ class AdminService extends BaseService
 
         $info = $admin->toArray();
         unset($info['password']);
+        $rows = app()->make(AssetHydrator::class)->hydrateFields([$info], [
+            'avatar' => 'avatar_full_url',
+        ]);
+        $info = $rows[0] ?? $info;
 
         // 手动加载角色列表
         $admin['roles'] = [];
@@ -173,7 +180,7 @@ class AdminService extends BaseService
 
         // 获取角色ID列表
         $info['role_ids'] = array_column($info['roles'] ?? [], 'id');
-        $info['home_path'] = '/workspace';
+        $info['home_path'] = app()->make(PermissionService::class)->getMenu($id)['home_path'] ?? '/workspace';
 
         return $info;
     }
@@ -198,6 +205,7 @@ class AdminService extends BaseService
                 'email' => $data['email'] ?? '',
                 'mobile' => $data['mobile'] ?? '',
                 'status' => $data['status'] ?? 1,
+                'password_changed_at' => date('Y-m-d H:i:s'),
                 'remark' => $data['remark'] ?? '',
             ]);
 
@@ -218,6 +226,10 @@ class AdminService extends BaseService
         $admin = $this->model()->find($id);
         if (!$admin) {
             throw new BusinessException('管理员不存在');
+        }
+
+        if ($id === $this->model()::SUPER_ADMIN_ID) {
+            throw new BusinessException('系统管理员不允许在管理员管理中修改');
         }
 
         // 检查用户名是否重复
@@ -267,6 +279,10 @@ class AdminService extends BaseService
             throw new BusinessException('管理员不存在');
         }
 
+        if ($id === $this->model()::SUPER_ADMIN_ID && $status !== 1) {
+            throw new BusinessException('不能禁用超级管理员');
+        }
+
         $this->model()->updateById($id, ['status' => $status]);
         return true;
     }
@@ -306,6 +322,11 @@ class AdminService extends BaseService
         // 删除原有角色
         $this->model(AdminRole::class)->where('admin_id', $adminId)->delete();
 
+        if ($adminId === $this->model()::SUPER_ADMIN_ID) {
+            $this->clearUserPermissionCache($adminId);
+            return;
+        }
+
         // 批量分配新角色
         if (!empty($roleIds)) {
             $insertData = [];
@@ -338,19 +359,24 @@ class AdminService extends BaseService
     /**
      * 重置密码
      */
-    public function resetPassword(int $id, array $data): bool
+    public function resetPassword(int $id, array|string $data): bool
     {
         $admin = $this->model()->find($id);
 
         if (!$admin) {
             throw new BusinessException('管理员不存在');
         }
-        if (!$admin->checkPassword($data['old_password'])) {
+
+        if ($id === $this->model()::SUPER_ADMIN_ID && is_string($data)) {
+            throw new BusinessException('系统管理员不允许在管理员管理中重置密码');
+        }
+
+        if (is_array($data) && !$admin->checkPassword($data['old_password'])) {
             throw new BusinessException('旧密码错误');
         }
         // 使用模型属性赋值，会触发 setPasswordAttr 修改器
-        $admin->password = $data['password'];
-        // 写入最近改密时间，清除"首次强制改密"标记；后续主动改密也统一刷新该字段。
+        $admin->password = is_array($data) ? $data['password'] : $data;
+        // 写入最近改密时间；后续主动改密也统一刷新该字段。
         $admin->password_changed_at = date('Y-m-d H:i:s');
         return $admin->save();
     }
@@ -441,15 +467,11 @@ class AdminService extends BaseService
         // 撤销旧的 refresh_token
         $jwtCacheService->revokeRefreshToken($admin->id);
 
-        // 刷新时重新判定 must_change_password，避免首次改密前靠刷新 token 绕过中间件守卫。
-        $mustChangePassword = $admin->password_changed_at === null;
-
         // 生成新的 token 对
         $token = $jwtService->encode([
-            'admin_id'             => $admin->id,
-            'username'             => $admin->username,
-            'nickname'             => $admin->nickname,
-            'must_change_password' => $mustChangePassword,
+            'admin_id' => $admin->id,
+            'username' => $admin->username,
+            'nickname' => $admin->nickname,
         ]);
 
         // 存储新的 refresh_token 到 Redis
@@ -458,8 +480,6 @@ class AdminService extends BaseService
             $admin->id,
             $jwtService->getRefreshExpire()
         );
-
-        $token['must_change_password'] = $mustChangePassword;
 
         return $token;
     }

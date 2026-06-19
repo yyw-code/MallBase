@@ -72,12 +72,20 @@ const payMethodLabel = (method?: null | number) => {
   return props.payMethodMap[method] ?? `#${method}`;
 };
 
+const buyerDisplayName = (order: OrderApi.OrderDetail) =>
+  order.buyer?.nickname || `用户 ${order.user_id}`;
+
+const buyerInitial = (order: OrderApi.OrderDetail) =>
+  buyerDisplayName(order).slice(0, 1) || '买';
+
 const itemColumns = [
   { title: '商品', dataIndex: 'goods_name', ellipsis: true },
   { title: '规格', dataIndex: 'sku_spec', width: 140, ellipsis: true },
   { title: '单价', dataIndex: 'unit_price', width: 90 },
   { title: '数量', dataIndex: 'quantity', width: 70 },
   { title: '小计', dataIndex: 'subtotal', width: 100 },
+  { title: '优惠', dataIndex: 'discount_amount', width: 100 },
+  { title: '实付', dataIndex: 'pay_amount', width: 100 },
   { title: '已发货', dataIndex: 'shipped_quantity', width: 80 },
   { title: '已退款', dataIndex: 'refunded_quantity', width: 80 },
   { title: '已退货', dataIndex: 'returned_quantity', width: 80 },
@@ -105,7 +113,9 @@ const itemColumns = [
             {{ detail.sn }}
           </a-descriptions-item>
           <a-descriptions-item label="状态">
-            <a-tag>{{ detail.status_text || statusLabel(detail.status) }}</a-tag>
+            <a-tag>
+              {{ detail.status_text || statusLabel(detail.status) }}
+            </a-tag>
             <a-tag
               v-if="detail.after_sale_tag_text"
               color="orange"
@@ -114,8 +124,28 @@ const itemColumns = [
               售后：{{ detail.after_sale_tag_text }}
             </a-tag>
           </a-descriptions-item>
-          <a-descriptions-item label="买家 ID">
-            {{ detail.user_id }}
+          <a-descriptions-item label="买家信息" :span="2">
+            <div class="order-detail-buyer">
+              <a-avatar
+                :size="40"
+                :src="detail.buyer?.avatar_full_url || undefined"
+              >
+                {{ buyerInitial(detail) }}
+              </a-avatar>
+              <div class="order-detail-buyer-meta">
+                <div class="order-detail-buyer-name">
+                  {{ buyerDisplayName(detail) }}
+                  <span class="order-detail-buyer-id">
+                    ID {{ detail.user_id }}
+                  </span>
+                </div>
+                <div class="order-detail-buyer-sub">
+                  手机号：{{ detail.buyer?.mobile || '—' }} · 邮箱：{{
+                    detail.buyer?.email || '—'
+                  }}
+                </div>
+              </div>
+            </div>
           </a-descriptions-item>
           <a-descriptions-item label="支付方式">
             {{ detail.pay_method_text || payMethodLabel(detail.pay_method) }}
@@ -135,7 +165,7 @@ const itemColumns = [
           <a-descriptions-item label="交易号">
             {{ detail.trade_no || '—' }}
           </a-descriptions-item>
-          <a-descriptions-item label="物流">
+          <a-descriptions-item label="物流" :span="2">
             <template v-if="detail.logistics_company || detail.logistics_sn">
               {{ detail.logistics_company || '—' }} /
               {{ detail.logistics_sn || '—' }}
@@ -148,9 +178,8 @@ const itemColumns = [
               · {{ detail.receiver_phone }}
             </span>
             <div v-if="detail.receiver_province" class="text-gray-500">
-              {{ detail.receiver_province }}{{ detail.receiver_city }}{{
-                detail.receiver_district
-              }}{{ detail.receiver_address }}
+              {{ detail.receiver_province }}{{ detail.receiver_city
+              }}{{ detail.receiver_district }}{{ detail.receiver_address }}
             </div>
           </a-descriptions-item>
           <a-descriptions-item label="买家备注" :span="2">
@@ -189,7 +218,7 @@ const itemColumns = [
           :pagination="false"
           size="small"
           row-key="id"
-          :scroll="{ x: 900 }"
+          :scroll="{ x: 1100 }"
         >
           <template #bodyCell="{ column, record }">
             <template v-if="column.dataIndex === 'goods_name'">
@@ -240,3 +269,35 @@ const itemColumns = [
     </a-spin>
   </a-drawer>
 </template>
+
+<style scoped>
+.order-detail-buyer {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 10px;
+}
+
+.order-detail-buyer-meta {
+  min-width: 0;
+}
+
+.order-detail-buyer-name {
+  color: hsl(var(--foreground));
+  font-weight: 500;
+  line-height: 22px;
+}
+
+.order-detail-buyer-id {
+  margin-left: 8px;
+  color: hsl(var(--muted-foreground));
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.order-detail-buyer-sub {
+  color: hsl(var(--muted-foreground));
+  font-size: 12px;
+  line-height: 18px;
+}
+</style>

@@ -23,19 +23,9 @@ class SmsProviderService extends BaseService
      */
     public function getList(array $where, int $page, int $limit): array
     {
-        $query = $this->model()
-            ->when(!empty($where['keyword']), function ($q) use ($where) {
-                $q->whereLike('name', "%{$where['keyword']}%");
-            })
-            ->when(!empty($where['driver']), function ($q) use ($where) {
-                $q->where('driver', $where['driver']);
-            })
-            ->when(isset($where['status']) && $where['status'] !== '', function ($q) use ($where) {
-                $q->where('status', (int) $where['status']);
-            });
-
-        $total = $query->count();
-        $list = $query->order('sort', 'asc')
+        $total = $this->buildListQuery($where)->count();
+        $list = $this->buildListQuery($where)
+            ->order('sort', 'asc')
             ->order('id', 'desc')
             ->page($page, $limit)
             ->select()
@@ -48,6 +38,20 @@ class SmsProviderService extends BaseService
         }
 
         return compact('total', 'list');
+    }
+
+    protected function buildListQuery(array $where)
+    {
+        return $this->model()
+            ->when(!empty($where['keyword']), function ($q) use ($where) {
+                $q->whereLike('name', "%{$where['keyword']}%");
+            })
+            ->when(!empty($where['driver']), function ($q) use ($where) {
+                $q->where('driver', $where['driver']);
+            })
+            ->when(($where['status'] ?? null) !== null && $where['status'] !== '', function ($q) use ($where) {
+                $q->where('status', (int) $where['status']);
+            });
     }
 
     public function getInfo(int $id): array
@@ -116,11 +120,6 @@ class SmsProviderService extends BaseService
             throw new BusinessException('服务商不存在');
         }
 
-        // PNVS 驱动不实现 SmsTemplateManagerInterface,走单独的探测逻辑
-        if ((string) $provider->driver === SmsProvider::DRIVER_ALIYUN_PNVS) {
-            return $this->testPnvsConnection($provider);
-        }
-
         try {
             $manager = SmsDriverFactory::manager($provider);
             // 用不存在的签名探测,若返回 OK 或"签名不存在/非法"等业务错误,说明凭证可用
@@ -147,36 +146,11 @@ class SmsProviderService extends BaseService
     }
 
     /**
-     * PNVS 连通性探测:用无效手机号触发 API,凭证错误会在此暴露
-     */
-    private function testPnvsConnection(SmsProvider $provider): array
-    {
-        try {
-            $driver = SmsDriverFactory::driver($provider);
-            $driver->sendCode('00000000000', 'test', '');
-            return ['ok' => true, 'message' => '凭证可用'];
-        } catch (\Throwable $e) {
-            $message = $e->getMessage();
-            $credentialErrors = [
-                'InvalidAccessKeyId',
-                'SignatureDoesNotMatch',
-                'Forbidden.RAM',
-            ];
-            foreach ($credentialErrors as $keyword) {
-                if (str_contains($message, $keyword)) {
-                    return ['ok' => false, 'message' => $message];
-                }
-            }
-            return ['ok' => true, 'message' => '凭证可用(探测正常)'];
-        }
-    }
-
-    /**
      * 入参清洗 + 凭证加密
      */
     private function normalize(array $data, bool $isCreate): array
     {
-        $allowed = ['name', 'driver', 'access_key_id', 'access_key_secret', 'region', 'scheme_name', 'is_default', 'status', 'remark', 'sort'];
+        $allowed = ['name', 'driver', 'access_key_id', 'access_key_secret', 'region', 'is_default', 'status', 'remark', 'sort'];
         $payload = array_intersect_key($data, array_flip($allowed));
 
         $payload['region'] = $payload['region'] ?? 'cn-hangzhou';

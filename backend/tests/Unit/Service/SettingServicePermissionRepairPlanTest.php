@@ -79,6 +79,17 @@ final class SettingServicePermissionRepairPlanTest extends TestCase
         $this->assertSame(['UploadBasic'], array_column($ordered, 'code'));
     }
 
+    public function testPermissionOverrideGroupAlwaysHasStandalonePermission(): void
+    {
+        $parent = $this->makeGroup(35, 0, SettingGroup::DISPLAY_TYPE_TAB, 350, 0, 'SmsConfig');
+        $child = $this->makeGroup(36, 35, SettingGroup::DISPLAY_TYPE_PAGE, 0, 0, 'SmsRateLimit');
+        $child['permission_parent_code'] = 'SmsConfig';
+        $child['permission_path'] = '/sms/config';
+        $child['permission_component'] = '/sms/config/index';
+
+        $this->assertTrue($this->invoke('shouldGroupHaveStandalonePermission', [$child, $parent]));
+    }
+
     public function testSharedWrongPermissionReferenceIsScheduledForRebuild(): void
     {
         $groups = [

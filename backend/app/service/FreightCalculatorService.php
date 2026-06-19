@@ -148,25 +148,48 @@ class FreightCalculatorService
         float $continueFee,
         float $totalCount,
     ): float {
-        $firstAmount = max(0.0, $firstAmount);
-        $firstFee = max(0.0, $firstFee);
-        $continueFee = max(0.0, $continueFee);
+        $totalUnits = $this->decimalToUnits(max(0.0, $totalCount), 3);
+        $firstUnits = $this->decimalToUnits(max(0.0, $firstAmount), 3);
+        $continueUnits = $this->decimalToUnits(max(0.0, $continueAmount), 3);
+        $firstFeeCents = $this->decimalToCents(max(0.0, $firstFee));
+        $continueFeeCents = $this->decimalToCents(max(0.0, $continueFee));
 
-        if ($totalCount <= $firstAmount) {
-            return $this->roundFee($firstFee);
+        if ($totalUnits <= $firstUnits) {
+            return $this->centsToFloat($firstFeeCents);
         }
 
-        if ($continueAmount <= 0) {
-            return $this->roundFee($firstFee);
+        if ($continueUnits <= 0) {
+            return $this->centsToFloat($firstFeeCents);
         }
 
-        $extra = $totalCount - $firstAmount;
-        $steps = (int) ceil($extra / $continueAmount);
-        return $this->roundFee($firstFee + $steps * $continueFee);
+        $extraUnits = $totalUnits - $firstUnits;
+        $steps = intdiv($extraUnits + $continueUnits - 1, $continueUnits);
+        return $this->centsToFloat($firstFeeCents + $steps * $continueFeeCents);
     }
 
-    protected function roundFee(float $fee): float
+    protected function decimalToCents(float|string|int $amount): int
     {
-        return round($fee, 2, PHP_ROUND_HALF_UP);
+        return $this->decimalToUnits($amount, 2);
+    }
+
+    protected function decimalToUnits(float|string|int $amount, int $scale): int
+    {
+        $scale = max(0, $scale);
+        $value = is_float($amount) ? sprintf('%.6F', $amount) : trim((string) $amount);
+        if ($value === '' || !preg_match('/^\d+(\.\d+)?$/', $value)) {
+            return 0;
+        }
+
+        [$yuan, $cent] = array_pad(explode('.', $value, 2), 2, '0');
+        $base = 10 ** $scale;
+        $cent = str_pad($cent, $scale + 1, '0');
+        $units = ((int) $yuan * $base) + (int) substr($cent, 0, $scale);
+
+        return ((int) $cent[$scale] >= 5) ? $units + 1 : $units;
+    }
+
+    protected function centsToFloat(int $cents): float
+    {
+        return (float) sprintf('%d.%02d', intdiv($cents, 100), $cents % 100);
     }
 }

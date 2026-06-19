@@ -85,12 +85,17 @@ class ExceptionHandle extends Handle
             }
         }
         $message = $e->getMessage();
-        return json([
+        return Response::create([
             'success' => false,
             'code' => $code,
             'message' => $message,
             'data' => [],
             'details' => $details,
-        ]);
+        ], 'json', $this->resolveHttpStatus($code));
+    }
+
+    private function resolveHttpStatus(int $code): int
+    {
+        return in_array($code, [400, 401, 403, 404, 405, 409, 422, 429, 500, 503], true) ? $code : 400;
     }
 }

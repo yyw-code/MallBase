@@ -242,11 +242,16 @@ class PrepayService extends BaseService
 
     private function yuanToCents(string $yuan): int
     {
-        // 用字符串 + bcmath 规避浮点误差
         if (!extension_loaded('bcmath')) {
-            return (int) round(((float) $yuan) * 100);
+            throw new BusinessException('支付金额计算组件不可用');
         }
-        return (int) bcmul($yuan, '100', 0);
+
+        $amount = trim($yuan);
+        if ($amount === '' || !preg_match('/^\d+(\.\d{1,2})?$/', $amount)) {
+            throw new BusinessException('订单金额异常');
+        }
+
+        return (int) bcmul($amount, '100', 0);
     }
 
     private function buildNotifyUrl(): string

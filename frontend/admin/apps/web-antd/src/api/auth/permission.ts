@@ -14,6 +14,7 @@ export namespace PermissionApi {
     sort: number;
     status: number;
     is_show: number;
+    source: number; // 1=手动添加, 2=路由同步, 3=设置模块同步
     remark?: string;
     create_time?: string;
     update_time?: string;
@@ -25,6 +26,7 @@ export namespace PermissionApi {
     keyword?: string;
     type?: number;
     status?: number;
+    source?: number;
     page?: number;
     limit?: number;
   }
@@ -91,8 +93,7 @@ export async function getPermissionTreeApi(params?: PermissionApi.ListParams) {
  */
 export async function getPermissionListApi(params?: PermissionApi.ListParams) {
   const result = await requestClient.get<
-    | PermissionApi.LegacyListResult
-    | PermissionApi.ListResult
+    PermissionApi.LegacyListResult | PermissionApi.ListResult
   >('/auth/permission/list', { params });
 
   if ('list' in result) {

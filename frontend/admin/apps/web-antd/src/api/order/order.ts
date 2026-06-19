@@ -14,6 +14,8 @@ export namespace OrderApi {
     unit_price: string;
     quantity: number;
     subtotal: string;
+    discount_amount: string;
+    pay_amount: string;
     shipped_quantity: number;
     refunded_quantity: number;
     returned_quantity: number;
@@ -32,6 +34,17 @@ export namespace OrderApi {
     remark?: string;
     ip?: string;
     create_time: string;
+  }
+
+  /** 买家摘要 */
+  export interface BuyerInfo {
+    id: number;
+    nickname?: string;
+    mobile?: string;
+    email?: string;
+    avatar?: null | number | string;
+    avatar_full_url?: string;
+    status?: null | number;
   }
 
   /** 订单主记录（含聚合字段） */
@@ -54,7 +67,10 @@ export namespace OrderApi {
     receiver_city?: string;
     receiver_district?: string;
     receiver_address?: string;
+    logistics_platform?: string;
+    logistics_company_id?: number;
     logistics_company?: string;
+    logistics_company_code?: string;
     logistics_sn?: string;
     buyer_remark?: string;
     admin_remark?: string;
@@ -67,6 +83,7 @@ export namespace OrderApi {
     create_time: string;
     update_time?: string;
     items?: OrderItem[];
+    buyer?: BuyerInfo;
     /** 实时聚合，非落库字段 */
     after_sale_tag_text?: string;
   }
@@ -81,6 +98,8 @@ export namespace OrderApi {
     sn?: string;
     status?: number;
     user_id?: number;
+    buyer_keyword?: string;
+    ids?: string;
     logistics_sn?: string;
     created_start?: string;
     created_end?: string;
@@ -91,6 +110,9 @@ export namespace OrderApi {
 
   /** 发货参数 */
   export interface ShipParams {
+    logistics_platform: string;
+    logistics_company_id: number;
+    logistics_company_code: string;
     logistics_company: string;
     logistics_sn: string;
   }
@@ -101,11 +123,22 @@ export namespace OrderApi {
   }
 
   /** 改价参数 */
+  export type AdjustMode = 'item_discount' | 'pay_percent';
+
+  export interface AdjustPriceItem {
+    order_item_id: number;
+    discount_amount: number | string;
+  }
+
   export interface AdjustPriceParams {
     /** 运费（≥0），数字或字符串均可，后端 bcmath 重算 */
     freight_amount: number | string;
-    /** 优惠（允许负数=加价） */
-    discount_amount: number | string;
+    /** 改价方式 */
+    adjust_mode: AdjustMode;
+    /** 逐商品优惠明细 */
+    items?: AdjustPriceItem[];
+    /** 整单实付比例，0-100，最多两位小数 */
+    pay_percent?: number | string;
     /** 调整原因（可选，≤255） */
     reason?: string;
   }
@@ -114,6 +147,17 @@ export namespace OrderApi {
   export interface EnumOption {
     value: number;
     label: string;
+  }
+
+  export interface StatsTab {
+    key: string;
+    label: string;
+    count: number;
+  }
+
+  export interface StatsResponse {
+    tabs: StatsTab[];
+    total: number;
   }
 
   /** 枚举接口响应 */
@@ -133,6 +177,16 @@ export async function getOrderListApi(params?: OrderApi.ListParams) {
   }>('/order/list', { params });
 }
 
+export async function getOrderStatsApi(params?: OrderApi.ListParams) {
+  return requestClient.get<OrderApi.StatsResponse>('/order/stats', {
+    params,
+  });
+}
+
+export async function exportOrderCsvApi(params?: OrderApi.ListParams) {
+  return requestClient.download<Blob>('/order/export', { params });
+}
+
 /**
  * 获取订单详情（后台）
  */
@@ -141,7 +195,7 @@ export async function getOrderDetailApi(id: number) {
 }
 
 /**
- * 订单发货（PAID → SHIPPED）
+ * 订单发货或修改已发货订单物流信息
  */
 export async function shipOrderApi(id: number, data: OrderApi.ShipParams) {
   return requestClient.post(`/order/ship/${id}`, data);
@@ -161,7 +215,7 @@ export async function adjustOrderPriceApi(
   id: number,
   data: OrderApi.AdjustPriceParams,
 ) {
-  return requestClient.post<void>(`/order/adjustPrice/${id}`, data);
+  return requestClient.post(`/order/adjustPrice/${id}`, data);
 }
 
 /**

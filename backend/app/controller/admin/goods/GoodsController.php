@@ -23,12 +23,28 @@ class GoodsController extends BaseController
      */
     public function list()
     {
-        $where = $this->request->param(['keyword', 'category_id', 'brand_id', 'is_on_sale', 'status']);
+        $where = $this->request->param(['keyword', 'category_id', 'brand_id', 'is_on_sale', 'status', 'view', 'stock_warning']);
 
         [$page, $limit] = $this->getPagination(1, 15);
 
         $result = $this->service()->getList($where, $page, $limit);
         return $this->success($result, '获取成功');
+    }
+
+    public function stats()
+    {
+        $where = $this->request->param(['keyword', 'category_id', 'brand_id', 'is_on_sale', 'status', 'view', 'stock_warning']);
+        return $this->success($this->service()->stats($where), '获取成功');
+    }
+
+    public function export()
+    {
+        $where = $this->request->param(['keyword', 'category_id', 'brand_id', 'is_on_sale', 'status', 'view', 'stock_warning']);
+
+        return response($this->service()->exportCsv($where), 200, [
+            'Content-Type' => 'text/csv; charset=utf-8',
+            'Content-Disposition' => 'attachment; filename="goods.csv"',
+        ]);
     }
 
     /**
@@ -103,6 +119,30 @@ class GoodsController extends BaseController
 
         $this->service()->delete((int) $id);
         return $this->success(null, '删除成功');
+    }
+
+    public function restore()
+    {
+        $id = $this->request->param('id');
+
+        if (empty($id)) {
+            return $this->error('ID不能为空');
+        }
+
+        $this->service()->restore((int) $id);
+        return $this->success(null, '恢复成功');
+    }
+
+    public function purge()
+    {
+        $id = $this->request->param('id');
+
+        if (empty($id)) {
+            return $this->error('ID不能为空');
+        }
+
+        $this->service()->purge((int) $id);
+        return $this->success(null, '永久删除成功');
     }
 
     /**

@@ -16,21 +16,12 @@ class OrderItem extends BaseModel
     protected $pk = 'id';
     protected $autoWriteTimestamp = true;
 
-    protected array $append = ['goods_image_full_url'];
-
     /**
      * 归属订单
      */
-    public function order()
+    public function mainOrder()
     {
         return $this->belongsTo(Order::class, 'order_id', 'id');
     }
 
-    /**
-     * 商品主图完整 URL（兼容相对路径）
-     */
-    public function getGoodsImageFullUrlAttr($value, $data): string
-    {
-        return buildUploadUrl($data['goods_image'] ?? '');
-    }
 }

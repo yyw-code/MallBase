@@ -4,7 +4,9 @@ declare (strict_types=1);
 
 namespace app\service;
 
+use app\model\setting\Setting;
 use app\service\client\WechatService;
+use app\service\upload\AssetService;
 use mall_base\base\BaseService;
 use mall_base\drivers\DriverManager;
 use mall_base\drivers\upload\LocalUploadDriver;
@@ -111,6 +113,27 @@ class UploadService extends BaseService
         // cert 是一种"虚拟"上传类型，专供 form_type=file/files 字段在 secure_upload 模式下使用；
         // 它本身不作为前端的 form_type，但 accept_types 选项库会被合并进 file/files 字段
         'cert'   => ['max_size' => 1,   'max_count' => 1,  'mime_key' => 'cert'],
+    ];
+
+    private static array $uploadTypeLabels = [
+        'image' => '单图',
+        'images' => '多图',
+        'video' => '单视频',
+        'videos' => '多视频',
+        'file' => '单文件',
+        'files' => '多文件',
+    ];
+
+    private static array $assetTypeLabels = [
+        'image' => '图片',
+        'video' => '视频',
+        'file' => '文件',
+    ];
+
+    private static array $uploadDriverLabels = [
+        'local' => '本地',
+        'oss' => 'OSS',
+        'cos' => 'COS',
     ];
 
     /**
@@ -254,7 +277,7 @@ class UploadService extends BaseService
     }
 
     /**
-     * 按系统上限截断上传规则
+     * 按系统上限处理上传规则
      *
      * @param array $rule 原始规则
      * @param string $type 上传类型（用于 warning 文案）
@@ -277,16 +300,28 @@ class UploadService extends BaseService
         $limits = self::getSystemUploadLimits();
         $warnings = [];
         $clamped = false;
+        $sizeLimitedByPhp = false;
 
         $effectiveMaxSizeMb = $limits['effective_max_size_mb'];
-        if (is_numeric($effectiveMaxSizeMb) && $effectiveMaxSizeMb > 0 && $normalizedRule['max_size'] > $effectiveMaxSizeMb) {
-            $normalizedRule['max_size'] = floatval($effectiveMaxSizeMb);
-            $warnings[] = sprintf(
-                '上传类型%s的 max_size 已按 PHP 上限截断为 %sMB。',
-                $type !== '' ? " {$type}" : '',
-                self::formatNumber($effectiveMaxSizeMb)
-            );
-            $clamped = true;
+        if (is_numeric($effectiveMaxSizeMb) && $effectiveMaxSizeMb > 0) {
+            $effectiveMaxSize = floatval($effectiveMaxSizeMb);
+            if ($normalizedRule['max_size'] > $effectiveMaxSize) {
+                $normalizedRule['max_size'] = $effectiveMaxSize;
+                $warnings[] = sprintf(
+                    '上传类型%s的 max_size 已按 PHP 上限截断为 %sMB。',
+                    $type !== '' ? " {$type}" : '',
+                    self::formatNumber($effectiveMaxSize)
+                );
+                $clamped = true;
+                $sizeLimitedByPhp = true;
+            } elseif (abs($normalizedRule['max_size'] - $effectiveMaxSize) < 0.0001) {
+                $warnings[] = sprintf(
+                    '上传类型%s的 max_size 已受 PHP 上限限制为 %sMB。',
+                    $type !== '' ? " {$type}" : '',
+                    self::formatNumber($effectiveMaxSize)
+                );
+                $sizeLimitedByPhp = true;
+            }
         }
 
         $effectiveMaxCount = $limits['effective_max_count'];
@@ -300,7 +335,7 @@ class UploadService extends BaseService
             $clamped = true;
         }
 
-        if ($clamped) {
+        if ($clamped || $sizeLimitedByPhp) {
             $warnings[] = self::NGINX_413_HINT;
         }
 
@@ -335,6 +370,102 @@ class UploadService extends BaseService
             'system_limits' => $result['system_limits'],
             'warnings' => $result['warnings'],
         ]);
+    }
+
+    /**
+     * 获取后台上传公共选项。
+     *
+     * @return array{
+     *   upload_types: array<int,array{label:string,value:string,asset_type:string,multiple:bool}>,
+     *   asset_types: array<int,array{label:string,value:string}>,
+     *   upload_drivers: array<int,array{label:string,value:string,enabled:bool}>
+     * }
+     */
+    public function getUploadOptions(): array
+    {
+        $uploadTypes = [];
+        foreach (['image', 'images', 'video', 'videos', 'file', 'files'] as $type) {
+            $uploadTypes[] = [
+                'label' => self::$uploadTypeLabels[$type],
+                'value' => $type,
+                'asset_type' => $this->assetTypeFromUploadType($type),
+                'multiple' => in_array($type, ['images', 'videos', 'files'], true),
+            ];
+        }
+
+        $assetTypes = [];
+        foreach (self::$assetTypeLabels as $value => $label) {
+            $assetTypes[] = compact('label', 'value');
+        }
+
+        $currentDriver = self::getDriver();
+        $uploadDrivers = [];
+        foreach (DriverManager::getRegisteredDrivers('upload') as $driver => $driverClass) {
+            if (!class_exists($driverClass)) {
+                continue;
+            }
+            $uploadDrivers[] = [
+                'label' => self::$uploadDriverLabels[$driver] ?? strtoupper((string) $driver),
+                'value' => (string) $driver,
+                'enabled' => (string) $driver === $currentDriver,
+            ];
+        }
+
+        return [
+            'upload_types' => $uploadTypes,
+            'asset_types' => $assetTypes,
+            'upload_drivers' => $uploadDrivers,
+        ];
+    }
+
+    /**
+     * 获取客户端安全上传配置。
+     *
+     * @return array{max_size: float, max_count: int, accept_types: string[], tips: string[]}
+     */
+    public function getClientUploadConfig(string $type): array
+    {
+        $config = $this->getUploadConfig($type);
+        return [
+            'max_size' => (float) ($config['max_size'] ?? 0),
+            'max_count' => (int) ($config['max_count'] ?? 1),
+            'accept_types' => (array) ($config['accept_types'] ?? []),
+            'tips' => $this->buildClientUploadTips($type, (float) ($config['max_size'] ?? 0)),
+        ];
+    }
+
+    private function assetTypeFromUploadType(string $type): string
+    {
+        if (in_array($type, ['image', 'images'], true)) {
+            return 'image';
+        }
+        if (in_array($type, ['video', 'videos'], true)) {
+            return 'video';
+        }
+        return 'file';
+    }
+
+    /**
+     * @return string[]
+     */
+    private function buildClientUploadTips(string $type, float $maxSize): array
+    {
+        if ($maxSize <= 0) {
+            return [];
+        }
+
+        $label = match ($this->assetTypeFromUploadType($type)) {
+            'image' => '图片',
+            'video' => '视频',
+            default => '文件',
+        };
+        $size = self::formatNumber($maxSize);
+        $tip = "{$label}最大支持 {$size}MB";
+        if ($label === '视频') {
+            $tip .= '，请压缩后上传';
+        }
+
+        return [$tip];
     }
 
     // ==================== 规则解析 ====================
@@ -375,7 +506,7 @@ class UploadService extends BaseService
         }
 
         // 查询 mb_setting 记录
-        $settingModel = $this->getSettingModel();
+        $settingModel = $this->model(Setting::class);
         $setting = $settingModel->findOrEmpty($relatedId);
         if ($setting->isEmpty()) {
             throw new BusinessException("设置项不存在（ID: {$relatedId}）");
@@ -416,10 +547,22 @@ class UploadService extends BaseService
      *
      * @param mixed $file 上传的文件对象
      * @param array $rules 验证规则 max_size(MB)/max_count/accept_types
-     * @param string $module 模块标识（用于区分上传路径，如 admin、api）
+     * @param string $module 存储路径模块（用于区分上传路径，如 admin、api）
+     * @param string $assetModule 业务素材模块（用于分类，如 goods/review/avatar）
+     * @param string $uploaderType 上传者类型：admin/user/system
+     * @param int $uploaderId 上传者 ID
+     * @param int $categoryId 指定素材分类 ID，0 表示按模块自动归类
      * @return array 返回文件路径信息
      */
-    public function upload($file, array $rules = [], string $module = ''): array
+    public function upload(
+        $file,
+        array $rules = [],
+        string $module = '',
+        string $assetModule = '',
+        string $uploaderType = 'admin',
+        int $uploaderId = 0,
+        int $categoryId = 0
+    ): array
     {
         if (!$file) {
             throw new BusinessException('文件不存在');
@@ -438,6 +581,7 @@ class UploadService extends BaseService
         $this->validateUploadFile($file, $rules);
 
         // 获取上传驱动
+        $driverName = self::getDriver();
         $uploadDriver = $this->getUploadDriver();
 
         // 生成文件名和路径（按 module 区分）
@@ -450,7 +594,21 @@ class UploadService extends BaseService
 
         try {
             $uploadDriver->upload($tempPath, $objectName);
-            return $uploadDriver->getFileInfo($objectName);
+            $fileInfo = $uploadDriver->getFileInfo($objectName);
+            if (!is_array($fileInfo)) {
+                throw new BusinessException('上传失败：无法读取文件信息');
+            }
+
+            return app()->make(AssetService::class)->createFromUploadedFile(
+                $fileInfo,
+                $driverName,
+                $tempPath,
+                $file,
+                $assetModule !== '' ? $assetModule : ($module !== '' ? $module : 'other'),
+                $uploaderType,
+                $uploaderId,
+                $categoryId
+            );
         } finally {
             if (file_exists($tempPath)) {
                 unlink($tempPath);
@@ -534,7 +692,7 @@ class UploadService extends BaseService
         }
 
         if ($relatedId > 0) {
-            $settingModel = $this->getSettingModel();
+            $settingModel = $this->model(Setting::class);
             $setting = $settingModel->findOrEmpty($relatedId);
             if (!$setting->isEmpty()) {
                 $settingRules = $setting->rules ?? [];
@@ -625,10 +783,22 @@ class UploadService extends BaseService
      *
      * @param array $files 文件对象数组
      * @param array $rules 验证规则
-     * @param string $module 模块标识（用于区分上传路径）
+     * @param string $module 存储路径模块（用于区分上传路径）
+     * @param string $assetModule 业务素材模块
+     * @param string $uploaderType 上传者类型
+     * @param int $uploaderId 上传者 ID
+     * @param int $categoryId 指定素材分类 ID，0 表示按模块自动归类
      * @return array{results: array, errors: array}
      */
-    public function batchUpload(array $files, array $rules = [], string $module = ''): array
+    public function batchUpload(
+        array $files,
+        array $rules = [],
+        string $module = '',
+        string $assetModule = '',
+        string $uploaderType = 'admin',
+        int $uploaderId = 0,
+        int $categoryId = 0
+    ): array
     {
         if (empty($rules)) {
             $rules = $this->getUploadConfig('images');
@@ -644,7 +814,7 @@ class UploadService extends BaseService
 
         foreach ($files as $key => $file) {
             try {
-                $results[] = $this->upload($file, $rules, $module);
+                $results[] = $this->upload($file, $rules, $module, $assetModule, $uploaderType, $uploaderId, $categoryId);
             } catch (\Exception $e) {
                 $errors[] = "文件 {$key}: " . $e->getMessage();
             }
@@ -660,10 +830,10 @@ class UploadService extends BaseService
     /**
      * 客户端单图上传。
      */
-    public function uploadClientImage($file): array
+    public function uploadClientImage($file, string $module = 'client', int $userId = 0): array
     {
         $rules = $this->resolveUploadRules('image', '', 0);
-        return $this->upload($file, $rules, 'client');
+        return $this->upload($file, $rules, 'client', $module, 'user', $userId);
     }
 
     /**
@@ -672,7 +842,7 @@ class UploadService extends BaseService
     public function uploadWechatAvatar($file, string $bindToken): array
     {
         app()->make(WechatService::class)->assertMiniappBindToken($bindToken);
-        return $this->uploadClientImage($file);
+        return $this->uploadClientImage($file, 'wechat_avatar', 0);
     }
 
     /**
@@ -685,6 +855,11 @@ class UploadService extends BaseService
         $image = trim($image);
         if ($image === '') {
             return '';
+        }
+
+        if (ctype_digit($image)) {
+            app()->make(AssetService::class)->assertUsableImageAssets([(int) $image]);
+            return $image;
         }
 
         if (str_starts_with($image, '//') || preg_match('#^https?://#i', $image)) {
@@ -915,6 +1090,10 @@ class UploadService extends BaseService
     {
         $driverName = self::getDriver();
 
+        if (!in_array($driverName, ['local', 'oss', 'cos'], true)) {
+            throw new BusinessException('当前上传驱动暂不可用，请切换为本地存储、阿里云 OSS 或腾讯云 COS');
+        }
+
         $groupMap = [
             'local' => 'UploadLocal',
             'oss'   => 'UploadOss',
@@ -939,19 +1118,8 @@ class UploadService extends BaseService
             $driverConfig['base_url'] = (string) getSystemSetting('site_url', '');
         }
 
-        return DriverManager::driver('upload', $driverName, $driverConfig);
-    }
-
-    /**
-     * 获取 Setting 模型实例
-     * 通过 app() 动态获取，避免直接 use admin 模块的模型类
-     * 这样当其他模块（如 api）使用此服务时，只要对应模型存在即可
-     *
-     * @return mixed
-     */
-    private function getSettingModel()
-    {
-        return app()->make(\app\model\setting\Setting::class);
+        // 上传配置来自后台系统设置，Swoole 常驻进程下不缓存实例，避免切换凭证或域名后沿用旧客户端。
+        return DriverManager::driver('upload', $driverName, $driverConfig, false);
     }
 
     /**

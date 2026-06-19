@@ -8,7 +8,7 @@ Route::group('user/auth', function () {
 
     Route::post('login/username', 'loginByUsername');       // 用户名 + 密码
     Route::post('login/sms', 'loginBySms');                 // 手机号 + SMS
-    Route::post('login', 'login');                          // 手机号 + 密码
+    Route::post('login', 'login')->completeMatch();         // 手机号 + 密码
 
     // 短信验证码下发(scene 由参数指定)
     Route::post('sms/send', 'sendSmsCode');
@@ -17,12 +17,12 @@ Route::group('user/auth', function () {
     Route::post('wechat/bindMobile', 'bindMobile');                   // 手动绑定(force_mobile=false)
     Route::post('wechat/bindMobileByPhoneCode', 'bindMobileByPhoneCode'); // getPhoneNumber 兑换(force_mobile=true)
     Route::post('wechat/bindUserInfo', 'bindUserInfo');               // 头像昵称绑定(force_userinfo=true)
-    Route::post('wechat', 'wechatLogin');
+    Route::post('wechat', 'wechatLogin')->completeMatch();
 
     // 微信公众号 OAuth(微信浏览器内打开网页)
     Route::post('wechat/official/oauthUrl', 'wechatOfficialOauthUrl');
     Route::post('wechat/official/bindMobile', 'wechatOfficialBindMobile');
-    Route::post('wechat/official', 'wechatOfficialLogin');
+    Route::post('wechat/official', 'wechatOfficialLogin')->completeMatch();
 })->prefix('client.user.UserController/');
 
 Route::group('user/my', function () {

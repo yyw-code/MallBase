@@ -189,7 +189,7 @@ class InstallAuto extends Command
             (string) ($params['redis_port'] ?? ''),
             (string) ($params['redis_db'] ?? '')
         ));
-        $output->writeln('<comment>[install:auto] 首次登录后请修改默认管理员密码。</comment>');
+        $output->writeln('<comment>[install:auto] 安装完成后请尽快修改默认管理员密码。</comment>');
         $output->writeln('<comment>[install:auto] 安装完成后请重启 Swoole，让新配置和安装锁生效。</comment>');
     }
 

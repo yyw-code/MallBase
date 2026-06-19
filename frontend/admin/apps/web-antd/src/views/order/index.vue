@@ -2,6 +2,7 @@
 import type { OrderApi } from '#/api/order';
 
 import { computed, onMounted, ref } from 'vue';
+import { useRoute } from 'vue-router';
 
 import { useAccess } from '@vben/access';
 
@@ -9,10 +10,13 @@ import { message, Modal } from 'ant-design-vue';
 
 import {
   closeOrderApi,
+  exportOrderCsvApi,
   getOrderListApi,
+  getOrderStatsApi,
   getOrderStatusOptionsApi,
 } from '#/api/order';
 import { useTableCrud } from '#/composables/useTableCrud';
+import { downloadBlob } from '#/utils/download';
 
 import AdjustPriceModal from './adjust-price-modal.vue';
 import DetailDrawer from './detail-drawer.vue';
@@ -20,6 +24,7 @@ import ShipModal from './ship-modal.vue';
 
 defineOptions({ name: 'OrderManagement' });
 
+const route = useRoute();
 const { hasAccessByCodes } = useAccess();
 
 /* ---------------- 表格 CRUD ---------------- */
@@ -37,7 +42,7 @@ const { tableData, loading, pagination, loadData } = useTableCrud<
 interface SearchForm {
   sn: string;
   status: number | undefined;
-  user_id: number | undefined;
+  buyer_keyword: string;
   logistics_sn: string;
   created_range: [string, string] | undefined;
   has_after_sale: 0 | 1 | undefined;
@@ -46,18 +51,27 @@ interface SearchForm {
 const searchParams = ref<SearchForm>({
   sn: '',
   status: undefined,
-  user_id: undefined,
+  buyer_keyword: '',
   logistics_sn: '',
   created_range: undefined,
   has_after_sale: undefined,
 });
+const activeStatusTab = ref('all');
+const statsTabs = ref<OrderApi.StatsTab[]>([]);
+const selectedRowKeys = ref<number[]>([]);
+const rowSelection = computed(() => ({
+  selectedRowKeys: selectedRowKeys.value,
+  onChange: (keys: Array<number | string>) => {
+    selectedRowKeys.value = keys.map(Number).filter((key) => key > 0);
+  },
+}));
 
 const buildQuery = (): OrderApi.ListParams => {
   const range = searchParams.value.created_range;
   return {
     sn: searchParams.value.sn?.trim() || undefined,
     status: searchParams.value.status,
-    user_id: searchParams.value.user_id,
+    buyer_keyword: searchParams.value.buyer_keyword?.trim() || undefined,
     logistics_sn: searchParams.value.logistics_sn?.trim() || undefined,
     created_start: range?.[0] || undefined,
     created_end: range?.[1] || undefined,
@@ -66,21 +80,76 @@ const buildQuery = (): OrderApi.ListParams => {
 };
 
 const resetSearch = () => {
+  selectedRowKeys.value = [];
   searchParams.value = {
     sn: '',
     status: undefined,
-    user_id: undefined,
+    buyer_keyword: '',
     logistics_sn: '',
     created_range: undefined,
     has_after_sale: undefined,
   };
+  activeStatusTab.value = 'all';
   pagination.current = 1;
-  loadData(buildQuery());
+  refreshData();
 };
 
 const submitSearch = () => {
+  selectedRowKeys.value = [];
   pagination.current = 1;
-  loadData(buildQuery());
+  refreshData();
+};
+
+const loadStats = async () => {
+  const res = await getOrderStatsApi(buildQuery());
+  statsTabs.value = res?.tabs ?? [];
+};
+
+const refreshData = async () => {
+  await Promise.all([loadData(buildQuery()), loadStats()]);
+};
+
+const routeNumberQuery = (value: unknown): number | undefined => {
+  const raw = Array.isArray(value) ? value[0] : value;
+  if (raw === undefined || raw === null || raw === '') {
+    return undefined;
+  }
+  const numeric = Number(raw);
+  return Number.isNaN(numeric) ? undefined : numeric;
+};
+
+const applyRouteQuery = () => {
+  const status = routeNumberQuery(route.query.status);
+  if (status !== undefined) {
+    searchParams.value.status = status;
+    activeStatusTab.value = String(status);
+  }
+
+  const hasAfterSale = routeNumberQuery(route.query.has_after_sale);
+  if (hasAfterSale === 0 || hasAfterSale === 1) {
+    searchParams.value.has_after_sale = hasAfterSale;
+  }
+};
+
+const handleStatusTabChange = (key: string) => {
+  selectedRowKeys.value = [];
+  activeStatusTab.value = key;
+  searchParams.value.status = key === 'all' ? undefined : Number(key);
+  pagination.current = 1;
+  refreshData();
+};
+
+const handleExport = async () => {
+  try {
+    const params =
+      selectedRowKeys.value.length > 0
+        ? { ids: selectedRowKeys.value.join(',') }
+        : buildQuery();
+    const blob = await exportOrderCsvApi(params);
+    downloadBlob(blob, 'orders.csv');
+  } catch (error: any) {
+    message.error(error?.message || '导出失败');
+  }
 };
 
 /* ---------------- 枚举选项 ---------------- */
@@ -118,8 +187,8 @@ const shipModalOpen = ref(false);
 const shipTargetOrder = ref<null | OrderApi.OrderRecord>(null);
 
 const openShip = (record: OrderApi.OrderRecord) => {
-  if (record.status !== 10) {
-    message.warning('仅已支付订单可发货');
+  if (![10, 20].includes(record.status)) {
+    message.warning('仅已支付或已发货订单可维护物流信息');
     return;
   }
   shipTargetOrder.value = record;
@@ -127,7 +196,7 @@ const openShip = (record: OrderApi.OrderRecord) => {
 };
 
 const onShipSuccess = async () => {
-  await loadData(buildQuery());
+  await refreshData();
 };
 
 /* ---------------- 改价弹窗 ---------------- */
@@ -144,7 +213,7 @@ const openAdjustPrice = (record: OrderApi.OrderRecord) => {
 };
 
 const onAdjustSuccess = async () => {
-  await loadData(buildQuery());
+  await refreshData();
 };
 
 /* ---------------- 关闭订单 ---------------- */
@@ -163,13 +232,22 @@ const handleClose = (record: OrderApi.OrderRecord) => {
       try {
         await closeOrderApi(record.id);
         message.success('订单已关闭');
-        await loadData(buildQuery());
+        await refreshData();
       } catch (error: any) {
         message.error(error?.message || '关闭失败');
       }
     },
   });
 };
+
+const buyerDisplayName = (record: OrderApi.OrderRecord) =>
+  record.buyer?.nickname || `用户 ${record.user_id}`;
+
+const buyerInitial = (record: OrderApi.OrderRecord) =>
+  buyerDisplayName(record).slice(0, 1) || '买';
+
+const buyerContact = (record: OrderApi.OrderRecord) =>
+  record.buyer?.mobile || record.buyer?.email || '未填写联系方式';
 
 /* ---------------- 表格列 ---------------- */
 const columns = [
@@ -186,7 +264,7 @@ const columns = [
         : text;
     },
   },
-  { title: '买家 ID', dataIndex: 'user_id', width: 90 },
+  { title: '买家信息', dataIndex: 'buyer', key: 'buyer', width: 220 },
   { title: '应付', dataIndex: 'pay_amount', width: 100 },
   {
     title: '支付方式',
@@ -194,7 +272,9 @@ const columns = [
     width: 100,
     customRender: ({ record }: { record: OrderApi.OrderRecord }) =>
       record.pay_method_text ||
-      (record.pay_method == null ? '—' : payMethodMap.value[record.pay_method]),
+      (record.pay_method === null || record.pay_method === undefined
+        ? '—'
+        : payMethodMap.value[record.pay_method]),
   },
   { title: '收件人', dataIndex: 'receiver_name', width: 110, ellipsis: true },
   { title: '运单号', dataIndex: 'logistics_sn', width: 160, ellipsis: true },
@@ -203,140 +283,192 @@ const columns = [
 ];
 
 onMounted(() => {
-  loadData(buildQuery());
+  applyRouteQuery();
+  refreshData();
   loadStatusOptions();
 });
 </script>
 
 <template>
-  <div class="p-4">
-    <div class="mb-4">
-      <a-button @click="() => loadData(buildQuery())">刷新</a-button>
+  <div class="order-page p-4">
+    <div class="order-header">
+      <div>
+        <h2 class="order-title">订单列表</h2>
+      </div>
+      <div class="order-actions">
+        <a-button @click="refreshData">刷新</a-button>
+        <a-button v-access:code="'SystemOrderExport'" @click="handleExport">
+          {{
+            selectedRowKeys.length > 0
+              ? `导出已选（${selectedRowKeys.length}）`
+              : '导出'
+          }}
+        </a-button>
+      </div>
     </div>
 
     <!-- 搜索表单 -->
-    <a-form layout="inline" class="mb-4">
-      <a-form-item label="订单号">
-        <a-input
-          v-model:value="searchParams.sn"
-          placeholder="订单号（支持模糊）"
-          allow-clear
-          style="width: 180px"
-          @press-enter="submitSearch"
-        />
-      </a-form-item>
-      <a-form-item label="状态">
-        <a-select
-          v-model:value="searchParams.status"
-          placeholder="请选择"
-          allow-clear
-          style="width: 140px"
-          :options="
-            statusOptions.map((o) => ({ label: o.label, value: o.value }))
-          "
-        />
-      </a-form-item>
-      <a-form-item label="买家ID">
-        <a-input-number
-          v-model:value="searchParams.user_id"
-          placeholder="买家ID"
-          :min="1"
-          style="width: 120px"
-          @press-enter="submitSearch"
-        />
-      </a-form-item>
-      <a-form-item label="运单号">
-        <a-input
-          v-model:value="searchParams.logistics_sn"
-          placeholder="运单号"
-          allow-clear
-          style="width: 160px"
-          @press-enter="submitSearch"
-        />
-      </a-form-item>
-      <a-form-item label="下单时间">
-        <a-range-picker
-          v-model:value="searchParams.created_range"
-          show-time
-          value-format="YYYY-MM-DD HH:mm:ss"
-          style="width: 360px"
-        />
-      </a-form-item>
-      <a-form-item label="售后">
-        <a-select
-          v-model:value="searchParams.has_after_sale"
-          placeholder="是否有售后"
-          allow-clear
-          style="width: 140px"
+    <div class="order-filter-panel">
+      <a-form>
+        <div
+          class="grid grid-cols-1 gap-x-4 gap-y-3 md:grid-cols-3 xl:grid-cols-6"
         >
-          <a-select-option :value="1">有进行中售后</a-select-option>
-          <a-select-option :value="0">无进行中售后</a-select-option>
-        </a-select>
-      </a-form-item>
-      <a-form-item>
-        <a-button type="primary" @click="submitSearch">搜索</a-button>
-        <a-button class="ml-2" @click="resetSearch">重置</a-button>
-      </a-form-item>
-    </a-form>
+          <div>
+            <a-form-item class="mb-0" label="订单号">
+              <a-input
+                v-model:value="searchParams.sn"
+                placeholder="订单号（支持模糊）"
+                allow-clear
+                class="w-full"
+                @press-enter="submitSearch"
+              />
+            </a-form-item>
+          </div>
+          <div>
+            <a-form-item class="mb-0" label="买家">
+              <a-input
+                v-model:value="searchParams.buyer_keyword"
+                placeholder="ID / 昵称 / 手机号 / 邮箱"
+                allow-clear
+                class="w-full"
+                @press-enter="submitSearch"
+              />
+            </a-form-item>
+          </div>
+          <div>
+            <a-form-item class="mb-0" label="运单号">
+              <a-input
+                v-model:value="searchParams.logistics_sn"
+                placeholder="运单号"
+                allow-clear
+                class="w-full"
+                @press-enter="submitSearch"
+              />
+            </a-form-item>
+          </div>
+          <div class="md:col-span-2 xl:col-span-2">
+            <a-form-item class="mb-0" label="下单时间">
+              <a-range-picker
+                v-model:value="searchParams.created_range"
+                show-time
+                value-format="YYYY-MM-DD HH:mm:ss"
+                class="w-full"
+              />
+            </a-form-item>
+          </div>
+          <div>
+            <a-form-item class="mb-0" label="售后">
+              <a-select
+                v-model:value="searchParams.has_after_sale"
+                placeholder="是否有售后"
+                allow-clear
+                class="w-full"
+              >
+                <a-select-option :value="1">有进行中售后</a-select-option>
+                <a-select-option :value="0">无进行中售后</a-select-option>
+              </a-select>
+            </a-form-item>
+          </div>
+        </div>
+        <div class="mt-3 flex justify-end gap-2">
+          <a-button type="primary" @click="submitSearch">搜索</a-button>
+          <a-button @click="resetSearch">重置</a-button>
+        </div>
+      </a-form>
+    </div>
 
-    <a-table
-      :columns="columns"
-      :data-source="tableData"
-      :loading="loading"
-      :pagination="pagination"
-      :scroll="{ x: 1500 }"
-      row-key="id"
-      @change="
-        (newPagination) => {
-          pagination.current = newPagination.current;
-          pagination.pageSize = newPagination.pageSize;
-          loadData(buildQuery());
-        }
-      "
-    >
-      <template #bodyCell="{ column, record }">
-        <template v-if="column.key === 'action'">
-          <a-space>
-            <a-button
-              type="link"
-              size="small"
-              v-access:code="'SystemOrderDetail'"
-              @click="openDetail(record)"
-            >
-              详情
-            </a-button>
-            <a-button
-              v-if="record.status === 10"
-              type="link"
-              size="small"
-              v-access:code="'SystemOrderShip'"
-              @click="openShip(record)"
-            >
-              发货
-            </a-button>
-            <a-button
-              v-if="record.status === 0"
-              type="link"
-              size="small"
-              v-access:code="'SystemOrderAdjustPrice'"
-              @click="openAdjustPrice(record)"
-            >
-              改价
-            </a-button>
-            <a-button
-              v-if="[0, 10].includes(record.status)"
-              type="link"
-              danger
-              size="small"
-              v-access:code="'SystemOrderClose'"
-              @click="handleClose(record)"
-            >
-              关闭
-            </a-button>
-          </a-space>
+    <div class="order-table-panel">
+      <a-tabs
+        :active-key="activeStatusTab"
+        class="order-status-tabs"
+        size="small"
+        @change="handleStatusTabChange"
+      >
+        <a-tab-pane v-for="tab in statsTabs" :key="tab.key">
+          <template #tab>
+            <span>{{ tab.label }} {{ tab.count }}</span>
+          </template>
+        </a-tab-pane>
+      </a-tabs>
+
+      <a-table
+        :columns="columns"
+        :data-source="tableData"
+        :loading="loading"
+        :pagination="pagination"
+        :row-selection="rowSelection"
+        :scroll="{ x: 1650 }"
+        row-key="id"
+        @change="
+          (newPagination: any) => {
+            pagination.current = newPagination.current;
+            pagination.pageSize = newPagination.pageSize;
+            loadData(buildQuery());
+          }
+        "
+      >
+        <template #bodyCell="{ column, record }">
+          <template v-if="column.key === 'buyer'">
+            <div class="order-buyer-cell">
+              <a-avatar
+                :size="32"
+                :src="record.buyer?.avatar_full_url || undefined"
+              >
+                {{ buyerInitial(record) }}
+              </a-avatar>
+              <div class="order-buyer-meta">
+                <div class="order-buyer-name">
+                  {{ buyerDisplayName(record) }}
+                </div>
+                <div class="order-buyer-sub">
+                  {{ buyerContact(record) }} · ID {{ record.user_id }}
+                </div>
+              </div>
+            </div>
+          </template>
+          <template v-if="column.key === 'action'">
+            <a-space>
+              <a-button
+                type="link"
+                size="small"
+                v-access:code="'SystemOrderDetail'"
+                @click="openDetail(record)"
+              >
+                详情
+              </a-button>
+              <a-button
+                v-if="[10, 20].includes(record.status)"
+                type="link"
+                size="small"
+                v-access:code="'SystemOrderShip'"
+                @click="openShip(record)"
+              >
+                {{ record.status === 10 ? '发货' : '修改物流' }}
+              </a-button>
+              <a-button
+                v-if="record.status === 0"
+                type="link"
+                size="small"
+                v-access:code="'SystemOrderAdjustPrice'"
+                @click="openAdjustPrice(record)"
+              >
+                改价
+              </a-button>
+              <a-button
+                v-if="[0, 10].includes(record.status)"
+                type="link"
+                danger
+                size="small"
+                v-access:code="'SystemOrderClose'"
+                @click="handleClose(record)"
+              >
+                关闭
+              </a-button>
+            </a-space>
+          </template>
         </template>
-      </template>
-    </a-table>
+      </a-table>
+    </div>
 
     <DetailDrawer
       v-model:open="drawerOpen"
@@ -360,3 +492,93 @@ onMounted(() => {
     />
   </div>
 </template>
+
+<style scoped>
+.order-page {
+  min-height: 100%;
+}
+
+.order-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.order-title {
+  margin: 0;
+  color: hsl(var(--foreground));
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 32px;
+}
+
+.order-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.order-filter-panel,
+.order-table-panel {
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+}
+
+.order-filter-panel {
+  padding: 16px;
+  margin-bottom: 12px;
+}
+
+.order-table-panel {
+  overflow: hidden;
+}
+
+.order-status-tabs {
+  padding: 0 16px;
+  margin-bottom: 0;
+}
+
+.order-status-tabs :deep(.ant-tabs-nav) {
+  margin-bottom: 0;
+}
+
+.order-status-tabs :deep(.ant-tabs-tab) {
+  padding: 14px 0 12px;
+}
+
+.order-buyer-cell {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 8px;
+}
+
+.order-buyer-meta {
+  min-width: 0;
+}
+
+.order-buyer-name {
+  overflow: hidden;
+  color: hsl(var(--foreground));
+  font-weight: 500;
+  line-height: 20px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.order-buyer-sub {
+  overflow: hidden;
+  color: hsl(var(--muted-foreground));
+  font-size: 12px;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.order-table-panel :deep(.ant-table-wrapper) {
+  border-top: 1px solid hsl(var(--border));
+}
+</style>

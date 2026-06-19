@@ -10,6 +10,10 @@ use app\model\goods\GoodsSku;
 use app\model\goods\GoodsTag;
 use app\model\goods\GoodsTagRelation;
 use app\model\setting\FreightTemplate;
+use app\service\admin\support\CsvExportService;
+use app\service\upload\AssetHydrator;
+use app\service\upload\AssetIdNormalizer;
+use app\service\upload\AssetService;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
 
@@ -20,6 +24,8 @@ use mall_base\exception\BusinessException;
 class GoodsService extends BaseService
 {
     private const DEFAULT_SINGLE_SKU_SPEC_VALUES = '';
+    private const EXPORT_LIMIT = 5000;
+    private const STOCK_WARNING_THRESHOLD = 10;
 
     /**
      * 默认 Model 类名
@@ -31,7 +37,23 @@ class GoodsService extends BaseService
      */
     protected function buildListQuery(array $where)
     {
-        return $this->model()
+        $query = $this->model();
+        $view = (string) ($where['view'] ?? 'all');
+
+        if ($view === 'recycle') {
+            $query->whereNotNull('delete_time');
+        } else {
+            $query->whereNull('delete_time');
+            if ($view === 'on_sale') {
+                $query->where('status', 1)->where('is_on_sale', 1);
+            } elseif ($view === 'off_sale') {
+                $query->where('status', 1)->where('is_on_sale', 0);
+            } elseif ($view === 'disabled') {
+                $query->where('status', 0);
+            }
+        }
+
+        return $query
             ->when(!empty($where['keyword']), function ($q) use ($where) {
                 $q->whereLike('name|subtitle', "%{$where['keyword']}%");
             })
@@ -46,6 +68,9 @@ class GoodsService extends BaseService
             })
             ->when(($where['status'] ?? null) !== null && $where['status'] !== '', function ($q) use ($where) {
                 $q->where('status', $where['status']);
+            })
+            ->when(!empty($where['stock_warning']), function ($q) {
+                $q->where('stock', '<=', self::STOCK_WARNING_THRESHOLD);
             });
     }
 
@@ -64,36 +89,107 @@ class GoodsService extends BaseService
         $total = $this->buildListQuery($where)->count();
 
         $listArray = $list->toArray();
-        if (!empty($listArray)) {
-            // 批量获取分类名
-            $categoryIds = array_unique(array_column($listArray, 'category_id'));
-            $categories = $this->model(GoodsCategory::class)
-                ->whereIn('id', $categoryIds)
-                ->column('name', 'id');
-
-            // 批量获取品牌名
-            $brandIds = array_filter(array_unique(array_column($listArray, 'brand_id')));
-            $brands = !empty($brandIds)
-                ? $this->model(GoodsBrand::class)->whereIn('id', $brandIds)->column('name', 'id')
-                : [];
-
-            $goodsIds = array_column($listArray, 'id');
-            $tagMap = $this->batchGetGoodsTags($goodsIds);
-
-            foreach ($listArray as &$item) {
-                $firstImageUrl = $this->getFirstImageUrl($item['images'] ?? []);
-                if (empty($item['main_image']) && $firstImageUrl !== '') {
-                    $item['main_image'] = $firstImageUrl;
-                    $item['main_image_full_url'] = buildUploadUrl($item['main_image']);
-                }
-                $item['category_name'] = $categories[$item['category_id']] ?? '';
-                $item['brand_name'] = $brands[$item['brand_id']] ?? '';
-                $item['tags'] = $tagMap[$item['id']] ?? [];
-            }
-        }
+        $listArray = $this->appendListDerivedFields($listArray);
 
         $list = $listArray;
         return compact('total', 'list');
+    }
+
+    /**
+     * @return array{total:int,tabs:array<int,array{key:string,label:string,count:int}>}
+     */
+    public function stats(array $where): array
+    {
+        $baseWhere = $where;
+        unset($baseWhere['view'], $baseWhere['status'], $baseWhere['is_on_sale']);
+
+        $tabs = [];
+        $views = [
+            'all' => '全部',
+            'on_sale' => '出售中',
+            'off_sale' => '已下架',
+            'disabled' => '已禁用',
+            'recycle' => '回收站',
+        ];
+
+        foreach ($views as $key => $label) {
+            $viewWhere = $baseWhere;
+            $viewWhere['view'] = $key;
+            $tabs[] = [
+                'key' => $key,
+                'label' => $label,
+                'count' => (int) $this->buildListQuery($viewWhere)->count(),
+            ];
+        }
+
+        $total = (int) ($tabs[0]['count'] ?? 0);
+        return compact('total', 'tabs');
+    }
+
+    public function exportCsv(array $where): string
+    {
+        $rows = $this->buildListQuery($where)
+            ->order('id', 'desc')
+            ->limit(self::EXPORT_LIMIT)
+            ->select()
+            ->toArray();
+        $rows = $this->appendListDerivedFields($rows);
+
+        foreach ($rows as &$row) {
+            $row['is_on_sale_text'] = (int) ($row['is_on_sale'] ?? 0) === 1 ? '上架' : '下架';
+            $row['status_text'] = (int) ($row['status'] ?? 0) === 1 ? '启用' : '禁用';
+        }
+        unset($row);
+
+        return app()->make(CsvExportService::class)->make([
+            'id' => 'ID',
+            'name' => '商品名称',
+            'category_name' => '分类',
+            'brand_name' => '品牌',
+            'price' => '价格',
+            'stock' => '库存',
+            'sales' => '销量',
+            'is_on_sale_text' => '上架状态',
+            'status_text' => '状态',
+            'create_time' => '创建时间',
+        ], $rows);
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $listArray
+     * @return array<int, array<string, mixed>>
+     */
+    private function appendListDerivedFields(array $listArray): array
+    {
+        if (empty($listArray)) {
+            return [];
+        }
+
+        $categoryIds = array_unique(array_column($listArray, 'category_id'));
+        $categories = $this->model(GoodsCategory::class)
+            ->whereIn('id', $categoryIds)
+            ->column('name', 'id');
+
+        $brandIds = array_filter(array_unique(array_column($listArray, 'brand_id')));
+        $brands = !empty($brandIds)
+            ? $this->model(GoodsBrand::class)->whereIn('id', $brandIds)->column('name', 'id')
+            : [];
+
+        $goodsIds = array_column($listArray, 'id');
+        $tagMap = $this->batchGetGoodsTags($goodsIds);
+
+        foreach ($listArray as &$item) {
+            $firstImageValue = app()->make(AssetHydrator::class)->firstImageValue($item['images'] ?? []);
+            if (empty($item['main_image']) && $firstImageValue !== '') {
+                $item['main_image'] = $firstImageValue;
+            }
+            $item['category_name'] = $categories[$item['category_id']] ?? '';
+            $item['brand_name'] = $brands[$item['brand_id']] ?? '';
+            $item['tags'] = $tagMap[$item['id']] ?? [];
+        }
+        unset($item);
+
+        return app()->make(AssetHydrator::class)->hydrateGoodsList($listArray);
     }
 
     /**
@@ -105,17 +201,16 @@ class GoodsService extends BaseService
      */
     public function getInfo(int $id): array
     {
-        $goods = $this->model()->find($id);
+        $goods = $this->model()->where('id', $id)->whereNull('delete_time')->find();
 
         if (!$goods) {
             throw new BusinessException('商品不存在');
         }
 
         $result = $goods->toArray();
-        $firstImageUrl = $this->getFirstImageUrl($result['images'] ?? []);
-        if (empty($result['main_image']) && $firstImageUrl !== '') {
-            $result['main_image'] = $firstImageUrl;
-            $result['main_image_full_url'] = buildUploadUrl($firstImageUrl);
+        $firstImageValue = app()->make(AssetHydrator::class)->firstImageValue($result['images'] ?? []);
+        if (empty($result['main_image']) && $firstImageValue !== '') {
+            $result['main_image'] = $firstImageValue;
         }
 
         // 获取商品SKU
@@ -138,7 +233,7 @@ class GoodsService extends BaseService
             $result['tags'] = [];
         }
 
-        return $result;
+        return app()->make(AssetHydrator::class)->hydrateGoodsDetail($result);
     }
 
     /**
@@ -160,6 +255,7 @@ class GoodsService extends BaseService
         $this->validateCategoryAndBrand($data);
         $this->validateFreightTemplate($data);
         $this->validateSkuCodes($data['skus'] ?? [], null);
+        $this->validateAssetRefs($data);
 
         // 事务内只做写入
         $goodsId = $this->transaction(function () use ($data) {
@@ -177,6 +273,8 @@ class GoodsService extends BaseService
             if (!empty($data['tag_ids']) && is_array($data['tag_ids'])) {
                 $this->syncTags($goodsId, $data['tag_ids']);
             }
+
+            $this->syncGoodsAssetUsage((int) $goodsId, $data);
 
             // 从SKU汇总价格和库存
             $this->updatePriceAndStock($goodsId);
@@ -204,7 +302,7 @@ class GoodsService extends BaseService
         $data = $this->normalizeSkusBySpecType($data);
 
         // 业务校验（事务外）
-        $goods = $this->model()->find($id);
+        $goods = $this->model()->where('id', $id)->whereNull('delete_time')->find();
 
         if (!$goods) {
             throw new BusinessException('商品不存在');
@@ -213,6 +311,7 @@ class GoodsService extends BaseService
         $this->validateCategoryAndBrand($data);
         $this->validateFreightTemplate($data);
         $this->validateSkuCodes($data['skus'] ?? [], $id);
+        $this->validateAssetRefs($data);
 
         // 事务内只做写入
         $this->transaction(function () use ($goods, $data) {
@@ -227,6 +326,8 @@ class GoodsService extends BaseService
             if (array_key_exists('tag_ids', $data) && is_array($data['tag_ids'])) {
                 $this->syncTags((int) $goods->id, $data['tag_ids']);
             }
+
+            $this->syncGoodsAssetUsage((int) $goods->id, $data);
 
             // 从SKU汇总价格和库存
             $this->updatePriceAndStock((int) $goods->id);
@@ -247,13 +348,36 @@ class GoodsService extends BaseService
     public function delete(int $id): bool
     {
         // 业务校验（事务外）
-        $goods = $this->model()->find($id);
+        $goods = $this->model()->where('id', $id)->whereNull('delete_time')->find();
 
         if (!$goods) {
             throw new BusinessException('商品不存在');
         }
 
-        // 事务内删除关联数据
+        $goods->save(['delete_time' => time()]);
+        return true;
+    }
+
+    public function restore(int $id): bool
+    {
+        $goods = $this->model()->where('id', $id)->whereNotNull('delete_time')->find();
+
+        if (!$goods) {
+            throw new BusinessException('回收站商品不存在');
+        }
+
+        $goods->save(['delete_time' => null]);
+        return true;
+    }
+
+    public function purge(int $id): bool
+    {
+        $goods = $this->model()->where('id', $id)->whereNotNull('delete_time')->find();
+
+        if (!$goods) {
+            throw new BusinessException('回收站商品不存在');
+        }
+
         return (bool) $this->transaction(function () use ($id, $goods) {
             $this->model(GoodsSku::class)->where('goods_id', $id)->delete();
             $this->model(GoodsTagRelation::class)->where('goods_id', $id)->delete();
@@ -272,7 +396,7 @@ class GoodsService extends BaseService
      */
     public function updateStatus(int $id, int $status): bool
     {
-        $goods = $this->model()->find($id);
+        $goods = $this->model()->where('id', $id)->whereNull('delete_time')->find();
 
         if (!$goods) {
             throw new BusinessException('商品不存在');
@@ -293,7 +417,7 @@ class GoodsService extends BaseService
      */
     public function updateOnSale(int $id, int $isOnSale): bool
     {
-        $goods = $this->model()->find($id);
+        $goods = $this->model()->where('id', $id)->whereNull('delete_time')->find();
 
         if (!$goods) {
             throw new BusinessException('商品不存在');
@@ -315,7 +439,8 @@ class GoodsService extends BaseService
         $this->model(GoodsSku::class)->where('goods_id', $goodsId)->delete();
 
         if (!empty($skus)) {
-            $data = array_map(function ($sku) use ($goodsId) {
+            $normalizer = app()->make(AssetIdNormalizer::class);
+            $data = array_map(function ($sku) use ($goodsId, $normalizer) {
                 return [
                     'goods_id' => $goodsId,
                     'spec_values' => $sku['spec_values'] ?? '',
@@ -323,7 +448,7 @@ class GoodsService extends BaseService
                     'price' => $sku['price'] ?? 0,
                     'market_price' => $sku['market_price'] ?? 0,
                     'stock' => $sku['stock'] ?? 0,
-                    'image' => $sku['image'] ?? '',
+                    'image' => $normalizer->normalizeSingle($sku['image'] ?? ''),
                     'status' => $sku['status'] ?? 1,
                     'weight' => isset($sku['weight']) && $sku['weight'] !== '' ? (float) $sku['weight'] : null,
                 ];
@@ -423,11 +548,12 @@ class GoodsService extends BaseService
             return $data;
         }
 
-        $data['spec_meta'] = array_values(array_map(function (array $item) {
-            $values = array_values(array_map(function (array $value) {
+        $normalizer = app()->make(AssetIdNormalizer::class);
+        $data['spec_meta'] = array_values(array_map(function (array $item) use ($normalizer) {
+            $values = array_values(array_map(function (array $value) use ($normalizer) {
                 return [
                     'value' => (string) ($value['value'] ?? ''),
-                    'pic' => (string) ($value['pic'] ?? ''),
+                    'pic' => $normalizer->normalizeSingle($value['pic'] ?? ''),
                 ];
             }, array_filter($item['values'] ?? [], 'is_array')));
 
@@ -460,7 +586,7 @@ class GoodsService extends BaseService
             'price' => $data['price'] ?? 0,
             'market_price' => $data['market_price'] ?? 0,
             'stock' => $data['stock'] ?? 0,
-            'image' => $data['main_image'] ?? '',
+            'image' => app()->make(AssetIdNormalizer::class)->normalizeSingle($data['main_image'] ?? ''),
             'status' => $data['status'] ?? 1,
         ];
     }
@@ -607,7 +733,7 @@ class GoodsService extends BaseService
 
         $images = [];
         foreach ($data['images'] as $image) {
-            $url = is_array($image) ? (string) ($image['url'] ?? '') : (string) $image;
+            $url = app()->make(AssetIdNormalizer::class)->normalizeSingle($image);
             if ($url === '') {
                 continue;
             }
@@ -624,28 +750,99 @@ class GoodsService extends BaseService
      */
     protected function normalizeMainImage(array $data): array
     {
+        if (array_key_exists('main_image', $data)) {
+            $data['main_image'] = app()->make(AssetIdNormalizer::class)->normalizeSingle($data['main_image']);
+        }
+        if (array_key_exists('main_video', $data)) {
+            $data['main_video'] = app()->make(AssetIdNormalizer::class)->normalizeSingle($data['main_video']);
+        }
+
         if (!empty($data['main_image'])) {
             return $data;
         }
-        $firstImageUrl = $this->getFirstImageUrl($data['images'] ?? []);
-        if ($firstImageUrl !== '') {
-            $data['main_image'] = $firstImageUrl;
+        $firstImageValue = app()->make(AssetHydrator::class)->firstImageValue($data['images'] ?? []);
+        if ($firstImageValue !== '') {
+            $data['main_image'] = $firstImageValue;
         }
         return $data;
     }
 
-    protected function getFirstImageUrl(mixed $images): string
+    /**
+     * 校验商品引用的素材是否存在。
+     */
+    protected function validateAssetRefs(array $data): void
     {
-        if (!is_array($images)) {
-            return '';
+        $ids = $this->collectGoodsAssetIds($data);
+        app()->make(AssetService::class)->assertUsableAssets($ids);
+    }
+
+    /**
+     * @return array<int, int>
+     */
+    protected function collectGoodsAssetIds(array $data): array
+    {
+        $normalizer = app()->make(AssetIdNormalizer::class);
+        $values = [];
+        $values[] = $data['main_image'] ?? '';
+        $values[] = $data['main_video'] ?? '';
+        foreach ($normalizer->normalizeMany($data['images'] ?? []) as $image) {
+            $values[] = $image;
+        }
+        foreach ((array) ($data['spec_meta'] ?? []) as $group) {
+            foreach ((array) ($group['values'] ?? []) as $value) {
+                $values[] = $value['pic'] ?? '';
+            }
+        }
+        foreach ((array) ($data['skus'] ?? []) as $sku) {
+            if (is_array($sku)) {
+                $values[] = $sku['image'] ?? '';
+            }
+        }
+        foreach ($this->extractAssetIdsFromHtml((string) ($data['description'] ?? '')) as $id) {
+            $values[] = $id;
         }
 
-        $first = $images[0] ?? null;
-        if (is_array($first)) {
-            return (string) ($first['url'] ?? '');
+        return $normalizer->collectAssetIds($values);
+    }
+
+    protected function syncGoodsAssetUsage(int $goodsId, array $data): void
+    {
+        $assetService = app()->make(AssetService::class);
+        $normalizer = app()->make(AssetIdNormalizer::class);
+
+        $assetService->syncUsage('goods', $goodsId, 'main_image', [$data['main_image'] ?? '']);
+        $assetService->syncUsage('goods', $goodsId, 'main_video', [$data['main_video'] ?? '']);
+        $assetService->syncUsage('goods', $goodsId, 'images', $normalizer->normalizeMany($data['images'] ?? []));
+
+        $specPicIds = [];
+        foreach ((array) ($data['spec_meta'] ?? []) as $group) {
+            foreach ((array) ($group['values'] ?? []) as $value) {
+                $specPicIds[] = $value['pic'] ?? '';
+            }
+        }
+        $assetService->syncUsage('goods', $goodsId, 'spec_meta.values.pic', $specPicIds);
+
+        $skuImageIds = [];
+        foreach ((array) ($data['skus'] ?? []) as $sku) {
+            if (is_array($sku)) {
+                $skuImageIds[] = $sku['image'] ?? '';
+            }
+        }
+        $assetService->syncUsage('goods', $goodsId, 'skus.image', $skuImageIds);
+        $assetService->syncUsage('goods', $goodsId, 'description', $this->extractAssetIdsFromHtml((string) ($data['description'] ?? '')));
+    }
+
+    /**
+     * @return array<int, int>
+     */
+    protected function extractAssetIdsFromHtml(string $html): array
+    {
+        if ($html === '' || !str_contains($html, 'data-asset-id')) {
+            return [];
         }
 
-        return (string) ($first ?? '');
+        preg_match_all('/\bdata-asset-id=["\']?(\d+)["\']?/i', $html, $matches);
+        return array_values(array_unique(array_map('intval', $matches[1] ?? [])));
     }
 
     /**

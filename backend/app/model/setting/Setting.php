@@ -26,11 +26,6 @@ class Setting extends BaseModel
      */
     protected $json = ['options', 'rules'];
 
-    /**
-     * 追加到数组中的虚拟字段
-     */
-    protected $append = ['full_url'];
-
     // ========== 表单类型常量 ==========
 
     /** 文本框 */
@@ -119,55 +114,6 @@ class Setting extends BaseModel
             ['label' => 'JSON',                 'value' => self::TYPE_JSON],
             ['label' => '选项列表 (option_list)', 'value' => self::TYPE_OPTION_LIST],
         ];
-    }
-
-    /**
-     * full_url 获取器
-     * 图片/文件类型自动拼接上传域名前缀
-     * - 单文件类型（image/file）：返回完整 URL 字符串
-     * - 多文件类型（images/files）：value 为 JSON 数组时返回 URL 数组，逗号分隔时返回逗号分隔的 URL 字符串
-     * - 非文件类型：返回 null
-     *
-     * @param mixed $value  无实际值（虚拟字段）
-     * @param array $data   当前记录数据
-     * @return string|array|null
-     */
-    public function getFullUrlAttr($value, $data)
-    {
-        $type = $data['type'] ?? '';
-        $val  = $data['value'] ?? '';
-
-        // 非文件类型不处理
-        if (!in_array($type, self::FILE_TYPES, true)) {
-            return null;
-        }
-
-        // 值为空
-        if ($val === '' || $val === null) {
-            return '';
-        }
-
-        // 多文件类型（images/files）：可能是 JSON 数组或逗号分隔
-        if (in_array($type, [self::TYPE_IMAGES, self::TYPE_FILES, self::TYPE_VIDEOS], true)) {
-            $decoded = json_decode($val, true);
-
-            // JSON 数组格式
-            if (is_array($decoded)) {
-                return buildUploadUrls($decoded);
-            }
-
-            // 逗号分隔格式
-            if (str_contains($val, ',')) {
-                $paths = explode(',', $val);
-                return buildUploadUrls(array_map(static fn($path) => trim($path), $paths));
-            }
-
-            // 单个值
-            return [buildUploadUrl($val)];
-        }
-
-        // 单文件类型（image/file）
-        return buildUploadUrl($val);
     }
 
     /**

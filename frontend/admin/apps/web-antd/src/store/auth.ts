@@ -49,7 +49,6 @@ export const useAuthStore = defineStore('auth', () => {
         if (refreshToken) {
           accessStore.setRefreshToken(refreshToken);
         }
-        accessStore.setMustChangePassword(!!loginResult.must_change_password);
         accessStore.setIsAccessChecked(false);
         accessStore.setAccessCodes([]);
         accessStore.setAccessMenus([]);
@@ -60,13 +59,12 @@ export const useAuthStore = defineStore('auth', () => {
 
         if (accessStore.loginExpired) {
           accessStore.setLoginExpired(false);
-        } else if (loginResult.must_change_password) {
-          // 首次登录（或从未改过密码）强制跳转到改密页，改密成功后由页面自行进入首页
-          await router.push('/auth/change-password');
         } else {
           await (onSuccess
             ? onSuccess?.()
-            : router.push(preferences.app.defaultHomePath));
+            : router.push(
+                userStore.userInfo?.homePath || preferences.app.defaultHomePath,
+              ));
         }
 
         if (adminInfo?.nickname) {
@@ -106,7 +104,6 @@ export const useAuthStore = defineStore('auth', () => {
     // 清除本地状态
     resetAllStores();
     accessStore.setLoginExpired(false);
-    accessStore.setMustChangePassword(false);
 
     // 回登录页带上当前路由地址
     await router.replace({
@@ -133,6 +130,7 @@ export const useAuthStore = defineStore('auth', () => {
           roles: adminInfo.roles?.map((role) => role.code) || [],
           username: adminInfo.username || '',
           email: adminInfo.email || '',
+          homePath: adminInfo.home_path || '',
         };
         userStore.setUserInfo(userInfo);
       }

@@ -48,12 +48,10 @@ mall_base/
 ```php
 use mall_base\drivers\DriverManager;
 use mall_base\drivers\sms\AliyunSmsDriver;
-use mall_base\drivers\sms\TencentSmsDriver;
 
 // 注册短信驱动
 DriverManager::register('sms', [
     'aliyun' => AliyunSmsDriver::class,
-    'tencent' => TencentSmsDriver::class,
 ]);
 
 // 设置默认驱动
@@ -393,12 +391,6 @@ return [
             'access_key_secret' => env('SMS_ALIYUN_ACCESS_KEY_SECRET'),
             'sign_name' => env('SMS_ALIYUN_SIGN_NAME'),
             'template_code' => env('SMS_ALIYUN_TEMPLATE_CODE'),
-        ],
-        'tencent' => [
-            'secret_id' => env('SMS_TENCENT_SECRET_ID'),
-            'secret_key' => env('SMS_TENCENT_SECRET_KEY'),
-            'sign_name' => env('SMS_TENCENT_SIGN_NAME'),
-            'template_id' => env('SMS_TENCENT_TEMPLATE_ID'),
         ],
     ],
 ];

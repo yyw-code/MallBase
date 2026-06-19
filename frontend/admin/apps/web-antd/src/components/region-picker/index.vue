@@ -131,7 +131,7 @@ async function loadRootOptions() {
 
 function mapOption(item: RegionApi.RegionItem): CascaderOption {
   return {
-    value: item.id,
+    value: Number(item.id),
     label: item.name,
     level: item.level,
     isLeaf: item.level >= 4,
@@ -150,9 +150,7 @@ async function ensureValueOptions() {
         (item): item is number => typeof item === 'number' && item > 0,
       );
 
-  const pending = values.filter(
-    (leafId) => !resolvedLeafIds.value.has(leafId),
-  );
+  const pending = values.filter((leafId) => !resolvedLeafIds.value.has(leafId));
   if (pending.length === 0) return;
 
   const results = await Promise.allSettled(
@@ -196,7 +194,8 @@ async function ensureValueOptions() {
 function mergeIntoOptions(path: RegionApi.RegionItem[]) {
   let current = options.value;
   for (const node of path) {
-    let existing = current.find((item) => item.value === node.id);
+    const nodeId = Number(node.id);
+    let existing = current.find((item) => item.value === nodeId);
     if (!existing) {
       existing = mapOption(node);
       current.push(existing);
@@ -312,12 +311,17 @@ async function handleSelectAllProvinces() {
 
     // 预写 tag 文案 + 标记已解析，tagRender 可直接命中，不再触发 region/path 查询
     for (const item of list) {
-      resolvedPathLabels.value.set(item.id, [item.name]);
-      resolvedLeafIds.value.add(item.id);
+      const regionId = Number(item.id);
+      if (!Number.isInteger(regionId) || regionId <= 0) continue;
+      resolvedPathLabels.value.set(regionId, [item.name]);
+      resolvedLeafIds.value.add(regionId);
     }
 
     // 多选模式下 cascader 需要 Array<number[]>，每条路径单独一个 tag
-    const next = list.map((item) => [item.id]) as RegionPickerValue;
+    const next = list
+      .map((item) => Number(item.id))
+      .filter((id) => Number.isInteger(id) && id > 0)
+      .map((id) => [id]) as RegionPickerValue;
     innerValue.value = next;
     emit('update:value', next);
   } catch {
@@ -343,7 +347,7 @@ async function handleSelectAllProvinces() {
     >
       <template
         v-if="multiple"
-        #tagRender="{ value, label, closable, onClose }"
+        #tagRender="{ value: tagValue, label, closable, onClose }"
       >
         <a-tag
           :closable="closable"
@@ -352,7 +356,7 @@ async function handleSelectAllProvinces() {
           @close="onClose"
           @mousedown.prevent
         >
-          {{ resolveTagText(value, label) }}
+          {{ resolveTagText(tagValue, label) }}
         </a-tag>
       </template>
     </a-cascader>

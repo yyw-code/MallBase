@@ -2,6 +2,7 @@
 import type { RefundApi } from '#/api/order/refund';
 
 import { computed, onMounted, ref } from 'vue';
+import { useRoute } from 'vue-router';
 
 import { useAccess } from '@vben/access';
 
@@ -9,11 +10,14 @@ import { message, Modal } from 'ant-design-vue';
 
 import {
   confirmRefundReturnApi,
+  exportRefundCsvApi,
   getRefundListApi,
+  getRefundStatsApi,
   getRefundStatusOptionsApi,
   updateRefundInterceptApi,
 } from '#/api/order/refund';
 import { useTableCrud } from '#/composables/useTableCrud';
+import { downloadBlob } from '#/utils/download';
 
 import ApproveModal from './approve-modal.vue';
 import DetailDrawer from './detail-drawer.vue';
@@ -21,6 +25,7 @@ import RejectModal from './reject-modal.vue';
 
 defineOptions({ name: 'RefundOrderManagement' });
 
+const route = useRoute();
 const { hasAccessByCodes } = useAccess();
 
 /* ---------------- 表格 CRUD ---------------- */
@@ -54,6 +59,8 @@ const searchParams = ref<SearchForm>({
   created_range: undefined,
   reviewed_range: undefined,
 });
+const activeStatusTab = ref('all');
+const statsTabs = ref<RefundApi.StatsTab[]>([]);
 
 const buildQuery = (): RefundApi.ListParams => {
   const cr = searchParams.value.created_range;
@@ -81,13 +88,56 @@ const resetSearch = () => {
     created_range: undefined,
     reviewed_range: undefined,
   };
+  activeStatusTab.value = 'all';
   pagination.current = 1;
-  loadData(buildQuery());
+  refreshData();
 };
 
 const submitSearch = () => {
   pagination.current = 1;
-  loadData(buildQuery());
+  refreshData();
+};
+
+const loadStats = async () => {
+  const res = await getRefundStatsApi(buildQuery());
+  statsTabs.value = res?.tabs ?? [];
+};
+
+const refreshData = async () => {
+  await Promise.all([loadData(buildQuery()), loadStats()]);
+};
+
+const routeNumberQuery = (value: unknown): number | undefined => {
+  const raw = Array.isArray(value) ? value[0] : value;
+  if (raw === undefined || raw === null || raw === '') {
+    return undefined;
+  }
+  const numeric = Number(raw);
+  return Number.isNaN(numeric) ? undefined : numeric;
+};
+
+const applyRouteQuery = () => {
+  const status = routeNumberQuery(route.query.status);
+  if (status !== undefined) {
+    searchParams.value.status = status;
+    activeStatusTab.value = String(status);
+  }
+};
+
+const handleStatusTabChange = (key: string) => {
+  activeStatusTab.value = key;
+  searchParams.value.status = key === 'all' ? null : Number(key);
+  pagination.current = 1;
+  refreshData();
+};
+
+const handleExport = async () => {
+  try {
+    const blob = await exportRefundCsvApi(buildQuery());
+    downloadBlob(blob, 'refund-orders.csv');
+  } catch (error: any) {
+    message.error(error?.message || '导出失败');
+  }
 };
 
 const handleTableChange = (newPagination: {
@@ -184,7 +234,7 @@ const canMarkIntercept = (record: RefundApi.RefundRecord, status: string) =>
   canUpdateIntercept(record) && record.intercept_status !== status;
 
 const onReviewSuccess = async () => {
-  await loadData(buildQuery());
+  await refreshData();
 };
 
 const updateIntercept = async (
@@ -197,7 +247,7 @@ const updateIntercept = async (
     intercept_note: note,
   });
   message.success('物流拦截状态已更新');
-  await loadData(buildQuery());
+  await refreshData();
 };
 
 const confirmReturn = (record: RefundApi.RefundRecord) => {
@@ -211,7 +261,7 @@ const confirmReturn = (record: RefundApi.RefundRecord) => {
         admin_remark: '确认收到买家退货',
       });
       message.success('已确认收货并发起退款');
-      await loadData(buildQuery());
+      await refreshData();
     },
   });
 };
@@ -283,202 +333,235 @@ const columns = [
 ];
 
 onMounted(() => {
-  loadData(buildQuery());
+  applyRouteQuery();
+  refreshData();
   loadStatusOptions();
 });
 </script>
 
 <template>
-  <div class="p-4">
-    <div class="mb-4">
-      <a-button @click="() => loadData(buildQuery())">刷新</a-button>
+  <div class="refund-page p-4">
+    <div class="refund-header">
+      <div>
+        <h2 class="refund-title">售后订单</h2>
+      </div>
+      <div class="refund-header-actions">
+        <a-button @click="refreshData">刷新</a-button>
+        <a-button
+          v-access:code="'SystemRefundOrderExport'"
+          @click="handleExport"
+        >
+          导出
+        </a-button>
+      </div>
     </div>
 
     <!-- 搜索表单 -->
-    <a-form layout="inline" class="mb-4">
-      <a-form-item label="售后单号">
-        <a-input
-          v-model:value="searchParams.sn"
-          placeholder="售后单号（支持模糊）"
-          allow-clear
-          style="width: 180px"
-          @press-enter="submitSearch"
-        />
-      </a-form-item>
-      <a-form-item label="订单号">
-        <a-input
-          v-model:value="searchParams.order_sn"
-          placeholder="订单号（支持模糊）"
-          allow-clear
-          style="width: 180px"
-          @press-enter="submitSearch"
-        />
-      </a-form-item>
-      <a-form-item label="状态">
-        <a-select
-          v-model:value="searchParams.status"
-          placeholder="请选择"
-          allow-clear
-          style="width: 130px"
-          :options="
-            statusOptions.map((o) => ({
-              label: o.label,
-              value: Number(o.value),
-            }))
-          "
-        />
-      </a-form-item>
-      <a-form-item label="类型">
-        <a-select
-          v-model:value="searchParams.type"
-          placeholder="请选择"
-          allow-clear
-          style="width: 130px"
-          :options="
-            typeOptions.map((o) => ({
-              label: o.label,
-              value: Number(o.value),
-            }))
-          "
-        />
-      </a-form-item>
-      <a-form-item label="买家手机">
-        <a-input
-          v-model:value="searchParams.user_phone"
-          placeholder="手机号"
-          allow-clear
-          style="width: 140px"
-          @press-enter="submitSearch"
-        />
-      </a-form-item>
-      <a-form-item label="申请时间">
-        <a-range-picker
-          v-model:value="searchParams.created_range"
-          show-time
-          value-format="YYYY-MM-DD HH:mm:ss"
-          style="width: 360px"
-        />
-      </a-form-item>
-      <a-form-item label="审核时间">
-        <a-range-picker
-          v-model:value="searchParams.reviewed_range"
-          show-time
-          value-format="YYYY-MM-DD HH:mm:ss"
-          style="width: 360px"
-        />
-      </a-form-item>
-      <a-form-item>
-        <a-button type="primary" @click="submitSearch">搜索</a-button>
-        <a-button class="ml-2" @click="resetSearch">重置</a-button>
-      </a-form-item>
-    </a-form>
+    <div class="refund-filter-panel">
+      <a-form>
+        <div
+          class="grid grid-cols-1 gap-x-4 gap-y-3 md:grid-cols-3 xl:grid-cols-6"
+        >
+          <div>
+            <a-form-item class="mb-0" label="售后单号">
+              <a-input
+                v-model:value="searchParams.sn"
+                placeholder="售后单号（支持模糊）"
+                allow-clear
+                class="w-full"
+                @press-enter="submitSearch"
+              />
+            </a-form-item>
+          </div>
+          <div>
+            <a-form-item class="mb-0" label="订单号">
+              <a-input
+                v-model:value="searchParams.order_sn"
+                placeholder="订单号（支持模糊）"
+                allow-clear
+                class="w-full"
+                @press-enter="submitSearch"
+              />
+            </a-form-item>
+          </div>
+          <div>
+            <a-form-item class="mb-0" label="类型">
+              <a-select
+                v-model:value="searchParams.type"
+                placeholder="请选择"
+                allow-clear
+                class="w-full"
+                :options="
+                  typeOptions.map((o) => ({
+                    label: o.label,
+                    value: Number(o.value),
+                  }))
+                "
+              />
+            </a-form-item>
+          </div>
+          <div>
+            <a-form-item class="mb-0" label="买家手机">
+              <a-input
+                v-model:value="searchParams.user_phone"
+                placeholder="手机号"
+                allow-clear
+                class="w-full"
+                @press-enter="submitSearch"
+              />
+            </a-form-item>
+          </div>
+          <div class="md:col-span-2 xl:col-span-2">
+            <a-form-item class="mb-0" label="申请时间">
+              <a-range-picker
+                v-model:value="searchParams.created_range"
+                show-time
+                value-format="YYYY-MM-DD HH:mm:ss"
+                class="w-full"
+              />
+            </a-form-item>
+          </div>
+          <div class="md:col-span-2 xl:col-span-2">
+            <a-form-item class="mb-0" label="审核时间">
+              <a-range-picker
+                v-model:value="searchParams.reviewed_range"
+                show-time
+                value-format="YYYY-MM-DD HH:mm:ss"
+                class="w-full"
+              />
+            </a-form-item>
+          </div>
+        </div>
+        <div class="mt-3 flex justify-end gap-2">
+          <a-button type="primary" @click="submitSearch">搜索</a-button>
+          <a-button @click="resetSearch">重置</a-button>
+        </div>
+      </a-form>
+    </div>
 
-    <a-table
-      :columns="columns"
-      :data-source="tableData"
-      :loading="loading"
-      :pagination="pagination"
-      :scroll="{ x: 1600 }"
-      row-key="id"
-      @change="handleTableChange"
-    >
-      <template #bodyCell="{ column, record }">
-        <template v-if="column.key === 'goods'">
-          <div class="flex items-center gap-2">
-            <a-avatar
-              v-if="
-                record.order_item?.goods_image_full_url ||
-                record.order_item?.goods_image
-              "
-              shape="square"
-              :size="32"
-              :src="
-                record.order_item?.goods_image_full_url ||
-                record.order_item?.goods_image
-              "
-            />
-            <span class="truncate">
-              {{ record.order_item?.goods_name || '—' }}
-            </span>
-          </div>
+    <div class="refund-table-panel">
+      <a-tabs
+        :active-key="activeStatusTab"
+        class="refund-status-tabs"
+        size="small"
+        @change="handleStatusTabChange"
+      >
+        <a-tab-pane v-for="tab in statsTabs" :key="tab.key">
+          <template #tab>
+            <span>{{ tab.label }} {{ tab.count }}</span>
+          </template>
+        </a-tab-pane>
+      </a-tabs>
+
+      <a-table
+        :columns="columns"
+        :data-source="tableData"
+        :loading="loading"
+        :pagination="pagination"
+        :scroll="{ x: 1600 }"
+        row-key="id"
+        @change="handleTableChange"
+      >
+        <template #bodyCell="{ column, record }">
+          <template v-if="column.key === 'goods'">
+            <div class="flex items-center gap-2">
+              <a-avatar
+                v-if="
+                  record.order_item?.goods_image_full_url ||
+                  record.order_item?.goods_image
+                "
+                shape="square"
+                :size="32"
+                :src="
+                  record.order_item?.goods_image_full_url ||
+                  record.order_item?.goods_image
+                "
+              />
+              <span class="truncate">
+                {{ record.order_item?.goods_name || '—' }}
+              </span>
+            </div>
+          </template>
+          <template v-if="column.key === 'action'">
+            <div class="refund-actions">
+              <a-button
+                type="link"
+                size="small"
+                v-access:code="'SystemRefundOrderDetail'"
+                @click="openDetail(record)"
+              >
+                详情
+              </a-button>
+              <a-button
+                v-if="canApprove(record)"
+                type="link"
+                size="small"
+                v-access:code="'SystemRefundOrderApprove'"
+                @click="openApprove(record)"
+              >
+                同意
+              </a-button>
+              <a-button
+                v-if="record.status === 0"
+                type="link"
+                danger
+                size="small"
+                v-access:code="'SystemRefundOrderReject'"
+                @click="openReject(record)"
+              >
+                驳回
+              </a-button>
+              <a-button
+                v-if="canMarkIntercept(record, 'success')"
+                type="link"
+                size="small"
+                v-access:code="'SystemRefundOrderUpdateIntercept'"
+                @click="
+                  updateIntercept(record, 'success', '人工确认物流拦截成功')
+                "
+              >
+                拦截成功
+              </a-button>
+              <a-button
+                v-if="canMarkIntercept(record, 'returned')"
+                type="link"
+                size="small"
+                v-access:code="'SystemRefundOrderUpdateIntercept'"
+                @click="
+                  updateIntercept(record, 'returned', '人工确认包裹已退回')
+                "
+              >
+                已退回
+              </a-button>
+              <a-button
+                v-if="canMarkIntercept(record, 'exception')"
+                type="link"
+                size="small"
+                v-access:code="'SystemRefundOrderUpdateIntercept'"
+                @click="
+                  updateIntercept(record, 'exception', '人工确认物流异常/丢件')
+                "
+              >
+                物流异常
+              </a-button>
+              <a-button
+                v-if="
+                  record.status === 1 &&
+                  record.type === 1 &&
+                  record.return_tracking_no
+                "
+                type="link"
+                size="small"
+                v-access:code="'SystemRefundOrderConfirmReturn'"
+                @click="confirmReturn(record)"
+              >
+                确认收货
+              </a-button>
+            </div>
+          </template>
         </template>
-        <template v-if="column.key === 'action'">
-          <div class="refund-actions">
-            <a-button
-              type="link"
-              size="small"
-              v-access:code="'SystemRefundOrderDetail'"
-              @click="openDetail(record)"
-            >
-              详情
-            </a-button>
-            <a-button
-              v-if="canApprove(record)"
-              type="link"
-              size="small"
-              v-access:code="'SystemRefundOrderApprove'"
-              @click="openApprove(record)"
-            >
-              同意
-            </a-button>
-            <a-button
-              v-if="record.status === 0"
-              type="link"
-              danger
-              size="small"
-              v-access:code="'SystemRefundOrderReject'"
-              @click="openReject(record)"
-            >
-              驳回
-            </a-button>
-            <a-button
-              v-if="canMarkIntercept(record, 'success')"
-              type="link"
-              size="small"
-              v-access:code="'SystemRefundOrderUpdateIntercept'"
-              @click="
-                updateIntercept(record, 'success', '人工确认物流拦截成功')
-              "
-            >
-              拦截成功
-            </a-button>
-            <a-button
-              v-if="canMarkIntercept(record, 'returned')"
-              type="link"
-              size="small"
-              v-access:code="'SystemRefundOrderUpdateIntercept'"
-              @click="updateIntercept(record, 'returned', '人工确认包裹已退回')"
-            >
-              已退回
-            </a-button>
-            <a-button
-              v-if="canMarkIntercept(record, 'exception')"
-              type="link"
-              size="small"
-              v-access:code="'SystemRefundOrderUpdateIntercept'"
-              @click="
-                updateIntercept(record, 'exception', '人工确认物流异常/丢件')
-              "
-            >
-              物流异常
-            </a-button>
-            <a-button
-              v-if="
-                record.status === 1 &&
-                record.type === 1 &&
-                record.return_tracking_no
-              "
-              type="link"
-              size="small"
-              v-access:code="'SystemRefundOrderConfirmReturn'"
-              @click="confirmReturn(record)"
-            >
-              确认收货
-            </a-button>
-          </div>
-        </template>
-      </template>
-    </a-table>
+      </a-table>
+    </div>
 
     <DetailDrawer
       v-model:open="drawerOpen"
@@ -504,6 +587,65 @@ onMounted(() => {
 </template>
 
 <style scoped>
+.refund-page {
+  min-height: 100%;
+}
+
+.refund-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.refund-title {
+  margin: 0;
+  color: hsl(var(--foreground));
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 32px;
+}
+
+.refund-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.refund-filter-panel,
+.refund-table-panel {
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+}
+
+.refund-filter-panel {
+  padding: 16px;
+  margin-bottom: 12px;
+}
+
+.refund-table-panel {
+  overflow: hidden;
+}
+
+.refund-status-tabs {
+  padding: 0 16px;
+  margin-bottom: 0;
+}
+
+.refund-status-tabs :deep(.ant-tabs-nav) {
+  margin-bottom: 0;
+}
+
+.refund-status-tabs :deep(.ant-tabs-tab) {
+  padding: 14px 0 12px;
+}
+
+.refund-table-panel :deep(.ant-table-wrapper) {
+  border-top: 1px solid hsl(var(--border));
+}
+
 .refund-actions {
   display: flex;
   flex-wrap: wrap;

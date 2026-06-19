@@ -6,12 +6,7 @@
       <!-- Avatar -->
       <view class="avatar-section">
         <view class="avatar-wrapper" @tap="chooseAvatarFallback">
-          <image
-            v-if="avatarPreview"
-            class="avatar"
-            :src="avatarPreview"
-            mode="aspectFill"
-          />
+          <image v-if="avatarPreview" class="avatar" :src="avatarPreview" mode="aspectFill" />
           <view v-else class="avatar avatar--placeholder">
             <view class="avatar-icon">
               <view class="avatar-icon__head" />
@@ -22,7 +17,11 @@
             <text class="avatar-badge-text">换</text>
           </view>
           <!-- #ifdef MP-WEIXIN -->
-          <button class="avatar-picker-button" open-type="chooseAvatar" @chooseavatar="chooseWechatAvatar"></button>
+          <button
+            class="avatar-picker-button"
+            open-type="chooseAvatar"
+            @chooseavatar="chooseWechatAvatar"
+          ></button>
           <!-- #endif -->
         </view>
         <text class="avatar-hint">{{ avatarUploading ? '头像上传中...' : '点击头像更换' }}</text>
@@ -94,11 +93,7 @@
       </view>
 
       <!-- Save button -->
-      <view
-        class="primary-btn"
-        :class="{ 'primary-btn--loading': loading }"
-        @tap="handleSave"
-      >
+      <view class="primary-btn" :class="{ 'primary-btn--loading': loading }" @tap="handleSave">
         <text class="primary-btn-text">{{ loading ? '保存中...' : '保 存' }}</text>
       </view>
     </view>
@@ -110,14 +105,14 @@ import { ref, reactive, computed } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { useUserStore } from '@/store/user'
 import { updateMyInfo } from '@/api/user/user'
-import { uploadFile } from '@/api/request'
+import { getUploadedAssetValue, getUploadedPreviewUrl, uploadImage } from '@/api/upload'
 
 const userStore = useUserStore()
 
 const genderOptions = [
   { label: '男', value: 1 },
   { label: '女', value: 2 },
-  { label: '保密', value: 0 },
+  { label: '保密', value: 0 }
 ]
 
 const today = computed(() => {
@@ -134,7 +129,7 @@ const form = reactive({
   nickname: '',
   gender: 0,
   birthday: '',
-  bio: '',
+  bio: ''
 })
 
 const loading = ref(false)
@@ -176,11 +171,13 @@ async function uploadAvatarPath(tempPath) {
   avatarUploadPath.value = ''
   avatarUploading.value = true
   try {
-    const uploadRes = await uploadFile('/client/api/upload/single', tempPath)
-    if (!uploadRes?.url) {
+    const uploadRes = await uploadImage(tempPath, { module: 'avatar' })
+    const submitValue = getUploadedAssetValue(uploadRes)
+    if (!submitValue) {
       throw new Error('上传结果缺少头像路径')
     }
-    avatarUploadPath.value = uploadRes.url
+    avatarUploadPath.value = String(submitValue)
+    avatarTempPreview.value = getUploadedPreviewUrl(uploadRes, tempPath)
   } catch (_) {
     avatarTempPreview.value = ''
     avatarUploadPath.value = ''
@@ -197,7 +194,7 @@ function chooseLocalAvatar() {
     success(res) {
       const tempPath = res.tempFilePaths[0]
       uploadAvatarPath(tempPath)
-    },
+    }
   })
 }
 
@@ -224,7 +221,7 @@ async function handleSave() {
       nickname: form.nickname.trim(),
       gender: form.gender,
       birthday: form.birthday || undefined,
-      bio: form.bio.trim(),
+      bio: form.bio.trim()
     }
 
     if (avatarUploadPath.value) {
@@ -394,7 +391,9 @@ async function handleSave() {
   background: $mb-color-bg-secondary;
   border: 1rpx solid $mb-color-border;
   padding: 0 32rpx;
-  transition: border-color 0.2s, background-color 0.2s;
+  transition:
+    border-color 0.2s,
+    background-color 0.2s;
 
   &:focus-within {
     border-color: rgba(13, 80, 213, 0.3);
@@ -450,7 +449,9 @@ async function handleSave() {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background-color 0.2s, color 0.2s;
+  transition:
+    background-color 0.2s,
+    color 0.2s;
 }
 
 .gender-chip--active {
@@ -474,7 +475,9 @@ async function handleSave() {
   border-radius: $mb-radius-sm;
   border: 1rpx solid $mb-color-border;
   padding: 24rpx 32rpx;
-  transition: border-color 0.2s, background-color 0.2s;
+  transition:
+    border-color 0.2s,
+    background-color 0.2s;
 
   &:focus-within {
     border-color: rgba(13, 80, 213, 0.3);
@@ -499,7 +502,9 @@ async function handleSave() {
   align-items: center;
   justify-content: center;
   margin-top: 48rpx;
-  transition: opacity 0.15s, transform 0.15s;
+  transition:
+    opacity 0.15s,
+    transform 0.15s;
 
   &:active {
     opacity: 0.85;

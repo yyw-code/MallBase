@@ -203,6 +203,7 @@ class OrderController extends BaseController
 
         $filter = [
             'status' => $this->request->param('status', null),
+            'sn'     => $this->request->param('sn', null),
         ];
         return $this->success($this->service()->list($userId, $filter, $page, $pageSize), '获取成功');
     }

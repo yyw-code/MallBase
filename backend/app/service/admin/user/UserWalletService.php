@@ -27,22 +27,9 @@ class UserWalletService extends BaseService
      */
     public function logs(array $where, int $page, int $limit): array
     {
-        $userId = (int) ($where['user_id'] ?? 0);
-        $direction = (string) ($where['type'] ?? '');
-        $bizType = (string) ($where['biz_type'] ?? '');
+        $query = $this->buildLogListQuery($where);
 
-        $query = $this->model(UserWalletLog::class)
-            ->when($userId > 0, function ($q) use ($userId) {
-                $q->where('user_id', $userId);
-            })
-            ->when(in_array($direction, [UserWalletLog::DIRECTION_INCOME, UserWalletLog::DIRECTION_EXPENSE], true), function ($q) use ($direction) {
-                $q->where('direction', $direction);
-            })
-            ->when($bizType !== '', function ($q) use ($bizType) {
-                $q->where('biz_type', $bizType);
-            });
-
-        $total = (int) $query->count();
+        $total = (int) (clone $query)->count();
         $rows = $query
             ->order('id', 'desc')
             ->page($page, $limit)
@@ -52,6 +39,24 @@ class UserWalletService extends BaseService
         $list = array_map(fn (array $row): array => $this->formatLog($row), $rows);
 
         return compact('total', 'list');
+    }
+
+    protected function buildLogListQuery(array $where)
+    {
+        $userId = (int) ($where['user_id'] ?? 0);
+        $direction = (string) ($where['type'] ?? '');
+        $bizType = (string) ($where['biz_type'] ?? '');
+
+        return $this->model(UserWalletLog::class)
+            ->when($userId > 0, function ($q) use ($userId) {
+                $q->where('user_id', $userId);
+            })
+            ->when(in_array($direction, [UserWalletLog::DIRECTION_INCOME, UserWalletLog::DIRECTION_EXPENSE], true), function ($q) use ($direction) {
+                $q->where('direction', $direction);
+            })
+            ->when($bizType !== '', function ($q) use ($bizType) {
+                $q->where('biz_type', $bizType);
+            });
     }
 
     /**

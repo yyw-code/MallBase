@@ -63,18 +63,41 @@
       <!-- After-sale preview -->
       <view v-if="order.after_sale" class="after-sale-card" @tap="goRefundDetail">
         <view class="after-sale-card__left">
-          <view class="after-sale-card__icon">
+          <view v-if="afterSalePreviewItems.length > 0" class="after-sale-card__images">
+            <view
+              v-for="(item, index) in afterSalePreviewItems"
+              :key="item.id || item.order_item_id || index"
+              class="after-sale-card__image-wrap"
+              :style="getAfterSaleThumbStyle(index)"
+            >
+              <image
+                v-if="getAfterSaleItemImage(item)"
+                class="after-sale-card__image"
+                :src="getAfterSaleItemImage(item)"
+                mode="aspectFill"
+                lazy-load
+              />
+              <view v-else class="after-sale-card__image after-sale-card__image--placeholder" />
+            </view>
+            <view v-if="afterSaleMoreCount > 0" class="after-sale-card__more">
+              <text class="after-sale-card__more-text">+{{ afterSaleMoreCount }}</text>
+            </view>
+          </view>
+          <view v-else class="after-sale-card__icon">
             <view class="after-sale-card__icon-dot" />
           </view>
           <view class="after-sale-card__content">
             <view class="after-sale-card__title-row">
               <text class="after-sale-card__title">售后{{ order.after_sale.status_text || order.after_sale_tag_text }}</text>
-              <text class="after-sale-card__type">{{ order.after_sale.type_text || '售后' }}</text>
+              <text class="after-sale-card__type">{{ getAfterSaleBadgeText(order.after_sale) }}</text>
             </view>
+            <text v-if="getAfterSaleGoodsText(order.after_sale)" class="after-sale-card__goods">
+              {{ getAfterSaleGoodsText(order.after_sale) }}
+            </text>
             <text class="after-sale-card__desc">{{ getAfterSaleDesc(order.after_sale) }}</text>
           </view>
         </view>
-        <text class="after-sale-card__arrow">查看详情</text>
+        <text class="after-sale-card__arrow">{{ getAfterSaleActionText(order.after_sale) }}</text>
       </view>
 
       <!-- Address card -->
@@ -117,6 +140,12 @@
             <view class="goods-item__bottom">
               <mb-price :value="item.unit_price" size="sm" color="var(--color-text-title)" />
               <text class="goods-item__qty">x{{ item.quantity || 1 }}</text>
+            </view>
+            <view v-if="getGoodsAfterSaleTag(item)" class="goods-item__after-sale">
+              <text class="goods-item__after-sale-text">{{ getGoodsAfterSaleTag(item) }}</text>
+              <text v-if="getGoodsAfterSaleAmount(item)" class="goods-item__after-sale-amount">
+                退款 ¥{{ getGoodsAfterSaleAmount(item) }}
+              </text>
             </view>
           </view>
         </view>
@@ -181,18 +210,15 @@
     <!-- Bottom action bar -->
     <view v-if="order && actions.length > 0" class="action-bar">
       <view class="action-bar__inner">
-        <view
+        <mb-button
           v-for="act in actions"
           :key="act.key"
-          class="action-bar__btn"
-          :class="{ 'action-bar__btn--primary': act.primary }"
-          @tap="handleAction(act.key)"
-        >
-          <text
-            class="action-bar__btn-text"
-            :class="{ 'action-bar__btn-text--primary': act.primary }"
-          >{{ act.label }}</text>
-        </view>
+          class="action-bar__button"
+          :type="act.primary ? 'primary' : 'secondary'"
+          size="medium"
+          :label="act.label"
+          @click="handleAction(act.key)"
+        />
       </view>
     </view>
 
@@ -205,6 +231,14 @@
       @select="onPayMethodSelect"
       @close="closeSheet"
     />
+
+    <!-- 售后商品选择 -->
+    <mb-refund-item-sheet
+      :visible="refundSheetVisible"
+      :items="refundSheetItems"
+      @confirm="onRefundItemsConfirm"
+      @close="closeRefundSheet"
+    />
   </view>
 </template>
 
@@ -213,6 +247,7 @@ import { ref, computed, onUnmounted } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { getOrderDetail, cancelOrder, confirmReceive } from '@/api/order/order'
 import { usePayFlow } from '@/utils/usePayFlow'
+import { multiplyPrice, sumPrices } from '@/utils/price'
 import config from '@/config/index'
 
 const {
@@ -231,8 +266,17 @@ function redirectToPayResult(payResult) {
     : payResult.status === 'pending'
       ? 'pending'
       : 'fail'
+  const query = [
+    `sn=${encodeURIComponent(order.value.sn || '')}`,
+    `order_id=${encodeURIComponent(order.value.id || '')}`,
+    `status=${status}`,
+  ]
+  const message = String(payResult.message || '').trim()
+  if (message) {
+    query.push(`message=${encodeURIComponent(message.slice(0, 160))}`)
+  }
   uni.redirectTo({
-    url: `/pages-sub/order/pay-result?sn=${order.value.sn}&order_id=${order.value.id}&status=${status}`,
+    url: `/pages-sub/order/pay-result?${query.join('&')}`,
   })
 }
 
@@ -254,6 +298,8 @@ const loading = ref(true)
 const order = ref(null)
 const orderId = ref('')
 const nowTs = ref(Date.now())
+const refundSheetVisible = ref(false)
+const refundSheetItems = ref([])
 let countdownTimer = null
 let expiredRefreshed = false
 
@@ -307,6 +353,8 @@ const statusDesc = computed(() => {
 })
 
 const orderItems = computed(() => getOrderItems(order.value))
+const afterSalePreviewItems = computed(() => getAfterSaleItems(order.value?.after_sale).slice(0, 3))
+const afterSaleMoreCount = computed(() => Math.max(0, getAfterSaleItems(order.value?.after_sale).length - 3))
 
 const receiverName = computed(() => {
   if (!order.value) return ''
@@ -338,11 +386,8 @@ const fullAddress = computed(() => {
 })
 
 const goodsTotal = computed(() => {
-  if (!orderItems.value.length) return 0
-  return orderItems.value.reduce(
-    (sum, item) => sum + Number(item.unit_price) * Number(item.quantity),
-    0,
-  )
+  if (!orderItems.value.length) return '0.00'
+  return sumPrices(orderItems.value.map((item) => multiplyPrice(item.unit_price, item.quantity)))
 })
 
 const actions = computed(() => {
@@ -416,23 +461,62 @@ function getOrderItemId(item) {
   return item?.id || item?.order_item_id || ''
 }
 
-function getRefundItemLabel(item) {
-  const name = item?.goods_name || item?.name || '商品'
-  const spec = getItemSpec(item)
-  return spec ? `${name} ${spec}` : name
-}
-
 function getRefundableQuantity(item) {
   const explicit = Number(item?.refundable_quantity)
   if (Number.isFinite(explicit)) return Math.max(0, explicit)
   return Math.max(0, Number(item?.quantity || 0) - Number(item?.refunded_quantity || 0))
 }
 
-function getRefundableAmount(item) {
-  const amount = item?.refundable_amount
-  return amount !== undefined && amount !== null && amount !== ''
-    ? String(amount)
-    : ''
+function getAfterSaleItems(refund) {
+  return Array.isArray(refund?.items) ? refund.items : []
+}
+
+function getAfterSaleItemImage(item) {
+  return normalizeImageUrl(
+    item?.goods_image_full_url
+      || item?.goods_image_url
+      || item?.goods_image
+      || '',
+  )
+}
+
+function getAfterSaleThumbStyle(index) {
+  return {
+    left: `${index * 34}rpx`,
+    zIndex: 4 - index,
+  }
+}
+
+function getAfterSaleBadgeText(refund) {
+  const total = Number(refund?.total || getAfterSaleItems(refund).length || 0)
+  return total > 1 ? `${total}个售后` : (refund?.type_text || '售后')
+}
+
+function getAfterSaleActionText(refund) {
+  const total = Number(refund?.total || getAfterSaleItems(refund).length || 0)
+  return total > 1 ? '查看全部' : '查看详情'
+}
+
+function getAfterSaleGoodsText(refund) {
+  const items = getAfterSaleItems(refund)
+  if (items.length === 0) return ''
+  const firstName = items[0]?.goods_name || '售后商品'
+  return items.length > 1 ? `${firstName}等 ${items.length} 件商品` : firstName
+}
+
+function getGoodsAfterSaleInfo(item) {
+  return item?.after_sale || null
+}
+
+function getGoodsAfterSaleTag(item) {
+  const refund = getGoodsAfterSaleInfo(item)
+  if (!refund) return ''
+  return `售后${refund.status_text || '处理中'}`
+}
+
+function getGoodsAfterSaleAmount(item) {
+  const amount = getGoodsAfterSaleInfo(item)?.refund_amount
+  return amount !== undefined && amount !== null && amount !== '' ? String(amount) : ''
 }
 
 function getExpireAtTs(source) {
@@ -464,8 +548,12 @@ function canApplyRefund(source) {
   return source?.can_refund !== false
 }
 
+function isActiveAfterSaleStatus(status) {
+  return [0, 1, 2].includes(Number(status))
+}
+
 function hasActiveAfterSale(source) {
-  return source?.can_refund === false && !!source?.after_sale_tag_text
+  return isActiveAfterSaleStatus(source?.after_sale?.status)
 }
 
 function isRefundCompletedOrder(source) {
@@ -475,45 +563,68 @@ function isRefundCompletedOrder(source) {
 function getAfterSaleDesc(refund) {
   if (!refund) return ''
   const parts = []
-  if (refund.refund_amount) parts.push(`退款 ¥${refund.refund_amount}`)
+  const total = Number(refund?.total || getAfterSaleItems(refund).length || 0)
+  const amount = total > 1 ? refund.total_refund_amount : refund.refund_amount
+  if (amount) parts.push(`${total > 1 ? '合计退款' : '退款'} ¥${amount}`)
   if (refund.receive_status_text) parts.push(refund.receive_status_text)
-  if (Number(refund.receive_status) === 0 && refund.intercept_status_text) {
+  if (
+    Number(refund.receive_status) === 0
+    && refund.intercept_status_text
+    && refund.intercept_status !== 'none'
+    && refund.intercept_status_text !== '无需拦截'
+  ) {
     parts.push(`物流拦截：${refund.intercept_status_text}`)
   }
   return parts.join('，') || '查看售后处理进度'
 }
 
 function goRefundDetail() {
-  const id = order.value?.after_sale?.id
+  const refund = order.value?.after_sale
+  const total = Number(refund?.total || getAfterSaleItems(refund).length || 0)
+  if (total > 1 && order.value?.id) {
+    uni.navigateTo({ url: `/pages-sub/refund/list?order_id=${order.value.id}` })
+    return
+  }
+  const id = refund?.id
   if (!id) return
   uni.navigateTo({ url: `/pages-sub/refund/detail?id=${id}` })
 }
 
-function navigateToRefund(item, receiveStatus = 'not_received', type = 0) {
-  const orderItemId = getOrderItemId(item)
-  if (!orderItemId) {
+function navigateToRefund(selections) {
+  const selectedItems = (Array.isArray(selections) ? selections : [])
+    .map((row) => {
+      const item = row?.item || row
+      const orderItemId = row?.order_item_id || getOrderItemId(item)
+      const quantity = Math.max(1, Number(row?.quantity || 1))
+      return orderItemId ? { order_item_id: orderItemId, quantity } : null
+    })
+    .filter(Boolean)
+
+  if (selectedItems.length === 0) {
     uni.showToast({ title: '请选择要申请售后的商品', icon: 'none' })
     return
   }
-  const refundableQuantity = getRefundableQuantity(item)
-  if (refundableQuantity <= 0) {
-    uni.showToast({ title: '该商品暂无可退数量', icon: 'none' })
-    return
-  }
-  const refundableAmount = getRefundableAmount(item)
+
   const query = [
     `order_id=${order.value.id}`,
-    `order_item_id=${orderItemId}`,
-    `receive_status=${receiveStatus}`,
-    `type=${type}`,
-    item?.goods_name ? `goods_name=${encodeURIComponent(item.goods_name)}` : '',
-    getOrderItemImage(item) ? `goods_image=${encodeURIComponent(getOrderItemImage(item))}` : '',
-    getItemSpec(item) ? `sku_spec_text=${encodeURIComponent(getItemSpec(item))}` : '',
-    item?.unit_price ? `price=${encodeURIComponent(item.unit_price)}` : '',
-    `quantity=${encodeURIComponent(refundableQuantity)}`,
-    refundableAmount ? `refundable_amount=${encodeURIComponent(refundableAmount)}` : '',
+    `selected_items=${encodeURIComponent(JSON.stringify(selectedItems))}`,
   ].filter(Boolean).join('&')
   uni.navigateTo({ url: `/pages-sub/refund/apply?${query}` })
+}
+
+function openRefundSheet(items) {
+  refundSheetItems.value = items
+  refundSheetVisible.value = true
+}
+
+function closeRefundSheet() {
+  refundSheetVisible.value = false
+  refundSheetItems.value = []
+}
+
+function onRefundItemsConfirm(selections) {
+  closeRefundSheet()
+  navigateToRefund(selections)
 }
 
 function maskPhone(phone) {
@@ -585,7 +696,7 @@ async function handleAction(key) {
   } else if (key === 'refund') {
     if (!canApplyRefund(order.value)) {
       uni.showToast({
-        title: hasActiveAfterSale(order.value) ? '已有进行中的售后申请' : '订单已超过售后申请期限',
+        title: hasActiveAfterSale(order.value) ? '剩余商品暂无可申请售后' : '订单已超过售后申请期限',
         icon: 'none',
       })
       return
@@ -595,42 +706,8 @@ async function handleAction(key) {
       uni.showToast({ title: '请选择要申请售后的商品', icon: 'none' })
       return
     }
-    const chooseItem = (item) => {
-      if (Number(order.value.status) === 20) {
-        chooseReceiveStatus(item)
-        return
-      }
-      navigateToRefund(item, Number(order.value.status) >= 30 ? 'received' : 'not_received', 0)
-    }
-    if (items.length === 1) {
-      chooseItem(items[0])
-      return
-    }
-    uni.showActionSheet({
-      itemList: items.map(getRefundItemLabel),
-      success(res) {
-        chooseItem(items[res.tapIndex])
-      },
-    })
+    openRefundSheet(items)
   }
-}
-
-function chooseReceiveStatus(item) {
-  uni.showActionSheet({
-    itemList: ['未收到货', '已收到货'],
-    success(res) {
-      if (res.tapIndex === 0) {
-        navigateToRefund(item, 'not_received', 0)
-        return
-      }
-      uni.showActionSheet({
-        itemList: ['仅退款', '退货退款'],
-        success(typeRes) {
-          navigateToRefund(item, 'received', typeRes.tapIndex === 1 ? 1 : 0)
-        },
-      })
-    },
-  })
 }
 
 function startCountdownTimer() {
@@ -865,6 +942,57 @@ onUnmounted(() => {
   box-sizing: content-box;
 }
 
+.after-sale-card__images {
+  position: relative;
+  flex-shrink: 0;
+  width: 166rpx;
+  height: 64rpx;
+}
+
+.after-sale-card__image-wrap {
+  position: absolute;
+  top: 0;
+  width: 64rpx;
+  height: 64rpx;
+  border-radius: 14rpx;
+  border: 3rpx solid $mb-color-bg;
+  overflow: hidden;
+  background: #f3f5f9;
+  box-sizing: border-box;
+}
+
+.after-sale-card__image {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.after-sale-card__image--placeholder {
+  background: linear-gradient(135deg, rgba(13, 80, 213, 0.12), rgba(25, 27, 35, 0.06));
+}
+
+.after-sale-card__more {
+  position: absolute;
+  top: 0;
+  left: 102rpx;
+  z-index: 6;
+  width: 64rpx;
+  height: 64rpx;
+  border-radius: 14rpx;
+  border: 3rpx solid $mb-color-bg;
+  background: rgba(25, 27, 35, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+.after-sale-card__more-text {
+  font-size: $mb-font-xs;
+  font-weight: 700;
+  color: $mb-color-text-inverse;
+}
+
 .after-sale-card__content {
   flex: 1;
   min-width: 0;
@@ -890,9 +1018,20 @@ onUnmounted(() => {
   color: $mb-color-primary;
 }
 
-.after-sale-card__desc {
+.after-sale-card__goods {
   display: block;
   margin-top: 6rpx;
+  font-size: $mb-font-xs;
+  font-weight: 600;
+  color: $mb-color-text-title;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.after-sale-card__desc {
+  display: block;
+  margin-top: 4rpx;
   font-size: $mb-font-xs;
   color: $mb-color-text-secondary;
   overflow: hidden;
@@ -1073,6 +1212,28 @@ onUnmounted(() => {
 
 .goods-item__qty { font-size: $mb-font-sm; color: $mb-color-text-tertiary; }
 
+.goods-item__after-sale {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  align-self: flex-start;
+  margin-top: 10rpx;
+  padding: 6rpx 12rpx;
+  border-radius: 999rpx;
+  background: rgba(13, 80, 213, 0.08);
+}
+
+.goods-item__after-sale-text {
+  font-size: $mb-font-xs;
+  font-weight: 700;
+  color: $mb-color-primary;
+}
+
+.goods-item__after-sale-amount {
+  font-size: $mb-font-xs;
+  color: $mb-color-text-secondary;
+}
+
 // ---- Remark card ----
 .remark-card {
   display: flex;
@@ -1229,30 +1390,9 @@ onUnmounted(() => {
   padding-bottom: calc(#{$mb-spacing-sm} + env(safe-area-inset-bottom));
 }
 
-.action-bar__btn {
-  height: 78rpx;
+.action-bar__button {
   min-width: 176rpx;
-  border-radius: 18rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 $mb-spacing-lg;
-  border: 1rpx solid rgba(13, 80, 213, 0.45);
-  transition: opacity 0.15s, transform 0.15s;
-
-  &:active {
-    opacity: 0.85;
-    transform: scale(0.98);
-  }
 }
-
-.action-bar__btn--primary {
-  background: $mb-color-primary;
-  border-color: $mb-color-primary;
-}
-
-.action-bar__btn-text { font-size: $mb-font-md; font-weight: 600; color: $mb-color-text; }
-.action-bar__btn-text--primary { color: $mb-color-text-inverse; }
 
 // ---- Bottom spacer ----
 .bottom-spacer {

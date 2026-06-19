@@ -37,8 +37,9 @@ class SmsAuthService extends BaseService
      * @param string $mobile  手机号
      * @param string $scene   场景,需是 SmsScene 常量值
      * @param string $ip      调用方 IP,用于频控
+     * @return array{code_ttl: int}
      */
-    public function send(string $mobile, string $scene, string $ip = ''): void
+    public function send(string $mobile, string $scene, string $ip = ''): array
     {
         if (!SmsScene::isValid($scene)) {
             throw new BusinessException('不支持的短信场景');
@@ -48,6 +49,10 @@ class SmsAuthService extends BaseService
         $this->assertSceneBusinessRule($mobile, $scene);
 
         $this->sms->sendCode($mobile, $scene, $ip);
+
+        return [
+            'code_ttl' => $this->sms->codeTtl(),
+        ];
     }
 
     private function assertSceneBusinessRule(string $mobile, string $scene): void
