@@ -52,7 +52,21 @@ VALUES
   (44, 1, 'image', 'vanity-01-04.png', 'vanity-01-04.png', 'image/png', 'png', 0, '', 0, 0, 'goods', 'system', 0, 'public', 1, '{"source":"demo"}'),
   (45, 1, 'image', 'vanity-01-05.png', 'vanity-01-05.png', 'image/png', 'png', 0, '', 0, 0, 'goods', 'system', 0, 'public', 1, '{"source":"demo"}'),
   (46, 1, 'image', 'vanity-01-main.png', 'vanity-01-main.png', 'image/png', 'png', 0, '', 0, 0, 'goods', 'system', 0, 'public', 1, '{"source":"demo"}'),
-  (47, 1, 'image', 'watch-01-main.png', 'watch-01-main.png', 'image/png', 'png', 0, '', 0, 0, 'goods', 'system', 0, 'public', 1, '{"source":"demo"}');
+  (47, 1, 'image', 'watch-01-main.png', 'watch-01-main.png', 'image/png', 'png', 0, '', 0, 0, 'goods', 'system', 0, 'public', 1, '{"source":"demo"}'),
+  (48, 5, 'image', 'decorate-banner-market.png', 'decorate-banner-market.png', 'image/png', 'png', 0, '', 0, 0, 'client_decorate', 'system', 0, 'public', 1, '{"source":"demo"}'),
+  (49, 5, 'image', 'decorate-banner-member.png', 'decorate-banner-member.png', 'image/png', 'png', 0, '', 0, 0, 'client_decorate', 'system', 0, 'public', 1, '{"source":"demo"}'),
+  (50, 5, 'image', 'decorate-banner-home.png', 'decorate-banner-home.png', 'image/png', 'png', 0, '', 0, 0, 'client_decorate', 'system', 0, 'public', 1, '{"source":"demo"}'),
+  (51, 5, 'image', 'decorate-nav-digital.png', 'decorate-nav-digital.png', 'image/png', 'png', 0, '', 0, 0, 'client_decorate', 'system', 0, 'public', 1, '{"source":"demo"}'),
+  (52, 5, 'image', 'decorate-nav-beauty.png', 'decorate-nav-beauty.png', 'image/png', 'png', 0, '', 0, 0, 'client_decorate', 'system', 0, 'public', 1, '{"source":"demo"}'),
+  (53, 5, 'image', 'decorate-nav-fashion.png', 'decorate-nav-fashion.png', 'image/png', 'png', 0, '', 0, 0, 'client_decorate', 'system', 0, 'public', 1, '{"source":"demo"}'),
+  (54, 5, 'image', 'decorate-nav-home.png', 'decorate-nav-home.png', 'image/png', 'png', 0, '', 0, 0, 'client_decorate', 'system', 0, 'public', 1, '{"source":"demo"}'),
+  (55, 5, 'image', 'decorate-nav-food.png', 'decorate-nav-food.png', 'image/png', 'png', 0, '', 0, 0, 'client_decorate', 'system', 0, 'public', 1, '{"source":"demo"}'),
+  (56, 5, 'image', 'decorate-nav-sport.png', 'decorate-nav-sport.png', 'image/png', 'png', 0, '', 0, 0, 'client_decorate', 'system', 0, 'public', 1, '{"source":"demo"}'),
+  (57, 5, 'image', 'decorate-cube-new.png', 'decorate-cube-new.png', 'image/png', 'png', 0, '', 0, 0, 'client_decorate', 'system', 0, 'public', 1, '{"source":"demo"}'),
+  (58, 5, 'image', 'decorate-cube-picks.png', 'decorate-cube-picks.png', 'image/png', 'png', 0, '', 0, 0, 'client_decorate', 'system', 0, 'public', 1, '{"source":"demo"}'),
+  (59, 5, 'image', 'decorate-cube-member.png', 'decorate-cube-member.png', 'image/png', 'png', 0, '', 0, 0, 'client_decorate', 'system', 0, 'public', 1, '{"source":"demo"}'),
+  (60, 5, 'image', 'decorate-cube-sale.png', 'decorate-cube-sale.png', 'image/png', 'png', 0, '', 0, 0, 'client_decorate', 'system', 0, 'public', 1, '{"source":"demo"}'),
+  (61, 5, 'image', 'decorate-entry-category.png', 'decorate-entry-category.png', 'image/png', 'png', 0, '', 0, 0, 'client_decorate', 'system', 0, 'public', 1, '{"source":"demo"}');
 
 INSERT INTO `mb_upload_asset_location`
   (`asset_id`, `driver`, `path`, `url_prefix`, `bucket`, `region`, `endpoint`, `is_primary`, `status`, `etag`, `size`, `meta`)
@@ -103,4 +117,18 @@ VALUES
   (44, 'static', 'static/demo/vanity-01-04.png', '', '', '', '', 1, 1, '', 0, '{"source":"demo"}'),
   (45, 'static', 'static/demo/vanity-01-05.png', '', '', '', '', 1, 1, '', 0, '{"source":"demo"}'),
   (46, 'static', 'static/demo/vanity-01-main.png', '', '', '', '', 1, 1, '', 0, '{"source":"demo"}'),
-  (47, 'static', 'static/demo/watch-01-main.png', '', '', '', '', 1, 1, '', 0, '{"source":"demo"}');
+  (47, 'static', 'static/demo/watch-01-main.png', '', '', '', '', 1, 1, '', 0, '{"source":"demo"}'),
+  (48, 'static', 'static/demo/decorate-banner-market.png', '', '', '', '', 1, 1, '', 0, '{"source":"demo"}'),
+  (49, 'static', 'static/demo/decorate-banner-member.png', '', '', '', '', 1, 1, '', 0, '{"source":"demo"}'),
+  (50, 'static', 'static/demo/decorate-banner-home.png', '', '', '', '', 1, 1, '', 0, '{"source":"demo"}'),
+  (51, 'static', 'static/demo/decorate-nav-digital.png', '', '', '', '', 1, 1, '', 0, '{"source":"demo"}'),
+  (52, 'static', 'static/demo/decorate-nav-beauty.png', '', '', '', '', 1, 1, '', 0, '{"source":"demo"}'),
+  (53, 'static', 'static/demo/decorate-nav-fashion.png', '', '', '', '', 1, 1, '', 0, '{"source":"demo"}'),
+  (54, 'static', 'static/demo/decorate-nav-home.png', '', '', '', '', 1, 1, '', 0, '{"source":"demo"}'),
+  (55, 'static', 'static/demo/decorate-nav-food.png', '', '', '', '', 1, 1, '', 0, '{"source":"demo"}'),
+  (56, 'static', 'static/demo/decorate-nav-sport.png', '', '', '', '', 1, 1, '', 0, '{"source":"demo"}'),
+  (57, 'static', 'static/demo/decorate-cube-new.png', '', '', '', '', 1, 1, '', 0, '{"source":"demo"}'),
+  (58, 'static', 'static/demo/decorate-cube-picks.png', '', '', '', '', 1, 1, '', 0, '{"source":"demo"}'),
+  (59, 'static', 'static/demo/decorate-cube-member.png', '', '', '', '', 1, 1, '', 0, '{"source":"demo"}'),
+  (60, 'static', 'static/demo/decorate-cube-sale.png', '', '', '', '', 1, 1, '', 0, '{"source":"demo"}'),
+  (61, 'static', 'static/demo/decorate-entry-category.png', '', '', '', '', 1, 1, '', 0, '{"source":"demo"}');

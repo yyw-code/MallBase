@@ -171,10 +171,6 @@ INSERT INTO `mb_goods_tag_relation` (`goods_id`, `tag_id`) VALUES
 (5, 2), (5, 4),
 (6, 1), (6, 2);
 
--- 演示用首页轮播图
-UPDATE `mb_setting` SET `value` = '["/static/demo/banner-digital.png","/static/demo/banner-fashion.png","/static/demo/banner-home.png"]'
-WHERE `code` = 'client_home_banners';
-
 -- 演示用商品保障
 UPDATE `mb_setting` SET `value` = '[{"title":"正品保障","desc":"平台严选商品来源","icon":"shield"},{"title":"极速发货","desc":"现货商品优先出库","icon":"truck"},{"title":"七天无理由","desc":"符合条件可无理由退货","icon":"refresh"},{"title":"售后无忧","desc":"订单售后进度可追踪","icon":"service"}]'
 WHERE `code` = 'client_goods_guarantees';

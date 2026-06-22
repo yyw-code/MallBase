@@ -101,24 +101,16 @@ final class DemoAssetReferenceTest extends TestCase
         $this->assertSame([], $violations, '素材 ID 字段不能写入 /static/demo 路径字符串');
     }
 
-    public function testDemoHomeBannersAreValidJsonArray(): void
+    public function testDemoHomeBannersMovedToDecorationSeed(): void
     {
         $root = dirname(__DIR__, 4);
-        $sql = file_get_contents($root . '/backend/install/data/demo/02_demo_goods.sql');
+        $settingSql = file_get_contents($root . '/backend/install/data/schema/03_mb_setting.sql');
+        $decorateSql = file_get_contents($root . '/backend/install/data/schema/13_mb_client_diy.sql');
 
-        $this->assertIsString($sql);
-        $matched = preg_match(
-            "/client_home_banners';\\s*\\nUPDATE `mb_setting` SET `value` = '([^']+)'/m",
-            $sql,
-            $matches,
-        );
-        if ($matched !== 1) {
-            $matched = preg_match("/SET `value` = '([^']+)'\\s*\\nWHERE `code` = 'client_home_banners'/m", $sql, $matches);
-        }
-
-        $this->assertSame(1, $matched);
-        $banners = json_decode($matches[1], true);
-        $this->assertIsArray($banners);
-        $this->assertNotEmpty($banners);
+        $this->assertIsString($settingSql);
+        $this->assertIsString($decorateSql);
+        $this->assertStringNotContainsString('client_home_banners', $settingSql);
+        $this->assertStringContainsString("'decorate-banner-market.png'", file_get_contents($root . '/backend/install/data/demo/00_demo_upload_assets.sql'));
+        $this->assertStringContainsString("'image', '48'", $decorateSql);
     }
 }

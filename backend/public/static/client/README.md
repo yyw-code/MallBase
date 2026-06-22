@@ -8,7 +8,7 @@
 | launch.png | Uniapp 编译为 App 时的启动屏 | 1080×2340 | JPG/PNG |
 | share-cover.png | H5/微信小程序"分享给好友"时封面 | 500×400 | PNG/JPG |
 
-首页轮播图（`client_home_banners`）不在此目录，由运营在后台自行上传多张，存储到 uploads。
+首页轮播图不再走系统设置配置，统一由客户端装修画布维护；装修默认素材在 `static/demo/decorate-*.png`。
 
 ## 替换方式
 

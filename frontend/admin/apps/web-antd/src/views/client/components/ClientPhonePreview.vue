@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { computed } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 
 import { IconifyIcon } from '@vben/icons';
 
@@ -15,9 +15,11 @@ const props = withDefaults(
     dragging?: boolean;
     dropIndex?: null | number;
     goods?: null | PreviewRecord;
+    goodsList?: PreviewRecord[];
     interactive?: boolean;
     kind?: PreviewKind;
     modules?: ModuleItem[];
+    pageStyle?: Record<string, any>;
     selectedModuleId?: null | string;
     size?: 'compact' | 'normal';
     tabbarItems?: ModuleItem[];
@@ -30,9 +32,11 @@ const props = withDefaults(
     dragging: false,
     dropIndex: null,
     goods: null,
+    goodsList: () => [],
     interactive: false,
     kind: 'home',
     modules: () => [],
+    pageStyle: () => ({}),
     selectedModuleId: null,
     size: 'normal',
     tabbarItems: () => [],
@@ -47,6 +51,19 @@ const emit = defineEmits<{
   moduleMove: [index: number, direction: 'down' | 'up'];
   selectModule: [module: ModuleItem];
 }>();
+
+const bannerPreviewTick = ref(0);
+let bannerPreviewTimer: ReturnType<typeof setInterval> | undefined;
+
+onMounted(() => {
+  bannerPreviewTimer = setInterval(() => {
+    bannerPreviewTick.value += 1;
+  }, 1000);
+});
+
+onBeforeUnmount(() => {
+  if (bannerPreviewTimer) clearInterval(bannerPreviewTimer);
+});
 
 const DEFAULT_THEME_TOKENS = {
   colorBg: '#ffffff',
@@ -71,19 +88,32 @@ const DEFAULT_HOME_MODULES: ModuleItem[] = [
   },
   {
     id: 'preview-banner',
-    props: { height: 314, list: [] },
+    props: {
+      height: 314,
+      list: [
+        {
+          image: 'static/demo/decorate-banner-market.png',
+          title: '夏日好物限时满减',
+        },
+        {
+          image: 'static/demo/decorate-banner-member.png',
+          title: '会员精选 每日上新',
+        },
+      ],
+    },
     type: 'banner',
   },
   {
     id: 'preview-nav',
     props: {
-      columns: 5,
+      columns: 6,
       items: [
-        { label: '数码', icon: 'phone' },
-        { label: '美妆', icon: 'beauty' },
-        { label: '服饰', icon: 'shirt' },
-        { label: '家居', icon: 'home' },
-        { label: '美食', icon: 'food' },
+        { image: 'static/demo/decorate-nav-digital.png', label: '数码' },
+        { image: 'static/demo/decorate-nav-beauty.png', label: '美妆' },
+        { image: 'static/demo/decorate-nav-fashion.png', label: '服饰' },
+        { image: 'static/demo/decorate-nav-home.png', label: '家居' },
+        { image: 'static/demo/decorate-nav-food.png', label: '美食' },
+        { image: 'static/demo/decorate-nav-sport.png', label: '运动' },
       ],
     },
     type: 'navGrid',
@@ -198,32 +228,6 @@ const GOODS_FALLBACK = {
   stock: 1000,
   subtitle: '双层防烫 · 全钢无缝 · 轻音烧水',
 };
-
-const demoImage = (title: string, subtitle: string, from: string, to: string) =>
-  `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(`
-    <svg xmlns="http://www.w3.org/2000/svg" width="720" height="320" viewBox="0 0 720 320">
-      <defs>
-        <linearGradient id="g" x1="0" x2="1" y1="0" y2="1">
-          <stop offset="0" stop-color="${from}"/>
-          <stop offset="1" stop-color="${to}"/>
-        </linearGradient>
-      </defs>
-      <rect width="720" height="320" rx="28" fill="url(#g)"/>
-      <circle cx="590" cy="78" r="78" fill="rgba(255,255,255,.22)"/>
-      <circle cx="104" cy="250" r="118" fill="rgba(255,255,255,.14)"/>
-      <text x="52" y="118" font-family="Arial, sans-serif" font-size="30" fill="rgba(255,255,255,.82)">${subtitle}</text>
-      <text x="52" y="178" font-family="Arial, sans-serif" font-size="48" font-weight="700" fill="#fff">${title}</text>
-      <rect x="52" y="218" width="154" height="44" rx="22" fill="rgba(255,255,255,.24)"/>
-      <text x="82" y="248" font-family="Arial, sans-serif" font-size="22" font-weight="700" fill="#fff">立即查看</text>
-    </svg>
-  `)}`;
-
-const DEMO_BANNER_IMAGE = demoImage(
-  '夏日好物限时满减',
-  'MALLBASE SELECTED',
-  '#ff7676',
-  '#ff5a1f',
-);
 
 const tokens = computed(() => ({
   ...DEFAULT_THEME_TOKENS,
@@ -343,7 +347,7 @@ function normalizeModuleProps(module: ModuleItem) {
   const rawData = module.data || {};
   const rawProps = module.props || {};
   const rawConfig = module.config || {};
-  const props = { ...rawData, ...rawProps, ...rawConfig };
+  const props = { ...rawProps, ...rawConfig, ...rawData };
   if (rawConfig.list !== undefined) {
     props.list = rawConfig.list;
   }
@@ -358,9 +362,9 @@ function normalizeModuleProps(module: ModuleItem) {
   props.widthPercent = Number(props.widthPercent ?? props.width_percent ?? 100);
   props.marginTop = Number(props.marginTop ?? props.margin_top ?? 0);
   props.marginBottom = Number(props.marginBottom ?? props.margin_bottom ?? 0);
-  if (props.padding === undefined && props.padding_y !== undefined) {
-    props.padding = props.padding_y;
-  }
+  const padding = props.padding ?? 0;
+  props.paddingY = Number(props.paddingY ?? props.padding_y ?? padding);
+  props.paddingX = Number(props.paddingX ?? props.padding_x ?? padding);
   if (!props.list && (props.items || props.images)) {
     props.list = props.items || props.images;
   }
@@ -404,24 +408,6 @@ function moduleList(module: ModuleItem) {
     module.props?.images,
   ].find((value) => Array.isArray(value) && value.length > 0);
   if (Array.isArray(list)) return list;
-  if (module.type === 'navGrid') {
-    return (
-      DEFAULT_HOME_MODULES.find((item) => item.type === 'navGrid')?.props
-        ?.items || []
-    );
-  }
-  if (module.type === 'orderShortcut') {
-    return (
-      DEFAULT_PROFILE_MODULES.find((item) => item.type === 'orderShortcut')
-        ?.props?.items || []
-    );
-  }
-  if (module.type === 'serviceMenu') {
-    return (
-      DEFAULT_PROFILE_MODULES.find((item) => item.type === 'serviceMenu')?.props
-        ?.items || []
-    );
-  }
   return [];
 }
 
@@ -461,7 +447,9 @@ function getImage(item: any): string {
 
 function normalizePreviewImageUrl(value: unknown) {
   if (typeof value !== 'string' || value.length === 0) return '';
-  if (/^(?:https?:|data:image|blob:)/.test(value)) return value;
+  if (/^(?:https?:|data:image|blob:)/.test(value)) {
+    return value;
+  }
   if (!looksLikeImagePath(value)) return '';
   const apiBase = import.meta.env.VITE_GLOB_API_URL || '';
   if (!value.startsWith('/')) {
@@ -653,8 +641,8 @@ function titleSubStyle(module: ModuleItem) {
 }
 
 function navColumns(module: ModuleItem) {
-  const columns = Number(module.props?.columns || 5);
-  return Math.max(3, Math.min(columns, 5));
+  const columns = Number(module.props?.columns || 6);
+  return Math.max(3, Math.min(columns, 6));
 }
 
 function toPreviewPx(value: unknown, fallback = 0) {
@@ -662,6 +650,15 @@ function toPreviewPx(value: unknown, fallback = 0) {
   if (!Number.isFinite(numberValue)) return fallback / 2;
   return Math.max(0, numberValue / 2);
 }
+
+const homePageStyle = computed(() => {
+  const pageStyle = props.pageStyle || {};
+  const paddingY = pageStyle.paddingY ?? pageStyle.padding_y ?? 0;
+  const paddingX = pageStyle.paddingX ?? pageStyle.padding_x ?? 28;
+  return {
+    padding: `${toPreviewPx(paddingY)}px ${toPreviewPx(paddingX)}px`,
+  };
+});
 
 function moduleOuterStyle(module: ModuleItem) {
   const props = module.props || {};
@@ -688,7 +685,12 @@ function moduleBoxStyle(
   if (props.radius !== undefined) {
     style.borderRadius = `${toPreviewPx(props.radius)}px`;
   }
-  if (props.padding !== undefined) {
+  if (props.paddingY !== undefined || props.paddingX !== undefined) {
+    const padding = props.padding ?? 0;
+    const paddingY = props.paddingY ?? props.padding_y ?? padding;
+    const paddingX = props.paddingX ?? props.padding_x ?? padding;
+    style.padding = `${toPreviewPx(paddingY)}px ${toPreviewPx(paddingX)}px`;
+  } else if (props.padding !== undefined) {
     style.padding = `${toPreviewPx(props.padding)}px`;
   }
   return style;
@@ -700,7 +702,15 @@ function bannerHeight(module: ModuleItem) {
 }
 
 function bannerImage(module: ModuleItem) {
-  return imageList(module)[0] || DEMO_BANNER_IMAGE;
+  const images = imageList(module);
+  if (images.length <= 1) return images[0] || '';
+  const intervalSeconds = Math.max(
+    1,
+    Math.round(Number(module.props?.interval || 3000) / 1000),
+  );
+  const index =
+    Math.floor(bannerPreviewTick.value / intervalSeconds) % images.length;
+  return images[index] || images[0] || '';
 }
 
 function imageList(module: ModuleItem) {
@@ -726,6 +736,14 @@ function productPreviewItems(module: ModuleItem) {
 
   if (Array.isArray(previewList) && previewList.length > 0) {
     return previewList.slice(0, limit);
+  }
+
+  if (props.goodsList.length > 0) {
+    return props.goodsList.slice(0, limit);
+  }
+
+  if (props.goods) {
+    return [props.goods];
   }
 
   return Array.from({ length: limit }, (_, index) => {
@@ -869,7 +887,7 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
 
       <div class="client-phone-preview__body">
         <template v-if="kind === 'home'">
-          <div class="home-page">
+          <div class="home-page" :style="homePageStyle">
             <div class="home-brand">
               <span class="home-brand__mark"></span>
               <strong>MallBase</strong>
@@ -991,8 +1009,9 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
                     class="home-nav__item"
                   >
                     <span class="home-nav__icon">
+                      <img v-if="getImage(item)" :src="getImage(item)" />
                       <IconifyIcon
-                        v-if="isIconifyName(getEntryIcon(item))"
+                        v-else-if="isIconifyName(getEntryIcon(item))"
                         :icon="getEntryIcon(item)"
                       />
                       <template v-else>{{ getFallbackIcon(item) }}</template>
@@ -1550,9 +1569,9 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
 }
 
 .client-phone-preview--compact .client-phone-preview__device {
-  width: 292px;
-  height: 560px;
-  border-radius: 22px;
+  width: 280px;
+  height: 536px;
+  border-radius: 18px;
   box-shadow: 0 10px 28px rgb(15 23 42 / 10%);
 }
 
@@ -1896,7 +1915,12 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
   background: var(--mb-preview-bg-surface);
 }
 
-.home-banner img,
+.home-banner img {
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+}
+
 .home-cube img {
   width: 100%;
   height: 100%;
@@ -1992,6 +2016,13 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
 .profile-cell > span svg {
   width: 18px;
   height: 18px;
+}
+
+.home-nav__icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
 }
 
 .client-phone-preview--compact .home-nav__icon,

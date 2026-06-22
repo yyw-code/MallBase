@@ -326,8 +326,19 @@ function moduleStyle(module) {
   if (props.background) style.push(`background: ${props.background}`);
   if (props.radius !== undefined)
     style.push(`border-radius: ${Number(props.radius)}rpx`);
-  if (props.padding !== undefined)
+  if (
+    props.paddingY !== undefined ||
+    props.padding_y !== undefined ||
+    props.paddingX !== undefined ||
+    props.padding_x !== undefined
+  ) {
+    const padding = props.padding ?? 0;
+    const paddingY = props.paddingY ?? props.padding_y ?? padding;
+    const paddingX = props.paddingX ?? props.padding_x ?? padding;
+    style.push(`padding: ${Number(paddingY)}rpx ${Number(paddingX)}rpx`);
+  } else if (props.padding !== undefined) {
     style.push(`padding: ${Number(props.padding)}rpx`);
+  }
   return style.join('; ');
 }
 

@@ -30,11 +30,16 @@ export function mergeDecorateConfig(config) {
 
 export function normalizeSchema(schema, fallback) {
   if (Array.isArray(schema)) {
-    return { modules: normalizeModules(schema) };
+    return {
+      ...fallback,
+      modules: normalizeModules(schema),
+    };
   }
   if (!isPlainObject(schema)) return fallback;
   return {
+    ...fallback,
     ...schema,
+    pageStyle: normalizePageStyle(schema.pageStyle || fallback.pageStyle),
     modules: normalizeModules(
       schema.modules ||
         schema.components ||
@@ -43,6 +48,14 @@ export function normalizeSchema(schema, fallback) {
         schema.items ||
         fallback.modules,
     ),
+  };
+}
+
+export function normalizePageStyle(style) {
+  const source = isPlainObject(style) ? style : {};
+  return {
+    paddingX: Number(source.paddingX ?? source.padding_x ?? 28),
+    paddingY: Number(source.paddingY ?? source.padding_y ?? 0),
   };
 }
 
@@ -113,7 +126,11 @@ export function normalizePath(path) {
 }
 
 export function normalizeAssetPath(path) {
+  if (path && typeof path === 'object') {
+    path = path.full_url || path.fullUrl || path.url || '';
+  }
   if (!path) return '';
+  path = String(path);
   if (/^https?:\/\//.test(path)) return path;
   if (path.includes(':')) return '';
   return path.startsWith('/') ? path : `/${path}`;

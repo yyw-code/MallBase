@@ -4,6 +4,8 @@
 -- 包含：页面库、装修方案、方案快照、主题方案、主题策略
 -- ============================================
 
+SET NAMES utf8mb4;
+
 DROP TABLE IF EXISTS `mb_client_page`;
 CREATE TABLE `mb_client_page` (
   `id` int(11) unsigned NOT NULL AUTO_INCREMENT COMMENT '页面ID',
@@ -132,11 +134,12 @@ INSERT INTO `mb_client_decoration_scheme`
 (`id`, `type`, `name`, `description`, `schema`, `tabbar_mode`, `is_system`, `is_active`, `sort`, `status`)
 VALUES
 (1, 'home', '系统默认首页', '系统内置首页方案，不能修改或删除',
- JSON_OBJECT('components', JSON_ARRAY(
-   JSON_OBJECT('id', 'home-search', 'type', 'search', 'props', JSON_OBJECT('placeholder', '搜索你心仪的商品...')),
-   JSON_OBJECT('id', 'home-banner', 'type', 'banner', 'props', JSON_OBJECT('items', JSON_ARRAY())),
-   JSON_OBJECT('id', 'home-nav', 'type', 'navGrid', 'props', JSON_OBJECT('items', JSON_ARRAY())),
-   JSON_OBJECT('id', 'home-products', 'type', 'productGroup', 'props', JSON_OBJECT('title', '猜你喜欢', 'source', JSON_OBJECT('mode', 'filter', 'filters', JSON_OBJECT('is_recommend', 1)), 'layout', 'grid'))
+ JSON_OBJECT('pageStyle', JSON_OBJECT('paddingY', 0, 'paddingX', 28), 'components', JSON_ARRAY(
+   JSON_OBJECT('id', 'home-search', 'type', 'search', 'title', '搜索框', 'enabled', true, 'sort', 0, 'props', JSON_OBJECT('placeholder', '搜索商品、分类或品牌', 'radius', 36, 'padding', 12, 'paddingY', 12, 'paddingX', 20, 'marginTop', 4, 'marginBottom', 8, 'background', '', 'target_path', '/pages-sub/goods/list', 'widthPercent', 100)),
+   JSON_OBJECT('id', 'home-banner', 'type', 'banner', 'title', '轮播图', 'enabled', true, 'sort', 1, 'props', JSON_OBJECT('items', JSON_ARRAY(JSON_OBJECT('image', '48', 'path', '/pages-sub/goods/list?is_recommend=1', 'title', '夏日好物限时满减'), JSON_OBJECT('image', '49', 'path', '/pages-sub/goods/list?sort=sales', 'title', '会员精选 每日上新')), 'list', JSON_ARRAY(JSON_OBJECT('image', '48', 'path', '/pages-sub/goods/list?is_recommend=1', 'title', '夏日好物限时满减'), JSON_OBJECT('image', '49', 'path', '/pages-sub/goods/list?sort=sales', 'title', '会员精选 每日上新')), 'images', JSON_ARRAY(JSON_OBJECT('image', '48', 'path', '/pages-sub/goods/list?is_recommend=1', 'title', '夏日好物限时满减'), JSON_OBJECT('image', '49', 'path', '/pages-sub/goods/list?sort=sales', 'title', '会员精选 每日上新')), 'height', 314, 'radius', 24, 'padding', 0, 'interval', 3000, 'subtitle', 'MALLBASE SELECTED', 'title', '好物限时满减', 'buttonText', '立即查看', 'marginTop', 12, 'marginBottom', 16, 'background', '', 'widthPercent', 100)),
+   JSON_OBJECT('id', 'home-nav', 'type', 'navGrid', 'title', '导航宫格', 'enabled', true, 'sort', 2, 'props', JSON_OBJECT('columns', 3, 'items', JSON_ARRAY(JSON_OBJECT('label', '数码', 'title', '数码', 'icon', 'phone', 'image', '51', 'path', '/pages/category/index'), JSON_OBJECT('label', '美妆', 'title', '美妆', 'icon', 'beauty', 'image', '52', 'path', '/pages/category/index'), JSON_OBJECT('label', '服饰', 'title', '服饰', 'icon', 'shirt', 'image', '53', 'path', '/pages/category/index'), JSON_OBJECT('label', '家居', 'title', '家居', 'icon', 'home', 'image', '54', 'path', '/pages/category/index'), JSON_OBJECT('label', '美食', 'title', '美食', 'icon', 'food', 'image', '55', 'path', '/pages/category/index'), JSON_OBJECT('label', '运动', 'title', '运动', 'icon', 'sport', 'image', '56', 'path', '/pages/category/index')), 'radius', 24, 'padding', 20, 'paddingY', 20, 'paddingX', 20, 'marginTop', 4, 'marginBottom', 18, 'background', '', 'widthPercent', 100)),
+   JSON_OBJECT('id', 'home-title-recommend', 'type', 'title', 'title', '标题栏', 'enabled', true, 'sort', 3, 'props', JSON_OBJECT('title', '人气推荐', 'sub_title', '严选好物正在热卖', 'more_text', '查看全部', 'more_path', '/pages-sub/goods/list?is_recommend=1', 'title_align', 'left', 'title_bold', true, 'title_italic', false, 'title_font_size', 34, 'title_color', '', 'sub_bold', false, 'sub_italic', false, 'sub_font_size', 22, 'sub_color', '', 'radius', 0, 'padding', 4, 'paddingY', 4, 'paddingX', 30, 'marginTop', 4, 'marginBottom', 8, 'background', '', 'widthPercent', 100)),
+   JSON_OBJECT('id', 'home-products', 'type', 'productGroup', 'title', '商品分组', 'enabled', true, 'sort', 4, 'props', JSON_OBJECT('title', '精选好物', 'subtitle', '精选好物实时更新', 'moreText', '查看全部', 'more_path', '/pages-sub/goods/list?is_recommend=1', 'source', 'recommend', 'layout', 'grid', 'limit', 8, 'sort_by', 'default', 'radius', 24, 'padding', 20, 'paddingY', 20, 'paddingX', 20, 'marginTop', 4, 'marginBottom', 24, 'background', '', 'widthPercent', 100))
  )), 'native', 1, 1, 10, 1),
 (2, 'profile', '系统默认个人中心', '系统内置个人中心方案，不能修改或删除',
  JSON_OBJECT('modules', JSON_ARRAY(

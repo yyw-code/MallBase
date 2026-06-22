@@ -35,6 +35,8 @@ export const useDecorateStore = defineStore('decorate', {
 
   getters: {
     homeModules: (state) => state.config.home.modules || [],
+    homePageStyle: (state) =>
+      state.config.home.pageStyle || { paddingX: 28, paddingY: 0 },
     profileModules: (state) => state.config.profile.modules || [],
     tabbarMode: (state) => state.config.tabbar.mode || 'native',
     tabbarItems: (state) => state.config.tabbar.schema?.items || [],

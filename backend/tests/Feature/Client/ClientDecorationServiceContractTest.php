@@ -331,6 +331,65 @@ final class ClientDecorationServiceContractTest extends TestCase
         $this->assertIsArray($config['theme']['themes']);
     }
 
+    public function testDecorationProductSourcePickerHydratesGoodsMainImageAssetUrl(): void
+    {
+        $this->requireDbTables(['goods', 'upload_asset', 'upload_asset_location']);
+        $service = $this->makeService('app\\service\\admin\\client\\ClientDecorationSchemeService');
+
+        Db::startTrans();
+        try {
+            $assetId = (int) Db::name('upload_asset')->insertGetId([
+                'category_id' => 0,
+                'type' => 'image',
+                'name' => 'CodexTest 商品主图',
+                'original_name' => 'codex-test-product-main.jpg',
+                'mime' => 'image/jpeg',
+                'ext' => 'jpg',
+                'size' => 1024,
+                'hash' => str_repeat('a', 64),
+                'width' => 800,
+                'height' => 800,
+                'module' => 'goods',
+                'uploader_type' => 'admin',
+                'uploader_id' => 0,
+                'visibility' => 'public',
+                'status' => 1,
+                'meta' => json_encode([], JSON_UNESCAPED_UNICODE),
+            ]);
+            Db::name('upload_asset_location')->insert([
+                'asset_id' => $assetId,
+                'driver' => 'local',
+                'path' => 'codex-test/product-main.jpg',
+                'url_prefix' => '/uploads',
+                'bucket' => '',
+                'region' => '',
+                'endpoint' => '',
+                'is_primary' => 1,
+                'status' => 1,
+                'etag' => '',
+                'size' => 1024,
+                'meta' => json_encode([], JSON_UNESCAPED_UNICODE),
+            ]);
+
+            $goodsId = $this->insertGoods('CodexTest 装修选择器主图商品', [
+                'category_id' => 0,
+                'main_image' => (string) $assetId,
+            ]);
+
+            $result = $service->getProductSourcePicker(['keyword' => 'CodexTest 装修选择器主图']);
+            $goods = array_values(array_filter(
+                $result['goods'],
+                fn(array $item): bool => (int) $item['id'] === $goodsId
+            ));
+
+            $this->assertCount(1, $goods);
+            $this->assertSame((string) $assetId, (string) $goods[0]['main_image']);
+            $this->assertStringContainsString('/uploads/codex-test/product-main.jpg', (string) $goods[0]['main_image_full_url']);
+        } finally {
+            Db::rollback();
+        }
+    }
+
     public function testClientGoodsListSupportsManualIdsOrderAndTagFiltersWithoutLeakingUnsaleableGoods(): void
     {
         $this->requireDbTables(['goods', 'goods_tag_relation']);

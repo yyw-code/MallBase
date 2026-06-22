@@ -30,7 +30,7 @@ type PickerTargetItem = {
   color?: string;
   depth?: number;
   desc?: string;
-  image?: string;
+  image?: number | string;
   key: number | string;
   path: string;
   tags?: string[];
@@ -118,8 +118,30 @@ const categoryDepth = (item: ClientDecorateApi.ProductPickerCategoryItem) => {
   return depth;
 };
 
+const normalizeTargetImageUrl = (value: unknown) => {
+  if (typeof value !== 'string' || value.length === 0) return '';
+  if (/^\d+$/.test(value.trim())) return '';
+  if (/^(?:https?:|data:image|blob:)/.test(value)) return value;
+  const apiBase = import.meta.env.VITE_GLOB_API_URL || '';
+  if (!value.startsWith('/')) {
+    if (value.startsWith('uploads/') || value.startsWith('static/')) {
+      try {
+        return `${new URL(apiBase, window.location.origin).origin}/${value}`;
+      } catch {
+        return `/${value}`;
+      }
+    }
+    return value;
+  }
+  try {
+    return `${new URL(apiBase, window.location.origin).origin}${value}`;
+  } catch {
+    return value;
+  }
+};
+
 const productImageUrl = (item: ClientDecorateApi.ProductPickerGoodsItem) =>
-  item.main_image_full_url || item.main_image || '';
+  normalizeTargetImageUrl(item.main_image_full_url || item.main_image || '');
 
 const buildPath = (
   path: string,
@@ -566,7 +588,7 @@ onBeforeUnmount(() => {
                 @click="selectPath(item.path)"
               >
                 <span v-if="item.image" class="target-item__image">
-                  <img :src="item.image" alt="" />
+                  <img :src="String(item.image)" alt="" />
                 </span>
                 <span
                   v-else-if="item.color"

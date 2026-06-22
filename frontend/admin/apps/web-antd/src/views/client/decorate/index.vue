@@ -1,7 +1,6 @@
 <script lang="ts" setup>
 import type { ClientDecorateApi, ClientThemeApi } from '#/api/client';
 import type { GoodsApi, GoodsCategoryApi } from '#/api/goods';
-import type { FileInfo } from '#/components/upload/index.vue';
 
 import {
   computed,
@@ -35,6 +34,10 @@ import DecorateSchemeList from './components/DecorateSchemeList.vue';
 defineOptions({ name: 'ClientDecorateManagement' });
 
 type ModuleItem = Record<string, any>;
+type UploadFileInfo = {
+  name?: string;
+  url?: number | string;
+};
 
 const DEFAULT_THEME_TOKENS = {
   colorBg: '#ffffff',
@@ -55,6 +58,11 @@ const DEFAULT_THEME_POLICY: ClientThemeApi.ThemePolicy = {
   allow_user_select: 1,
   default_mode: 'system',
   default_theme_id: null,
+};
+
+const DEFAULT_HOME_PAGE_STYLE = {
+  paddingX: 28,
+  paddingY: 0,
 };
 
 const SCHEME_TABS: Array<{
@@ -178,6 +186,174 @@ const HOME_TYPE_ALIAS: Record<string, string> = {
   categoryEntry: 'entryCard',
 };
 
+const DEMO_ASSET_BASE_URL = `${
+  new URL(import.meta.env.VITE_GLOB_API_URL || '/', window.location.origin)
+    .origin
+}/static/demo/`;
+
+const createDemoAssetFile = (url: string, name: string) => ({
+  full_url: `${DEMO_ASSET_BASE_URL}${name}`,
+  name,
+  url,
+});
+
+const DEFAULT_BANNER_IMAGE_BY_INDEX = [
+  createDemoAssetFile('48', 'decorate-banner-market.png'),
+  createDemoAssetFile('49', 'decorate-banner-member.png'),
+  createDemoAssetFile('50', 'decorate-banner-home.png'),
+];
+
+const LEGACY_DEFAULT_BANNER_IDS = new Set(['6', '7', '8', '41']);
+const LEGACY_DEFAULT_NAV_IDS = new Set([
+  '15',
+  '16',
+  '20',
+  '23',
+  '40',
+  '46',
+  '47',
+]);
+
+const DEFAULT_BANNER_ITEMS = [
+  {
+    image: DEFAULT_BANNER_IMAGE_BY_INDEX[0],
+    path: '/pages-sub/goods/list?is_recommend=1',
+    title: '夏日好物限时满减',
+  },
+  {
+    image: DEFAULT_BANNER_IMAGE_BY_INDEX[1],
+    path: '/pages-sub/goods/list?sort=sales',
+    title: '会员精选 每日上新',
+  },
+];
+
+const DEFAULT_NAV_IMAGE_BY_KEY: Record<
+  string,
+  { full_url: string; name: string; url: string }
+> = {
+  beauty: createDemoAssetFile('52', 'decorate-nav-beauty.png'),
+  food: createDemoAssetFile('55', 'decorate-nav-food.png'),
+  home: createDemoAssetFile('54', 'decorate-nav-home.png'),
+  phone: createDemoAssetFile('51', 'decorate-nav-digital.png'),
+  shirt: createDemoAssetFile('53', 'decorate-nav-fashion.png'),
+  sport: createDemoAssetFile('56', 'decorate-nav-sport.png'),
+};
+
+const DEFAULT_CUBE_ITEMS = [
+  {
+    image: createDemoAssetFile('57', 'decorate-cube-new.png'),
+    path: '/pages-sub/goods/list?sort=newest',
+    title: '新品上架',
+  },
+  {
+    image: createDemoAssetFile('58', 'decorate-cube-picks.png'),
+    path: '/pages-sub/goods/list?is_recommend=1',
+    title: '精选榜单',
+  },
+  {
+    image: createDemoAssetFile('59', 'decorate-cube-member.png'),
+    path: '/pages-sub/goods/list?sort=sales',
+    title: '会员专享',
+  },
+  {
+    image: createDemoAssetFile('60', 'decorate-cube-sale.png'),
+    path: '/pages-sub/goods/list?is_hot=1',
+    title: '限时满减',
+  },
+];
+
+const getDefaultNavImage = (item: any, fallback = '') => {
+  const key = String(item?.icon || item?.key || '').replace(/^lucide:/, '');
+  const title = String(item?.title || item?.label || item?.text || '');
+  if (key.includes('sparkles') || key.includes('beauty') || title === '美妆') {
+    return DEFAULT_NAV_IMAGE_BY_KEY.beauty;
+  }
+  if (
+    key.includes('shirt') ||
+    key.includes('clothes') ||
+    key.includes('menswear') ||
+    title === '服饰'
+  ) {
+    return DEFAULT_NAV_IMAGE_BY_KEY.shirt;
+  }
+  if (
+    key.includes('sofa') ||
+    key.includes('home') ||
+    key.includes('furniture') ||
+    title === '家居'
+  ) {
+    return DEFAULT_NAV_IMAGE_BY_KEY.home;
+  }
+  if (key.includes('utensils') || key.includes('food') || title === '美食') {
+    return DEFAULT_NAV_IMAGE_BY_KEY.food;
+  }
+  if (key.includes('dumbbell') || key.includes('sport') || title === '运动') {
+    return DEFAULT_NAV_IMAGE_BY_KEY.sport;
+  }
+  if (key.includes('smartphone') || key.includes('phone') || title === '数码') {
+    return DEFAULT_NAV_IMAGE_BY_KEY.phone;
+  }
+  return fallback;
+};
+
+const normalizeNavImageValue = (item: any, defaultItem: any) => {
+  const image =
+    item?.image ||
+    item?.image_url ||
+    item?.imageUrl ||
+    item?.full_url ||
+    item?.fullUrl ||
+    '';
+  const imageUrl =
+    typeof image === 'object' ? String(image.url || image.asset_id || '') : '';
+  if (
+    (typeof image === 'string' && image.startsWith('data:image/svg')) ||
+    LEGACY_DEFAULT_NAV_IDS.has(String(image || imageUrl))
+  ) {
+    return getDefaultNavImage(item, defaultItem.image);
+  }
+  return image || getDefaultNavImage(item, defaultItem.image);
+};
+
+const DEFAULT_NAV_ITEMS = [
+  {
+    icon: 'lucide:smartphone',
+    image: DEFAULT_NAV_IMAGE_BY_KEY.phone,
+    path: '/pages/category/index',
+    title: '数码',
+  },
+  {
+    icon: 'lucide:sparkles',
+    image: DEFAULT_NAV_IMAGE_BY_KEY.beauty,
+    path: '/pages/category/index',
+    title: '美妆',
+  },
+  {
+    icon: 'lucide:shirt',
+    image: DEFAULT_NAV_IMAGE_BY_KEY.shirt,
+    path: '/pages/category/index',
+    title: '服饰',
+  },
+  {
+    icon: 'lucide:sofa',
+    image: DEFAULT_NAV_IMAGE_BY_KEY.home,
+    path: '/pages/category/index',
+    title: '家居',
+  },
+  {
+    icon: 'lucide:utensils',
+    image: DEFAULT_NAV_IMAGE_BY_KEY.food,
+    path: '/pages/category/index',
+    title: '美食',
+  },
+  {
+    icon: 'lucide:dumbbell',
+    image: DEFAULT_NAV_IMAGE_BY_KEY.sport,
+    path: '/pages/category/index',
+    title: '运动',
+  },
+];
+
 const PRODUCT_SOURCE_OPTIONS = [
   { label: '手动商品', value: 'manual' },
   { label: '指定分类', value: 'category' },
@@ -262,6 +438,7 @@ const schemeList = ref<ClientDecorateApi.SchemeItem[]>([]);
 const themeList = ref<ClientThemeApi.ThemeItem[]>([]);
 const previewCategoryTree = ref<GoodsCategoryApi.CategoryItem[]>([]);
 const previewGoods = ref<GoodsApi.GoodsItem | null>(null);
+const previewGoodsList = ref<GoodsApi.GoodsItem[]>([]);
 const themePolicy = ref<ClientThemeApi.ThemePolicy>({
   ...DEFAULT_THEME_POLICY,
 });
@@ -297,6 +474,7 @@ let pendingDragEvent: MouseEvent | null = null;
 const schemeForm = reactive({
   description: '',
   name: '',
+  pageStyle: { ...DEFAULT_HOME_PAGE_STYLE },
   schema: [] as ModuleItem[],
   sort: 0,
   status: 1,
@@ -313,6 +491,19 @@ const getSchemeSchemaList = (
   if (type === 'profile') return schema?.modules || schema?.components || [];
   return schema?.components || schema?.modules || [];
 };
+
+const normalizeHomePageStyle = (value: any) => ({
+  paddingX: Number(
+    value?.paddingX ?? value?.padding_x ?? DEFAULT_HOME_PAGE_STYLE.paddingX,
+  ),
+  paddingY: Number(
+    value?.paddingY ?? value?.padding_y ?? DEFAULT_HOME_PAGE_STYLE.paddingY,
+  ),
+});
+
+const getSchemePageStyle = (
+  scheme: ClientDecorateApi.SchemeItem | null | undefined,
+) => normalizeHomePageStyle((scheme?.schema as any)?.pageStyle);
 
 const getActiveSchemeByType = (type: ClientDecorateApi.SchemeType) =>
   overviewSchemes[type].find((item) => item.is_active === 1) ||
@@ -394,9 +585,10 @@ const paletteGroups = computed(() => {
   }
   return [
     {
-      items: pick(['search', 'banner', 'navGrid', 'imageCube']),
+      items: pick(['search', 'banner', 'imageCube']),
       title: '基础组件',
     },
+    { items: pick(['navGrid']), title: '图标分类' },
     {
       items: pick(['productGroup', 'entryCard', 'title', 'richText']),
       title: '内容组件',
@@ -455,13 +647,16 @@ const currentThemeName = computed(() => {
 });
 
 const currentThemeSwatches = computed(() =>
-  (
-    ['colorPrimary', 'colorPrimaryLight', 'colorPrice'] as Array<
-      keyof typeof DEFAULT_THEME_TOKENS
-    >
-  ).map(
-    (key) => currentThemeTokens.value[key] || DEFAULT_THEME_TOKENS.colorPrimary,
-  ),
+  [
+    { key: 'colorPrimary', label: '主色' },
+    { key: 'colorPrimaryLight', label: '辅助色' },
+    { key: 'colorPrice', label: '价格色' },
+  ].map((item) => ({
+    ...item,
+    value:
+      currentThemeTokens.value[item.key as keyof typeof DEFAULT_THEME_TOKENS] ||
+      DEFAULT_THEME_TOKENS.colorPrimary,
+  })),
 );
 
 const overviewTabbarItems = computed(() => getOverviewModules('tabbar'));
@@ -485,24 +680,31 @@ const getOverviewSchemeTabbarItems = (scheme: ClientDecorateApi.SchemeItem) =>
     ? getSchemeSchemaList(scheme, 'tabbar')
     : overviewTabbarItems.value;
 
+const getOverviewSchemeModuleNames = (scheme: ClientDecorateApi.SchemeItem) => {
+  const modules = getSchemeSchemaList(scheme, scheme.type);
+  return modules.map((item: ModuleItem) =>
+    scheme.type === 'tabbar'
+      ? item.text || item.label || item.title || '导航项'
+      : item.title ||
+        item.label ||
+        getModuleLabel(String(item.type || item.component || ''), scheme.type),
+  );
+};
+
 const getOverviewSchemeModuleSummary = (
   scheme: ClientDecorateApi.SchemeItem,
 ) => {
-  const modules = getSchemeSchemaList(scheme, scheme.type);
-  if (modules.length === 0) return '暂无模块';
-  const names = modules
-    .slice(0, 4)
-    .map((item: ModuleItem) =>
-      scheme.type === 'tabbar'
-        ? item.text || item.label || item.title || '导航项'
-        : item.title ||
-          item.label ||
-          getModuleLabel(
-            String(item.type || item.component || ''),
-            scheme.type,
-          ),
-    );
-  return names.join(' / ');
+  const names = getOverviewSchemeModuleNames(scheme);
+  if (names.length === 0) return '暂无模块';
+  const visibleNames = names.slice(0, 3).join(' / ');
+  return names.length > 3
+    ? `${visibleNames} 等 ${names.length} 个`
+    : visibleNames;
+};
+
+const getOverviewSchemeModuleTitle = (scheme: ClientDecorateApi.SchemeItem) => {
+  const names = getOverviewSchemeModuleNames(scheme);
+  return names.length === 0 ? '暂无模块' : names.join(' / ');
 };
 
 const getOverviewSchemeUpdateLabel = (scheme: ClientDecorateApi.SchemeItem) =>
@@ -602,7 +804,7 @@ const normalizeUploadValue = (value: any): any => {
   }
   if (value && typeof value === 'object') {
     if ('url' in value && 'name' in value) {
-      return (value as FileInfo).url || '';
+      return (value as UploadFileInfo).url || '';
     }
     return Object.fromEntries(
       Object.entries(value).map(([key, item]) => [
@@ -634,6 +836,33 @@ const getTabbarPreviewItems = () =>
     ? schemeForm.schema
     : DEFAULT_TABBAR_PREVIEW_ITEMS;
 
+const normalizeBannerImageValue = (value: any, index: number) => {
+  const url =
+    value && typeof value === 'object'
+      ? String(value.url || value.asset_id || '')
+      : String(value || '');
+  if (typeof value === 'string' && value.startsWith('data:image/svg')) {
+    return DEFAULT_BANNER_IMAGE_BY_INDEX[
+      index % DEFAULT_BANNER_IMAGE_BY_INDEX.length
+    ];
+  }
+  if (LEGACY_DEFAULT_BANNER_IDS.has(url)) {
+    return DEFAULT_BANNER_IMAGE_BY_INDEX[
+      index % DEFAULT_BANNER_IMAGE_BY_INDEX.length
+    ];
+  }
+  if (
+    value?.image &&
+    typeof value.image === 'string' &&
+    value.image.startsWith('data:image/svg')
+  ) {
+    return DEFAULT_BANNER_IMAGE_BY_INDEX[
+      index % DEFAULT_BANNER_IMAGE_BY_INDEX.length
+    ];
+  }
+  return value;
+};
+
 const normalizeEditorConfig = (
   type: string,
   rawConfig: Record<string, any>,
@@ -654,6 +883,12 @@ const normalizeEditorConfig = (
     config.padding === undefined || config.padding === null
       ? 0
       : Number(config.padding);
+  config.paddingY = Number(
+    config.paddingY ?? config.padding_y ?? config.padding,
+  );
+  config.paddingX = Number(
+    config.paddingX ?? config.padding_x ?? config.padding,
+  );
   config.background = config.background || '';
   if (type === 'banner') {
     let sourceItems = [];
@@ -665,47 +900,58 @@ const normalizeEditorConfig = (
       sourceItems = config.list;
     }
 
-    const bannerItems = Array.isArray(sourceItems)
-      ? sourceItems.map((item: any, index: number) => {
-          if (typeof item === 'string') {
-            return {
-              id: createId('banner_item'),
-              image: item,
-              path: '',
-              title: `轮播图${index + 1}`,
-            };
-          }
-          return {
-            ...item,
-            id: item.id || item.key || createId('banner_item'),
-            image:
-              item.image ||
-              item.full_url ||
-              item.fullUrl ||
-              item.image_url ||
-              item.imageUrl ||
-              item.src ||
-              item.cover ||
-              item.url ||
-              '',
-            path:
-              item.path ||
-              item.target_path ||
-              item.link ||
-              item.href ||
-              item.jump_url ||
-              item.jumpUrl ||
-              '',
-            title: item.title || item.label || `轮播图${index + 1}`,
-          };
-        })
-      : [];
+    const bannerSourceItems =
+      Array.isArray(sourceItems) && sourceItems.length > 0
+        ? sourceItems
+        : clone(DEFAULT_BANNER_ITEMS);
+    const bannerItems = bannerSourceItems.map((item: any, index: number) => {
+      if (typeof item === 'string') {
+        return {
+          id: createId('banner_item'),
+          image: normalizeBannerImageValue(item, index),
+          path: '',
+          title: `轮播图${index + 1}`,
+        };
+      }
+      const image = normalizeBannerImageValue(
+        item.image ||
+          item.full_url ||
+          item.fullUrl ||
+          item.image_url ||
+          item.imageUrl ||
+          item.src ||
+          item.cover ||
+          item.url ||
+          '',
+        index,
+      );
+      return {
+        ...item,
+        id: item.id || item.key || createId('banner_item'),
+        image,
+        path:
+          item.path ||
+          item.target_path ||
+          item.link ||
+          item.href ||
+          item.jump_url ||
+          item.jumpUrl ||
+          '',
+        title: item.title || item.label || `轮播图${index + 1}`,
+      };
+    });
     config.items = bannerItems;
     config.images = bannerItems;
     config.list = bannerItems;
     config.height = Number(config.height || 314);
     config.radius = Number(rawConfig.radius ?? rawConfig.border_radius ?? 24);
     config.padding = Number(rawConfig.padding ?? rawConfig.padding_y ?? 0);
+    config.paddingY = Number(
+      rawConfig.paddingY ?? rawConfig.padding_y ?? config.padding,
+    );
+    config.paddingX = Number(
+      rawConfig.paddingX ?? rawConfig.padding_x ?? config.padding,
+    );
     config.interval = Number(config.interval || 3000);
   }
   if (type === 'title') {
@@ -767,6 +1013,8 @@ const normalizeEditorConfig = (
     config.content = config.content || config.html || '';
     config.radius = Number(config.radius ?? 24);
     config.padding = Number(config.padding ?? 24);
+    config.paddingY = Number(config.paddingY ?? config.padding);
+    config.paddingX = Number(config.paddingX ?? config.padding);
   }
   if (type === 'productGroup') {
     if (config.source && typeof config.source === 'object') {
@@ -780,6 +1028,23 @@ const normalizeEditorConfig = (
       ? config.preview_goods
       : [];
     config.sort_by = config.sort_by || config.sortBy || 'default';
+  }
+  if (type === 'navGrid') {
+    const sourceItems =
+      Array.isArray(config.items) && config.items.length > 0
+        ? config.items
+        : clone(DEFAULT_NAV_ITEMS);
+    config.columns = Number(config.columns || 6);
+    config.items = sourceItems.map((item: any, index: number) => {
+      const defaultItem = DEFAULT_NAV_ITEMS[index % DEFAULT_NAV_ITEMS.length]!;
+      return {
+        ...defaultItem,
+        ...(item && typeof item === 'object' ? item : {}),
+        image: normalizeNavImageValue(item, defaultItem),
+        path: item?.path || item?.url || defaultItem.path,
+        title: item?.title || item?.label || item?.text || defaultItem.title,
+      };
+    });
   }
   return config;
 };
@@ -827,20 +1092,26 @@ const defaultHomeConfig = (
   > = {
     banner: withStyle({
       height: 314,
-      images: [],
-      items: [],
+      images: clone(DEFAULT_BANNER_ITEMS),
+      items: clone(DEFAULT_BANNER_ITEMS),
       interval: 3000,
+      list: clone(DEFAULT_BANNER_ITEMS),
+      marginBottom: 16,
+      marginTop: 12,
       radius: 24,
       subtitle: '新人首单立减，爆款商品限时优惠',
       title: '夏日好物限时满减',
     }),
     entryCard: withStyle({
-      background_image: '',
+      background_image: createDemoAssetFile(
+        '61',
+        'decorate-entry-category.png',
+      ),
       icon: 'lucide:folder-tree',
       icon_background: '',
       icon_color: '',
-      icon_image: '',
-      icon_mode: 'icon',
+      icon_image: createDemoAssetFile('61', 'decorate-entry-category.png'),
+      icon_mode: 'image',
       padding: 24,
       path: '/pages/category/index',
       radius: 24,
@@ -850,46 +1121,22 @@ const defaultHomeConfig = (
     }),
     divider: withStyle({ color: '', margin: 24, style: 'solid' }),
     imageCube: withStyle({
-      images: [],
+      images: clone(DEFAULT_CUBE_ITEMS),
+      items: clone(DEFAULT_CUBE_ITEMS),
+      list: clone(DEFAULT_CUBE_ITEMS),
       layout: 'four',
       radius: 20,
       titles: ['精选榜单', '本周值得买', '会员专享', '新品榜'],
     }),
     navGrid: withStyle({
-      columns: 4,
-      items: [
-        {
-          icon: 'lucide:zap',
-          path: '/pages-sub/goods/list?is_recommend=1',
-          title: '限时秒杀',
-        },
-        {
-          icon: 'lucide:gift',
-          path: '/pages-sub/goods/list?keyword=拼团',
-          title: '拼团活动',
-        },
-        {
-          icon: 'lucide:package',
-          path: '/pages/category/index',
-          title: '商品分类',
-        },
-        {
-          icon: 'lucide:calendar-check',
-          path: '/pages/order/index',
-          title: '每日签到',
-        },
-        {
-          icon: 'lucide:ticket-percent',
-          path: '/pages-sub/goods/list?keyword=优惠',
-          title: '领优惠券',
-        },
-        {
-          icon: 'lucide:coins',
-          path: '/pages-sub/wallet/index',
-          title: '积分商城',
-        },
-      ],
-      radius: 0,
+      columns: 3,
+      items: clone(DEFAULT_NAV_ITEMS),
+      marginTop: 4,
+      marginBottom: 18,
+      paddingX: 20,
+      paddingY: 20,
+      radius: 24,
+      widthPercent: 100,
     }),
     productGroup: withStyle({
       brand_id: null,
@@ -897,41 +1144,56 @@ const defaultHomeConfig = (
       ids: '',
       layout: 'grid',
       limit: 8,
-      moreText: '更多',
+      moreText: '查看全部',
+      more_path: '/pages-sub/goods/list?is_recommend=1',
+      marginTop: 4,
+      paddingX: 20,
+      paddingY: 20,
       radius: 24,
       sort_by: 'default',
       source: 'recommend',
-      subtitle: '根据主题色渲染商品卡片',
+      subtitle: '精选好物实时更新',
       tag_ids: '',
-      title: '推荐商品',
+      title: '精选好物',
+      widthPercent: 100,
     }),
     richText: withStyle({
-      background: '#ffffff',
+      background: '',
       content:
         '<p><strong>新人专享福利</strong></p><p>下单即享满减优惠，支持图片、文字和活动说明。</p>',
       padding: 24,
       radius: 24,
     }),
     search: withStyle({
-      placeholder: '搜索你心仪的商品',
+      marginBottom: 8,
+      marginTop: 4,
+      paddingX: 20,
+      paddingY: 12,
+      placeholder: '搜索商品、分类或品牌',
       radius: 36,
-      target_path: '/pages-sub/search/index',
+      target_path: '/pages-sub/goods/list',
+      widthPercent: 100,
     }),
     spacing: withStyle({ height: 32 }),
     title: withStyle({
-      more_path: '',
+      marginBottom: 8,
+      marginTop: 4,
+      more_path: '/pages-sub/goods/list?is_recommend=1',
       more_text: '查看全部',
-      sub_title: '精选好物实时更新',
+      paddingX: 30,
+      paddingY: 4,
+      sub_title: '严选好物正在热卖',
       sub_bold: false,
       sub_color: '',
-      sub_font_size: 24,
+      sub_font_size: 22,
       sub_italic: false,
-      title: '爆款推荐',
+      title: '人气推荐',
       title_align: 'left',
       title_bold: true,
       title_color: '',
-      title_font_size: 32,
+      title_font_size: 34,
       title_italic: false,
+      widthPercent: 100,
     }),
   };
   return clone(defaults[type] || {});
@@ -1021,6 +1283,7 @@ const resetSchemeForm = (type = activeType.value) => {
   Object.assign(schemeForm, {
     description: '',
     name: `${activeTypeLabel.value}方案`,
+    pageStyle: { ...DEFAULT_HOME_PAGE_STYLE },
     schema: type === 'tabbar' ? defaultTabbarItems() : [],
     sort: 0,
     status: 1,
@@ -1060,13 +1323,15 @@ const loadPreviewBusinessData = async () => {
   try {
     const [categories, goods] = await Promise.all([
       getGoodsCategoryTreeApi({ status: 1 }),
-      getGoodsListApi({ is_on_sale: 1, limit: 1, page: 1, status: 1 }),
+      getGoodsListApi({ is_on_sale: 1, limit: 8, page: 1, status: 1 }),
     ]);
     previewCategoryTree.value = Array.isArray(categories) ? categories : [];
-    previewGoods.value = goods.list?.[0] || null;
+    previewGoodsList.value = goods.list || [];
+    previewGoods.value = previewGoodsList.value[0] || null;
   } catch (error) {
     console.error('加载装修业务预览数据失败:', error);
     previewCategoryTree.value = [];
+    previewGoodsList.value = [];
     previewGoods.value = null;
   }
 };
@@ -1096,6 +1361,10 @@ const loadSchemeDetail = async (id: number) => {
   Object.assign(schemeForm, {
     description: detail.description || '',
     name: detail.name,
+    pageStyle:
+      activeType.value === 'home'
+        ? getSchemePageStyle(detail)
+        : clone(DEFAULT_HOME_PAGE_STYLE),
     schema:
       activeType.value === 'tabbar'
         ? clone(schema)
@@ -1216,12 +1485,51 @@ const openSchemeSettings = () => {
   schemeSettingsOpen.value = true;
 };
 
+const normalizeSchemaForClient = (
+  schema: ModuleItem[],
+): ClientDecorateApi.SchemeSchema => {
+  if (activeType.value === 'tabbar') {
+    return stripRuntimePreviewFields(normalizeUploadValue(clone(schema)));
+  }
+
+  const modules = stripRuntimePreviewFields(
+    normalizeUploadValue(
+      clone(schema).map((item: ModuleItem, index: number) => {
+        const props = {
+          ...(item.props && typeof item.props === 'object' ? item.props : {}),
+          ...(item.config && typeof item.config === 'object'
+            ? item.config
+            : {}),
+          ...(item.data && typeof item.data === 'object' ? item.data : {}),
+        };
+
+        return {
+          enabled: item.enabled !== false,
+          id: item.id || item.key || createId(item.type || 'module'),
+          props,
+          sort: item.sort ?? index,
+          title: item.title || getModuleLabel(item.type, activeType.value),
+          type: item.type,
+        };
+      }),
+    ),
+  ) as ClientDecorateApi.DecorationModule[] | ClientDecorateApi.ProfileModule[];
+
+  if (activeType.value === 'home') {
+    return {
+      components: modules as ClientDecorateApi.DecorationModule[],
+      modules: modules as ClientDecorateApi.DecorationModule[],
+      pageStyle: normalizeHomePageStyle(schemeForm.pageStyle),
+    };
+  }
+
+  return modules as ClientDecorateApi.SchemeSchema;
+};
+
 const buildSaveData = (): ClientDecorateApi.SaveParams => ({
   description: schemeForm.description || null,
   name: schemeForm.name,
-  schema: stripRuntimePreviewFields(
-    normalizeUploadValue(clone(schemeForm.schema)),
-  ) as ClientDecorateApi.SchemeSchema,
+  schema: normalizeSchemaForClient(schemeForm.schema),
   sort: schemeForm.sort,
   status: schemeForm.status,
   tabbar_mode: schemeForm.tabbar_mode,
@@ -1272,11 +1580,15 @@ const handleSave = async () => {
     const data = buildSaveData();
     if (selectedSchemeId.value) {
       await updateClientDecorateSchemeApi(selectedSchemeId.value, data);
-      message.success('保存成功');
+      message.success(
+        currentScheme.value?.is_active === 1
+          ? '保存成功，客户端已更新'
+          : '保存成功，设为当前后客户端生效',
+      );
     } else {
       const result = await createClientDecorateSchemeApi(data);
       selectedSchemeId.value = result.id;
-      message.success('创建成功');
+      message.success('创建成功，设为当前后客户端生效');
     }
     await loadSchemes();
   } catch (error) {
@@ -1564,11 +1876,7 @@ const handlePaletteClick = (type: string) => {
 const addNavItem = (module: ModuleItem) => {
   if (warnReadonlyScheme()) return;
   const items = (module.config.items ||= []);
-  items.push({
-    icon: 'ant-design:appstore-outlined',
-    path: '',
-    title: '入口',
-  });
+  items.push(clone(DEFAULT_NAV_ITEMS[items.length % DEFAULT_NAV_ITEMS.length]));
 };
 
 const addProfileItem = (module: ModuleItem) => {
@@ -1585,6 +1893,33 @@ const addProfileItem = (module: ModuleItem) => {
 const removeConfigItem = (items: any[], index: number | string) => {
   if (warnReadonlyScheme()) return;
   items.splice(Number(index), 1);
+};
+
+const updateHomePageStyle = (
+  field: 'paddingX' | 'paddingY',
+  value: unknown,
+) => {
+  if (warnReadonlyScheme()) return;
+  schemeForm.pageStyle[field] = Math.max(0, Number(value || 0));
+};
+
+const resetHomePageStyle = () => {
+  if (warnReadonlyScheme()) return;
+  schemeForm.pageStyle = { ...DEFAULT_HOME_PAGE_STYLE };
+  message.success('已重置页面样式');
+};
+
+const resetModuleConfig = (module: ModuleItem) => {
+  if (warnReadonlyScheme()) return;
+  if (!module) return;
+  if (activeType.value === 'home') {
+    module.config = defaultHomeConfig(
+      module.type as ClientDecorateApi.ComponentType,
+    );
+  } else if (activeType.value === 'profile') {
+    module.config = defaultProfileConfig(String(module.type || ''));
+  }
+  message.success('已重置组件属性');
 };
 
 watch(
@@ -1613,7 +1948,10 @@ onBeforeUnmount(resetMouseDrag);
 </script>
 
 <template>
-  <div class="decorate-page">
+  <div
+    class="decorate-page"
+    :class="{ 'decorate-page--editor': viewMode !== 'overview' }"
+  >
     <div
       v-if="dragPreview.visible"
       class="drag-ghost"
@@ -1630,11 +1968,16 @@ onBeforeUnmount(resetMouseDrag);
           <a-tag color="blue">{{ activeTypeLabel }}</a-tag>
           <strong>当前主题：</strong>
           <span>{{ currentThemeName }}</span>
-          <i
-            v-for="color in currentThemeSwatches"
-            :key="color"
-            :style="{ backgroundColor: color }"
-          ></i>
+          <span
+            v-for="item in currentThemeSwatches"
+            :key="item.key"
+            class="decorate-theme-swatch"
+            :title="`${item.label}：${item.value}`"
+          >
+            <i :style="{ backgroundColor: item.value }"></i>
+            <span>{{ item.label }}</span>
+            <code>{{ item.value }}</code>
+          </span>
         </div>
         <div class="decorate-help">
           {{ activeTabMeta.help }}，预览已接入主题色。
@@ -1646,11 +1989,16 @@ onBeforeUnmount(resetMouseDrag);
           <a-tag color="blue">{{ activeTypeLabel }}</a-tag>
           <strong>{{ schemeForm.name || `${activeTypeLabel}方案` }}</strong>
           <span>当前主题：{{ currentThemeName }}</span>
-          <i
-            v-for="color in currentThemeSwatches"
-            :key="color"
-            :style="{ backgroundColor: color }"
-          ></i>
+          <span
+            v-for="item in currentThemeSwatches"
+            :key="item.key"
+            class="decorate-theme-swatch"
+            :title="`${item.label}：${item.value}`"
+          >
+            <i :style="{ backgroundColor: item.value }"></i>
+            <span>{{ item.label }}</span>
+            <code>{{ item.value }}</code>
+          </span>
         </div>
         <div class="decorate-help">
           {{ activeTabMeta.help }}，当前使用：{{ schemeSummary.activeName }}
@@ -1714,6 +2062,7 @@ onBeforeUnmount(resetMouseDrag);
       :active-type-label="activeTypeLabel"
       :current-theme-tokens="currentThemeTokens"
       :get-overview-scheme-module-summary="getOverviewSchemeModuleSummary"
+      :get-overview-scheme-module-title="getOverviewSchemeModuleTitle"
       :get-overview-scheme-modules="getOverviewSchemeModules"
       :get-overview-scheme-tabbar-items="getOverviewSchemeTabbarItems"
       :get-overview-scheme-update-label="getOverviewSchemeUpdateLabel"
@@ -1727,6 +2076,7 @@ onBeforeUnmount(resetMouseDrag);
       :overview-loading="overviewLoading"
       :preview-category-tree="previewCategoryTree"
       :preview-goods="previewGoods"
+      :preview-goods-list="previewGoodsList"
       @activate="handleOverviewActivate"
       @copy="handleOverviewCopy"
       @create="handleOverviewCreate"
@@ -1747,6 +2097,7 @@ onBeforeUnmount(resetMouseDrag);
       :palette-groups="paletteGroups"
       :preview-category-tree="previewCategoryTree"
       :preview-goods="previewGoods"
+      :preview-goods-list="previewGoodsList"
       :product-layout-options="PRODUCT_LAYOUT_OPTIONS"
       :product-sort-options="PRODUCT_SORT_OPTIONS"
       :product-source-options="PRODUCT_SOURCE_OPTIONS"
@@ -1762,7 +2113,10 @@ onBeforeUnmount(resetMouseDrag);
       @palette-click="handlePaletteClick"
       @palette-mouse-down="handlePaletteMouseDown"
       @remove-config-item="removeConfigItem"
+      @reset-module-config="resetModuleConfig"
+      @reset-page-style="resetHomePageStyle"
       @select-module="selectModuleFromPreview"
+      @update-page-style="updateHomePageStyle"
     />
 
     <a-modal

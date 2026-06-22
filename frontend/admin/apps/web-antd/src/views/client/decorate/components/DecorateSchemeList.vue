@@ -24,6 +24,9 @@ defineProps<{
   getOverviewSchemeModuleSummary: (
     scheme: ClientDecorateApi.SchemeItem,
   ) => string;
+  getOverviewSchemeModuleTitle: (
+    scheme: ClientDecorateApi.SchemeItem,
+  ) => string;
   getOverviewSchemeTabbarItems: (
     scheme: ClientDecorateApi.SchemeItem,
   ) => ModuleItem[];
@@ -42,6 +45,7 @@ defineProps<{
   overviewLoading: boolean;
   previewCategoryTree: GoodsCategoryApi.CategoryItem[];
   previewGoods: GoodsApi.GoodsItem | null;
+  previewGoodsList: GoodsApi.GoodsItem[];
 }>();
 
 defineEmits<{
@@ -71,36 +75,69 @@ defineEmits<{
         v-for="scheme in overviewActiveSchemes"
         :key="scheme.id"
         class="decorate-overview-card"
-        :class="`decorate-overview-card--${scheme.type}`"
+        :class="[
+          `decorate-overview-card--${scheme.type}`,
+          { 'decorate-overview-card--active': scheme.is_active === 1 },
+        ]"
       >
         <div class="decorate-overview-card__head">
           <div>
             <div class="decorate-overview-card__tags">
+              <a-tag
+                v-if="scheme.is_active === 1"
+                class="decorate-overview-card__active-tag"
+                color="blue"
+              >
+                当前使用
+              </a-tag>
               <a-tag>{{ getSchemeTypeLabel(scheme.type) }}</a-tag>
-              <a-tag :color="getSchemeStatusColor(scheme)">
+              <a-tag
+                v-if="scheme.is_active !== 1"
+                :color="getSchemeStatusColor(scheme)"
+              >
                 {{ getSchemeStatusLabel(scheme) }}
               </a-tag>
-              <a-tag v-if="scheme.is_system === 1">系统</a-tag>
             </div>
             <strong>{{ scheme.name }}</strong>
             <span>{{ getOverviewSchemeUpdateLabel(scheme) }}</span>
           </div>
-          <a-space v-if="isReadonlyOverviewScheme(scheme)">
-            <a-tag>系统内置</a-tag>
-            <a-button type="link" size="small" @click="$emit('copy', scheme)">
-              复制
-            </a-button>
+        </div>
+
+        <div class="decorate-overview-card__preview">
+          <ClientPhonePreview
+            :category-tree="previewCategoryTree"
+            :current-path="getSchemePreviewMeta(scheme).currentPath"
+            :goods="previewGoods"
+            :goods-list="previewGoodsList"
+            :kind="getSchemePreviewMeta(scheme).previewKind"
+            :modules="getOverviewSchemeModules(scheme)"
+            size="compact"
+            :tabbar-items="getOverviewSchemeTabbarItems(scheme)"
+            :theme-tokens="currentThemeTokens"
+            :title="getSchemeTypeLabel(scheme.type)"
+          />
+        </div>
+
+        <div class="decorate-overview-card__foot">
+          <div class="decorate-overview-card__meta">
+            <p>{{ getSchemePreviewMeta(scheme).cardDesc }}</p>
+            <p :title="getOverviewSchemeModuleTitle(scheme)">
+              模块：{{ getOverviewSchemeModuleSummary(scheme) }}
+            </p>
+          </div>
+          <div class="decorate-overview-card__actions">
+            <span
+              v-if="isReadonlyOverviewScheme(scheme)"
+              class="decorate-overview-card__readonly"
+            >
+              系统内置
+            </span>
             <a-button
+              v-if="!isReadonlyOverviewScheme(scheme)"
               type="link"
               size="small"
-              :disabled="scheme.is_active === 1"
-              @click="$emit('activate', scheme)"
+              @click="$emit('edit', scheme)"
             >
-              设为当前
-            </a-button>
-          </a-space>
-          <a-space v-else>
-            <a-button type="link" size="small" @click="$emit('edit', scheme)">
               编辑
             </a-button>
             <a-button type="link" size="small" @click="$emit('copy', scheme)">
@@ -115,6 +152,7 @@ defineEmits<{
               设为当前
             </a-button>
             <a-button
+              v-if="!isReadonlyOverviewScheme(scheme)"
               danger
               type="link"
               size="small"
@@ -122,26 +160,7 @@ defineEmits<{
             >
               删除
             </a-button>
-          </a-space>
-        </div>
-
-        <div class="decorate-overview-card__preview">
-          <ClientPhonePreview
-            :category-tree="previewCategoryTree"
-            :current-path="getSchemePreviewMeta(scheme).currentPath"
-            :goods="previewGoods"
-            :kind="getSchemePreviewMeta(scheme).previewKind"
-            :modules="getOverviewSchemeModules(scheme)"
-            size="compact"
-            :tabbar-items="getOverviewSchemeTabbarItems(scheme)"
-            :theme-tokens="currentThemeTokens"
-            :title="getSchemeTypeLabel(scheme.type)"
-          />
-        </div>
-
-        <div class="decorate-overview-card__meta">
-          <p>{{ getSchemePreviewMeta(scheme).cardDesc }}</p>
-          <p>模块：{{ getOverviewSchemeModuleSummary(scheme) }}</p>
+          </div>
         </div>
       </article>
     </section>

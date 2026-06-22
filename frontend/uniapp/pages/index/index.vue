@@ -11,29 +11,17 @@ const rendererRef = ref(null)
 const systemInfo = uni.getSystemInfoSync()
 const statusBarHeight = systemInfo.statusBarHeight || 0
 
-function getModuleList(module) {
-  const props = module?.props || {}
-  const value = props.list || props.items || props.images || []
-  return Array.isArray(value) ? value : []
-}
-
-const homeModules = computed(() => {
-  const banners = appStore.siteConfig?.client_home_banners
-  if (!Array.isArray(banners) || banners.length === 0) {
-    return decorateStore.homeModules
+const homeModules = computed(() => decorateStore.homeModules)
+const homeStyle = computed(() => {
+  const pageStyle = decorateStore.homePageStyle || {}
+  const paddingY = Number(pageStyle.paddingY ?? pageStyle.padding_y ?? 0)
+  const paddingX = Number(pageStyle.paddingX ?? pageStyle.padding_x ?? 28)
+  return {
+    paddingTop: `calc(${statusBarHeight}px + ${paddingY}rpx)`,
+    paddingRight: `${paddingX}rpx`,
+    paddingBottom: `${paddingY}rpx`,
+    paddingLeft: `${paddingX}rpx`,
   }
-  return decorateStore.homeModules.map((module) => {
-    if (module.type !== 'banner') return module
-    const configuredList = getModuleList(module)
-    const list = configuredList.length > 0 ? configuredList : banners
-    return {
-      ...module,
-      props: {
-        ...module.props,
-        list,
-      },
-    }
-  })
 })
 
 onPullDownRefresh(async () => {
@@ -67,11 +55,14 @@ onShareTimeline(() => {
 <template>
   <view
     class="page"
-    :class="[`theme-${decorateStore.resolvedThemeMode}`]"
+    :class="[
+      `theme-${decorateStore.resolvedThemeMode}`,
+      { 'page--custom-tabbar': decorateStore.tabbarMode === 'custom' },
+    ]"
     :style="decorateStore.themeStyle"
   >
     <mb-splash />
-    <view class="home" :style="{ paddingTop: statusBarHeight + 'px' }">
+    <view class="home" :style="homeStyle">
       <view class="header">
         <view class="brand">
           <view class="brand__icon">
@@ -83,9 +74,12 @@ onShareTimeline(() => {
 
       <mb-decorate-renderer ref="rendererRef" :modules="homeModules" />
 
-      <view class="bottom-spacer" />
+      <view v-if="decorateStore.tabbarMode === 'custom'" class="bottom-spacer" />
     </view>
-    <mb-custom-tabbar current="/pages/index/index" />
+    <mb-custom-tabbar
+      v-if="decorateStore.tabbarMode === 'custom'"
+      current="/pages/index/index"
+    />
   </view>
 </template>
 
@@ -97,8 +91,6 @@ onShareTimeline(() => {
 
 .home {
   min-height: 100vh;
-  padding-left: 28rpx;
-  padding-right: 28rpx;
 }
 
 .header {

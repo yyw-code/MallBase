@@ -52,8 +52,15 @@ export namespace ClientDecorateApi {
     text: string;
   }
 
+  export interface HomeSchemeSchema {
+    components?: DecorationModule[];
+    modules?: DecorationModule[];
+    pageStyle?: Record<string, any>;
+  }
+
   export type SchemeSchema =
     | DecorationModule[]
+    | HomeSchemeSchema
     | ProfileModule[]
     | TabbarItem[];
 
@@ -96,7 +103,7 @@ export namespace ClientDecorateApi {
     brand_id?: number;
     name: string;
     subtitle?: null | string;
-    main_image?: null | string;
+    main_image?: null | number | string;
     main_image_full_url?: string;
     price: number | string;
     market_price?: null | number | string;

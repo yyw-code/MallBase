@@ -41,12 +41,14 @@ const props = defineProps<{
   paletteGroups: PaletteGroup[];
   previewCategoryTree: GoodsCategoryApi.CategoryItem[];
   previewGoods: GoodsApi.GoodsItem | null;
+  previewGoodsList: GoodsApi.GoodsItem[];
   productLayoutOptions: Array<{ label: string; value: string }>;
   productSortOptions: Array<{ label: string; value: string }>;
   productSourceOptions: Array<{ label: string; value: string }>;
   schemeForm: {
     description: string;
     name: string;
+    pageStyle: Record<string, any>;
     schema: ModuleItem[];
     sort: number;
     status: number;
@@ -66,7 +68,10 @@ defineEmits<{
   paletteClick: [type: string];
   paletteMouseDown: [item: PaletteItem, event: MouseEvent];
   removeConfigItem: [items: any[], index: number | string];
+  resetModuleConfig: [module: ModuleItem];
+  resetPageStyle: [];
   selectModule: [module: ModuleItem];
+  updatePageStyle: [field: 'paddingX' | 'paddingY', value: unknown];
 }>();
 
 const previewCurrentPath = computed(() =>
@@ -83,6 +88,8 @@ const editableModule = computed(() => props.selectedModule);
 
 const bannerDragIndex = ref<null | number>(null);
 const bannerDropIndex = ref<null | number>(null);
+const navDragIndex = ref<null | number>(null);
+const navDropIndex = ref<null | number>(null);
 const entryCardIconPrefix = ref(props.iconPrefix || 'ant-design');
 
 const updateSelectedRichTextContent = (value: string) => {
@@ -117,6 +124,7 @@ const extractUploadName = (value: string) => {
 
 const buildUploadFullUrl = (value: unknown) => {
   if (typeof value !== 'string' || value.length === 0) return '';
+  if (/^\d+$/.test(value.trim())) return '';
   if (/^(?:https?:|data:image|blob:)/.test(value)) return value;
   const apiBase = import.meta.env.VITE_GLOB_API_URL || '';
   const normalizedPath = value.startsWith('/') ? value : `/${value}`;
@@ -127,69 +135,190 @@ const buildUploadFullUrl = (value: unknown) => {
   }
 };
 
-const normalizeUploadImageValue = (value: any) => {
+const normalizeUploadImageValue = (value: any, previewUrl?: unknown) => {
   if (!value) return undefined;
+  if (typeof value === 'number') {
+    return normalizeUploadImageValue(String(value), previewUrl);
+  }
   if (typeof value === 'string') {
+    const fullUrl =
+      typeof previewUrl === 'string' && previewUrl
+        ? previewUrl
+        : buildUploadFullUrl(value);
     return {
-      full_url: buildUploadFullUrl(value),
-      name: extractUploadName(value),
+      full_url: fullUrl,
+      name: extractUploadName(fullUrl || value),
       url: value,
     };
   }
   if (typeof value === 'object') {
+    const fullUrl =
+      value.full_url ||
+      value.fullUrl ||
+      value.response?.full_url ||
+      value.response?.fullUrl ||
+      value.preview_url ||
+      value.previewUrl ||
+      value.image_full_url ||
+      value.imageFullUrl ||
+      previewUrl ||
+      '';
     const url =
       value.url ||
       value.path ||
       value.image ||
       value.src ||
       value.response?.url ||
-      value.full_url ||
-      value.fullUrl ||
-      value.response?.full_url ||
-      value.response?.fullUrl ||
+      value.asset_id ||
       '';
     if (!url) return undefined;
     return {
       ...value,
-      full_url:
-        value.full_url ||
-        value.fullUrl ||
-        value.response?.full_url ||
-        value.response?.fullUrl ||
-        value.response?.url ||
-        value.preview_url ||
-        value.previewUrl ||
-        buildUploadFullUrl(url),
-      name: value.name || extractUploadName(String(url)),
-      url,
+      full_url: fullUrl || buildUploadFullUrl(String(url)),
+      name:
+        value.name ||
+        value.original_name ||
+        extractUploadName(String(fullUrl || url)),
+      url: String(url),
     };
   }
   return undefined;
 };
 
+const demoAssetBaseUrl = `${
+  new URL(import.meta.env.VITE_GLOB_API_URL || '/', window.location.origin)
+    .origin
+}/static/demo/`;
+
+const createDemoAssetFile = (url: string, name: string) => ({
+  full_url: `${demoAssetBaseUrl}${name}`,
+  name,
+  url,
+});
+
+const defaultBannerImageByIndex = [
+  createDemoAssetFile('48', 'decorate-banner-market.png'),
+  createDemoAssetFile('49', 'decorate-banner-member.png'),
+  createDemoAssetFile('50', 'decorate-banner-home.png'),
+];
+
+const legacyDefaultBannerIds = new Set(['6', '7', '8', '41']);
+const legacyDefaultNavIds = new Set(['15', '16', '20', '23', '40', '46', '47']);
+
+const defaultNavImageByKey: Record<
+  string,
+  { full_url: string; name: string; url: string }
+> = {
+  beauty: createDemoAssetFile('52', 'decorate-nav-beauty.png'),
+  food: createDemoAssetFile('55', 'decorate-nav-food.png'),
+  home: createDemoAssetFile('54', 'decorate-nav-home.png'),
+  phone: createDemoAssetFile('51', 'decorate-nav-digital.png'),
+  shirt: createDemoAssetFile('53', 'decorate-nav-fashion.png'),
+  sport: createDemoAssetFile('56', 'decorate-nav-sport.png'),
+};
+
+const getDefaultNavImageValue = (item: any) => {
+  const key = String(item?.icon || item?.key || '').replace(/^lucide:/, '');
+  const title = String(item?.title || item?.label || item?.text || '');
+  if (key.includes('sparkles') || key.includes('beauty') || title === '美妆') {
+    return defaultNavImageByKey.beauty;
+  }
+  if (
+    key.includes('shirt') ||
+    key.includes('clothes') ||
+    key.includes('menswear') ||
+    title === '服饰'
+  ) {
+    return defaultNavImageByKey.shirt;
+  }
+  if (
+    key.includes('sofa') ||
+    key.includes('home') ||
+    key.includes('furniture') ||
+    title === '家居'
+  ) {
+    return defaultNavImageByKey.home;
+  }
+  if (key.includes('utensils') || key.includes('food') || title === '美食') {
+    return defaultNavImageByKey.food;
+  }
+  if (key.includes('dumbbell') || key.includes('sport') || title === '运动') {
+    return defaultNavImageByKey.sport;
+  }
+  if (key.includes('smartphone') || key.includes('phone') || title === '数码') {
+    return defaultNavImageByKey.phone;
+  }
+  return undefined;
+};
+
+const getDefaultBannerImageValue = (index: number) =>
+  defaultBannerImageByIndex[index % defaultBannerImageByIndex.length];
+
+const getDefaultBannerItem = (index: number) => ({
+  image: getDefaultBannerImageValue(index),
+  path:
+    index % 2 === 0
+      ? '/pages-sub/goods/list?is_recommend=1'
+      : '/pages-sub/goods/list?sort=sales',
+  title: index % 2 === 0 ? '夏日好物限时满减' : '会员精选 每日上新',
+});
+
+const getUploadValueId = (value: any) =>
+  value && typeof value === 'object'
+    ? String(value.url || value.asset_id || '')
+    : String(value || '');
+
 const normalizeBannerItem = (item: any, index: number) => {
   if (typeof item === 'string') {
+    const image =
+      item.startsWith('data:image/svg') || legacyDefaultBannerIds.has(item)
+        ? getDefaultBannerImageValue(index)
+        : item;
     return {
       id: createLocalId('banner_item'),
-      image: normalizeUploadImageValue(item),
+      image: normalizeUploadImageValue(image),
       path: '',
       title: `轮播图${index + 1}`,
     };
   }
   const target = item && typeof item === 'object' ? item : {};
   if (!target.id) target.id = target.key || createLocalId('banner_item');
+  const imagePreviewUrl =
+    (target.image && typeof target.image === 'object'
+      ? target.image.full_url ||
+        target.image.fullUrl ||
+        target.image.preview_url ||
+        target.image.previewUrl ||
+        target.image.response?.full_url ||
+        target.image.response?.fullUrl
+      : '') ||
+    target.image_full_url ||
+    target.imageFullUrl ||
+    target.full_url ||
+    target.fullUrl ||
+    target.preview_url ||
+    target.previewUrl ||
+    '';
   if (!target.image) {
     target.image =
-      target.full_url ||
-      target.fullUrl ||
+      target.image_id ||
+      target.imageId ||
       target.image_url ||
       target.imageUrl ||
+      imagePreviewUrl ||
       target.src ||
       target.cover ||
       target.url ||
       '';
   }
-  target.image = normalizeUploadImageValue(target.image);
+  if (
+    (typeof target.image === 'string' &&
+      target.image.startsWith('data:image/svg')) ||
+    legacyDefaultBannerIds.has(getUploadValueId(target.image))
+  ) {
+    target.image = getDefaultBannerImageValue(index);
+  }
+  target.image = normalizeUploadImageValue(target.image, imagePreviewUrl);
   if (!target.path) {
     target.path =
       target.target_path ||
@@ -216,6 +345,7 @@ const isNormalizedBannerItem = (item: any) =>
   !Array.isArray(item) &&
   item.id &&
   'image' in item &&
+  (!item.image || typeof item.image === 'object') &&
   'path' in item &&
   'title' in item;
 
@@ -255,13 +385,92 @@ const selectedBannerItems = computed<any[]>(() =>
     : [],
 );
 
+const normalizeNavGridItem = (item: any, index: number) => {
+  const target = item && typeof item === 'object' ? item : {};
+  if (!target.id) target.id = target.key || createLocalId('nav_item');
+  const defaultImage = getDefaultNavImageValue(target);
+  const imagePreviewUrl =
+    (target.image && typeof target.image === 'object'
+      ? target.image.full_url ||
+        target.image.fullUrl ||
+        target.image.preview_url ||
+        target.image.previewUrl ||
+        target.image.response?.full_url ||
+        target.image.response?.fullUrl
+      : '') ||
+    target.image_full_url ||
+    target.imageFullUrl ||
+    target.full_url ||
+    target.fullUrl ||
+    target.preview_url ||
+    target.previewUrl ||
+    '';
+  if (
+    (typeof target.image === 'string' &&
+      target.image.startsWith('data:image/svg')) ||
+    legacyDefaultNavIds.has(getUploadValueId(target.image))
+  ) {
+    target.image = defaultImage || target.image;
+  }
+  if (!target.image) {
+    target.image =
+      target.image_id ||
+      target.imageId ||
+      target.image_url ||
+      target.imageUrl ||
+      imagePreviewUrl ||
+      defaultImage ||
+      target.icon ||
+      '';
+  }
+  target.image = normalizeUploadImageValue(target.image, imagePreviewUrl);
+  if (!target.title) target.title = target.label || `导航${index + 1}`;
+  if (!target.path) {
+    target.path =
+      target.target_path ||
+      target.link ||
+      target.href ||
+      target.jump_url ||
+      target.jumpUrl ||
+      '';
+  }
+  return target;
+};
+
+const isNormalizedNavGridItem = (item: any) =>
+  item &&
+  typeof item === 'object' &&
+  !Array.isArray(item) &&
+  (!item.image || typeof item.image === 'object') &&
+  'path' in item &&
+  'title' in item;
+
+const getNavGridItems = (module: ModuleItem) => {
+  const config = (module.config ||= {});
+  const source = Array.isArray(config.items) ? config.items : [];
+  if (source.every((item: any) => isNormalizedNavGridItem(item))) {
+    config.items = source;
+    return source;
+  }
+  const items = source.map((item: any, index: number) =>
+    normalizeNavGridItem(item, index),
+  );
+  config.items = items;
+  return items;
+};
+
+const selectedNavGridItems = computed<any[]>(() =>
+  editableModule.value?.type === 'navGrid' && editableModule.value.config
+    ? getNavGridItems(editableModule.value)
+    : [],
+);
+
 const bannerIndex = Number;
+const navIndex = Number;
 
 const createBannerItem = (index: number) => ({
   id: createLocalId('banner_item'),
-  image: undefined,
-  path: '',
-  title: `轮播图${index + 1}`,
+  ...getDefaultBannerItem(index),
 });
 
 const addBannerItem = (module: ModuleItem) => {
@@ -372,6 +581,72 @@ const handleBannerItemDragEnd = () => {
   bannerDropIndex.value = null;
 };
 
+const syncNavGridItems = (module: ModuleItem, items: any[]) => {
+  const config = (module.config ||= {});
+  if (config.items !== items) config.items = items;
+};
+
+const moveNavGridItem = (
+  module: ModuleItem,
+  sourceIndex: number,
+  targetIndex: number,
+) => {
+  if (sourceIndex === targetIndex) return;
+  const items = getNavGridItems(module);
+  if (
+    sourceIndex < 0 ||
+    sourceIndex >= items.length ||
+    targetIndex < 0 ||
+    targetIndex >= items.length
+  ) {
+    return;
+  }
+  const [item] = items.splice(sourceIndex, 1);
+  if (item) {
+    items.splice(targetIndex, 0, item);
+  }
+  syncNavGridItems(module, items);
+};
+
+const handleNavItemDragStart = (index: number, event: DragEvent) => {
+  if (props.isReadonlyScheme) return;
+  navDragIndex.value = index;
+  event.dataTransfer?.setData('text/plain', String(index));
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move';
+  }
+};
+
+const handleNavItemDragOver = (event: DragEvent) => {
+  if (props.isReadonlyScheme) return;
+  event.preventDefault();
+  if (event.dataTransfer) {
+    event.dataTransfer.dropEffect = 'move';
+  }
+};
+
+const handleNavItemDragEnter = (index: number, event: DragEvent) => {
+  if (props.isReadonlyScheme) return;
+  event.preventDefault();
+  navDropIndex.value = index;
+};
+
+const handleSelectedNavItemDrop = (targetIndex: number, event: DragEvent) => {
+  if (!editableModule.value || props.isReadonlyScheme) return;
+  event.preventDefault();
+  const sourceIndex =
+    navDragIndex.value ??
+    Number(event.dataTransfer?.getData('text/plain') ?? -1);
+  moveNavGridItem(editableModule.value, sourceIndex, targetIndex);
+  navDragIndex.value = null;
+  navDropIndex.value = null;
+};
+
+const handleNavItemDragEnd = () => {
+  navDragIndex.value = null;
+  navDropIndex.value = null;
+};
+
 const normalizeCubeItem = (item: any, index: number) => {
   const normalized = normalizeBannerItem(item, index);
   normalized.id =
@@ -397,6 +672,7 @@ const isNormalizedCubeItem = (item: any) =>
   !Array.isArray(item) &&
   item.id &&
   'image' in item &&
+  (!item.image || typeof item.image === 'object') &&
   'path' in item &&
   'title' in item;
 
@@ -438,9 +714,25 @@ const selectedCubeItems = computed<any[]>(() =>
 
 const createCubeItem = (index: number) => ({
   id: createLocalId('cube_item'),
-  image: undefined,
-  path: '',
-  title: `图片${index + 1}`,
+  image: createDemoAssetFile(
+    String(57 + (index % 4)),
+    [
+      'decorate-cube-new.png',
+      'decorate-cube-picks.png',
+      'decorate-cube-member.png',
+      'decorate-cube-sale.png',
+    ][index % 4] || 'decorate-cube-new.png',
+  ),
+  path:
+    [
+      '/pages-sub/goods/list?sort=newest',
+      '/pages-sub/goods/list?is_recommend=1',
+      '/pages-sub/goods/list?sort=sales',
+      '/pages-sub/goods/list?is_hot=1',
+    ][index % 4] || '/pages-sub/goods/list',
+  title:
+    ['新品上架', '精选榜单', '会员专享', '限时满减'][index % 4] ||
+    `图片${index + 1}`,
 });
 
 const addSelectedCubeItem = () => {
@@ -580,9 +872,11 @@ const updateSelectedSubTitleColor = (event: Event) => {
           :dragging="dragActive"
           :drop-index="dragDropIndex"
           :goods="previewGoods"
+          :goods-list="previewGoodsList"
           interactive
           :kind="previewKind"
           :modules="schemeForm.schema"
+          :page-style="schemeForm.pageStyle"
           :selected-module-id="selectedModuleId"
           :tabbar-items="tabbarPreviewItems"
           :theme-tokens="currentThemeTokens"
@@ -611,7 +905,57 @@ const updateSelectedSubTitleColor = (event: Event) => {
 
     <aside class="property-panel">
       <a-card size="small" title="属性配置">
-        <a-empty v-if="!editableModule" description="选择画布中的模块后配置" />
+        <a-form
+          v-if="activeType === 'home'"
+          :disabled="isReadonlyScheme"
+          :label-col="{ style: { width: '92px' } }"
+          class="property-form"
+        >
+          <div class="property-section">
+            <div class="property-section__head">
+              <div class="property-section__title">页面样式</div>
+              <a-button
+                :disabled="isReadonlyScheme"
+                size="small"
+                type="link"
+                @click="$emit('resetPageStyle')"
+              >
+                重置
+              </a-button>
+            </div>
+            <div class="style-grid">
+              <a-form-item label="上下内边距">
+                <a-input-number
+                  :value="schemeForm.pageStyle.paddingY"
+                  :min="0"
+                  :max="120"
+                  addon-after="rpx"
+                  class="w-full"
+                  @change="
+                    (value) => $emit('updatePageStyle', 'paddingY', value)
+                  "
+                />
+              </a-form-item>
+              <a-form-item label="左右内边距">
+                <a-input-number
+                  :value="schemeForm.pageStyle.paddingX"
+                  :min="0"
+                  :max="120"
+                  addon-after="rpx"
+                  class="w-full"
+                  @change="
+                    (value) => $emit('updatePageStyle', 'paddingX', value)
+                  "
+                />
+              </a-form-item>
+            </div>
+          </div>
+        </a-form>
+
+        <a-empty
+          v-if="!editableModule"
+          description="选择画布中的模块后配置组件"
+        />
 
         <a-form
           v-else
@@ -631,7 +975,17 @@ const updateSelectedSubTitleColor = (event: Event) => {
             </div>
             <template v-if="editableModule.config">
               <div class="property-section">
-                <div class="property-section__title">基础样式</div>
+                <div class="property-section__head">
+                  <div class="property-section__title">基础样式</div>
+                  <a-button
+                    :disabled="isReadonlyScheme"
+                    size="small"
+                    type="link"
+                    @click="$emit('resetModuleConfig', editableModule)"
+                  >
+                    重置
+                  </a-button>
+                </div>
                 <div class="style-grid">
                   <a-form-item label="宽度">
                     <a-input-number
@@ -669,9 +1023,18 @@ const updateSelectedSubTitleColor = (event: Event) => {
                       class="w-full"
                     />
                   </a-form-item>
-                  <a-form-item label="内边距">
+                  <a-form-item label="上下内边距">
                     <a-input-number
-                      v-model:value="editableModule.config.padding"
+                      v-model:value="editableModule.config.paddingY"
+                      :min="0"
+                      :max="80"
+                      addon-after="rpx"
+                      class="w-full"
+                    />
+                  </a-form-item>
+                  <a-form-item label="左右内边距">
+                    <a-input-number
+                      v-model:value="editableModule.config.paddingX"
                       :min="0"
                       :max="80"
                       addon-after="rpx"
@@ -870,7 +1233,7 @@ const updateSelectedSubTitleColor = (event: Event) => {
                       </a-space>
                     </div>
                     <div class="banner-item-row__body">
-                      <div>
+                      <div class="banner-item-row__image">
                         <div class="banner-item-label">图片</div>
                         <Upload
                           v-model:value="item.image"
@@ -879,7 +1242,7 @@ const updateSelectedSubTitleColor = (event: Event) => {
                           type="image"
                         />
                       </div>
-                      <div>
+                      <div class="banner-item-row__link">
                         <div class="banner-item-label">链接</div>
                         <TargetPicker
                           v-model:value="item.path"
@@ -925,27 +1288,58 @@ const updateSelectedSubTitleColor = (event: Event) => {
                 <a-input-number
                   v-model:value="editableModule.config.columns"
                   :min="3"
-                  :max="5"
+                  :max="6"
                   class="w-full"
                 />
               </a-form-item>
-              <a-form-item label="导航项">
+              <a-form-item class="property-form-item--full" label="导航项">
                 <div class="entry-list">
                   <div
-                    v-for="(item, itemIndex) in editableModule.config.items"
-                    :key="itemIndex"
-                    class="entry-row"
+                    v-for="(item, itemIndex) in selectedNavGridItems"
+                    :key="item.id || itemIndex"
+                    class="entry-row entry-row--nav"
+                    :class="{
+                      'is-dragging': navDragIndex === navIndex(itemIndex),
+                      'is-drop-target':
+                        navDropIndex === navIndex(itemIndex) &&
+                        navDragIndex !== navIndex(itemIndex),
+                    }"
+                    @dragenter="
+                      handleNavItemDragEnter(navIndex(itemIndex), $event)
+                    "
+                    @dragover="handleNavItemDragOver"
+                    @drop="
+                      handleSelectedNavItemDrop(navIndex(itemIndex), $event)
+                    "
                   >
+                    <button
+                      class="banner-item-drag entry-row__drag"
+                      :disabled="isReadonlyScheme"
+                      draggable="true"
+                      title="拖动排序"
+                      type="button"
+                      @dragend="handleNavItemDragEnd"
+                      @dragstart="
+                        handleNavItemDragStart(navIndex(itemIndex), $event)
+                      "
+                    >
+                      <IconifyIcon icon="lucide:grip-vertical" />
+                    </button>
+                    <div class="entry-row__image">
+                      <Upload
+                        v-model:value="item.image"
+                        :disabled="isReadonlyScheme"
+                        :max-count="1"
+                        mode="both"
+                        module="client_decorate"
+                        type="image"
+                      />
+                    </div>
                     <a-input v-model:value="item.title" placeholder="标题" />
                     <TargetPicker
                       v-model:value="item.path"
                       :disabled="isReadonlyScheme"
                       placeholder="跳转目标"
-                    />
-                    <IconPicker
-                      v-model="item.icon"
-                      :prefix="iconPrefix"
-                      placeholder="图标"
                     />
                     <a-button
                       danger
@@ -999,7 +1393,7 @@ const updateSelectedSubTitleColor = (event: Event) => {
                       </a-button>
                     </div>
                     <div class="banner-item-row__body">
-                      <div>
+                      <div class="banner-item-row__image">
                         <div class="banner-item-label">图片</div>
                         <Upload
                           v-model:value="item.image"

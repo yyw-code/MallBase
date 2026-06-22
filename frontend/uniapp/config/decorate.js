@@ -44,7 +44,14 @@ export const DEFAULT_HOME_MODULES = [
     type: 'search',
     sort: 10,
     props: {
-      placeholder: '搜索你心仪的商品...',
+      placeholder: '搜索商品、分类或品牌',
+      target_path: '/pages-sub/goods/list',
+      marginTop: 4,
+      marginBottom: 8,
+      paddingY: 12,
+      paddingX: 20,
+      radius: 36,
+      widthPercent: 100,
     },
   },
   {
@@ -54,7 +61,18 @@ export const DEFAULT_HOME_MODULES = [
     props: {
       height: 314,
       radius: 12,
-      list: [],
+      list: [
+        {
+          image: '/static/demo/decorate-banner-market.png',
+          title: '夏日好物限时满减',
+          url: '/pages-sub/goods/list?is_recommend=1',
+        },
+        {
+          image: '/static/demo/decorate-banner-member.png',
+          title: '会员精选 每日上新',
+          url: '/pages-sub/goods/list?sort=sales',
+        },
+      ],
     },
   },
   {
@@ -62,14 +80,38 @@ export const DEFAULT_HOME_MODULES = [
     type: 'navGrid',
     sort: 30,
     props: {
-      columns: 5,
+      columns: 3,
+      marginTop: 4,
+      marginBottom: 18,
+      paddingY: 20,
+      paddingX: 20,
+      radius: 24,
+      widthPercent: 100,
       items: [
-        { label: '数码', url: '/pages-sub/goods/list?keyword=数码', icon: 'phone' },
-        { label: '美妆', url: '/pages-sub/goods/list?keyword=美妆', icon: 'beauty' },
-        { label: '服饰', url: '/pages-sub/goods/list?keyword=服饰', icon: 'shirt' },
-        { label: '家居', url: '/pages-sub/goods/list?keyword=家居', icon: 'home' },
-        { label: '美食', url: '/pages-sub/goods/list?keyword=美食', icon: 'food' },
+        { label: '数码', url: '/pages-sub/goods/list?keyword=数码', image: '/static/demo/decorate-nav-digital.png' },
+        { label: '美妆', url: '/pages-sub/goods/list?keyword=美妆', image: '/static/demo/decorate-nav-beauty.png' },
+        { label: '服饰', url: '/pages-sub/goods/list?keyword=服饰', image: '/static/demo/decorate-nav-fashion.png' },
+        { label: '家居', url: '/pages-sub/goods/list?keyword=家居', image: '/static/demo/decorate-nav-home.png' },
+        { label: '美食', url: '/pages-sub/goods/list?keyword=美食', image: '/static/demo/decorate-nav-food.png' },
       ],
+    },
+  },
+  {
+    id: 'title-recommend-default',
+    type: 'title',
+    sort: 35,
+    props: {
+      title: '人气推荐',
+      sub_title: '严选好物正在热卖',
+      more_text: '查看全部',
+      more_path: '/pages-sub/goods/list?is_recommend=1',
+      marginTop: 4,
+      marginBottom: 8,
+      paddingY: 4,
+      paddingX: 30,
+      title_font_size: 34,
+      sub_font_size: 22,
+      widthPercent: 100,
     },
   },
   {
@@ -77,12 +119,19 @@ export const DEFAULT_HOME_MODULES = [
     type: 'productGroup',
     sort: 40,
     props: {
-      title: '今日必买',
+      title: '精选好物',
+      subtitle: '精选好物实时更新',
       source: 'recommend',
-      layout: 'scroll',
+      layout: 'grid',
       limit: 8,
       moreText: '查看全部',
       moreUrl: '/pages-sub/goods/list?is_recommend=1',
+      marginTop: 4,
+      marginBottom: 24,
+      paddingY: 20,
+      paddingX: 20,
+      radius: 24,
+      widthPercent: 100,
     },
   },
   {
@@ -91,10 +140,17 @@ export const DEFAULT_HOME_MODULES = [
     sort: 50,
     props: {
       title: '猜你喜欢',
+      subtitle: '根据浏览偏好持续更新',
       source: 'filter',
       layout: 'grid',
       limit: 10,
       pageable: true,
+      marginTop: 4,
+      marginBottom: 24,
+      paddingY: 20,
+      paddingX: 20,
+      radius: 24,
+      widthPercent: 100,
     },
   },
 ]
@@ -136,6 +192,10 @@ export const DEFAULT_PROFILE_MODULES = [
 export const DEFAULT_DECORATE_CONFIG = {
   home: {
     modules: DEFAULT_HOME_MODULES,
+    pageStyle: {
+      paddingX: 28,
+      paddingY: 0,
+    },
   },
   profile: {
     modules: DEFAULT_PROFILE_MODULES,

@@ -9,6 +9,7 @@ use app\model\goods\Goods;
 use app\model\goods\GoodsBrand;
 use app\model\goods\GoodsCategory;
 use app\model\goods\GoodsTag;
+use app\service\upload\AssetHydrator;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
 
@@ -47,6 +48,7 @@ class ClientDecorationSchemeService extends BaseService
             ->page($page, $limit)
             ->select()
             ->toArray();
+        $list = $this->hydrateSchemeListSchemaAssets($list);
 
         $total = $this->buildListQuery($where)->count();
 
@@ -56,8 +58,10 @@ class ClientDecorationSchemeService extends BaseService
     public function getInfo(int $id): array
     {
         $scheme = $this->findValidScheme($id);
+        $data = $scheme->toArray();
+        $data['schema'] = $this->hydrateSchemeSchemaAssets($this->normalizeJsonValue($data['schema'] ?? []));
 
-        return $scheme->toArray();
+        return $data;
     }
 
     /**
@@ -140,6 +144,7 @@ class ClientDecorationSchemeService extends BaseService
         $data['is_system'] = 0;
         $data['is_active'] = 0;
         $data['status'] = 1;
+        $data['schema'] = $this->normalizeSchemaByType((string) $data['type'], $data['schema'] ?? []);
 
         $copy = $this->model()->create($data);
 
@@ -153,7 +158,7 @@ class ClientDecorationSchemeService extends BaseService
             throw new BusinessException('禁用方案不能启用');
         }
 
-        $schema = $this->normalizeJsonValue($scheme->schema);
+        $schema = $this->normalizeSchemaByType((string) $scheme->type, $scheme->schema);
         $this->validateSchemaByType((string) $scheme->type, $schema, (string) $scheme->tabbar_mode, true);
 
         return $this->transaction(function () use ($scheme, $schema) {
@@ -269,17 +274,17 @@ class ClientDecorationSchemeService extends BaseService
 
         foreach ($list as &$item) {
             if (empty($item['main_image']) && !empty($item['images'])) {
-                $firstImageUrl = $this->getFirstImageUrl($item['images']);
-                if ($firstImageUrl !== '') {
-                    $item['main_image'] = $firstImageUrl;
-                    $item['main_image_full_url'] = buildUploadUrl($firstImageUrl);
+                $firstImageValue = app()->make(AssetHydrator::class)->firstImageValue($item['images']);
+                if ($firstImageValue !== '') {
+                    $item['main_image'] = $firstImageValue;
                 }
             }
             $item['category_name'] = $categories[(int) ($item['category_id'] ?? 0)] ?? '';
             $item['brand_name'] = $brands[(int) ($item['brand_id'] ?? 0)] ?? '';
         }
+        unset($item);
 
-        return $list;
+        return app()->make(AssetHydrator::class)->hydrateGoodsList($list);
     }
 
     /**
@@ -333,25 +338,6 @@ class ClientDecorationSchemeService extends BaseService
             ->toArray();
     }
 
-    protected function getFirstImageUrl($images): string
-    {
-        if (is_string($images)) {
-            $decoded = json_decode($images, true);
-            $images = is_array($decoded) ? $decoded : [];
-        }
-
-        if (!is_array($images) || $images === []) {
-            return '';
-        }
-
-        $firstImage = $images[0] ?? [];
-        if (is_array($firstImage)) {
-            return (string) ($firstImage['url'] ?? '');
-        }
-
-        return (string) $firstImage;
-    }
-
     protected function normalizePayload(array $data, array $base = []): array
     {
         $type = (string) ($data['type'] ?? $base['type'] ?? ClientDecorationScheme::TYPE_HOME);
@@ -387,7 +373,7 @@ class ClientDecorationSchemeService extends BaseService
         return match ($type) {
             ClientDecorationScheme::TYPE_PROFILE => ['modules' => []],
             ClientDecorationScheme::TYPE_TABBAR => ['items' => []],
-            default => ['components' => [], 'modules' => []],
+            default => ['components' => [], 'modules' => [], 'pageStyle' => ['paddingY' => 0, 'paddingX' => 28]],
         };
     }
 
@@ -400,12 +386,17 @@ class ClientDecorationSchemeService extends BaseService
             if ($isList) {
                 $schema = ['components' => $schema, 'modules' => $schema];
             }
+            if (!isset($schema['pageStyle']) || !is_array($schema['pageStyle'])) {
+                $schema['pageStyle'] = ['paddingY' => 0, 'paddingX' => 28];
+            }
             if (!isset($schema['components']) && isset($schema['modules']) && is_array($schema['modules'])) {
                 $schema['components'] = $schema['modules'];
             }
             if (!isset($schema['modules']) && isset($schema['components']) && is_array($schema['components'])) {
                 $schema['modules'] = $schema['components'];
             }
+            $schema['components'] = $this->normalizeModuleListForClient($schema['components'] ?? []);
+            $schema['modules'] = $this->normalizeModuleListForClient($schema['modules'] ?? []);
         }
 
         if ($type === ClientDecorationScheme::TYPE_PROFILE) {
@@ -415,6 +406,7 @@ class ClientDecorationSchemeService extends BaseService
             if (!isset($schema['modules']) && isset($schema['components']) && is_array($schema['components'])) {
                 $schema['modules'] = $schema['components'];
             }
+            $schema['modules'] = $this->normalizeModuleListForClient($schema['modules'] ?? []);
         }
 
         if ($type === ClientDecorationScheme::TYPE_TABBAR && $isList) {
@@ -422,6 +414,190 @@ class ClientDecorationSchemeService extends BaseService
         }
 
         return $schema;
+    }
+
+    /**
+     * @param mixed $modules
+     * @return array<int, array<string, mixed>>
+     */
+    protected function normalizeModuleListForClient($modules): array
+    {
+        if (!is_array($modules)) {
+            return [];
+        }
+
+        $list = [];
+        foreach ($modules as $index => $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+
+            $props = [];
+            foreach (['props', 'config', 'data'] as $key) {
+                if (isset($item[$key]) && is_array($item[$key])) {
+                    $props = array_merge($props, $item[$key]);
+                }
+            }
+            $props = $this->stripRuntimePreviewFields($props);
+
+            $type = (string) ($item['type'] ?? $item['component'] ?? '');
+            if ($type === 'banner') {
+                $props = $this->normalizeBannerProps($props);
+            }
+            if ($type === 'navGrid') {
+                $props = $this->normalizeNavGridProps($props);
+            }
+
+            $list[] = [
+                'id' => (string) ($item['id'] ?? $item['key'] ?? ('module-' . $index)),
+                'type' => $type,
+                'title' => (string) ($item['title'] ?? $item['label'] ?? ''),
+                'enabled' => ($item['enabled'] ?? true) !== false && ($item['visible'] ?? true) !== false,
+                'sort' => (int) ($item['sort'] ?? $item['order'] ?? $index),
+                'props' => $props,
+            ];
+        }
+
+        return array_values(array_filter($list, fn (array $item): bool => $item['type'] !== ''));
+    }
+
+    /**
+     * @param array<string, mixed> $props
+     * @return array<string, mixed>
+     */
+    protected function normalizeBannerProps(array $props): array
+    {
+        $items = $props['items'] ?? $props['list'] ?? $props['images'] ?? [];
+        if (!is_array($items)) {
+            return $props;
+        }
+
+        $normalized = [];
+        foreach (array_values($items) as $index => $item) {
+            if (is_string($item)) {
+                $normalized[] = $this->isLegacySvgImage($item) || $this->isLegacyDefaultBannerImage($item)
+                    ? [
+                        'image' => $this->defaultBannerImageByIndex($index),
+                        'path' => '',
+                        'title' => '轮播图' . ($index + 1),
+                    ]
+                    : $item;
+                continue;
+            }
+            if (!is_array($item)) {
+                continue;
+            }
+            $image = $item['image'] ?? $item['url'] ?? '';
+            if ($this->isLegacySvgImage($image) || $this->isLegacyDefaultBannerImage($image)) {
+                $item['image'] = $this->defaultBannerImageByIndex($index);
+            }
+            $normalized[] = $item;
+        }
+
+        $props['items'] = $normalized;
+        $props['list'] = $normalized;
+        $props['images'] = $normalized;
+
+        return $props;
+    }
+
+    protected function defaultBannerImageByIndex(int $index): string
+    {
+        $ids = ['48', '49', '50'];
+        return $ids[$index % count($ids)];
+    }
+
+    /**
+     * @param array<string, mixed> $props
+     * @return array<string, mixed>
+     */
+    protected function normalizeNavGridProps(array $props): array
+    {
+        $items = $props['items'] ?? [];
+        if (!is_array($items)) {
+            return $props;
+        }
+
+        foreach ($items as &$item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $image = $item['image']
+                ?? $item['image_url']
+                ?? $item['imageUrl']
+                ?? $item['full_url']
+                ?? $item['fullUrl']
+                ?? '';
+            if ($image === '' || $image === null || $this->isLegacySvgImage($image) || $this->isLegacyDefaultNavImage($image)) {
+                $item['image'] = $this->defaultNavImageByItem($item, '');
+            }
+        }
+        unset($item);
+
+        $props['items'] = $items;
+
+        return $props;
+    }
+
+    /**
+     * @param array<string, mixed> $item
+     */
+    protected function defaultNavImageByItem(array $item, string $fallback): string
+    {
+        $key = (string) ($item['icon'] ?? $item['key'] ?? '');
+        $key = str_replace('lucide:', '', $key);
+        $title = (string) ($item['title'] ?? $item['label'] ?? $item['text'] ?? '');
+
+        if (str_contains($key, 'sparkles') || str_contains($key, 'beauty') || $title === '美妆') {
+            return '52';
+        }
+        if (str_contains($key, 'shirt') || str_contains($key, 'clothes') || str_contains($key, 'menswear') || $title === '服饰') {
+            return '53';
+        }
+        if (str_contains($key, 'sofa') || str_contains($key, 'home') || str_contains($key, 'furniture') || $title === '家居') {
+            return '54';
+        }
+        if (str_contains($key, 'utensils') || str_contains($key, 'food') || $title === '美食') {
+            return '55';
+        }
+        if (str_contains($key, 'dumbbell') || str_contains($key, 'sport') || $title === '运动') {
+            return '56';
+        }
+        if (str_contains($key, 'smartphone') || str_contains($key, 'phone') || $title === '数码') {
+            return '51';
+        }
+
+        return $fallback;
+    }
+
+    protected function isLegacySvgImage(mixed $image): bool
+    {
+        return is_string($image) && str_starts_with($image, 'data:image/svg');
+    }
+
+    protected function isLegacyDefaultBannerImage(mixed $image): bool
+    {
+        $id = is_array($image) ? (string) ($image['url'] ?? $image['asset_id'] ?? '') : (string) $image;
+        return in_array($id, ['6', '7', '8', '41'], true);
+    }
+
+    protected function isLegacyDefaultNavImage(mixed $image): bool
+    {
+        $id = is_array($image) ? (string) ($image['url'] ?? $image['asset_id'] ?? '') : (string) $image;
+        return in_array($id, ['15', '16', '20', '23', '40', '46', '47'], true);
+    }
+
+    protected function stripRuntimePreviewFields(array $value): array
+    {
+        unset($value['preview_goods'], $value['previewGoods']);
+
+        foreach ($value as $key => $item) {
+            if (is_array($item)) {
+                $value[$key] = $this->stripRuntimePreviewFields($item);
+            }
+        }
+
+        return $value;
     }
 
     protected function normalizeJsonValue($value): array
@@ -441,6 +617,32 @@ class ClientDecorationSchemeService extends BaseService
         }
 
         return [];
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $list
+     * @return array<int, array<string, mixed>>
+     */
+    protected function hydrateSchemeListSchemaAssets(array $list): array
+    {
+        foreach ($list as &$item) {
+            $item['schema'] = $this->hydrateSchemeSchemaAssets($this->normalizeJsonValue($item['schema'] ?? []));
+        }
+        unset($item);
+
+        return $list;
+    }
+
+    /**
+     * @param array<string, mixed> $schema
+     * @return array<string, mixed>
+     */
+    protected function hydrateSchemeSchemaAssets(array $schema): array
+    {
+        /** @var AssetHydrator $hydrator */
+        $hydrator = app()->make(AssetHydrator::class);
+
+        return $hydrator->hydrateDecorationSchema($schema);
     }
 
     protected function validateSchemaByType(string $type, array $schema, string $tabbarMode, bool $strict = false): void
