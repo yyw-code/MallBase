@@ -1269,19 +1269,37 @@ const normalizeProfileItems = (
         (type === 'orderEntry'
           ? `订单入口${index + 1}`
           : `服务入口${index + 1}`);
-      const image =
-        item.image ??
-        item.image_url ??
-        item.imageUrl ??
-        item.icon_image ??
-        item.iconImage ??
-        getDefaultProfileEntryImage(type, index);
+      const imageRemoved =
+        item.imageRemoved === true || item.image_removed === true;
+      const image = imageRemoved
+        ? ''
+        : (item.image ??
+          item.image_url ??
+          item.imageUrl ??
+          item.icon_image ??
+          item.iconImage ??
+          getDefaultProfileEntryImage(type, index));
       const rest = { ...item };
       if (rest.action === 'theme' && !rest.key) {
         rest.key = 'theme';
       }
       delete rest.action;
       delete rest.icon;
+      if (imageRemoved) {
+        delete rest.image_url;
+        delete rest.imageUrl;
+        delete rest.icon_image;
+        delete rest.iconImage;
+        delete rest.full_url;
+        delete rest.fullUrl;
+        delete rest.preview_url;
+        delete rest.previewUrl;
+        rest.imageRemoved = true;
+        rest.image_removed = true;
+      } else {
+        delete rest.imageRemoved;
+        delete rest.image_removed;
+      }
       return {
         ...rest,
         enabled: item.enabled !== false && item.visible !== false,

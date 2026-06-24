@@ -120,6 +120,10 @@ function defaultProfileEntryImage(type, index) {
   return "";
 }
 
+function isProfileEntryImageRemoved(item) {
+  return item?.imageRemoved === true || item?.image_removed === true;
+}
+
 const logged = computed(() => userStore.isLoggedIn);
 const nickname = computed(() => userStore.userInfo?.nickname || "");
 const avatar = computed(
@@ -249,13 +253,15 @@ function moduleList(module) {
       return item.visible !== false && item.enabled !== false;
     })
     .map((item, index) => {
-      const image =
-        item.image ||
-        item.image_url ||
-        item.imageUrl ||
-        item.icon_image ||
-        item.iconImage ||
-        defaultProfileEntryImage(module.type, index);
+      const imageRemoved = isProfileEntryImageRemoved(item);
+      const image = imageRemoved
+        ? ""
+        : item.image ||
+          item.image_url ||
+          item.imageUrl ||
+          item.icon_image ||
+          item.iconImage ||
+          defaultProfileEntryImage(module.type, index);
       return {
         ...item,
         image,
@@ -645,6 +651,7 @@ function profileIconText(item) {
 }
 
 function getProfileEntryImage(item) {
+  if (isProfileEntryImageRemoved(item)) return "";
   return normalizeProfileImageUrl(
     item?.full_url ||
       item?.fullUrl ||
@@ -1339,7 +1346,7 @@ function handleLogout() {
 .wallet-card__action {
   flex: 1;
   height: 64rpx;
-  border-radius: 12rpx;
+  border-radius: 999rpx;
   background: var(--color-bg-surface, #f3f3fe);
   display: flex;
   align-items: center;

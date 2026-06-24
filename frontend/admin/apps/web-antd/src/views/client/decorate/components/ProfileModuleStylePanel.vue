@@ -83,7 +83,6 @@ const updateMarginSide = (field: string, value: unknown) => {
     <div class="property-section__head">
       <div class="property-section__title">基础样式</div>
       <a-button
-        class="decorate-capsule-button"
         :disabled="disabled"
         size="small"
         type="link"

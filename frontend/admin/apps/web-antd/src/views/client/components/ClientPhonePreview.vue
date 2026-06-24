@@ -63,6 +63,8 @@ const bannerPreviewTick = ref(0);
 const previewRootRef = ref<HTMLElement | null>(null);
 const selectedModuleControlReady = ref(false);
 const selectedModuleControlStyle = ref<Record<string, string>>({});
+const selectedModuleFrameReady = ref(false);
+const selectedModuleFrameStyle = ref<Record<string, string>>({});
 let bannerPreviewTimer: ReturnType<typeof setInterval> | undefined;
 
 onMounted(() => {
@@ -92,6 +94,8 @@ const DEFAULT_THEME_TOKENS = {
   colorTextTertiary: '#737686',
   colorTextTitle: '#191b23',
 };
+
+const PREVIEW_EXTERNAL_CONTROL_VERTICAL_INSET = 56;
 
 const DEFAULT_HOME_MODULES: ModuleItem[] = [
   {
@@ -660,6 +664,10 @@ function defaultProfileEntryImage(moduleType: string, index: number) {
   return '';
 }
 
+function isProfileEntryImageRemoved(item: any) {
+  return item?.imageRemoved === true || item?.image_removed === true;
+}
+
 function moduleList(module: ModuleItem) {
   const list = [
     module.props?.list,
@@ -677,6 +685,7 @@ function moduleList(module: ModuleItem) {
   return source
     .filter((item: any) => item?.enabled !== false && item?.visible !== false)
     .map((item: any, index: number) => {
+      if (isProfileEntryImageRemoved(item)) return item;
       if (getImage(item)) return item;
       const image = defaultProfileEntryImage(module.type, index);
       return image ? { ...item, image } : item;
@@ -685,6 +694,7 @@ function moduleList(module: ModuleItem) {
 
 function getImage(item: any): string {
   if (typeof item === 'string') return normalizePreviewImageUrl(item);
+  if (isProfileEntryImageRemoved(item)) return '';
   const candidates = [
     item?.full_url ||
       item?.fullUrl ||
@@ -1471,6 +1481,7 @@ function isTabbarDropAppend() {
 function updateSelectedModuleControlPosition() {
   if (!selectedModuleForControls.value) {
     selectedModuleControlReady.value = false;
+    selectedModuleFrameReady.value = false;
     return;
   }
 
@@ -1479,16 +1490,49 @@ function updateSelectedModuleControlPosition() {
     const target = root?.querySelector<HTMLElement>(
       '[data-module-selected="true"]',
     );
-    if (!root || !target) {
+    const device = root?.querySelector<HTMLElement>(
+      '.client-phone-preview__device',
+    );
+    if (!root || !target || !device) {
       selectedModuleControlReady.value = false;
+      selectedModuleFrameReady.value = false;
       return;
     }
 
     const rootRect = root.getBoundingClientRect();
+    const deviceRect = device.getBoundingClientRect();
     const targetRect = target.getBoundingClientRect();
-    selectedModuleControlStyle.value = {
-      top: `${targetRect.top - rootRect.top + targetRect.height / 2}px`,
+    selectedModuleFrameStyle.value = {
+      height: `${targetRect.height}px`,
+      left: `${targetRect.left - deviceRect.left - device.clientLeft}px`,
+      top: `${targetRect.top - deviceRect.top - device.clientTop}px`,
+      width: `${targetRect.width}px`,
     };
+    const rawControlTop = targetRect.top - rootRect.top + targetRect.height / 2;
+    const controlTopMin =
+      deviceRect.top -
+      rootRect.top +
+      device.clientTop +
+      PREVIEW_EXTERNAL_CONTROL_VERTICAL_INSET;
+    const controlTopMax =
+      deviceRect.top -
+      rootRect.top +
+      device.clientTop +
+      device.clientHeight -
+      PREVIEW_EXTERNAL_CONTROL_VERTICAL_INSET;
+    const controlTop =
+      controlTopMin <= controlTopMax
+        ? clampNumber(
+            rawControlTop,
+            rawControlTop,
+            controlTopMin,
+            controlTopMax,
+          )
+        : rawControlTop;
+    selectedModuleControlStyle.value = {
+      top: `${controlTop}px`,
+    };
+    selectedModuleFrameReady.value = true;
     selectedModuleControlReady.value = true;
   });
 }
@@ -2239,6 +2283,13 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
         <button>加入购物车</button>
         <button>立即购买</button>
       </div>
+
+      <div
+        v-if="selectedModuleForControls && selectedModuleFrameReady"
+        class="preview-selection-frame"
+        :style="selectedModuleFrameStyle"
+        aria-hidden="true"
+      ></div>
     </div>
 
     <div
@@ -2307,6 +2358,7 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
 }
 
 .client-phone-preview__device {
+  position: relative;
   display: flex;
   flex-direction: column;
   width: 375px;
@@ -2494,21 +2546,11 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
   background: transparent;
   transition:
     transform 0.16s ease,
-    box-shadow 0.16s ease,
-    outline-color 0.16s ease;
+    box-shadow 0.16s ease;
 }
 
 .preview-module--interactive {
   cursor: pointer;
-}
-
-.preview-module--selected {
-  z-index: 20;
-  outline: 2px solid var(--mb-preview-primary);
-  outline-offset: 5px;
-  border-radius: 12px;
-  box-shadow: 0 0 0 6px
-    color-mix(in srgb, var(--mb-preview-primary) 12%, transparent);
 }
 
 .preview-module--hidden {
@@ -2559,6 +2601,18 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
 
 .preview-selected-title {
   white-space: nowrap;
+}
+
+.preview-selection-frame {
+  position: absolute;
+  z-index: 50;
+  box-sizing: border-box;
+  pointer-events: none;
+  border-radius: 12px;
+  outline: 2px solid var(--mb-preview-primary);
+  outline-offset: -2px;
+  box-shadow: inset 0 0 0 5px
+    color-mix(in srgb, var(--mb-preview-primary) 12%, transparent);
 }
 
 .preview-external-controls {
@@ -3608,9 +3662,10 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
   padding: 7px;
   overflow: hidden;
   text-align: center;
-  border-radius: 8px;
+  border-radius: 999px;
   background: var(--mb-preview-bg-surface);
   font-size: 12px;
+  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }

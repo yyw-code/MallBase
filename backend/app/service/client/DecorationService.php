@@ -470,24 +470,50 @@ class DecorationService extends BaseService
             }
 
             $label = (string) ($item['label'] ?? $item['title'] ?? $item['text'] ?? '入口');
-            $image = $item['image']
-                ?? $item['image_url']
-                ?? $item['imageUrl']
-                ?? $item['icon_image']
-                ?? $item['iconImage']
-                ?? '';
+            $imageRemoved = ($item['imageRemoved'] ?? false) === true
+                || ($item['image_removed'] ?? false) === true;
+            $image = $imageRemoved
+                ? ''
+                : ($item['image']
+                    ?? $item['image_url']
+                    ?? $item['imageUrl']
+                    ?? $item['icon_image']
+                    ?? $item['iconImage']
+                    ?? '');
             if (($item['action'] ?? '') === 'theme' && empty($item['key'])) {
                 $item['key'] = 'theme';
             }
 
             unset($item['action'], $item['icon']);
+            if ($imageRemoved) {
+                unset(
+                    $item['image_url'],
+                    $item['imageUrl'],
+                    $item['icon_image'],
+                    $item['iconImage'],
+                    $item['full_url'],
+                    $item['fullUrl'],
+                    $item['preview_url'],
+                    $item['previewUrl']
+                );
+            } else {
+                unset($item['imageRemoved'], $item['image_removed']);
+            }
 
-            $normalized[] = array_merge($item, [
-                'image' => $image !== '' && $image !== null ? $image : $this->defaultProfileEntryImage($type, $index),
+            $normalizedItem = array_merge($item, [
+                'image' => $imageRemoved
+                    ? ''
+                    : ($image !== '' && $image !== null ? $image : $this->defaultProfileEntryImage($type, $index)),
                 'label' => $label,
                 'path' => (string) ($item['path'] ?? $item['url'] ?? $item['link'] ?? ''),
                 'title' => $label,
             ]);
+            if ($imageRemoved) {
+                $normalizedItem['imageRemoved'] = true;
+                $normalizedItem['image_removed'] = true;
+            }
+
+            $normalized[] = $normalizedItem;
         }
 
         return $normalized;

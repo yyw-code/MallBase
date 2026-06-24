@@ -716,6 +716,32 @@ const getDefaultProfileEntryImageValue = (moduleType: string, index: number) =>
         index % defaultProfileServiceImageByIndex.length
       ];
 
+const isProfileItemImageRemoved = (item: any) =>
+  item?.imageRemoved === true || item?.image_removed === true;
+
+const clearProfileItemImageFields = (item: any) => {
+  delete item.image;
+  delete item.image_url;
+  delete item.imageUrl;
+  delete item.icon_image;
+  delete item.iconImage;
+  delete item.full_url;
+  delete item.fullUrl;
+  delete item.preview_url;
+  delete item.previewUrl;
+};
+
+const setProfileItemImageRemoved = (item: any, removed: boolean) => {
+  if (removed) {
+    item.imageRemoved = true;
+    item.image_removed = true;
+    clearProfileItemImageFields(item);
+    return;
+  }
+  delete item.imageRemoved;
+  delete item.image_removed;
+};
+
 const getDefaultBannerItem = (index: number) => ({
   image: getDefaultBannerImageValue(index),
   path:
@@ -1192,22 +1218,29 @@ const normalizeProfileEntryItem = (
   if (target.title !== label) target.title = label;
   if (target.action === 'theme' && !target.key) target.key = 'theme';
 
-  const imageSource =
-    target.image ||
-    target.image_url ||
-    target.imageUrl ||
-    target.icon_image ||
-    target.iconImage ||
-    getDefaultProfileEntryImageValue(moduleType, index);
+  const imageRemoved = isProfileItemImageRemoved(target);
+  const imageSource = imageRemoved
+    ? undefined
+    : target.image ||
+      target.image_url ||
+      target.imageUrl ||
+      target.icon_image ||
+      target.iconImage ||
+      getDefaultProfileEntryImageValue(moduleType, index);
   const shouldNormalizeImage =
-    !target.image ||
-    typeof target.image === 'string' ||
-    typeof target.image === 'number';
+    !imageRemoved &&
+    (!target.image ||
+      typeof target.image === 'string' ||
+      typeof target.image === 'number');
   if (shouldNormalizeImage) {
     const normalizedImage =
       normalizeUploadImageValue(imageSource) ||
       getDefaultProfileEntryImageValue(moduleType, index);
     if (target.image !== normalizedImage) target.image = normalizedImage;
+  } else if (imageRemoved) {
+    clearProfileItemImageFields(target);
+    target.imageRemoved = true;
+    target.image_removed = true;
   }
 
   const path =
@@ -1314,6 +1347,15 @@ const updateProfileItemLabel = (item: any, value: string) => {
 
 const updateProfileItemPath = (item: any, value: string) => {
   item.path = value;
+};
+
+const updateProfileItemImage = (item: any, value: any) => {
+  if (value) {
+    item.image = value;
+    setProfileItemImageRemoved(item, false);
+    return;
+  }
+  setProfileItemImageRemoved(item, true);
 };
 
 const createCubeItem = (index: number) => ({
@@ -1794,7 +1836,6 @@ const updateSelectedSubTitleColor = (event: Event) => {
             <div class="property-section__head">
               <div class="property-section__title">页面样式</div>
               <a-button
-                class="decorate-capsule-button"
                 :disabled="isReadonlyScheme"
                 size="small"
                 type="link"
@@ -2787,7 +2828,6 @@ const updateSelectedSubTitleColor = (event: Event) => {
                 </div>
               </div>
               <a-button
-                class="decorate-capsule-button"
                 :disabled="isReadonlyScheme"
                 size="small"
                 type="link"
@@ -2895,12 +2935,13 @@ const updateSelectedSubTitleColor = (event: Event) => {
                     </button>
                     <div class="entry-row__image">
                       <Upload
-                        v-model:value="item.image"
+                        :value="item.image"
                         :disabled="isReadonlyScheme"
                         :max-count="1"
                         mode="both"
                         module="client_decorate"
                         type="image"
+                        @update:value="updateProfileItemImage(item, $event)"
                       />
                     </div>
                     <a-input
@@ -2930,7 +2971,6 @@ const updateSelectedSubTitleColor = (event: Event) => {
                       />
                     </div>
                     <a-button
-                      class="decorate-capsule-button"
                       danger
                       size="small"
                       @click="
@@ -2945,7 +2985,6 @@ const updateSelectedSubTitleColor = (event: Event) => {
                     </a-button>
                   </div>
                   <a-button
-                    class="decorate-capsule-button"
                     size="small"
                     @click="$emit('addProfileItem', editableModule)"
                   >
@@ -2959,7 +2998,6 @@ const updateSelectedSubTitleColor = (event: Event) => {
               <div class="property-subsection__head">
                 <div class="property-subsection__title">文字样式</div>
                 <a-button
-                  class="decorate-capsule-button"
                   :disabled="isReadonlyScheme"
                   size="small"
                   type="link"

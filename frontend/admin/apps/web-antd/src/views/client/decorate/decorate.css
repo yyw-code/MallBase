@@ -68,47 +68,6 @@
   grid-template-columns: minmax(360px, 1fr) clamp(460px, 34vw, 600px);
 }
 
-.decorate-page--profile .decorate-top :where(.ant-btn),
-.decorate-capsule-button:where(.ant-btn),
-.decorate-capsule-button.ant-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  font-weight: 600;
-}
-
-.decorate-page--profile .decorate-top :where(.ant-btn:not(.ant-btn-link)),
-.decorate-capsule-button:where(.ant-btn:not(.ant-btn-link)) {
-  padding-inline: 15px;
-}
-
-.decorate-capsule-button:where(.ant-btn-sm) {
-  min-width: 54px;
-  padding-inline: 12px;
-}
-
-.decorate-capsule-button:where(.ant-btn-link) {
-  height: 28px;
-  padding-inline: 12px;
-  color: hsl(var(--foreground));
-  border: 1px solid hsl(var(--border));
-  background: hsl(var(--muted) / 36%);
-}
-
-.decorate-capsule-button:where(.ant-btn-link:hover) {
-  color: hsl(var(--primary));
-  border-color: hsl(var(--primary) / 42%);
-  background: hsl(var(--primary) / 8%);
-}
-
-.decorate-capsule-button:where(.ant-btn-link[disabled]),
-.decorate-capsule-button:where(.ant-btn-link.ant-btn-disabled) {
-  color: hsl(var(--muted-foreground));
-  border-color: hsl(var(--border));
-  background: hsl(var(--muted) / 24%);
-}
-
 .component-library,
 .property-panel,
 .preview-canvas-panel {

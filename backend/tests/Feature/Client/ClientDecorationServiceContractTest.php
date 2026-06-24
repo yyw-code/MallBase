@@ -434,6 +434,13 @@ final class ClientDecorationServiceContractTest extends TestCase
                                 'path' => '/pages-sub/order/list?status=10',
                                 'visible' => false,
                             ],
+                            [
+                                'image' => '',
+                                'imageRemoved' => true,
+                                'image_removed' => true,
+                                'label' => '待发货',
+                                'path' => '/pages-sub/order/list?status=20',
+                            ],
                         ],
                         'padding_bottom' => 3,
                         'padding_left' => 4,
@@ -474,6 +481,9 @@ final class ClientDecorationServiceContractTest extends TestCase
         $this->assertSame('#123456', $props['shadowColor']);
         $this->assertSame(35, $props['shadowOpacity']);
         $this->assertFalse($props['items'][0]['visible']);
+        $this->assertSame('', $props['items'][1]['image']);
+        $this->assertTrue($props['items'][1]['imageRemoved']);
+        $this->assertTrue($props['items'][1]['image_removed']);
         $this->assertArrayNotHasKey('textVisibility', $props);
     }
 
