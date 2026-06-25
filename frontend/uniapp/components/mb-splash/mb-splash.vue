@@ -33,7 +33,6 @@ import { useAppStore } from '@/store/app'
 
 let shownThisRun = false
 
-const STORAGE_KEY = 'mb_splash_enabled'
 const DEFAULT_DURATION_MS = 3000
 // 启动页展示前等待 siteConfig 的最长时间；超时则进入 brand 兜底视图
 // 避免接口慢/失败时启动页永远不出现
@@ -69,10 +68,6 @@ let autoCloseTimer = null
 let tickTimer = null
 let configWaitTimer = null
 let stopConfigWatch = null
-
-function userEnabled() {
-  return uni.getStorageSync(STORAGE_KEY) !== false
-}
 
 function clearAllTimers() {
   if (autoCloseTimer) {
@@ -157,7 +152,6 @@ onMounted(() => {
     clearConfigWait()
     if (shownThisRun) return
     if (!remoteEnabled.value) return
-    if (!userEnabled()) return
     shownThisRun = true
     show()
   }
