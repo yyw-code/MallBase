@@ -208,21 +208,29 @@
       </view>
 
       <!-- Bottom spacer -->
-      <view v-if="actions.length > 0" class="bottom-spacer" />
+      <view class="bottom-spacer" />
     </template>
 
     <!-- Bottom action bar -->
-    <view v-if="order && actions.length > 0" class="action-bar">
+    <view v-if="order" class="action-bar">
       <view class="action-bar__inner">
-        <mb-button
-          v-for="act in actions"
-          :key="act.key"
-          class="action-bar__button"
-          :type="act.primary ? 'primary' : 'secondary'"
-          size="medium"
-          :label="act.label"
-          @click="handleAction(act.key)"
-        />
+        <view class="action-bar__tools">
+          <view class="action-bar__tool" @tap="openCustomerService">
+            <view class="action-bar__icon-service" />
+            <text class="action-bar__tool-label">客服</text>
+          </view>
+        </view>
+        <view v-if="actions.length > 0" class="action-bar__actions">
+          <mb-button
+            v-for="act in actions"
+            :key="act.key"
+            class="action-bar__button"
+            :type="act.primary ? 'primary' : 'secondary'"
+            size="medium"
+            :label="act.label"
+            @click="handleAction(act.key)"
+          />
+        </view>
       </view>
     </view>
 
@@ -253,6 +261,7 @@ import { onLoad } from '@dcloudio/uni-app'
 import { getOrderDetail, cancelOrder, confirmReceive } from '@/api/order/order'
 import { usePayFlow } from '@/utils/usePayFlow'
 import { multiplyPrice, sumPrices } from '@/utils/price'
+import { openCustomerService } from '@/utils/customer-service'
 import config from '@/config/index'
 const decorateStore = useDecorateStore()
 
@@ -1390,10 +1399,49 @@ onUnmounted(() => {
 .action-bar__inner {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
   gap: $mb-spacing-md;
   padding: $mb-spacing-sm $mb-spacing-page;
   padding-bottom: calc(#{$mb-spacing-sm} + env(safe-area-inset-bottom));
+}
+
+.action-bar__tools {
+  display: flex;
+  align-items: center;
+  gap: $mb-spacing-lg;
+  flex-shrink: 0;
+}
+
+.action-bar__tool {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4rpx;
+  min-width: 64rpx;
+}
+
+.action-bar__icon-service {
+  width: 44rpx;
+  height: 44rpx;
+  background-image: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0OCIgaGVpZ2h0PSI0OCIgdmlld0JveD0iMCAtOTYwIDk2MCA5NjAiPjxwYXRoIGZpbGw9IiM0MzQ2NTQiIGQ9Ik00ODItNDB2LTYwaDI5OHYtNTRINjMydi0yOTZoMTQ4di02OHEwLTEyNC04Ny0yMTMuNVQ0ODItODIxcS0xMjQgMC0yMTMgODkuNVQxODAtNTE4djY4aDE0OHYyOTZIMTgwcS0yNCAwLTQyLTE4dC0xOC00MnYtMzA0cTAtNzQuNzMgMjguNS0xNDAuODhRMTc3LTcyNS4wMyAyMjYtNzc0LjUxIDI3NS04MjQgMzQxLjItODUyLjVxNjYuMjEtMjguNSAxNDEtMjguNSA3NC44IDAgMTQwLjMgMjguNVE2ODgtODI0IDczNi4wNS03NzQuNTFxNDguMDUgNDkuNDggNzYgMTE1LjYzUTg0MC01OTIuNzMgODQwLTUxOHY0MThxMCAyNC0xOCA0MnQtNDIgMThINDgyWk0xODAtMjE0aDg4di0xNzZoLTg4djE3NlptNTEyIDBoODh2LTE3NmgtODh2MTc2Wk0xODAtMzkwaDg4LTg4Wm01MTIgMGg4OC04OFoiLz48L3N2Zz4=");
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+}
+
+.action-bar__tool-label {
+  font-size: 20rpx;
+  color: var(--color-text-secondary, #434654);
+  line-height: 1;
+}
+
+.action-bar__actions {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: $mb-spacing-md;
+  min-width: 0;
 }
 
 .action-bar__button {
