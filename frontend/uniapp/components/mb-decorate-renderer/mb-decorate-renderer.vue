@@ -189,14 +189,18 @@
       <view
         v-else-if="module.type === 'spacing'"
         class="decorate-spacing"
-        :style="spacingStyle(module)"
-      />
+        :style="moduleStyle(module)"
+      >
+        <view class="decorate-spacing__inner" :style="spacingStyle(module)" />
+      </view>
 
       <view
         v-else-if="module.type === 'divider'"
-        class="decorate-divider"
+        class="decorate-divider-wrap"
         :style="moduleStyle(module)"
-      />
+      >
+        <view class="decorate-divider" :style="dividerStyle(module)" />
+      </view>
 
       <view
         v-else-if="module.type === 'productGroup'"
@@ -617,7 +621,23 @@ function bannerStyle(module) {
 }
 
 function spacingStyle(module) {
-  return `${moduleStyle(module)}; height: ${Number(module.props.height || 24)}rpx`;
+  const height = clampStyleNumber(module.props?.height, 32, 0, 300);
+  return `height: ${height}rpx`;
+}
+
+function dividerStyle(module) {
+  const height = clampStyleNumber(
+    module.props?.height ??
+      module.props?.lineHeight ??
+      module.props?.line_height,
+    1,
+    1,
+    20,
+  );
+  const color =
+    styleColor(module.props?.color) || "var(--color-divider, #f0f2f5)";
+  const lineStyle = module.props?.style === "dashed" ? "dashed" : "solid";
+  return `border-top: ${height}rpx ${lineStyle} ${color}`;
 }
 
 function navItemWidth(module) {
@@ -1369,9 +1389,20 @@ defineExpose({ refresh, loadMore });
   color: var(--color-text, #191b23);
 }
 
+.decorate-spacing,
+.decorate-divider-wrap {
+  box-sizing: border-box;
+}
+
+.decorate-spacing__inner {
+  width: 100%;
+}
+
 .decorate-divider {
-  height: 1rpx;
-  background: var(--color-divider, #f0f2f5);
+  width: 100%;
+  height: 0;
+  border-top: 1rpx solid var(--color-divider, #f0f2f5);
+  background: transparent;
 }
 
 .decorate-section-head {

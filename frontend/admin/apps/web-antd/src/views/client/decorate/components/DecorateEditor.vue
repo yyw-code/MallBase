@@ -677,6 +677,35 @@ const syncModuleBackgroundShortcutByModule = (module: ModuleItem | null) => {
   syncModuleBackgroundShortcut(module.config);
 };
 
+const getDividerColorInputValue = (module: ModuleItem | null) =>
+  normalizeStyleColorValue(module?.config?.color, '#e5e7eb');
+
+const updateDividerColorFromEvent = (event: Event) => {
+  const value = (event.target as HTMLInputElement | null)?.value;
+  if (value && editableModule.value?.config) {
+    editableModule.value.config.color = value;
+  }
+};
+
+const normalizeDividerHeight = (value: unknown, fallback = 1) => {
+  const numberValue = Number(value ?? fallback);
+  if (!Number.isFinite(numberValue)) return fallback;
+  return Math.max(1, Math.min(Math.round(numberValue), 20));
+};
+
+const getDividerHeightValue = (module: ModuleItem | null) =>
+  normalizeDividerHeight(
+    module?.config?.height ??
+      module?.config?.lineHeight ??
+      module?.config?.line_height,
+  );
+
+const updateDividerHeight = (value: unknown) => {
+  if (editableModule.value?.config) {
+    editableModule.value.config.height = normalizeDividerHeight(value);
+  }
+};
+
 const updateSelectedRichTextContent = (value: string) => {
   if (editableModule.value?.config) {
     editableModule.value.config.content = value;
@@ -2835,12 +2864,23 @@ const updateProfileItemVisible = updateConfigItemVisible;
 
             <template v-if="editableModule.type === 'spacing'">
               <a-form-item label="高度">
-                <a-input-number
-                  v-model:value="editableModule.config.height"
-                  :min="4"
-                  :max="120"
-                  class="w-full"
-                />
+                <div class="style-range-control">
+                  <a-slider
+                    v-model:value="editableModule.config.height"
+                    :disabled="isReadonlyScheme"
+                    :min="0"
+                    :max="300"
+                    class="style-range-control__slider"
+                  />
+                  <a-input-number
+                    v-model:value="editableModule.config.height"
+                    :disabled="isReadonlyScheme"
+                    :min="0"
+                    :max="300"
+                    addon-after="rpx"
+                    class="style-range-control__number"
+                  />
+                </div>
               </a-form-item>
             </template>
 
@@ -2851,13 +2891,43 @@ const updateProfileItemVisible = updateConfigItemVisible;
                   <a-select-option value="dashed">虚线</a-select-option>
                 </a-select>
               </a-form-item>
-              <a-form-item label="边距">
-                <a-input-number
-                  v-model:value="editableModule.config.margin"
-                  :min="0"
-                  :max="60"
-                  class="w-full"
-                />
+              <a-form-item label="线条颜色">
+                <div class="style-color-field style-color-field--no-action">
+                  <input
+                    aria-label="选择分割线颜色"
+                    class="style-color-field__picker"
+                    type="color"
+                    :value="getDividerColorInputValue(editableModule)"
+                    @input="updateDividerColorFromEvent"
+                  />
+                  <a-input
+                    v-model:value="editableModule.config.color"
+                    allow-clear
+                    class="style-color-field__input"
+                    placeholder="跟随主题分割线"
+                  />
+                </div>
+              </a-form-item>
+              <a-form-item label="线条高度">
+                <div class="style-range-control">
+                  <a-slider
+                    :value="getDividerHeightValue(editableModule)"
+                    :disabled="isReadonlyScheme"
+                    :min="1"
+                    :max="20"
+                    class="style-range-control__slider"
+                    @change="updateDividerHeight"
+                  />
+                  <a-input-number
+                    :value="getDividerHeightValue(editableModule)"
+                    :disabled="isReadonlyScheme"
+                    :min="1"
+                    :max="20"
+                    addon-after="rpx"
+                    class="style-range-control__number"
+                    @change="updateDividerHeight"
+                  />
+                </div>
               </a-form-item>
             </template>
           </div>

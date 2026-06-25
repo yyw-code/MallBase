@@ -1649,19 +1649,27 @@ function richTextHtml(module: ModuleItem) {
 }
 
 function spacingStyle(module: ModuleItem) {
+  const height = clampNumber(module.props?.height, 32, 0, 300);
   return {
-    height: `${toPreviewPx(module.props?.height, 24)}px`,
+    height: `${toPreviewPx(height)}px`,
   };
 }
 
 function dividerStyle(module: ModuleItem) {
-  const margin = `${toPreviewPx(module.props?.margin, 12)}px`;
+  const lineHeight = toPreviewPx(
+    clampNumber(
+      module.props?.height ??
+        module.props?.lineHeight ??
+        module.props?.line_height,
+      1,
+      1,
+      20,
+    ),
+  );
+  const color = styleColor(module.props?.color) || 'var(--mb-preview-divider)';
+  const lineStyle = module.props?.style === 'dashed' ? 'dashed' : 'solid';
   return {
-    ...moduleBoxStyle(module),
-    background: module.props?.color || undefined,
-    borderTopStyle: module.props?.style || 'solid',
-    marginBottom: margin,
-    marginTop: margin,
+    borderTop: `${lineHeight}px ${lineStyle} ${color}`,
   };
 }
 
@@ -2079,14 +2087,22 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
 
                 <div
                   v-else-if="module.type === 'spacing'"
-                  :style="spacingStyle(module)"
-                ></div>
+                  class="home-spacing"
+                  :style="moduleBoxStyle(module)"
+                >
+                  <div
+                    class="home-spacing__inner"
+                    :style="spacingStyle(module)"
+                  ></div>
+                </div>
 
                 <div
                   v-else-if="module.type === 'divider'"
-                  class="home-divider"
-                  :style="dividerStyle(module)"
-                ></div>
+                  class="home-divider-wrap"
+                  :style="moduleBoxStyle(module)"
+                >
+                  <div class="home-divider" :style="dividerStyle(module)"></div>
+                </div>
               </div>
             </template>
             <div v-if="isDropAppend()" class="preview-drop-placeholder">
@@ -3568,8 +3584,18 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
   margin-top: 0;
 }
 
+.home-spacing,
+.home-divider-wrap {
+  box-sizing: border-box;
+}
+
+.home-spacing__inner {
+  width: 100%;
+}
+
 .home-divider {
-  height: 1px;
+  width: 100%;
+  height: 0;
   border-top: 1px solid var(--mb-preview-divider);
   background: transparent;
 }

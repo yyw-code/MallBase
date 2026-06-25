@@ -2323,7 +2323,7 @@ const defaultHomeConfig = (
       subtitle: '查看全部商品分类',
       title: '热门分类',
     }),
-    divider: withStyle({ color: '', margin: 24, style: 'solid' }),
+    divider: withStyle({ color: '', height: 1, style: 'solid' }),
     imageCube: withStyle({
       images: clone(DEFAULT_CUBE_ITEMS),
       items: clone(DEFAULT_CUBE_ITEMS),
