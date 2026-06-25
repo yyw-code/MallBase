@@ -308,10 +308,7 @@ onLoad(() => {
         @action="fetchCategories"
       />
     </view>
-    <mb-custom-tabbar
-      v-if="decorateStore.tabbarMode === 'custom'"
-      current="/pages/category/index"
-    />
+    <mb-custom-tabbar current="/pages/category/index" />
   </view>
 </template>
 
@@ -323,7 +320,7 @@ onLoad(() => {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
-  background-color: $mb-color-bg-secondary;
+  background-color: var(--color-bg-secondary, #faf8ff);
 }
 
 /* ===========================
@@ -356,7 +353,7 @@ onLoad(() => {
 }
 
 .sidebar__item--active {
-  background-color: $mb-color-bg-surface;
+  background-color: var(--color-bg-surface, #f3f3fe);
 }
 
 .sidebar__indicator {
@@ -367,12 +364,12 @@ onLoad(() => {
   width: 6rpx;
   height: 44rpx;
   border-radius: 0 $mb-radius-sm $mb-radius-sm 0;
-  background-color: $mb-color-primary;
+  background-color: var(--color-primary, #0d50d5);
 }
 
 .sidebar__text {
   font-size: $mb-font-sm;
-  color: $mb-color-text-secondary;
+  color: var(--color-text-secondary, #434654);
   text-align: center;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -383,7 +380,7 @@ onLoad(() => {
 
 .sidebar__text--active {
   font-weight: 700;
-  color: $mb-color-text-title;
+  color: var(--color-text-title, #191b23);
 }
 
 /* ===========================
@@ -392,7 +389,7 @@ onLoad(() => {
 .content {
   flex: 1;
   height: 100%;
-  background-color: $mb-color-bg;
+  background-color: var(--color-bg, #ffffff);
 }
 
 /* ===========================
@@ -404,7 +401,7 @@ onLoad(() => {
   height: 200rpx;
   border-radius: $mb-radius-lg;
   overflow: hidden;
-  border: 1rpx solid $mb-color-divider;
+  border: 1rpx solid var(--color-divider, #f0f2f5);
 }
 
 .banner__bg {
@@ -448,7 +445,7 @@ onLoad(() => {
 .banner__zh {
   font-size: $mb-font-md;
   font-weight: 700;
-  color: $mb-color-text-inverse;
+  color: var(--color-text-inverse, #ffffff);
   letter-spacing: 0;
 }
 
@@ -463,7 +460,7 @@ onLoad(() => {
   display: block;
   font-size: $mb-font-lg;
   font-weight: 700;
-  color: $mb-color-text-title;
+  color: var(--color-text-title, #191b23);
   line-height: 1.3;
 }
 
@@ -471,7 +468,7 @@ onLoad(() => {
   display: block;
   margin-top: $mb-spacing-xs;
   font-size: $mb-font-xs;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
   line-height: 1.4;
 }
 
@@ -492,7 +489,7 @@ onLoad(() => {
 .sub-group__title {
   font-size: $mb-font-xs;
   font-weight: 600;
-  color: $mb-color-text-secondary;
+  color: var(--color-text-secondary, #434654);
   white-space: nowrap;
   margin-right: $mb-spacing-sm;
 }
@@ -500,7 +497,7 @@ onLoad(() => {
 .sub-group__line {
   flex: 1;
   height: 1rpx;
-  background-color: $mb-color-divider;
+  background-color: var(--color-divider, #f0f2f5);
 }
 
 /* ===========================
@@ -525,7 +522,7 @@ onLoad(() => {
   height: 104rpx;
   border-radius: $mb-radius-lg;
   background-color: #fafbff;
-  border: 1rpx solid $mb-color-divider;
+  border: 1rpx solid var(--color-divider, #f0f2f5);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -545,7 +542,7 @@ onLoad(() => {
 .grid__icon-char {
   font-size: $mb-font-lg;
   font-weight: 700;
-  color: $mb-color-primary;
+  color: var(--color-primary, #0d50d5);
   line-height: 1;
 }
 
@@ -553,7 +550,7 @@ onLoad(() => {
   position: relative;
   width: 42rpx;
   height: 42rpx;
-  color: $mb-color-primary;
+  color: var(--color-primary, #0d50d5);
 }
 
 .grid__line-icon::before,
@@ -603,7 +600,7 @@ onLoad(() => {
 .grid__name {
   margin-top: $mb-spacing-xs;
   font-size: $mb-font-xs;
-  color: $mb-color-text;
+  color: var(--color-text, #191b23);
   text-align: center;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -638,7 +635,7 @@ onLoad(() => {
 .skeleton-sidebar {
   width: 176rpx;
   flex-shrink: 0;
-  background-color: $mb-color-bg;
+  background-color: var(--color-bg, #ffffff);
   padding: $mb-spacing-sm 0;
   display: flex;
   flex-direction: column;
@@ -651,9 +648,9 @@ onLoad(() => {
   border-radius: $mb-radius-sm;
   background: linear-gradient(
     90deg,
-    $mb-color-bg-secondary 25%,
-    $mb-color-bg-surface 50%,
-    $mb-color-bg-secondary 75%
+    var(--color-bg-secondary, #faf8ff) 25%,
+    var(--color-bg-surface, #f3f3fe) 50%,
+    var(--color-bg-secondary, #faf8ff) 75%
   );
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite ease-in-out;
@@ -661,7 +658,7 @@ onLoad(() => {
 
 .skeleton-content {
   flex: 1;
-  background-color: $mb-color-bg-secondary;
+  background-color: var(--color-bg-secondary, #faf8ff);
   padding: $mb-spacing-md;
 }
 
@@ -698,9 +695,9 @@ onLoad(() => {
   border-radius: $mb-radius-lg;
   background: linear-gradient(
     90deg,
-    $mb-color-bg 25%,
-    $mb-color-bg-surface 50%,
-    $mb-color-bg 75%
+    var(--color-bg, #ffffff) 25%,
+    var(--color-bg-surface, #f3f3fe) 50%,
+    var(--color-bg, #ffffff) 75%
   );
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite ease-in-out;
@@ -713,9 +710,9 @@ onLoad(() => {
   border-radius: $mb-radius-sm;
   background: linear-gradient(
     90deg,
-    $mb-color-bg 25%,
-    $mb-color-bg-surface 50%,
-    $mb-color-bg 75%
+    var(--color-bg, #ffffff) 25%,
+    var(--color-bg-surface, #f3f3fe) 50%,
+    var(--color-bg, #ffffff) 75%
   );
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite ease-in-out;

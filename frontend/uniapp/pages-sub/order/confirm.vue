@@ -1,5 +1,9 @@
 <template>
-  <view class="confirm-page">
+  <view
+    class="confirm-page"
+    :class="[`theme-${decorateStore.resolvedThemeMode}`]"
+    :style="decorateStore.themeStyle"
+  >
     <mb-navbar title="确认订单" />
 
     <!-- 收货地址 -->
@@ -127,6 +131,7 @@
 </template>
 
 <script setup>
+import { useDecorateStore } from '@/store/decorate'
 import { ref, computed, watch, onUnmounted } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
 import { useCartStore } from '@/store/cart'
@@ -134,6 +139,7 @@ import { getAddressList } from '@/api/user/address'
 import { createOrder, previewOrder } from '@/api/order/order'
 import { usePayFlow } from '@/utils/usePayFlow'
 import { isPositivePrice, isZeroPrice, multiplyPrice, normalizePrice, sumPrices } from '@/utils/price'
+const decorateStore = useDecorateStore()
 
 const {
   sheetVisible,
@@ -402,17 +408,17 @@ async function handleSubmit() {
 <style lang="scss" scoped>
 .confirm-page {
   min-height: 100vh;
-  background-color: $mb-color-bg-secondary;
+  background-color: var(--color-bg-secondary, #faf8ff);
   padding: 0 $mb-spacing-page $mb-spacing-lg;
 }
 
 // ---- Card base ----
 .card {
-  background: $mb-color-bg;
+  background: var(--color-bg, #ffffff);
   border-radius: $mb-radius-lg;
   padding: $mb-spacing-lg;
   margin-bottom: $mb-spacing-md;
-  border: 1rpx solid $mb-color-divider;
+  border: 1rpx solid var(--color-divider, #f0f2f5);
 }
 
 // ---- Address card ----
@@ -431,7 +437,7 @@ async function handleSubmit() {
   width: 72rpx;
   height: 72rpx;
   border-radius: 50%;
-  background: rgba($mb-color-primary, 0.08);
+  background: var(--color-primary-soft, rgba(13, 80, 213, 0.08));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -448,7 +454,7 @@ async function handleSubmit() {
   height: 28rpx;
   border-radius: 50% 50% 50% 0;
   transform: rotate(-45deg);
-  background: $mb-color-primary;
+  background: var(--color-primary, #0d50d5);
   position: absolute;
   top: 0;
   left: 0;
@@ -462,7 +468,7 @@ async function handleSubmit() {
     width: 10rpx;
     height: 10rpx;
     border-radius: 50%;
-    background: $mb-color-bg;
+    background: var(--color-bg, #ffffff);
   }
 }
 
@@ -473,7 +479,7 @@ async function handleSubmit() {
   transform: translateX(-50%);
   width: 4rpx;
   height: 10rpx;
-  background: $mb-color-primary;
+  background: var(--color-primary, #0d50d5);
   border-radius: 0 0 2rpx 2rpx;
 }
 
@@ -492,17 +498,17 @@ async function handleSubmit() {
 .address-card__name {
   font-size: $mb-font-lg;
   font-weight: 600;
-  color: $mb-color-text-title;
+  color: var(--color-text-title, #191b23);
 }
 
 .address-card__phone {
   font-size: $mb-font-sm;
-  color: $mb-color-text-secondary;
+  color: var(--color-text-secondary, #434654);
 }
 
 .address-card__detail {
   font-size: $mb-font-md;
-  color: $mb-color-text-secondary;
+  color: var(--color-text-secondary, #434654);
   line-height: 1.5;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -514,7 +520,7 @@ async function handleSubmit() {
   display: block;
   margin-top: 8rpx;
   font-size: $mb-font-sm;
-  color: $mb-color-error;
+  color: var(--color-error, #ba1a1a);
 }
 
 .address-card__empty {
@@ -523,13 +529,13 @@ async function handleSubmit() {
 
 .address-card__empty-text {
   font-size: $mb-font-md;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
 }
 
 .address-card__arrow {
   flex-shrink: 0;
   font-size: 24rpx;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
   margin-left: $mb-spacing-xs;
 }
 
@@ -538,7 +544,7 @@ async function handleSubmit() {
   height: 4rpx;
   margin-bottom: $mb-spacing-md;
   border-radius: 0 0 $mb-radius-lg $mb-radius-lg;
-  background: rgba($mb-color-primary, 0.12);
+  background: var(--color-primary-soft, rgba(13, 80, 213, 0.12));
 }
 
 // ---- Goods card ----
@@ -553,7 +559,7 @@ async function handleSubmit() {
 .section-label__text {
   font-size: $mb-font-md;
   font-weight: 600;
-  color: $mb-color-text-title;
+  color: var(--color-text-title, #191b23);
 }
 
 .goods-item {
@@ -562,7 +568,7 @@ async function handleSubmit() {
   padding: $mb-spacing-sm 0;
 
   & + & {
-    border-top: 1rpx solid $mb-color-divider;
+    border-top: 1rpx solid var(--color-divider, #f0f2f5);
   }
 }
 
@@ -571,7 +577,7 @@ async function handleSubmit() {
   width: 160rpx;
   height: 160rpx;
   border-radius: $mb-radius-lg;
-  background: $mb-color-bg-surface;
+  background: var(--color-bg-surface, #f3f3fe);
 }
 
 .goods-item__info {
@@ -586,7 +592,7 @@ async function handleSubmit() {
 .goods-item__name {
   font-size: $mb-font-md;
   font-weight: 500;
-  color: $mb-color-text-title;
+  color: var(--color-text-title, #191b23);
   line-height: 1.4;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -596,8 +602,8 @@ async function handleSubmit() {
 
 .goods-item__spec {
   font-size: $mb-font-sm;
-  color: $mb-color-text-tertiary;
-  background: $mb-color-bg-surface;
+  color: var(--color-text-tertiary, #737686);
+  background: var(--color-bg-surface, #f3f3fe);
   border-radius: $mb-radius-sm;
   padding: 4rpx 12rpx;
   align-self: flex-start;
@@ -613,7 +619,7 @@ async function handleSubmit() {
 
 .goods-item__qty {
   font-size: $mb-font-sm;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
 }
 
 // ---- Delivery card ----
@@ -627,7 +633,7 @@ async function handleSubmit() {
 .delivery-card__label {
   font-size: $mb-font-md;
   font-weight: 500;
-  color: $mb-color-text-title;
+  color: var(--color-text-title, #191b23);
   flex-shrink: 0;
 }
 
@@ -638,7 +644,7 @@ async function handleSubmit() {
 
 .delivery-card__value {
   font-size: $mb-font-md;
-  color: $mb-color-text-secondary;
+  color: var(--color-text-secondary, #434654);
 }
 
 // ---- Remark card ----
@@ -653,18 +659,18 @@ async function handleSubmit() {
   flex-shrink: 0;
   font-size: $mb-font-md;
   font-weight: 500;
-  color: $mb-color-text-title;
+  color: var(--color-text-title, #191b23);
 }
 
 .remark-card__input {
   flex: 1;
   font-size: $mb-font-md;
-  color: $mb-color-text;
+  color: var(--color-text, #191b23);
   text-align: right;
 }
 
 .remark-placeholder {
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
 }
 
 // ---- Summary card ----
@@ -681,18 +687,18 @@ async function handleSubmit() {
 
 .summary-row__label {
   font-size: $mb-font-md;
-  color: $mb-color-text-secondary;
+  color: var(--color-text-secondary, #434654);
 }
 
 .summary-row__free {
   font-size: $mb-font-md;
-  color: $mb-color-success;
+  color: var(--color-success, #34c759);
   font-weight: 500;
 }
 
 .summary-divider {
   height: 1rpx;
-  background: $mb-color-divider;
+  background: var(--color-divider, #f0f2f5);
   margin: 8rpx 0;
 }
 
@@ -700,7 +706,7 @@ async function handleSubmit() {
   .summary-row__label {
     font-size: $mb-font-lg;
     font-weight: 600;
-    color: $mb-color-text-title;
+    color: var(--color-text-title, #191b23);
   }
 }
 
@@ -711,7 +717,7 @@ async function handleSubmit() {
   right: 0;
   bottom: 0;
   z-index: 100;
-  background: $mb-color-bg;
+  background: var(--color-bg, #ffffff);
   box-shadow: $mb-shadow-bar;
 }
 
@@ -731,7 +737,7 @@ async function handleSubmit() {
 
 .submit-bar__sup {
   font-size: 20rpx;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
   letter-spacing: 1rpx;
   font-weight: 500;
 }
@@ -740,7 +746,7 @@ async function handleSubmit() {
   height: 88rpx;
   min-width: 260rpx;
   border-radius: $mb-radius-full;
-  background: $mb-color-primary;
+  background: var(--color-primary, #0d50d5);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -762,7 +768,7 @@ async function handleSubmit() {
 .submit-bar__btn-text {
   font-size: $mb-font-lg;
   font-weight: 600;
-  color: $mb-color-text-inverse;
+  color: var(--color-text-inverse, #ffffff);
   letter-spacing: 0;
 }
 

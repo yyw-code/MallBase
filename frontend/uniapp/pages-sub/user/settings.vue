@@ -39,7 +39,7 @@
         </view>
       </view>
 
-      <view v-if="decorateStore.allowUserThemeSelect" class="cell" @tap="toggleTheme">
+      <view class="cell" @tap="toggleTheme">
         <text class="cell__label">外观设置</text>
         <view class="cell__right">
           <text class="cell__value">{{ themeLabel }}</text>
@@ -60,7 +60,7 @@
         <view class="cell__right">
           <switch
             :checked="splashEnabled"
-            color="#0d50d5"
+            :color="decorateStore.themeTokens.colorPrimary || '#0d50d5'"
             style="transform: scale(0.82)"
             @change="onSplashChange"
           />
@@ -120,27 +120,17 @@ const logoutLoading = ref(false)
 const cacheSize = ref('0 KB')
 const splashEnabled = ref(true)
 
-const themeOptions = computed(() => {
-  const list = [
-    { mode: 'system', label: '跟随系统' },
-    { mode: 'light', label: '浅色' },
-    { mode: 'dark', label: '深色' },
-  ]
-  if (decorateStore.themes?.custom) {
-    list.push({ mode: 'custom', label: '自定义' })
-  }
-  return list
-})
+const themeOptions = computed(() => decorateStore.availableThemeOptions)
 
 const isLoggedIn = computed(() => userStore.isLoggedIn)
 const nickname = computed(() => userStore.userInfo?.nickname || '')
 const avatar = computed(() => userStore.userInfo?.avatar_full_url || userStore.userInfo?.avatar || '')
 const uid = computed(() => userStore.userInfo?.id || '-----')
-const themeLabel = computed(() => {
-  return themeOptions.value.find((item) => item.mode === decorateStore.themeMode)?.label || '跟随系统'
-})
+const themeLabel = computed(() => decorateStore.themeLabel)
 
-onShow(() => {
+onShow(async () => {
+  await decorateStore.fetchThemes({ force: true })
+  await decorateStore.fetchMyThemePreference({ force: true })
   calculateCacheSize()
   splashEnabled.value = uni.getStorageSync('mb_splash_enabled') !== false
 })
@@ -168,15 +158,20 @@ function calculateCacheSize() {
 
 function toggleTheme() {
   if (!decorateStore.allowUserThemeSelect) {
-    uni.showToast({ title: '当前不允许切换主题', icon: 'none' })
+    uni.showToast({ title: '主题由管理员统一设置', icon: 'none' })
     return
   }
   uni.showActionSheet({
     itemList: themeOptions.value.map((item) => item.label),
-    success(res) {
+    async success(res) {
       const selected = themeOptions.value[res.tapIndex]
       if (!selected) return
-      decorateStore.setThemeMode(selected.mode)
+      const changed = await decorateStore.setThemeMode(selected.mode, {
+        theme_id: selected.theme_id,
+      })
+      if (!changed) {
+        return
+      }
       uni.showToast({ title: `已切换为${selected.label}`, icon: 'none' })
     },
   })
@@ -220,6 +215,7 @@ async function handleLogout() {
         logoutLoading.value = true
         try {
           await userStore.logout()
+          await decorateStore.fetchMyThemePreference({ force: true })
           uni.reLaunch({ url: '/pages/index/index' })
         } catch (_) {
           /* ignore */
@@ -247,7 +243,7 @@ function goAbout() {
 <style lang="scss" scoped>
 .page {
   min-height: 100vh;
-  background: $mb-color-bg-secondary;
+  background: var(--color-page-bg, var(--color-bg-secondary, #faf8ff));
   padding: $mb-spacing-md $mb-spacing-page 0;
 }
 
@@ -257,12 +253,12 @@ function goAbout() {
   align-items: center;
   padding: $mb-spacing-lg;
   gap: 24rpx;
-  background: $mb-color-bg;
+  background: var(--color-bg, #ffffff);
   border-radius: $mb-radius-lg;
-  border: 1rpx solid $mb-color-divider;
+  border: 1rpx solid var(--color-divider, #f0f2f5);
 
   &:active {
-    background: $mb-color-bg-surface;
+    background: var(--color-bg-surface, #f3f3fe);
   }
 }
 
@@ -274,7 +270,7 @@ function goAbout() {
 }
 
 .user-card__avatar--placeholder {
-  background: $mb-color-bg-secondary;
+  background: var(--color-bg-secondary, #faf8ff);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -290,7 +286,7 @@ function goAbout() {
   width: 26rpx;
   height: 26rpx;
   border-radius: $mb-radius-full;
-  background: $mb-color-border;
+  background: var(--color-text-tertiary-on-page, var(--color-border, #e0e4e8));
   position: absolute;
   top: 0;
   left: 50%;
@@ -301,7 +297,7 @@ function goAbout() {
   width: 40rpx;
   height: 22rpx;
   border-radius: 20rpx 20rpx 0 0;
-  background: $mb-color-border;
+  background: var(--color-text-tertiary-on-page, var(--color-border, #e0e4e8));
   position: absolute;
   bottom: 0;
   left: 50%;
@@ -318,13 +314,13 @@ function goAbout() {
 .user-card__name {
   font-size: $mb-font-xl;
   font-weight: 600;
-  color: $mb-color-text;
+  color: var(--color-text-on-bg, var(--color-text, #191b23));
   line-height: 1.3;
 }
 
 .user-card__uid {
   font-size: $mb-font-sm;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary-on-bg, var(--color-text-tertiary, #737686));
   line-height: 1.4;
 }
 
@@ -337,9 +333,9 @@ function goAbout() {
 .cell-group {
   margin-top: $mb-spacing-md;
   padding: 0 $mb-spacing-lg;
-  background: $mb-color-bg;
+  background: var(--color-bg, #ffffff);
   border-radius: $mb-radius-lg;
-  border: 1rpx solid $mb-color-divider;
+  border: 1rpx solid var(--color-divider, #f0f2f5);
 }
 
 .cell {
@@ -356,7 +352,7 @@ function goAbout() {
     right: 0;
     bottom: 0;
     height: 1rpx;
-    background: $mb-color-divider;
+    background: var(--color-divider, #f0f2f5);
   }
 
   &:active {
@@ -366,7 +362,7 @@ function goAbout() {
 
 .cell__label {
   font-size: $mb-font-md;
-  color: $mb-color-text;
+  color: var(--color-text-on-bg, var(--color-text, #191b23));
   font-weight: 500;
 }
 
@@ -378,15 +374,15 @@ function goAbout() {
 
 .cell__value {
   font-size: $mb-font-sm;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary-on-bg, var(--color-text-tertiary, #737686));
 }
 
 // ---- Arrow ----
 .arrow-icon {
   width: 16rpx;
   height: 16rpx;
-  border-right: 3rpx solid $mb-color-text-tertiary;
-  border-bottom: 3rpx solid $mb-color-text-tertiary;
+  border-right: 3rpx solid var(--color-text-tertiary-on-bg, var(--color-text-tertiary, #737686));
+  border-bottom: 3rpx solid var(--color-text-tertiary-on-bg, var(--color-text-tertiary, #737686));
   transform: rotate(-45deg);
   flex-shrink: 0;
 }
@@ -400,7 +396,7 @@ function goAbout() {
   height: 100rpx;
   border-radius: $mb-radius-sm;
   border: 0;
-  background: rgba(186, 26, 26, 0.08);
+  background: var(--color-error-soft, rgba(186, 26, 26, 0.08));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -420,7 +416,7 @@ function goAbout() {
 .logout-btn-text {
   font-size: 32rpx;
   font-weight: 600;
-  color: $mb-color-error;
+  color: var(--color-error-on-page, var(--color-error, #ba1a1a));
   letter-spacing: 0;
 }
 

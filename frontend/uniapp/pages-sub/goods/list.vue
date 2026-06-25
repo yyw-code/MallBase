@@ -1,5 +1,9 @@
 <template>
-  <view class="goods-list">
+  <view
+    class="goods-list"
+    :class="[`theme-${decorateStore.resolvedThemeMode}`]"
+    :style="decorateStore.themeStyle"
+  >
     <mb-navbar title="商品列表" />
 
     <!-- Search bar -->
@@ -174,11 +178,13 @@
 </template>
 
 <script setup>
+import { useDecorateStore } from '@/store/decorate'
 import { ref, reactive } from 'vue'
 import { onLoad, onPullDownRefresh, onReachBottom } from '@dcloudio/uni-app'
 import { getGoodsDetail, getGoodsList } from '@/api/goods/goods'
 import { useCartStore } from '@/store/cart'
 import { requireLogin } from '@/utils/auth'
+const decorateStore = useDecorateStore()
 
 const cartStore = useCartStore()
 
@@ -511,7 +517,7 @@ function buildCurrentQuery() {
 <style lang="scss" scoped>
 .goods-list {
   min-height: 100vh;
-  background: $mb-color-bg-secondary;
+  background: var(--color-bg-secondary, #faf8ff);
 }
 
 // ---------- Search ----------
@@ -519,8 +525,8 @@ function buildCurrentQuery() {
   margin: $mb-spacing-sm $mb-spacing-page 0;
   height: 64rpx;
   border-radius: $mb-radius-sm;
-  background: $mb-color-bg;
-  border: 1rpx solid $mb-color-divider;
+  background: var(--color-bg, #ffffff);
+  border: 1rpx solid var(--color-divider, #f0f2f5);
   display: flex;
   align-items: center;
   padding: 0 $mb-spacing-md;
@@ -530,7 +536,7 @@ function buildCurrentQuery() {
 .goods-list__search-icon {
   width: 24rpx;
   height: 24rpx;
-  border: 3rpx solid $mb-color-text-tertiary;
+  border: 3rpx solid var(--color-text-tertiary, #737686);
   border-radius: 50%;
   position: relative;
   flex-shrink: 0;
@@ -541,7 +547,7 @@ function buildCurrentQuery() {
     width: 10rpx;
     height: 3rpx;
     border-radius: $mb-radius-full;
-    background: $mb-color-text-tertiary;
+    background: var(--color-text-tertiary, #737686);
     right: -7rpx;
     bottom: -3rpx;
     transform: rotate(45deg);
@@ -551,7 +557,7 @@ function buildCurrentQuery() {
 .goods-list__search-text {
   flex: 1;
   font-size: $mb-font-sm;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -564,7 +570,7 @@ function buildCurrentQuery() {
   z-index: 90;
   display: flex;
   align-items: center;
-  background: $mb-color-bg-secondary;
+  background: var(--color-bg-secondary, #faf8ff);
   border-bottom: 0;
   padding: 0 $mb-spacing-page;
 }
@@ -596,13 +602,13 @@ function buildCurrentQuery() {
 
 .goods-list__sort-text {
   font-size: $mb-font-md;
-  color: $mb-color-text-secondary;
+  color: var(--color-text-secondary, #434654);
   font-weight: 500;
   transition: color 0.2s;
 }
 
 .goods-list__sort-item--active .goods-list__sort-text {
-  color: $mb-color-primary;
+  color: var(--color-primary, #0d50d5);
   font-weight: 600;
 }
 
@@ -617,7 +623,7 @@ function buildCurrentQuery() {
   width: 28rpx;
   height: 4rpx;
   border-radius: $mb-radius-full;
-  background: $mb-color-primary;
+  background: var(--color-primary, #0d50d5);
   transform: translateX(-50%);
 }
 
@@ -637,20 +643,20 @@ function buildCurrentQuery() {
 }
 
 .goods-list__arrow--up {
-  border-bottom: 10rpx solid $mb-color-text-tertiary;
+  border-bottom: 10rpx solid var(--color-text-tertiary, #737686);
 }
 
 .goods-list__arrow--down {
-  border-top: 10rpx solid $mb-color-text-tertiary;
+  border-top: 10rpx solid var(--color-text-tertiary, #737686);
 }
 
 .goods-list__arrow--active {
   &.goods-list__arrow--up {
-    border-bottom-color: $mb-color-primary;
+    border-bottom-color: var(--color-primary, #0d50d5);
   }
 
   &.goods-list__arrow--down {
-    border-top-color: $mb-color-primary;
+    border-top-color: var(--color-primary, #0d50d5);
   }
 }
 
@@ -666,15 +672,15 @@ function buildCurrentQuery() {
 
 .goods-list__filter-text {
   font-size: $mb-font-sm;
-  color: $mb-color-text-secondary;
+  color: var(--color-text-secondary, #434654);
   font-weight: 500;
 }
 
 .goods-list__filter-arrow {
   width: 10rpx;
   height: 10rpx;
-  border-right: 2rpx solid $mb-color-text-tertiary;
-  border-bottom: 2rpx solid $mb-color-text-tertiary;
+  border-right: 2rpx solid var(--color-text-tertiary, #737686);
+  border-bottom: 2rpx solid var(--color-text-tertiary, #737686);
   transform: rotate(45deg);
   margin-top: -4rpx;
 }
@@ -695,9 +701,9 @@ function buildCurrentQuery() {
 
 .goods-list__skeleton-card {
   width: calc(50% - 8rpx);
-  background: $mb-color-bg;
+  background: var(--color-bg, #ffffff);
   border-radius: $mb-radius-lg;
-  border: 1rpx solid $mb-color-divider;
+  border: 1rpx solid var(--color-divider, #f0f2f5);
   overflow: hidden;
 }
 
@@ -716,9 +722,9 @@ function buildCurrentQuery() {
 
 // ---------- Design-card grid ----------
 .goods-card {
-  background: $mb-color-bg;
+  background: var(--color-bg, #ffffff);
   border-radius: $mb-radius-sm;
-  border: 1rpx solid $mb-color-divider;
+  border: 1rpx solid var(--color-divider, #f0f2f5);
   overflow: hidden;
   min-height: 100%;
 }
@@ -747,7 +753,7 @@ function buildCurrentQuery() {
 .goods-card__placeholder-icon {
   width: 52rpx;
   height: 42rpx;
-  border: 4rpx solid $mb-color-primary;
+  border: 4rpx solid var(--color-primary, #0d50d5);
   border-radius: $mb-radius-sm;
   position: relative;
   opacity: 0.8;
@@ -760,7 +766,7 @@ function buildCurrentQuery() {
     top: 12rpx;
     height: 4rpx;
     border-radius: $mb-radius-full;
-    background: $mb-color-primary;
+    background: var(--color-primary, #0d50d5);
   }
 }
 
@@ -778,7 +784,7 @@ function buildCurrentQuery() {
 
 .goods-card__badge-text {
   font-size: 18rpx;
-  color: $mb-color-primary;
+  color: var(--color-primary, #0d50d5);
   font-weight: 700;
   line-height: 1;
 }
@@ -791,7 +797,7 @@ function buildCurrentQuery() {
   display: -webkit-box;
   font-size: 22rpx;
   font-weight: 600;
-  color: $mb-color-text-title;
+  color: var(--color-text-title, #191b23);
   line-height: 1.35;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
@@ -802,7 +808,7 @@ function buildCurrentQuery() {
   display: block;
   margin-top: 4rpx;
   font-size: 19rpx;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
   line-height: 1.3;
   overflow: hidden;
   white-space: nowrap;
@@ -826,7 +832,7 @@ function buildCurrentQuery() {
 
 .goods-card__origin {
   font-size: 18rpx;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
   text-decoration: line-through;
 }
 
@@ -834,7 +840,7 @@ function buildCurrentQuery() {
   width: 32rpx;
   height: 32rpx;
   border-radius: $mb-radius-full;
-  background: $mb-color-primary;
+  background: var(--color-primary, #0d50d5);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -848,7 +854,7 @@ function buildCurrentQuery() {
 .goods-card__add-symbol {
   font-size: 26rpx;
   line-height: 1;
-  color: $mb-color-text-inverse;
+  color: var(--color-text-inverse, #ffffff);
   font-weight: 600;
   margin-top: -2rpx;
 }
@@ -857,7 +863,7 @@ function buildCurrentQuery() {
   display: block;
   margin-top: 5rpx;
   font-size: 18rpx;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
   line-height: 1.3;
 }
 
@@ -877,8 +883,8 @@ function buildCurrentQuery() {
   display: flex;
   gap: $mb-spacing-md;
   padding: $mb-spacing-md;
-  background: $mb-color-bg;
-  border: 1rpx solid $mb-color-divider;
+  background: var(--color-bg, #ffffff);
+  border: 1rpx solid var(--color-divider, #f0f2f5);
   border-radius: $mb-radius-sm;
 }
 
@@ -918,7 +924,7 @@ function buildCurrentQuery() {
   display: -webkit-box;
   font-size: $mb-font-md;
   font-weight: 600;
-  color: $mb-color-text-title;
+  color: var(--color-text-title, #191b23);
   line-height: 1.4;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
@@ -929,7 +935,7 @@ function buildCurrentQuery() {
   display: block;
   margin-top: 6rpx;
   font-size: $mb-font-sm;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -950,7 +956,7 @@ function buildCurrentQuery() {
   display: block;
   margin-top: 4rpx;
   font-size: $mb-font-xs;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
 }
 
 // ---------- Bottom status ----------
@@ -970,8 +976,8 @@ function buildCurrentQuery() {
 .goods-list__spinner {
   width: 32rpx;
   height: 32rpx;
-  border: 4rpx solid $mb-color-divider;
-  border-top-color: $mb-color-primary;
+  border: 4rpx solid var(--color-divider, #f0f2f5);
+  border-top-color: var(--color-primary, #0d50d5);
   border-radius: 50%;
   animation: goods-spin 0.7s linear infinite;
 }
@@ -984,11 +990,11 @@ function buildCurrentQuery() {
 
 .goods-list__loading-text {
   font-size: $mb-font-sm;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
 }
 
 .goods-list__no-more {
   font-size: $mb-font-sm;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
 }
 </style>

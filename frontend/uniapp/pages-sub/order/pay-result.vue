@@ -1,8 +1,10 @@
 <script setup>
+import { useDecorateStore } from '@/store/decorate'
 import { ref, computed, onUnmounted } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { getOrderDetail, getOrderList } from '@/api/order/order'
 import { usePayFlow } from '@/utils/usePayFlow'
+const decorateStore = useDecorateStore()
 
 const sn = ref('')
 const orderId = ref('')
@@ -221,7 +223,11 @@ async function onPayMethodSelect(code) {
 </script>
 
 <template>
-  <view class="page">
+  <view
+    class="page"
+    :class="[`theme-${decorateStore.resolvedThemeMode}`]"
+    :style="decorateStore.themeStyle"
+  >
     <mb-navbar title="支付结果" />
 
     <view class="result" :class="`result--${resultMeta.type}`">
@@ -299,7 +305,7 @@ async function onPayMethodSelect(code) {
   padding: 40rpx 32rpx 32rpx;
   overflow: hidden;
   background: #ffffff;
-  border: 1rpx solid $mb-color-divider;
+  border: 1rpx solid var(--color-divider, #f0f2f5);
   border-radius: 28rpx;
 
   &::before {
@@ -309,19 +315,19 @@ async function onPayMethodSelect(code) {
     right: 0;
     height: 12rpx;
     content: '';
-    background: $mb-color-primary;
+    background: var(--color-primary, #0d50d5);
   }
 
   &--success::before {
-    background: $mb-color-success;
+    background: var(--color-success, #34c759);
   }
 
   &--pending::before {
-    background: $mb-color-warning;
+    background: var(--color-warning, #f0ad4e);
   }
 
   &--fail::before {
-    background: $mb-color-error;
+    background: var(--color-error, #ba1a1a);
   }
 
   &__hero {
@@ -360,19 +366,19 @@ async function onPayMethodSelect(code) {
     width: 104rpx;
     height: 104rpx;
     border-radius: 50%;
-    background: $mb-color-primary;
+    background: var(--color-primary, #0d50d5);
   }
 
   &--success &__icon {
-    background: $mb-color-success;
+    background: var(--color-success, #34c759);
   }
 
   &--pending &__icon {
-    background: $mb-color-warning;
+    background: var(--color-warning, #f0ad4e);
   }
 
   &--fail &__icon {
-    background: $mb-color-error;
+    background: var(--color-error, #ba1a1a);
   }
 
   &__icon-symbol {
@@ -386,14 +392,14 @@ async function onPayMethodSelect(code) {
     margin-top: 36rpx;
     font-size: 40rpx;
     font-weight: 700;
-    color: $mb-color-text-title;
+    color: var(--color-text-title, #191b23);
     line-height: 1.35;
   }
 
   &__subtitle {
     margin-top: 12rpx;
     font-size: 26rpx;
-    color: $mb-color-text-tertiary;
+    color: var(--color-text-tertiary, #737686);
     line-height: 1.5;
     text-align: center;
   }
@@ -403,7 +409,7 @@ async function onPayMethodSelect(code) {
     align-items: flex-end;
     justify-content: center;
     margin-top: 28rpx;
-    color: $mb-color-text-title;
+    color: var(--color-text-title, #191b23);
   }
 
   &__amount-prefix {
@@ -434,13 +440,13 @@ async function onPayMethodSelect(code) {
     flex-shrink: 0;
     margin-right: 24rpx;
     font-size: 26rpx;
-    color: $mb-color-text-tertiary;
+    color: var(--color-text-tertiary, #737686);
   }
 
   &__info-value {
     min-width: 0;
     font-size: 26rpx;
-    color: $mb-color-text-secondary;
+    color: var(--color-text-secondary, #434654);
     line-height: 1.4;
     text-align: right;
     word-break: break-all;
@@ -469,12 +475,12 @@ async function onPayMethodSelect(code) {
     }
 
     &--primary {
-      background-color: $mb-color-primary;
+      background-color: var(--color-primary, #0d50d5);
     }
 
     &--outline {
       background-color: transparent;
-      border: 2rpx solid $mb-color-border;
+      border: 2rpx solid var(--color-border, #e0e4e8);
     }
   }
 
@@ -484,11 +490,11 @@ async function onPayMethodSelect(code) {
     line-height: 1;
 
     &--primary {
-      color: $mb-color-text-inverse;
+      color: var(--color-text-inverse, #ffffff);
     }
 
     &--outline {
-      color: $mb-color-text;
+      color: var(--color-text, #191b23);
     }
   }
 }

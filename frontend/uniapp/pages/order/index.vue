@@ -147,10 +147,7 @@
       @close="closeRefundSheet"
     />
 
-    <mb-custom-tabbar
-      v-if="decorateStore.tabbarMode === 'custom'"
-      current="/pages/order/index"
-    />
+    <mb-custom-tabbar current="/pages/order/index" />
   </view>
 </template>
 
@@ -601,7 +598,7 @@ onUnmounted(() => {
    ============================================================ */
 .page {
   min-height: 100vh;
-  background: #faf8ff;
+  background: var(--color-bg-secondary, #faf8ff);
 }
 
 .page__tabs {
@@ -610,7 +607,7 @@ onUnmounted(() => {
   align-items: stretch;
   padding: 0 $mb-spacing-sm;
   border-bottom: 1rpx solid rgba(25, 27, 35, 0.06);
-  background: $mb-color-bg;
+  background: var(--color-bg, #ffffff);
 }
 
 .page__tab {
@@ -624,13 +621,13 @@ onUnmounted(() => {
 
 .page__tab-label {
   font-size: $mb-font-md;
-  color: $mb-color-text-secondary;
+  color: var(--color-text-secondary, #434654);
   line-height: 1;
   transition: color 0.2s;
 }
 
 .page__tab--active .page__tab-label {
-  color: $mb-color-primary;
+  color: var(--color-primary, #0d50d5);
   font-weight: 600;
 }
 
@@ -639,7 +636,7 @@ onUnmounted(() => {
   bottom: 0;
   width: 48rpx;
   height: 4rpx;
-  background: $mb-color-primary;
+  background: var(--color-primary, #0d50d5);
   border-radius: 2rpx;
 }
 
@@ -668,14 +665,14 @@ onUnmounted(() => {
 
 .page__load-text {
   font-size: $mb-font-sm;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
 }
 
 /* ============================================================
    Order card
    ============================================================ */
 .order-card {
-  background: $mb-color-bg;
+  background: var(--color-bg, #ffffff);
   border-radius: 16rpx;
   padding: 18rpx;
   border: 1rpx solid rgba(25, 27, 35, 0.06);
@@ -724,7 +721,7 @@ onUnmounted(() => {
   min-width: 0;
   font-size: $mb-font-sm;
   font-weight: 600;
-  color: $mb-color-text-title;
+  color: var(--color-text-title, #191b23);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -734,7 +731,7 @@ onUnmounted(() => {
   flex: 1;
   min-width: 0;
   font-size: $mb-font-xs;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -753,26 +750,26 @@ onUnmounted(() => {
 
 /* Status theme variants */
 .order-card__status--primary {
-  color: $mb-color-primary;
+  color: var(--color-primary, #0d50d5);
 }
 
 .order-card__status--warning {
-  color: $mb-color-primary;
+  color: var(--color-primary, #0d50d5);
 }
 
 .order-card__status--success {
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
 }
 
 .order-card__status--muted {
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
 }
 
 .order-card__countdown {
   display: block;
   margin: -8rpx 0 14rpx;
   font-size: $mb-font-xs;
-  color: $mb-color-primary;
+  color: var(--color-primary, #0d50d5);
 }
 
 .order-card__after-sale {
@@ -782,22 +779,22 @@ onUnmounted(() => {
   padding: 14rpx 16rpx;
   margin: -4rpx 0 14rpx;
   border-radius: 12rpx;
-  background: rgba(13, 80, 213, 0.06);
-  border: 1rpx solid rgba(13, 80, 213, 0.12);
+  background: var(--color-primary-softer, rgba(13, 80, 213, 0.06));
+  border: 1rpx solid var(--color-primary-border, rgba(13, 80, 213, 0.12));
 }
 
 .order-card__after-sale-dot {
   width: 10rpx;
   height: 10rpx;
   border-radius: 50%;
-  background: $mb-color-primary;
+  background: var(--color-primary, #0d50d5);
   flex-shrink: 0;
 }
 
 .order-card__after-sale-text {
   font-size: $mb-font-sm;
   font-weight: 700;
-  color: $mb-color-primary;
+  color: var(--color-primary, #0d50d5);
   flex-shrink: 0;
 }
 
@@ -805,7 +802,7 @@ onUnmounted(() => {
   min-width: 0;
   flex: 1;
   font-size: $mb-font-xs;
-  color: $mb-color-text-secondary;
+  color: var(--color-text-secondary, #434654);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -840,7 +837,11 @@ onUnmounted(() => {
   width: 54rpx;
   height: 38rpx;
   border-radius: 8rpx;
-  background: linear-gradient(135deg, rgba(13, 80, 213, 0.14), rgba(25, 27, 35, 0.06));
+  background: linear-gradient(
+    135deg,
+    var(--color-primary-soft, rgba(13, 80, 213, 0.14)),
+    var(--color-divider, rgba(25, 27, 35, 0.06))
+  );
 }
 
 .order-card__info {
@@ -855,7 +856,7 @@ onUnmounted(() => {
 .order-card__name {
   font-size: 27rpx;
   font-weight: 600;
-  color: $mb-color-text-title;
+  color: var(--color-text-title, #191b23);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -864,7 +865,7 @@ onUnmounted(() => {
 
 .order-card__spec {
   font-size: $mb-font-xs;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
   line-height: 1.4;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -881,7 +882,7 @@ onUnmounted(() => {
 
 .order-card__qty {
   font-size: $mb-font-xs;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
 }
 
 /* --- Footer: total row ------------------------------------- */
@@ -897,7 +898,7 @@ onUnmounted(() => {
 
 .order-card__total {
   font-size: $mb-font-sm;
-  color: $mb-color-text-secondary;
+  color: var(--color-text-secondary, #434654);
 }
 
 /* --- Action buttons ---------------------------------------- */

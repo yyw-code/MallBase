@@ -1,5 +1,9 @@
 <template>
-  <view class="page">
+  <view
+    class="page"
+    :class="[`theme-${decorateStore.resolvedThemeMode}`]"
+    :style="decorateStore.themeStyle"
+  >
     <mb-navbar :title="title" />
     <scroll-view class="content" scroll-y>
       <rich-text v-if="htmlContent" :nodes="htmlContent" />
@@ -12,9 +16,11 @@
 </template>
 
 <script setup>
+import { useDecorateStore } from '@/store/decorate'
 import { computed, ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { useAppStore } from '@/store/app'
+const decorateStore = useDecorateStore()
 
 const appStore = useAppStore()
 const type = ref('service')
@@ -38,7 +44,7 @@ const htmlContent = computed(() => {
 <style lang="scss" scoped>
 .page {
   min-height: 100vh;
-  background: $mb-color-bg;
+  background: var(--color-bg, #ffffff);
 }
 
 .content {
@@ -47,7 +53,7 @@ const htmlContent = computed(() => {
   padding: 32rpx $mb-spacing-page 80rpx;
   font-size: $mb-font-md;
   line-height: 1.8;
-  color: $mb-color-text;
+  color: var(--color-text, #191b23);
 }
 
 .empty {
@@ -63,11 +69,11 @@ const htmlContent = computed(() => {
 .empty-title {
   font-size: $mb-font-xl;
   font-weight: 600;
-  color: $mb-color-text;
+  color: var(--color-text, #191b23);
 }
 
 .empty-desc {
   font-size: $mb-font-sm;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
 }
 </style>

@@ -1,7 +1,9 @@
 <script setup>
+import { useDecorateStore } from '@/store/decorate'
 import { computed, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { getWalletInfo, getWalletLogs } from '@/api/user/wallet'
+const decorateStore = useDecorateStore()
 
 const loading = ref(false)
 const wallet = ref({
@@ -77,8 +79,12 @@ function goRecharge() {
 </script>
 
 <template>
-  <view class="page">
-    <mb-navbar title="我的余额" bg-color="#ffffff" />
+  <view
+    class="page"
+    :class="[`theme-${decorateStore.resolvedThemeMode}`]"
+    :style="decorateStore.themeStyle"
+  >
+    <mb-navbar title="我的余额" bg-color="var(--color-bg, #ffffff)" />
 
     <view class="balance-card">
       <view class="balance-card__top">
@@ -155,14 +161,14 @@ function goRecharge() {
 .page {
   min-height: 100vh;
   padding: 0 $mb-spacing-page 48rpx;
-  background: $mb-color-bg-secondary;
+  background: var(--color-bg-secondary, #faf8ff);
 }
 
 .balance-card {
   margin-top: $mb-spacing-md;
   padding: 32rpx;
-  background: $mb-color-bg;
-  border: 1rpx solid $mb-color-divider;
+  background: var(--color-bg, #ffffff);
+  border: 1rpx solid var(--color-divider, #f0f2f5);
   border-radius: $mb-radius-lg;
 }
 
@@ -180,14 +186,14 @@ function goRecharge() {
 
 .balance-card__label {
   font-size: $mb-font-md;
-  color: $mb-color-text-secondary;
+  color: var(--color-text-secondary, #434654);
 }
 
 .balance-card__status {
   padding: 6rpx 14rpx;
   border-radius: $mb-radius-full;
-  background: rgba($mb-color-success, 0.1);
-  color: $mb-color-success;
+  background: var(--color-success-soft, rgba(52, 199, 89, 0.1));
+  color: var(--color-success, #34c759);
   font-size: $mb-font-xs;
 }
 
@@ -199,7 +205,7 @@ function goRecharge() {
 
 .balance-card__symbol {
   font-size: $mb-font-xl;
-  color: $mb-color-text-title;
+  color: var(--color-text-title, #191b23);
   font-weight: 700;
 }
 
@@ -207,7 +213,7 @@ function goRecharge() {
   margin-left: 6rpx;
   font-size: 72rpx;
   line-height: 1;
-  color: $mb-color-text-title;
+  color: var(--color-text-title, #191b23);
   font-weight: 700;
 }
 
@@ -219,7 +225,7 @@ function goRecharge() {
 .balance-stat {
   flex: 1;
   padding: 20rpx;
-  background: $mb-color-bg-surface;
+  background: var(--color-bg-surface, #f3f3fe);
   border-radius: $mb-radius-md;
 }
 
@@ -228,14 +234,14 @@ function goRecharge() {
 .log-row__balance,
 .empty__desc {
   font-size: $mb-font-sm;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
 }
 
 .balance-stat__value {
   display: block;
   margin-top: 8rpx;
   font-size: $mb-font-md;
-  color: $mb-color-text-title;
+  color: var(--color-text-title, #191b23);
   font-weight: 600;
 }
 
@@ -244,8 +250,8 @@ function goRecharge() {
   gap: $mb-spacing-sm;
   margin-top: $mb-spacing-md;
   padding: 20rpx;
-  background: $mb-color-bg;
-  border: 1rpx solid $mb-color-divider;
+  background: var(--color-bg, #ffffff);
+  border: 1rpx solid var(--color-divider, #f0f2f5);
   border-radius: $mb-radius-lg;
 }
 
@@ -257,28 +263,28 @@ function goRecharge() {
   height: $mb-btn-height-sm;
   padding: 0 $mb-btn-padding-x-sm;
   border-radius: $mb-radius-full;
-  background: $mb-color-bg-surface;
+  background: var(--color-bg-surface, #f3f3fe);
 }
 
 .action-item--primary {
-  background: $mb-color-primary;
+  background: var(--color-primary, #0d50d5);
 }
 
 .action-item__label {
   font-size: $mb-font-sm;
-  color: $mb-color-text-secondary;
+  color: var(--color-text-secondary, #434654);
   font-weight: 600;
 }
 
 .action-item--primary .action-item__label {
-  color: $mb-color-text-inverse;
+  color: var(--color-text-inverse, #ffffff);
 }
 
 .section {
   margin-top: $mb-spacing-md;
   padding: $mb-spacing-lg;
-  background: $mb-color-bg;
-  border: 1rpx solid $mb-color-divider;
+  background: var(--color-bg, #ffffff);
+  border: 1rpx solid var(--color-divider, #f0f2f5);
   border-radius: $mb-radius-lg;
 }
 
@@ -289,20 +295,20 @@ function goRecharge() {
 
 .section__title {
   font-size: $mb-font-lg;
-  color: $mb-color-text-title;
+  color: var(--color-text-title, #191b23);
   font-weight: 600;
 }
 
 .section__more {
   font-size: $mb-font-sm;
-  color: $mb-color-primary;
+  color: var(--color-primary, #0d50d5);
 }
 
 .log-row {
   padding: 22rpx 0;
 
   & + & {
-    border-top: 1rpx solid $mb-color-divider;
+    border-top: 1rpx solid var(--color-divider, #f0f2f5);
   }
 }
 
@@ -310,7 +316,7 @@ function goRecharge() {
   width: 64rpx;
   height: 64rpx;
   border-radius: $mb-radius-md;
-  background: rgba($mb-color-warning, 0.12);
+  background: var(--color-warning-soft, rgba(240, 173, 78, 0.12));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -333,7 +339,7 @@ function goRecharge() {
 
 .log-row__title {
   font-size: $mb-font-md;
-  color: $mb-color-text-title;
+  color: var(--color-text-title, #191b23);
   font-weight: 500;
 }
 
@@ -346,12 +352,12 @@ function goRecharge() {
 
 .log-row__amount {
   font-size: $mb-font-md;
-  color: $mb-color-text-title;
+  color: var(--color-text-title, #191b23);
   font-weight: 700;
 }
 
 .log-row__amount--income {
-  color: $mb-color-success;
+  color: var(--color-success, #34c759);
 }
 
 .empty {
@@ -365,18 +371,18 @@ function goRecharge() {
   width: 96rpx;
   height: 96rpx;
   border-radius: $mb-radius-lg;
-  background: $mb-color-bg-surface;
+  background: var(--color-bg-surface, #f3f3fe);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
   font-size: 44rpx;
 }
 
 .empty__title {
   margin-top: 22rpx;
   font-size: $mb-font-md;
-  color: $mb-color-text-title;
+  color: var(--color-text-title, #191b23);
   font-weight: 600;
 }
 

@@ -1,5 +1,9 @@
 <template>
-  <view class="login-page">
+  <view
+    class="login-page"
+    :class="[`theme-${decorateStore.resolvedThemeMode}`]"
+    :style="decorateStore.themeStyle"
+  >
     <view class="nebula-bg" />
     <view class="blob blob--1" />
     <view class="blob blob--2" />
@@ -325,6 +329,7 @@
 </template>
 
 <script setup>
+import { useDecorateStore } from '@/store/decorate'
 import { computed, ref, onMounted } from 'vue'
 import { onLoad, onUnload } from '@dcloudio/uni-app'
 import { useAppStore } from '@/store/app'
@@ -344,6 +349,7 @@ import {
   wechatOfficialBindMobile
 } from '@/api/user/auth'
 import { getUploadedAssetValue, getUploadedPreviewUrl } from '@/api/upload'
+const decorateStore = useDecorateStore()
 
 const userStore = useUserStore()
 const appStore = useAppStore()
@@ -527,6 +533,7 @@ async function onLoginSuccess(data) {
   }
   userStore.setToken(data.access_token, data.refresh_token)
   await userStore.fetchUserInfo()
+  await decorateStore.fetchMyThemePreference({ force: true })
   if (redirectUrl.value) {
     const url = redirectUrl.value
     uni.redirectTo({

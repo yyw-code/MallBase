@@ -23,7 +23,7 @@ import { computed } from 'vue'
 const props = defineProps({
   title: { type: String, default: '' },
   back: { type: Boolean, default: true },
-  bgColor: { type: String, default: '#ffffff' },
+  bgColor: { type: String, default: 'var(--color-bg, #ffffff)' },
   textColor: { type: String, default: 'var(--color-text, #191b23)' },
   accentLine: { type: Boolean, default: false },
 })

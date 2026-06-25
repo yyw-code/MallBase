@@ -1,5 +1,9 @@
 <template>
-  <view class="page">
+  <view
+    class="page"
+    :class="[`theme-${decorateStore.resolvedThemeMode}`]"
+    :style="decorateStore.themeStyle"
+  >
     <mb-navbar title="编辑资料" />
 
     <view class="page-content">
@@ -101,11 +105,13 @@
 </template>
 
 <script setup>
+import { useDecorateStore } from '@/store/decorate'
 import { ref, reactive, computed } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { useUserStore } from '@/store/user'
 import { updateMyInfo } from '@/api/user/user'
 import { getUploadedAssetValue, getUploadedPreviewUrl, uploadImage } from '@/api/upload'
+const decorateStore = useDecorateStore()
 
 const userStore = useUserStore()
 
@@ -292,7 +298,7 @@ async function handleSave() {
 }
 
 .avatar--placeholder {
-  background: $mb-color-bg-secondary;
+  background: var(--color-bg-secondary, #faf8ff);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -308,7 +314,7 @@ async function handleSave() {
   width: 32rpx;
   height: 32rpx;
   border-radius: $mb-radius-full;
-  background: $mb-color-border;
+  background: var(--color-border, #e0e4e8);
   position: absolute;
   top: 0;
   left: 50%;
@@ -319,7 +325,7 @@ async function handleSave() {
   width: 48rpx;
   height: 28rpx;
   border-radius: $mb-radius-lg $mb-radius-lg 0 0;
-  background: $mb-color-border;
+  background: var(--color-border, #e0e4e8);
   position: absolute;
   bottom: 0;
   left: 50%;
@@ -333,7 +339,7 @@ async function handleSave() {
   width: 48rpx;
   height: 48rpx;
   border-radius: $mb-radius-full;
-  background: $mb-color-text;
+  background: var(--color-text, #191b23);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -348,7 +354,7 @@ async function handleSave() {
 
 .avatar-hint {
   font-size: 24rpx;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
 }
 
 // ---- Form ----
@@ -373,13 +379,13 @@ async function handleSave() {
 .form-label {
   font-size: 26rpx;
   font-weight: 500;
-  color: $mb-color-text-secondary;
+  color: var(--color-text-secondary, #434654);
   padding-left: 8rpx;
 }
 
 .char-count {
   font-size: 22rpx;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
   padding-right: 8rpx;
 }
 
@@ -388,8 +394,8 @@ async function handleSave() {
   align-items: center;
   height: 100rpx;
   border-radius: $mb-radius-sm;
-  background: $mb-color-bg-secondary;
-  border: 1rpx solid $mb-color-border;
+  background: var(--color-bg-secondary, #faf8ff);
+  border: 1rpx solid var(--color-border, #e0e4e8);
   padding: 0 32rpx;
   transition:
     border-color 0.2s,
@@ -397,7 +403,7 @@ async function handleSave() {
 
   &:focus-within {
     border-color: rgba(13, 80, 213, 0.3);
-    background: $mb-color-bg;
+    background: var(--color-bg, #ffffff);
   }
 }
 
@@ -408,30 +414,30 @@ async function handleSave() {
 .pill-input {
   flex: 1;
   font-size: 30rpx;
-  color: $mb-color-text;
+  color: var(--color-text, #191b23);
   height: 100%;
 }
 
 .pill-value {
   font-size: 30rpx;
-  color: $mb-color-text;
+  color: var(--color-text, #191b23);
 }
 
 .pill-value--empty {
-  color: $mb-color-border-light;
+  color: var(--color-border, #c3c5d7);
 }
 
 .picker-arrow {
   width: 16rpx;
   height: 16rpx;
-  border-right: 3rpx solid $mb-color-text-tertiary;
-  border-bottom: 3rpx solid $mb-color-text-tertiary;
+  border-right: 3rpx solid var(--color-text-tertiary, #737686);
+  border-bottom: 3rpx solid var(--color-text-tertiary, #737686);
   transform: rotate(-45deg);
   flex-shrink: 0;
 }
 
 .placeholder {
-  color: $mb-color-border-light;
+  color: var(--color-border, #c3c5d7);
 }
 
 // ---- Gender ----
@@ -444,8 +450,8 @@ async function handleSave() {
   flex: 1;
   height: 80rpx;
   border-radius: $mb-radius-sm;
-  background: $mb-color-bg-secondary;
-  border: 1rpx solid $mb-color-border;
+  background: var(--color-bg-secondary, #faf8ff);
+  border: 1rpx solid var(--color-border, #e0e4e8);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -455,25 +461,25 @@ async function handleSave() {
 }
 
 .gender-chip--active {
-  background: rgba($mb-color-primary, 0.08);
-  border-color: rgba($mb-color-primary, 0.3);
+  background: var(--color-primary-soft, rgba(13, 80, 213, 0.08));
+  border-color: var(--color-primary-border, rgba(13, 80, 213, 0.3));
 }
 
 .gender-chip-text {
   font-size: 28rpx;
-  color: $mb-color-text-secondary;
+  color: var(--color-text-secondary, #434654);
 }
 
 .gender-chip--active .gender-chip-text {
-  color: $mb-color-primary;
+  color: var(--color-primary, #0d50d5);
   font-weight: 500;
 }
 
 // ---- Textarea ----
 .textarea-wrapper {
-  background: $mb-color-bg-secondary;
+  background: var(--color-bg-secondary, #faf8ff);
   border-radius: $mb-radius-sm;
-  border: 1rpx solid $mb-color-border;
+  border: 1rpx solid var(--color-border, #e0e4e8);
   padding: 24rpx 32rpx;
   transition:
     border-color 0.2s,
@@ -481,7 +487,7 @@ async function handleSave() {
 
   &:focus-within {
     border-color: rgba(13, 80, 213, 0.3);
-    background: $mb-color-bg;
+    background: var(--color-bg, #ffffff);
   }
 }
 
@@ -489,7 +495,7 @@ async function handleSave() {
   width: 100%;
   height: 160rpx;
   font-size: 28rpx;
-  color: $mb-color-text;
+  color: var(--color-text, #191b23);
   line-height: 1.6;
 }
 
@@ -497,7 +503,7 @@ async function handleSave() {
 .primary-btn {
   height: 100rpx;
   border-radius: $mb-radius-sm;
-  background: $mb-color-primary;
+  background: var(--color-primary, #0d50d5);
   display: flex;
   align-items: center;
   justify-content: center;

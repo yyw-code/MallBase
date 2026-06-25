@@ -1,9 +1,11 @@
 <script setup>
+import { useDecorateStore } from '@/store/decorate'
 import { ref, computed, onMounted, nextTick } from 'vue'
 import { useAppStore } from '@/store/app'
 import { getGoodsRecommend } from '@/api/goods/goods'
 import { getHotSearch, recordSearch } from '@/api/search/search'
 import { getPlatform } from '@/utils/platform'
+const decorateStore = useDecorateStore()
 
 const STORAGE_KEY = 'search_history'
 const MAX_HISTORY = 20
@@ -143,7 +145,11 @@ const gridItems = computed(() => featuredList.value.slice(1, 5))
 </script>
 
 <template>
-  <view class="page">
+  <view
+    class="page"
+    :class="[`theme-${decorateStore.resolvedThemeMode}`]"
+    :style="decorateStore.themeStyle"
+  >
     <mb-navbar title="搜索" />
 
     <!-- ========== Search Header ========== -->
@@ -299,7 +305,7 @@ const gridItems = computed(() => featuredList.value.slice(1, 5))
    =========================== */
 .page {
   min-height: 100vh;
-  background: $mb-color-bg-secondary;
+  background: var(--color-bg-secondary, #faf8ff);
 }
 
 /* ===========================
@@ -307,7 +313,7 @@ const gridItems = computed(() => featuredList.value.slice(1, 5))
    =========================== */
 .search-head {
   padding: $mb-spacing-sm $mb-spacing-page $mb-spacing-lg;
-  background: $mb-color-bg-secondary;
+  background: var(--color-bg-secondary, #faf8ff);
 }
 
 .search-head__brand {
@@ -321,7 +327,7 @@ const gridItems = computed(() => featuredList.value.slice(1, 5))
   width: 24rpx;
   height: 24rpx;
   border-radius: 6rpx;
-  border: 4rpx solid $mb-color-primary;
+  border: 4rpx solid var(--color-primary, #0d50d5);
   position: relative;
 
   &::after {
@@ -332,15 +338,15 @@ const gridItems = computed(() => featuredList.value.slice(1, 5))
     width: 4rpx;
     height: 4rpx;
     border-radius: $mb-radius-full;
-    background: $mb-color-primary;
-    box-shadow: 9rpx 0 0 $mb-color-primary, 0 9rpx 0 $mb-color-primary, 9rpx 9rpx 0 $mb-color-primary;
+    background: var(--color-primary, #0d50d5);
+    box-shadow: 9rpx 0 0 var(--color-primary, #0d50d5), 0 9rpx 0 var(--color-primary, #0d50d5), 9rpx 9rpx 0 var(--color-primary, #0d50d5);
   }
 }
 
 .search-head__brand-text {
   font-size: $mb-font-md;
   font-weight: 700;
-  color: $mb-color-text-title;
+  color: var(--color-text-title, #191b23);
 }
 
 .search-head__row {
@@ -355,8 +361,8 @@ const gridItems = computed(() => featuredList.value.slice(1, 5))
   align-items: center;
   height: 72rpx;
   padding: 0 $mb-spacing-md;
-  background: $mb-color-bg;
-  border: 1rpx solid $mb-color-divider;
+  background: var(--color-bg, #ffffff);
+  border: 1rpx solid var(--color-divider, #f0f2f5);
   border-radius: $mb-radius-sm;
   min-width: 0;
 }
@@ -364,7 +370,7 @@ const gridItems = computed(() => featuredList.value.slice(1, 5))
 .search-head__search-icon {
   width: 24rpx;
   height: 24rpx;
-  border: 3rpx solid $mb-color-text-tertiary;
+  border: 3rpx solid var(--color-text-tertiary, #737686);
   border-radius: 50%;
   position: relative;
   margin-right: $mb-spacing-sm;
@@ -376,7 +382,7 @@ const gridItems = computed(() => featuredList.value.slice(1, 5))
     width: 10rpx;
     height: 3rpx;
     border-radius: $mb-radius-full;
-    background: $mb-color-text-tertiary;
+    background: var(--color-text-tertiary, #737686);
     right: -7rpx;
     bottom: -3rpx;
     transform: rotate(45deg);
@@ -386,7 +392,7 @@ const gridItems = computed(() => featuredList.value.slice(1, 5))
 .search-head__input {
   flex: 1;
   font-size: $mb-font-md;
-  color: $mb-color-text;
+  color: var(--color-text, #191b23);
   height: 72rpx;
 }
 
@@ -397,7 +403,7 @@ const gridItems = computed(() => featuredList.value.slice(1, 5))
 
 .search-head__cancel-text {
   font-size: $mb-font-md;
-  color: $mb-color-primary;
+  color: var(--color-primary, #0d50d5);
   font-weight: 600;
 }
 
@@ -425,7 +431,7 @@ const gridItems = computed(() => featuredList.value.slice(1, 5))
 .section__title {
   font-size: 34rpx;
   font-weight: 700;
-  color: $mb-color-text;
+  color: var(--color-text, #191b23);
   letter-spacing: 1rpx;
 }
 
@@ -447,7 +453,7 @@ const gridItems = computed(() => featuredList.value.slice(1, 5))
   top: 10rpx;
   width: 20rpx;
   height: 20rpx;
-  border: 3rpx solid $mb-color-text-tertiary;
+  border: 3rpx solid var(--color-text-tertiary, #737686);
   border-top: 0;
   border-radius: 0 0 5rpx 5rpx;
 }
@@ -460,8 +466,8 @@ const gridItems = computed(() => featuredList.value.slice(1, 5))
   width: 24rpx;
   height: 4rpx;
   border-radius: $mb-radius-full;
-  background: $mb-color-text-tertiary;
-  box-shadow: 8rpx -5rpx 0 -1rpx $mb-color-text-tertiary;
+  background: var(--color-text-tertiary, #737686);
+  box-shadow: 8rpx -5rpx 0 -1rpx var(--color-text-tertiary, #737686);
 }
 
 /* ===========================
@@ -475,8 +481,8 @@ const gridItems = computed(() => featuredList.value.slice(1, 5))
 
 .tag {
   padding: 14rpx 28rpx;
-  background: $mb-color-bg;
-  border: 1rpx solid $mb-color-divider;
+  background: var(--color-bg, #ffffff);
+  border: 1rpx solid var(--color-divider, #f0f2f5);
   border-radius: $mb-radius-sm;
   transition: opacity 0.15s;
 
@@ -487,7 +493,7 @@ const gridItems = computed(() => featuredList.value.slice(1, 5))
 
 .tag__text {
   font-size: 26rpx;
-  color: $mb-color-text-secondary;
+  color: var(--color-text-secondary, #434654);
   line-height: 1.4;
   white-space: nowrap;
 }
@@ -503,7 +509,7 @@ const gridItems = computed(() => featuredList.value.slice(1, 5))
   border-radius: $mb-radius-lg;
   overflow: hidden;
   margin-bottom: $mb-spacing-md;
-  border: 1rpx solid $mb-color-divider;
+  border: 1rpx solid var(--color-divider, #f0f2f5);
 }
 
 .hero-card__img {
@@ -535,7 +541,7 @@ const gridItems = computed(() => featuredList.value.slice(1, 5))
 .hero-card__label {
   font-size: 36rpx;
   font-weight: 700;
-  color: $mb-color-text-inverse;
+  color: var(--color-text-inverse, #ffffff);
   line-height: 1.3;
   letter-spacing: 2rpx;
 }
@@ -564,7 +570,7 @@ const gridItems = computed(() => featuredList.value.slice(1, 5))
 .topic-item__num {
   font-size: 26rpx;
   font-weight: 700;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
   flex-shrink: 0;
   line-height: 1.6;
   letter-spacing: 1rpx;
@@ -580,13 +586,13 @@ const gridItems = computed(() => featuredList.value.slice(1, 5))
 .topic-item__title {
   font-size: 28rpx;
   font-weight: 600;
-  color: $mb-color-text;
+  color: var(--color-text, #191b23);
   line-height: 1.5;
 }
 
 .topic-item__sub {
   font-size: $mb-font-sm;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
   line-height: 1.5;
 }
 
@@ -604,8 +610,8 @@ const gridItems = computed(() => featuredList.value.slice(1, 5))
   border-radius: $mb-radius-lg;
   overflow: hidden;
   height: 240rpx;
-  background: $mb-color-bg-secondary;
-  border: 1rpx solid $mb-color-divider;
+  background: var(--color-bg-secondary, #faf8ff);
+  border: 1rpx solid var(--color-divider, #f0f2f5);
 }
 
 .bento-cell--tall {
@@ -642,12 +648,12 @@ const gridItems = computed(() => featuredList.value.slice(1, 5))
   width: 100%;
   height: 280rpx;
   border-radius: $mb-radius-lg;
-  background: $mb-color-bg-secondary;
+  background: var(--color-bg-secondary, #faf8ff);
 }
 
 .curated-card__name {
   font-size: $mb-font-sm;
-  color: $mb-color-text-secondary;
+  color: var(--color-text-secondary, #434654);
   margin-top: $mb-spacing-xs;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -681,8 +687,8 @@ const gridItems = computed(() => featuredList.value.slice(1, 5))
   width: 96rpx;
   height: 96rpx;
   border-radius: $mb-radius-lg;
-  background: $mb-color-bg;
-  border: 1rpx solid $mb-color-divider;
+  background: var(--color-bg, #ffffff);
+  border: 1rpx solid var(--color-divider, #f0f2f5);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -692,7 +698,7 @@ const gridItems = computed(() => featuredList.value.slice(1, 5))
   position: relative;
   width: 34rpx;
   height: 34rpx;
-  color: $mb-color-primary;
+  color: var(--color-primary, #0d50d5);
 }
 
 .quick-cat__icon::before,
@@ -749,7 +755,7 @@ const gridItems = computed(() => featuredList.value.slice(1, 5))
 
 .quick-cat__label {
   font-size: $mb-font-xs;
-  color: $mb-color-text-secondary;
+  color: var(--color-text-secondary, #434654);
   white-space: nowrap;
 }
 

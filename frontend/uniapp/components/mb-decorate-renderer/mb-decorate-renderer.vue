@@ -8,9 +8,11 @@
         @tap="openSearch(module)"
       >
         <view class="decorate-search__icon" />
-        <text class="decorate-search__text">{{
-          module.props.placeholder || "搜索商品"
-        }}</text>
+        <text
+          class="decorate-search__text"
+          :style="textStyle(module, 'placeholder')"
+          >{{ module.props.placeholder || "搜索商品" }}</text
+        >
       </view>
 
       <view
@@ -36,7 +38,10 @@
             />
           </swiper-item>
         </swiper>
-        <view v-else class="decorate-banner__fallback">
+        <view
+          v-else-if="!hasConfiguredList(module)"
+          class="decorate-banner__fallback"
+        >
           <text class="decorate-banner__fallback-sub">{{
             module.props.subtitle || "NEW ARRIVAL"
           }}</text>
@@ -72,9 +77,11 @@
               getFallbackIcon(item)
             }}</text>
           </view>
-          <text class="decorate-nav__label">{{
-            item.label || item.title || item.text
-          }}</text>
+          <text
+            class="decorate-nav__label"
+            :style="textStyle(module, 'itemLabel')"
+            >{{ item.label || item.title || item.text }}</text
+          >
         </view>
       </view>
 
@@ -85,29 +92,31 @@
         @tap="openEntryCard(module)"
       >
         <view
+          v-if="entryCardIconImage(module)"
           class="decorate-entry-card__icon"
-          :style="entryCardIconStyle(module)"
         >
           <image
-            v-if="entryCardIconImage(module)"
             class="decorate-entry-card__icon-image"
             :src="entryCardIconImage(module)"
             mode="aspectFill"
           />
-          <text v-else class="decorate-entry-card__icon-text">{{
-            entryCardFallbackIcon(module)
-          }}</text>
         </view>
         <view class="decorate-entry-card__content">
-          <text class="decorate-entry-card__title">{{
-            module.props.title || "入口卡片"
-          }}</text>
-          <text class="decorate-entry-card__sub">{{
-            module.props.subtitle ||
-            module.props.sub_title ||
-            module.props.path ||
-            "点击查看"
-          }}</text>
+          <text
+            class="decorate-entry-card__title"
+            :style="textStyle(module, 'title')"
+            >{{ module.props.title || "入口卡片" }}</text
+          >
+          <text
+            class="decorate-entry-card__sub"
+            :style="textStyle(module, 'subtitle')"
+            >{{
+              module.props.subtitle ||
+              module.props.sub_title ||
+              module.props.path ||
+              "点击查看"
+            }}</text
+          >
         </view>
         <view v-if="module.props.show_arrow !== false" class="decorate-arrow" />
       </view>
@@ -115,7 +124,7 @@
       <view
         v-else-if="module.type === 'imageCube'"
         class="decorate-cube"
-        :class="[`decorate-cube--${Math.min(cubeItems(module).length, 4)}`]"
+        :class="[`decorate-cube--${cubeDisplayLimit(module)}`]"
         :style="moduleStyle(module)"
       >
         <view
@@ -130,8 +139,13 @@
             :src="getImage(item)"
             mode="aspectFill"
           />
-          <view v-else class="decorate-cube__fallback">
-            <text>{{ cubeItemTitle(item) }}</text>
+          <view v-else class="decorate-cube__fallback" />
+          <view
+            v-if="cubeItemTitle(item)"
+            class="decorate-cube__title"
+            :style="cubeTitleStyle(module)"
+          >
+            {{ cubeItemTitle(item) }}
           </view>
         </view>
       </view>
@@ -155,9 +169,11 @@
           class="decorate-title__more"
           @tap="openTitleMore(module)"
         >
-          <text class="decorate-title__more-text">{{
-            titleMoreText(module)
-          }}</text>
+          <text
+            class="decorate-title__more-text"
+            :style="textStyle(module, 'more')"
+            >{{ titleMoreText(module) }}</text
+          >
           <view class="decorate-arrow" />
         </view>
       </view>
@@ -192,11 +208,13 @@
             <text
               v-if="module.props.title"
               class="decorate-section-head__title"
+              :style="textStyle(module, 'title')"
               >{{ module.props.title }}</text
             >
             <text
               v-if="module.props.subtitle"
               class="decorate-section-head__sub"
+              :style="textStyle(module, 'subtitle')"
               >{{ module.props.subtitle }}</text
             >
           </view>
@@ -205,9 +223,11 @@
             class="decorate-section-head__more"
             @tap="openMore(module)"
           >
-            <text class="decorate-section-head__more-text">{{
-              productMoreText(module)
-            }}</text>
+            <text
+              class="decorate-section-head__more-text"
+              :style="textStyle(module, 'more')"
+              >{{ productMoreText(module) }}</text
+            >
             <view class="decorate-arrow" />
           </view>
         </view>
@@ -297,9 +317,21 @@ watch(
 );
 
 function getList(module) {
+  return getRawList(module).filter((item) => itemVisible(item));
+}
+
+function getRawList(module) {
   const value =
     module.props.list || module.props.items || module.props.images || [];
   return Array.isArray(value) ? value : [];
+}
+
+function hasConfiguredList(module) {
+  return getRawList(module).length > 0;
+}
+
+function itemVisible(item) {
+  return item?.enabled !== false && item?.visible !== false;
 }
 
 function styleColor(value) {
@@ -402,6 +434,52 @@ function styleBoolean(value, fallback = false) {
   return Boolean(value);
 }
 
+function normalizeTextAlign(value) {
+  const align = String(value || "");
+  return ["center", "left", "right"].includes(align) ? align : "";
+}
+
+function normalizeFontWeight(value) {
+  const weight = String(value || "");
+  return ["400", "500", "600", "700", "800", "900"].includes(weight)
+    ? weight
+    : "";
+}
+
+function textStyleConfig(module, role) {
+  const styles = module.props?.textStyles || module.props?.text_styles || {};
+  const config = styles?.[role];
+  return config && typeof config === "object" && !Array.isArray(config)
+    ? config
+    : {};
+}
+
+function textStyle(module, role) {
+  const config = textStyleConfig(module, role);
+  if (Object.keys(config).length === 0) return "";
+  const style = [];
+  const color = styleColor(config.color);
+  if (color) style.push(`color: ${color}`);
+  const fontSize = Number(config.fontSize ?? config.font_size);
+  if (Number.isFinite(fontSize) && fontSize > 0) {
+    style.push(`font-size: ${clampStyleNumber(fontSize, 24, 16, 80)}rpx`);
+  }
+  const fontWeight = normalizeFontWeight(
+    config.fontWeight ?? config.font_weight,
+  );
+  if (fontWeight) style.push(`font-weight: ${fontWeight}`);
+  if (
+    config.fontStyle === "italic" ||
+    config.font_style === "italic" ||
+    styleBoolean(config.italic)
+  ) {
+    style.push("font-style: italic");
+  }
+  const textAlign = normalizeTextAlign(config.textAlign ?? config.text_align);
+  if (textAlign) style.push(`text-align: ${textAlign}`);
+  return style.join("; ");
+}
+
 function moduleStyle(module) {
   const props = module.props || {};
   const style = [];
@@ -422,7 +500,8 @@ function moduleStyle(module) {
     style.push(`margin-top: ${Number(marginTop)}rpx`);
   if (marginBottom !== undefined)
     style.push(`margin-bottom: ${Number(marginBottom)}rpx`);
-  if (marginLeft !== undefined) style.push(`margin-left: ${Number(marginLeft)}rpx`);
+  if (marginLeft !== undefined)
+    style.push(`margin-left: ${Number(marginLeft)}rpx`);
   if (marginRight !== undefined)
     style.push(`margin-right: ${Number(marginRight)}rpx`);
   const componentBackground = gradientBackground(
@@ -433,9 +512,12 @@ function moduleStyle(module) {
   const backgroundImage = getImage(
     props.background_image || props.backgroundImage || "",
   );
-  const backgroundMode = props.backgroundMode || props.background_mode || "color";
+  const backgroundMode =
+    props.backgroundMode || props.background_mode || "color";
   const background = gradientBackground(
-    props.backgroundColorStart || props.background_color_start || props.background,
+    props.backgroundColorStart ||
+      props.background_color_start ||
+      props.background,
     props.backgroundColorEnd || props.background_color_end,
     props.backgroundGradientDirection || props.background_gradient_direction,
     props.bottomBackground || props.bottom_background,
@@ -528,16 +610,6 @@ function entryCardStyle(module) {
   return style.filter(Boolean).join("; ");
 }
 
-function entryCardIconStyle(module) {
-  const props = module.props || {};
-  const style = [];
-  const color = props.icon_color || props.iconColor;
-  const background = props.icon_background || props.iconBackground;
-  if (color) style.push(`color: ${color}`);
-  if (background) style.push(`background: ${background}`);
-  return style.join("; ");
-}
-
 function bannerStyle(module) {
   const height = Number(module.props.height || 314);
   const radius = Number(module.props.radius ?? 12);
@@ -600,24 +672,120 @@ function entryCardIconImage(module) {
   return getImage(module.props?.icon_image || module.props?.iconImage || "");
 }
 
-function entryCardFallbackIcon(module) {
-  return getFallbackIcon({
-    icon: module.props?.icon,
-    title: module.props?.title,
-  });
+function cubeLayout(module) {
+  const layout = String(module.props?.layout || "four");
+  return ["four", "one", "two"].includes(layout) ? layout : "four";
+}
+
+function cubeDisplayLimit(module) {
+  const map = {
+    four: 4,
+    one: 1,
+    two: 2,
+  };
+  return map[cubeLayout(module)] || map.four;
 }
 
 function cubeItems(module) {
   const list = getList(module);
-  if (list.length > 0) return list.slice(0, 4);
+  const limit = cubeDisplayLimit(module);
+  if (list.length > 0 || hasConfiguredList(module)) return list.slice(0, limit);
   const titles = module.props?.titles;
-  if (Array.isArray(titles) && titles.length > 0) return titles.slice(0, 4);
-  return ["精选榜单", "本周值得买", "会员专享", "新品榜"];
+  if (Array.isArray(titles) && titles.length > 0) return titles.slice(0, limit);
+  return ["精选榜单", "本周值得买", "会员专享", "新品榜"].slice(0, limit);
 }
 
 function cubeItemTitle(item) {
-  if (typeof item === "string") return item;
-  return item?.title || item?.label || item?.text || "精选内容";
+  if (typeof item === "string") return getImage(item) ? "" : item;
+  return item?.title || item?.label || item?.text || item?.name || "";
+}
+
+function textAlignJustifyContent(value) {
+  const align = normalizeTextAlign(value);
+  if (align === "center") return "center";
+  if (align === "right") return "flex-end";
+  return "flex-start";
+}
+
+function cubeTitlePositionStyle(value) {
+  const position = String(value || "bottom");
+  const style = [
+    "top: auto",
+    "right: auto",
+    "bottom: auto",
+    "left: auto",
+    "transform: none",
+  ];
+  const offset = "16rpx";
+  if (position.includes("top")) {
+    style.push(`top: ${offset}`);
+  } else if (position.includes("center")) {
+    style.push("top: 50%");
+    style.push("transform: translateY(-50%)");
+  } else {
+    style.push(`bottom: ${offset}`);
+  }
+  if (position.endsWith("Left")) {
+    style.push(`left: ${offset}`);
+  } else if (position.endsWith("Right")) {
+    style.push(`right: ${offset}`);
+  } else {
+    style.push("left: 50%");
+    style.push(
+      position.includes("center")
+        ? "transform: translate(-50%, -50%)"
+        : "transform: translateX(-50%)",
+    );
+  }
+  return style;
+}
+
+function cubeTitleStyle(module) {
+  const config = textStyleConfig(module, "itemLabel");
+  const style = [textStyle(module, "itemLabel")].filter(Boolean);
+  const mode = String(
+    config.backgroundMode ?? config.background_mode ?? "color",
+  );
+  const backgroundImage = getImage(
+    config.backgroundImage || config.background_image || "",
+  );
+  if (mode === "image" && backgroundImage) {
+    style.push(`background-image: url("${backgroundImage}")`);
+    style.push("background-position: center");
+    style.push("background-size: cover");
+  } else {
+    const background = gradientBackground(
+      config.backgroundColorStart ?? config.background_color_start,
+      config.backgroundColorEnd ?? config.background_color_end,
+      config.backgroundGradientDirection ??
+        config.background_gradient_direction,
+    );
+    if (background) style.push(`background: ${background}`);
+  }
+  const height = Number(
+    config.backgroundHeight ?? config.background_height ?? 26,
+  );
+  style.push(`height: ${clampStyleNumber(height, 26, 10, 100)}%`);
+  const width = Number(
+    config.backgroundWidth ?? config.background_width ?? 100,
+  );
+  style.push(`width: ${clampStyleNumber(width, 100, 20, 100)}%`);
+  style.push("max-width: calc(100% - 32rpx)");
+  style.push("max-height: calc(100% - 32rpx)");
+  const radius = Number(
+    config.backgroundRadius ?? config.background_radius ?? 12,
+  );
+  style.push(`border-radius: ${clampStyleNumber(radius, 12, 0, 80)}rpx`);
+  style.push(
+    ...cubeTitlePositionStyle(
+      config.backgroundPosition ?? config.background_position,
+    ),
+  );
+  const align =
+    normalizeTextAlign(config.textAlign ?? config.text_align) || "center";
+  style.push(`text-align: ${align}`);
+  style.push(`justify-content: ${textAlignJustifyContent(align)}`);
+  return style.join("; ");
 }
 
 function openEntryCard(module) {
@@ -657,6 +825,8 @@ function clampNumber(value, fallback, min, max) {
 }
 
 function titleTextStyle(module) {
+  const customStyle = textStyle(module, "title");
+  if (customStyle) return customStyle;
   const props = module.props || {};
   const style = [`text-align: ${titleAlign(module)}`];
   const fontSize = clampNumber(
@@ -679,6 +849,8 @@ function titleTextStyle(module) {
 }
 
 function titleSubStyle(module) {
+  const customStyle = textStyle(module, "subtitle");
+  if (customStyle) return customStyle;
   const props = module.props || {};
   const style = [`text-align: ${titleAlign(module)}`];
   const fontSize = clampNumber(
@@ -1086,12 +1258,12 @@ defineExpose({ refresh, loadMore });
 }
 
 .decorate-cube--2,
-.decorate-cube--3,
 .decorate-cube--4 {
   grid-template-columns: repeat(2, 1fr);
 }
 
 .decorate-cube__item {
+  position: relative;
   min-height: 180rpx;
   border-radius: 12rpx;
   overflow: hidden;
@@ -1121,6 +1293,26 @@ defineExpose({ refresh, loadMore });
   color: var(--color-text-title, #191b23);
   font-size: 24rpx;
   font-weight: 700;
+}
+
+.decorate-cube__title {
+  position: absolute;
+  bottom: 16rpx;
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  width: calc(100% - 32rpx);
+  height: 26%;
+  max-width: calc(100% - 32rpx);
+  max-height: calc(100% - 32rpx);
+  padding: 8rpx 12rpx;
+  overflow: hidden;
+  left: 50%;
+  border-radius: 10rpx;
+  background: rgba(255, 255, 255, 0.78);
+  text-overflow: ellipsis;
+  transform: translateX(-50%);
+  white-space: nowrap;
 }
 
 .decorate-title {

@@ -140,17 +140,7 @@ const walletRecharge = computed(() =>
   formatAmount(wallet.value.total_recharge),
 );
 const walletConsume = computed(() => formatAmount(wallet.value.total_consume));
-const themeOptions = computed(() => {
-  const list = [
-    { label: "跟随系统", mode: "system" },
-    { label: "浅色", mode: "light" },
-    { label: "深色", mode: "dark" },
-  ];
-  if (decorateStore.themes?.custom) {
-    list.push({ label: "自定义", mode: "custom" });
-  }
-  return list;
-});
+const themeOptions = computed(() => decorateStore.availableThemeOptions);
 
 const profileModules = computed(() => {
   const modules = Array.isArray(decorateStore.profileModules)
@@ -187,8 +177,10 @@ const profilePageStyle = computed(() => {
   };
 });
 
-onShow(() => {
+onShow(async () => {
   userStore.restoreToken();
+  await decorateStore.fetchThemes({ force: true });
+  await decorateStore.fetchMyThemePreference({ force: true });
   fetchPayMethodState();
   if (userStore.isLoggedIn) {
     userStore.fetchUserInfo();
@@ -247,9 +239,6 @@ function moduleList(module) {
     .filter((item) => item && typeof item === "object")
     .filter((item) => {
       if (item.requireBalanceEnabled) return balancePaymentEnabled.value;
-      if (isThemeEntry(item) && !decorateStore.allowUserThemeSelect) {
-        return false;
-      }
       return item.visible !== false && item.enabled !== false;
     })
     .map((item, index) => {
@@ -442,6 +431,56 @@ function styleBoolean(value, fallback = false) {
   return Boolean(value);
 }
 
+function normalizeHexColor(value) {
+  const color = styleColor(value).toLowerCase();
+  const shortHex = color.match(/^#([\da-f])([\da-f])([\da-f])$/i);
+  if (shortHex) {
+    return `#${shortHex[1]}${shortHex[1]}${shortHex[2]}${shortHex[2]}${shortHex[3]}${shortHex[3]}`;
+  }
+  return color;
+}
+
+function isDefaultProfileSurfaceColor(value) {
+  return ["#ffffff", "#faf8ff", "#f3f3fe"].includes(
+    normalizeHexColor(value),
+  );
+}
+
+function isDefaultProfileBorderColor(value) {
+  return ["#e5e5e5", "#e0e4e8", "#f0f2f5"].includes(
+    normalizeHexColor(value),
+  );
+}
+
+function shouldUseThemeModuleSurface(props, backgroundMode, backgroundImage) {
+  if (backgroundMode !== "color" || backgroundImage) return false;
+  const colors = [
+    props.background,
+    props.backgroundColorStart || props.background_color_start,
+    props.backgroundColorEnd || props.background_color_end,
+    props.bottomBackground || props.bottom_background,
+  ]
+    .map((item) => styleColor(item))
+    .filter(Boolean);
+  return (
+    colors.length > 0 &&
+    colors.every((item) => isDefaultProfileSurfaceColor(item))
+  );
+}
+
+function shouldUseThemeModuleBorder(props) {
+  const borderEnabled = props.borderEnabled ?? props.border_enabled;
+  if (!styleBoolean(borderEnabled, true)) return false;
+  const borderWidth = Number(props.borderWidth ?? props.border_width ?? 1);
+  const borderStyle = String(props.borderStyle || props.border_style || "solid");
+  const borderColor = props.borderColor || props.border_color || "";
+  return (
+    borderWidth === 1 &&
+    borderStyle === "dashed" &&
+    isDefaultProfileBorderColor(borderColor)
+  );
+}
+
 function normalizeFontWeight(value) {
   const weight = String(value || "");
   return ["400", "500", "600", "700", "800", "900"].includes(weight)
@@ -536,6 +575,11 @@ function moduleBoxStyle(module) {
   const backgroundMode =
     props.backgroundMode || props.background_mode || "color";
   const backgroundImage = moduleBackgroundImage(props);
+  const useThemeSurface = shouldUseThemeModuleSurface(
+    props,
+    backgroundMode,
+    backgroundImage,
+  );
   if (backgroundMode === "image" && backgroundImage) {
     style.backgroundImage = `url("${backgroundImage}")`;
     style.backgroundSize = "cover";
@@ -544,7 +588,7 @@ function moduleBoxStyle(module) {
       styleColor(props.background) ||
       styleColor(props.bottomBackground || props.bottom_background);
     if (fallback) style.backgroundColor = fallback;
-  } else {
+  } else if (!useThemeSurface) {
     const background = gradientBackground(
       props.backgroundColorStart ||
         props.background_color_start ||
@@ -567,7 +611,7 @@ function moduleBoxStyle(module) {
     style["--color-text-tertiary"] = textColor;
   }
   const borderEnabled = props.borderEnabled ?? props.border_enabled;
-  if (borderEnabled !== undefined) {
+  if (borderEnabled !== undefined && !shouldUseThemeModuleBorder(props)) {
     if (styleBoolean(borderEnabled, true)) {
       const borderWidth = Number(props.borderWidth ?? props.border_width ?? 1);
       const borderStyle = props.borderStyle || props.border_style || "solid";
@@ -767,15 +811,20 @@ function goCell(cell) {
 
 function showThemeSelector() {
   if (!decorateStore.allowUserThemeSelect) {
-    uni.showToast({ title: "当前不允许切换主题", icon: "none" });
+    uni.showToast({ title: "主题由管理员统一设置", icon: "none" });
     return;
   }
   uni.showActionSheet({
     itemList: themeOptions.value.map((item) => item.label),
-    success(res) {
+    async success(res) {
       const selected = themeOptions.value[res.tapIndex];
       if (!selected) return;
-      decorateStore.setThemeMode(selected.mode);
+      const changed = await decorateStore.setThemeMode(selected.mode, {
+        theme_id: selected.theme_id,
+      });
+      if (!changed) {
+        return;
+      }
       uni.showToast({ title: `已切换为${selected.label}`, icon: "none" });
     },
   });
@@ -785,9 +834,10 @@ function handleLogout() {
   uni.showModal({
     title: "提示",
     content: "确定退出登录吗？",
-    success: (res) => {
+    success: async (res) => {
       if (res.confirm) {
-        userStore.logout();
+        await userStore.logout();
+        await decorateStore.fetchMyThemePreference({ force: true });
         uni.showToast({ title: "已退出登录", icon: "none" });
       }
     },
@@ -1175,10 +1225,7 @@ function handleLogout() {
     </view>
 
     <view v-if="decorateStore.tabbarMode === 'custom'" class="bottom-spacer" />
-    <mb-custom-tabbar
-      v-if="decorateStore.tabbarMode === 'custom'"
-      current="/pages/profile/index"
-    />
+    <mb-custom-tabbar current="/pages/profile/index" />
   </view>
 </template>
 
@@ -1276,8 +1323,8 @@ function handleLogout() {
   height: 48rpx;
   padding: 0 20rpx;
   border-radius: 999rpx;
-  border: 1rpx solid rgba(13, 80, 213, 0.45);
-  background: rgba(13, 80, 213, 0.06);
+  border: 1rpx solid var(--color-primary-border, rgba(13, 80, 213, 0.45));
+  background: var(--color-primary-softer, rgba(13, 80, 213, 0.06));
   align-self: flex-start;
   display: flex;
   align-items: center;

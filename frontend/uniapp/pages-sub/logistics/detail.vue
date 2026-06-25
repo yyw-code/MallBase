@@ -1,7 +1,9 @@
 <script setup>
+import { useDecorateStore } from '@/store/decorate'
 import { ref, computed } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { getLogisticsDetail } from '@/api/order/logistics'
+const decorateStore = useDecorateStore()
 
 // ---------- state ----------
 const orderId = ref('')
@@ -61,7 +63,11 @@ function copyTrackingNo() {
 </script>
 
 <template>
-  <view class="page">
+  <view
+    class="page"
+    :class="[`theme-${decorateStore.resolvedThemeMode}`]"
+    :style="decorateStore.themeStyle"
+  >
     <mb-navbar title="物流详情" />
 
     <!-- Loading -->
@@ -159,7 +165,7 @@ function copyTrackingNo() {
 <style lang="scss" scoped>
 .page {
   min-height: 100vh;
-  background: $mb-color-bg-secondary;
+  background: var(--color-bg-secondary, #faf8ff);
 }
 
 // ---- Loading ----
@@ -182,7 +188,7 @@ function copyTrackingNo() {
 .status-header__label {
   display: block;
   font-size: $mb-font-sm;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
   margin-bottom: $mb-spacing-xs;
 }
 
@@ -190,7 +196,7 @@ function copyTrackingNo() {
   display: block;
   font-size: $mb-font-xxl;
   font-weight: 700;
-  color: $mb-color-primary;
+  color: var(--color-primary, #0d50d5);
   margin-bottom: $mb-spacing-lg;
 }
 
@@ -208,7 +214,7 @@ function copyTrackingNo() {
 
 .status-header__info-label {
   font-size: $mb-font-sm;
-  color: $mb-color-text-secondary;
+  color: var(--color-text-secondary, #434654);
   flex-shrink: 0;
 }
 
@@ -222,14 +228,14 @@ function copyTrackingNo() {
 
 .status-header__info-value {
   font-size: $mb-font-sm;
-  color: $mb-color-text;
+  color: var(--color-text, #191b23);
   font-weight: 500;
 }
 
 .copy-btn {
   flex-shrink: 0;
   padding: 4rpx 16rpx;
-  border: 1rpx solid $mb-color-primary;
+  border: 1rpx solid var(--color-primary, #0d50d5);
   border-radius: $mb-radius-sm;
 
   &:active {
@@ -239,16 +245,16 @@ function copyTrackingNo() {
 
 .copy-btn__text {
   font-size: $mb-font-xs;
-  color: $mb-color-primary;
+  color: var(--color-primary, #0d50d5);
 }
 
 // ---- Card base ----
 .card {
-  background: $mb-color-bg;
+  background: var(--color-bg, #ffffff);
   border-radius: $mb-radius-lg;
   padding: $mb-spacing-lg;
   margin: 0 $mb-spacing-md $mb-spacing-md;
-  border: 1rpx solid $mb-color-border;
+  border: 1rpx solid var(--color-border, #e0e4e8);
 }
 
 // ---- Address card ----
@@ -279,17 +285,17 @@ function copyTrackingNo() {
 .address-card__name {
   font-size: $mb-font-lg;
   font-weight: 600;
-  color: $mb-color-text-title;
+  color: var(--color-text-title, #191b23);
 }
 
 .address-card__phone {
   font-size: $mb-font-sm;
-  color: $mb-color-text-secondary;
+  color: var(--color-text-secondary, #434654);
 }
 
 .address-card__detail {
   font-size: $mb-font-md;
-  color: $mb-color-text-secondary;
+  color: var(--color-text-secondary, #434654);
   line-height: 1.5;
 }
 
@@ -303,7 +309,7 @@ function copyTrackingNo() {
   display: block;
   font-size: $mb-font-md;
   font-weight: 600;
-  color: $mb-color-text-title;
+  color: var(--color-text-title, #191b23);
   margin-bottom: $mb-spacing-lg;
 }
 
@@ -339,14 +345,14 @@ function copyTrackingNo() {
   width: 12rpx;
   height: 12rpx;
   border-radius: 50%;
-  background: $mb-color-border;
+  background: var(--color-border, #e0e4e8);
   flex-shrink: 0;
 
   &--active {
     width: 16rpx;
     height: 16rpx;
-    background: $mb-color-primary;
-    border: 6rpx solid rgba($mb-color-primary, 0.12);
+    background: var(--color-primary, #0d50d5);
+    border: 6rpx solid var(--color-primary-soft, rgba(13, 80, 213, 0.12));
     box-sizing: content-box;
   }
 }
@@ -354,7 +360,7 @@ function copyTrackingNo() {
 .timeline__line {
   width: 2rpx;
   flex: 1;
-  background: $mb-color-divider;
+  background: var(--color-divider, #f0f2f5);
   margin-top: 8rpx;
 }
 
@@ -368,11 +374,11 @@ function copyTrackingNo() {
 .timeline__text {
   display: block;
   font-size: $mb-font-md;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
   line-height: 1.5;
 
   &--active {
-    color: $mb-color-text;
+    color: var(--color-text, #191b23);
     font-weight: 600;
   }
 }
@@ -380,7 +386,7 @@ function copyTrackingNo() {
 .timeline__time {
   display: block;
   font-size: $mb-font-sm;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
   margin-top: 8rpx;
 }
 

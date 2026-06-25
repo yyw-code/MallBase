@@ -1,5 +1,9 @@
 <template>
-  <view class="detail-page">
+  <view
+    class="detail-page"
+    :class="[`theme-${decorateStore.resolvedThemeMode}`]"
+    :style="decorateStore.themeStyle"
+  >
     <mb-navbar title="订单详情" />
 
     <!-- Loading skeleton -->
@@ -243,12 +247,14 @@
 </template>
 
 <script setup>
+import { useDecorateStore } from '@/store/decorate'
 import { ref, computed, onUnmounted } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { getOrderDetail, cancelOrder, confirmReceive } from '@/api/order/order'
 import { usePayFlow } from '@/utils/usePayFlow'
 import { multiplyPrice, sumPrices } from '@/utils/price'
 import config from '@/config/index'
+const decorateStore = useDecorateStore()
 
 const {
   sheetVisible,
@@ -744,7 +750,7 @@ onUnmounted(() => {
 <style lang="scss" scoped>
 .detail-page {
   min-height: 100vh;
-  background-color: #faf8ff;
+  background-color: var(--color-bg-secondary, #faf8ff);
   padding: 0 $mb-spacing-page $mb-spacing-lg;
 }
 
@@ -755,7 +761,7 @@ onUnmounted(() => {
 
 // ---- Card base ----
 .card {
-  background: $mb-color-bg;
+  background: var(--color-bg, #ffffff);
   border-radius: 16rpx;
   padding: $mb-spacing-lg;
   margin-bottom: $mb-spacing-md;
@@ -770,8 +776,8 @@ onUnmounted(() => {
   gap: $mb-spacing-lg;
   margin: 0 (-$mb-spacing-page) $mb-spacing-md;
   padding: 34rpx $mb-spacing-page 42rpx;
-  background: $mb-color-primary;
-  color: $mb-color-text-inverse;
+  background: var(--color-primary, #0d50d5);
+  color: var(--color-text-inverse, #ffffff);
 }
 
 .status-section__content {
@@ -783,7 +789,7 @@ onUnmounted(() => {
   display: block;
   font-size: 34rpx;
   font-weight: 700;
-  color: $mb-color-text-inverse;
+  color: var(--color-text-inverse, #ffffff);
   line-height: 1.2;
 }
 
@@ -816,7 +822,7 @@ onUnmounted(() => {
 .status-truck__cab,
 .status-truck__wheel {
   position: absolute;
-  background: $mb-color-text-inverse;
+  background: var(--color-text-inverse, #ffffff);
 }
 
 .status-truck__body {
@@ -853,7 +859,7 @@ onUnmounted(() => {
   gap: $mb-spacing-md;
   padding: $mb-spacing-md $mb-spacing-lg;
   margin-bottom: $mb-spacing-md;
-  background: $mb-color-bg;
+  background: var(--color-bg, #ffffff);
   border-radius: 16rpx;
   border: 1rpx solid rgba(25, 27, 35, 0.06);
 }
@@ -863,7 +869,7 @@ onUnmounted(() => {
   width: 64rpx;
   height: 64rpx;
   border-radius: $mb-radius-md;
-  background: rgba($mb-color-primary, 0.1);
+  background: var(--color-primary-soft, rgba(13, 80, 213, 0.1));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -875,7 +881,7 @@ onUnmounted(() => {
   width: 32rpx;
   height: 24rpx;
 
-  &__body, &__cab, &__wheel { position: absolute; background: $mb-color-primary; }
+  &__body, &__cab, &__wheel { position: absolute; background: var(--color-primary, #0d50d5); }
   &__body { left: 0; bottom: 6rpx; width: 20rpx; height: 14rpx; border-radius: 2rpx; }
   &__cab { right: 0; bottom: 6rpx; width: 12rpx; height: 10rpx; border-radius: 0 3rpx 3rpx 0; }
   &__wheel { bottom: 0; width: 8rpx; height: 8rpx; border-radius: 50%; box-shadow: inset 0 0 0 2rpx rgba(255, 255, 255, 0.8); }
@@ -887,7 +893,7 @@ onUnmounted(() => {
 
 .logistics-preview__text {
   font-size: $mb-font-md;
-  color: $mb-color-text;
+  color: var(--color-text, #191b23);
   line-height: 1.5;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -897,7 +903,7 @@ onUnmounted(() => {
 
 .logistics-preview__time {
   font-size: $mb-font-sm;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
   margin-top: 8rpx;
 }
 
@@ -909,7 +915,7 @@ onUnmounted(() => {
   gap: $mb-spacing-md;
   padding: 18rpx $mb-spacing-lg;
   margin-bottom: $mb-spacing-md;
-  background: $mb-color-bg;
+  background: var(--color-bg, #ffffff);
   border-radius: 16rpx;
   border: 1rpx solid rgba(13, 80, 213, 0.14);
 }
@@ -938,7 +944,7 @@ onUnmounted(() => {
   height: 20rpx;
   border-radius: 50%;
   border: 6rpx solid rgba(13, 80, 213, 0.18);
-  background: $mb-color-primary;
+  background: var(--color-primary, #0d50d5);
   box-sizing: content-box;
 }
 
@@ -955,7 +961,7 @@ onUnmounted(() => {
   width: 64rpx;
   height: 64rpx;
   border-radius: 14rpx;
-  border: 3rpx solid $mb-color-bg;
+  border: 3rpx solid var(--color-bg, #ffffff);
   overflow: hidden;
   background: #f3f5f9;
   box-sizing: border-box;
@@ -979,7 +985,7 @@ onUnmounted(() => {
   width: 64rpx;
   height: 64rpx;
   border-radius: 14rpx;
-  border: 3rpx solid $mb-color-bg;
+  border: 3rpx solid var(--color-bg, #ffffff);
   background: rgba(25, 27, 35, 0.72);
   display: flex;
   align-items: center;
@@ -990,7 +996,7 @@ onUnmounted(() => {
 .after-sale-card__more-text {
   font-size: $mb-font-xs;
   font-weight: 700;
-  color: $mb-color-text-inverse;
+  color: var(--color-text-inverse, #ffffff);
 }
 
 .after-sale-card__content {
@@ -1007,7 +1013,7 @@ onUnmounted(() => {
 .after-sale-card__title {
   font-size: $mb-font-md;
   font-weight: 700;
-  color: $mb-color-text-title;
+  color: var(--color-text-title, #191b23);
 }
 
 .after-sale-card__type {
@@ -1015,7 +1021,7 @@ onUnmounted(() => {
   border-radius: 999rpx;
   background: rgba(13, 80, 213, 0.08);
   font-size: $mb-font-xs;
-  color: $mb-color-primary;
+  color: var(--color-primary, #0d50d5);
 }
 
 .after-sale-card__goods {
@@ -1023,7 +1029,7 @@ onUnmounted(() => {
   margin-top: 6rpx;
   font-size: $mb-font-xs;
   font-weight: 600;
-  color: $mb-color-text-title;
+  color: var(--color-text-title, #191b23);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1033,7 +1039,7 @@ onUnmounted(() => {
   display: block;
   margin-top: 4rpx;
   font-size: $mb-font-xs;
-  color: $mb-color-text-secondary;
+  color: var(--color-text-secondary, #434654);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1043,7 +1049,7 @@ onUnmounted(() => {
   flex-shrink: 0;
   font-size: $mb-font-sm;
   font-weight: 600;
-  color: $mb-color-primary;
+  color: var(--color-primary, #0d50d5);
 }
 
 // ---- Address card ----
@@ -1060,7 +1066,7 @@ onUnmounted(() => {
   width: 58rpx;
   height: 58rpx;
   border-radius: 14rpx;
-  background: rgba($mb-color-primary, 0.08);
+  background: var(--color-primary-soft, rgba(13, 80, 213, 0.08));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1078,7 +1084,7 @@ onUnmounted(() => {
   height: 28rpx;
   border-radius: 50% 50% 50% 0;
   transform: rotate(-45deg);
-  background: $mb-color-primary;
+  background: var(--color-primary, #0d50d5);
   position: absolute;
   top: 0;
   left: 0;
@@ -1092,7 +1098,7 @@ onUnmounted(() => {
     width: 10rpx;
     height: 10rpx;
     border-radius: 50%;
-    background: $mb-color-bg;
+    background: var(--color-bg, #ffffff);
   }
 }
 
@@ -1103,7 +1109,7 @@ onUnmounted(() => {
   transform: translateX(-50%);
   width: 4rpx;
   height: 10rpx;
-  background: $mb-color-primary;
+  background: var(--color-primary, #0d50d5);
   border-radius: 0 0 2rpx 2rpx;
 }
 
@@ -1116,12 +1122,12 @@ onUnmounted(() => {
   margin-bottom: 8rpx;
 }
 
-.address-card__name { font-size: $mb-font-lg; font-weight: 700; color: $mb-color-text-title; }
-.address-card__phone { font-size: $mb-font-sm; color: $mb-color-text-secondary; }
+.address-card__name { font-size: $mb-font-lg; font-weight: 700; color: var(--color-text-title, #191b23); }
+.address-card__phone { font-size: $mb-font-sm; color: var(--color-text-secondary, #434654); }
 
 .address-card__detail {
   font-size: $mb-font-md;
-  color: $mb-color-text-secondary;
+  color: var(--color-text-secondary, #434654);
   line-height: 1.5;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -1144,7 +1150,7 @@ onUnmounted(() => {
   }
 
   & + & {
-    border-top: 1rpx solid $mb-color-divider;
+    border-top: 1rpx solid var(--color-divider, #f0f2f5);
   }
 }
 
@@ -1181,7 +1187,7 @@ onUnmounted(() => {
 .goods-item__name {
   font-size: $mb-font-md;
   font-weight: 500;
-  color: $mb-color-text-title;
+  color: var(--color-text-title, #191b23);
   line-height: 1.4;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -1191,7 +1197,7 @@ onUnmounted(() => {
 
 .goods-item__spec {
   font-size: $mb-font-sm;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
   background: #f5f7fb;
   border-radius: 8rpx;
   padding: 5rpx 12rpx;
@@ -1210,7 +1216,7 @@ onUnmounted(() => {
   margin-top: auto;
 }
 
-.goods-item__qty { font-size: $mb-font-sm; color: $mb-color-text-tertiary; }
+.goods-item__qty { font-size: $mb-font-sm; color: var(--color-text-tertiary, #737686); }
 
 .goods-item__after-sale {
   display: flex;
@@ -1226,12 +1232,12 @@ onUnmounted(() => {
 .goods-item__after-sale-text {
   font-size: $mb-font-xs;
   font-weight: 700;
-  color: $mb-color-primary;
+  color: var(--color-primary, #0d50d5);
 }
 
 .goods-item__after-sale-amount {
   font-size: $mb-font-xs;
-  color: $mb-color-text-secondary;
+  color: var(--color-text-secondary, #434654);
 }
 
 // ---- Remark card ----
@@ -1246,13 +1252,13 @@ onUnmounted(() => {
   flex-shrink: 0;
   font-size: $mb-font-md;
   font-weight: 500;
-  color: $mb-color-text-title;
+  color: var(--color-text-title, #191b23);
 }
 
 .remark-card__value {
   flex: 1;
   font-size: $mb-font-md;
-  color: $mb-color-text-secondary;
+  color: var(--color-text-secondary, #434654);
   line-height: 1.5;
   text-align: right;
 }
@@ -1269,14 +1275,14 @@ onUnmounted(() => {
   padding: 14rpx 0;
 }
 
-.summary-row__label { font-size: $mb-font-md; color: $mb-color-text-secondary; }
+.summary-row__label { font-size: $mb-font-md; color: var(--color-text-secondary, #434654); }
 
 .summary-row__discount {
   font-size: $mb-font-sm;
   color: #c2410c;
 }
 
-.summary-divider { height: 1rpx; background: $mb-color-divider; margin: 8rpx 0; }
+.summary-divider { height: 1rpx; background: var(--color-divider, #f0f2f5); margin: 8rpx 0; }
 
 .summary-row--total {
   padding-top: 20rpx;
@@ -1284,7 +1290,7 @@ onUnmounted(() => {
   .summary-row__label {
     font-size: $mb-font-lg;
     font-weight: 600;
-    color: $mb-color-text-title;
+    color: var(--color-text-title, #191b23);
   }
 }
 
@@ -1302,7 +1308,7 @@ onUnmounted(() => {
 
 .info-row__label {
   font-size: $mb-font-md;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
   flex-shrink: 0;
 }
 
@@ -1317,7 +1323,7 @@ onUnmounted(() => {
 
 .info-row__value {
   font-size: $mb-font-md;
-  color: $mb-color-text;
+  color: var(--color-text, #191b23);
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -1344,7 +1350,7 @@ onUnmounted(() => {
     left: 0;
     width: 20rpx;
     height: 24rpx;
-    border: 2rpx solid $mb-color-primary;
+    border: 2rpx solid var(--color-primary, #0d50d5);
     border-radius: 3rpx;
   }
 
@@ -1356,7 +1362,7 @@ onUnmounted(() => {
     width: 10rpx;
     height: 6rpx;
     border-radius: 2rpx 2rpx 0 0;
-    background: $mb-color-primary;
+    background: var(--color-primary, #0d50d5);
 
     &::after {
       content: '';
@@ -1365,7 +1371,7 @@ onUnmounted(() => {
       left: -3rpx;
       width: 16rpx;
       height: 2rpx;
-      background: $mb-color-primary;
+      background: var(--color-primary, #0d50d5);
     }
   }
 }
@@ -1377,7 +1383,7 @@ onUnmounted(() => {
   right: 0;
   bottom: 0;
   z-index: 100;
-  background: $mb-color-bg;
+  background: var(--color-bg, #ffffff);
   border-top: 1rpx solid rgba(25, 27, 35, 0.08);
 }
 

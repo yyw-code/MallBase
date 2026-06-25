@@ -61,6 +61,14 @@ export function mergeDecorateConfig(config) {
     theme: {
       ...DEFAULT_DECORATE_CONFIG.theme,
       ...sourceTheme,
+      setting: {
+        ...DEFAULT_DECORATE_CONFIG.theme.setting,
+        ...(isPlainObject(sourceTheme.setting)
+          ? sourceTheme.setting
+          : isPlainObject(sourceTheme.policy)
+            ? sourceTheme.policy
+            : {}),
+      },
       policy: {
         ...DEFAULT_DECORATE_CONFIG.theme.policy,
         ...(isPlainObject(sourceTheme.policy) ? sourceTheme.policy : {}),

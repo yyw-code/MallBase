@@ -1,5 +1,9 @@
 <template>
-  <view v-if="isCustom" class="mb-custom-tabbar">
+  <view
+    v-if="isCustom"
+    class="mb-custom-tabbar"
+    :style="decorateStore.themeStyle"
+  >
     <view
       v-for="item in items"
       :key="item.key"
@@ -39,15 +43,70 @@ const decorateStore = useDecorateStore()
 const isCustom = computed(() => decorateStore.tabbarMode === 'custom')
 const items = computed(() => decorateStore.tabbarItems.slice(0, 5))
 
-watch(isCustom, syncNativeTabbar, { immediate: true })
+watch(
+  () => [
+    isCustom.value,
+    decorateStore.themeStyle,
+    decorateStore.resolvedThemeMode,
+  ],
+  syncNativeTabbar,
+  { immediate: true },
+)
 onMounted(syncNativeTabbar)
 onShow(syncNativeTabbar)
 
 function syncNativeTabbar() {
   if (isCustom.value) {
     uni.hideTabBar({ animation: false, fail: () => {} })
-  } else {
-    uni.showTabBar({ animation: false, fail: () => {} })
+    return
+  }
+
+  uni.showTabBar({ animation: false, fail: () => {} })
+  if (typeof uni.setTabBarStyle === 'function') {
+    const tokens = decorateStore.themeTokens || {}
+    uni.setTabBarStyle({
+      color: tokens.colorTextTertiaryOnBg || tokens.colorTextTertiary || '#737686',
+      selectedColor: tokens.colorPrimaryOnBg || tokens.colorPrimary || '#0d50d5',
+      backgroundColor: tokens.colorBg || '#ffffff',
+      borderStyle:
+        decorateStore.resolvedThemeMode === 'dark' ? 'black' : 'white',
+      fail: () => {},
+    })
+  }
+  if (typeof uni.setTabBarItem === 'function') {
+    syncNativeTabbarItems()
+  }
+}
+
+function normalizeNativeTabbarPath(path) {
+  if (!path) return ''
+  return String(path).replace(/^\/+/, '')
+}
+
+function normalizeNativeTabbarAsset(path) {
+  if (!path) return ''
+  const value = String(path)
+  return /^https?:\/\//.test(value) ? value : value.replace(/^\/+/, '')
+}
+
+function syncNativeTabbarItems() {
+  items.value.forEach((item, index) => {
+    const options = {
+      index,
+      text: item.text,
+      pagePath: normalizeNativeTabbarPath(item.pagePath),
+      visible: true,
+      fail: () => {},
+    }
+    const iconPath = normalizeNativeTabbarAsset(item.iconPath)
+    const selectedIconPath = normalizeNativeTabbarAsset(item.selectedIconPath)
+    if (iconPath) options.iconPath = iconPath
+    if (selectedIconPath) options.selectedIconPath = selectedIconPath
+    uni.setTabBarItem(options)
+  })
+
+  for (let index = items.value.length; index < 5; index += 1) {
+    uni.setTabBarItem({ index, visible: false, fail: () => {} })
   }
 }
 
@@ -103,11 +162,11 @@ function goTab(item) {
   align-items: center;
   justify-content: center;
   gap: 6rpx;
-  color: var(--color-text-tertiary, #737686);
+  color: var(--color-text-tertiary-on-bg, var(--color-text-tertiary, #737686));
 }
 
 .mb-custom-tabbar__item--active {
-  color: var(--color-primary, #0d50d5);
+  color: var(--color-primary-on-bg, var(--color-primary, #0d50d5));
 }
 
 .mb-custom-tabbar__icon {
@@ -128,7 +187,7 @@ function goTab(item) {
 .mb-custom-tabbar__fallback-text {
   font-size: 22rpx;
   font-weight: 700;
-  color: currentColor;
+  color: var(--color-text-on-surface, currentColor);
 }
 
 .mb-custom-tabbar__text {

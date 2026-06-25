@@ -239,7 +239,7 @@ function firstEnabled(list) {
 }
 
 .mb-pay__row--active {
-  background: rgba(13, 80, 213, 0.04);
+  background: var(--color-primary-softer, rgba(13, 80, 213, 0.04));
 }
 
 .mb-pay__row--disabled {
@@ -265,7 +265,7 @@ function firstEnabled(list) {
 }
 
 .mb-pay__icon--wallet {
-  background: #f0ad4e;
+  background: var(--color-warning, #f0ad4e);
 }
 
 .mb-pay__icon--default {

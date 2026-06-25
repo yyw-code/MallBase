@@ -5,6 +5,7 @@
     "versionName" : "1.0.0",
     "versionCode" : "100",
     "darkmode" : true,
+    "themeLocation" : "theme.json",
     "transformPx" : false,
     /* 5+App特有相关 */
     "app-plus" : {
@@ -52,10 +53,16 @@
     /* 小程序特有相关 */
     "mp-weixin" : {
         "appid" : "wx807343cceb26da6a",
+        "darkmode" : true,
+        "themeLocation" : "theme.json",
         "setting" : {
             "urlCheck" : false
         },
         "usingComponents" : true
+    },
+    "h5" : {
+        "darkmode" : true,
+        "themeLocation" : "theme.json"
     },
     "mp-alipay" : {
         "usingComponents" : true

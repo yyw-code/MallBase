@@ -320,7 +320,7 @@ function getRefundableAmount(item) {
   max-height: 82vh;
   display: flex;
   flex-direction: column;
-  background: $mb-color-bg;
+  background: var(--color-bg, #ffffff);
   border-radius: 28rpx 28rpx 0 0;
   transform: translateY(100%);
   transition: transform 0.24s ease-out;
@@ -335,7 +335,7 @@ function getRefundableAmount(item) {
   height: 8rpx;
   margin: 18rpx auto 8rpx;
   border-radius: $mb-radius-full;
-  background: #d8dce6;
+  background: var(--color-border, #d8dce6);
 }
 
 .mb-refund-sheet__header {
@@ -355,14 +355,14 @@ function getRefundableAmount(item) {
   display: block;
   font-size: $mb-font-lg;
   font-weight: 700;
-  color: $mb-color-text-title;
+  color: var(--color-text-title, #191b23);
 }
 
 .mb-refund-sheet__desc {
   display: block;
   margin-top: 6rpx;
   font-size: $mb-font-sm;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
 }
 
 .mb-refund-sheet__close {
@@ -373,12 +373,12 @@ function getRefundableAmount(item) {
   align-items: center;
   justify-content: center;
   border-radius: $mb-radius-full;
-  background: #f3f5f9;
+  background: var(--color-bg-surface, #f3f5f9);
 }
 
 .mb-refund-sheet__close-icon {
   font-size: $mb-font-md;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
 }
 
 .mb-refund-sheet__tools {
@@ -397,13 +397,13 @@ function getRefundableAmount(item) {
   gap: $mb-spacing-xs;
   padding: 0 $mb-spacing-md;
   border-radius: $mb-radius-full;
-  background: #f5f7fb;
+  background: var(--color-bg-surface, #f5f7fb);
 }
 
 .mb-refund-sheet__search-icon {
   flex-shrink: 0;
   font-size: $mb-font-xs;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
 }
 
 .mb-refund-sheet__search-input {
@@ -411,7 +411,7 @@ function getRefundableAmount(item) {
   min-width: 0;
   height: 64rpx;
   font-size: $mb-font-sm;
-  color: $mb-color-text;
+  color: var(--color-text, #191b23);
 }
 
 .mb-refund-sheet__select-all {
@@ -421,13 +421,13 @@ function getRefundableAmount(item) {
   align-items: center;
   padding: 0 $mb-spacing-md;
   border-radius: $mb-radius-full;
-  background: rgba(13, 80, 213, 0.08);
+  background: var(--color-primary-soft, rgba(13, 80, 213, 0.08));
 }
 
 .mb-refund-sheet__select-all-text {
   font-size: $mb-font-sm;
   font-weight: 600;
-  color: $mb-color-primary;
+  color: var(--color-primary, #0d50d5);
 }
 
 .mb-refund-sheet__list {
@@ -443,14 +443,14 @@ function getRefundableAmount(item) {
   gap: $mb-spacing-sm;
   padding: $mb-spacing-md;
   margin-bottom: $mb-spacing-md;
-  border: 1rpx solid $mb-color-divider;
+  border: 1rpx solid var(--color-divider, #f0f2f5);
   border-radius: $mb-radius-lg;
-  background: #fbfcff;
+  background: var(--color-bg, #fbfcff);
 }
 
 .mb-refund-sheet__item--active {
-  border-color: rgba(13, 80, 213, 0.42);
-  background: rgba(13, 80, 213, 0.04);
+  border-color: var(--color-primary-border, rgba(13, 80, 213, 0.42));
+  background: var(--color-primary-softer, rgba(13, 80, 213, 0.04));
 }
 
 .mb-refund-sheet__item--disabled {
@@ -464,21 +464,21 @@ function getRefundableAmount(item) {
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 2rpx solid #cbd2df;
+  border: 2rpx solid var(--color-border, #cbd2df);
   border-radius: $mb-radius-full;
-  background: $mb-color-bg;
+  background: var(--color-bg, #ffffff);
 }
 
 .mb-refund-sheet__checkbox--active {
-  border-color: $mb-color-primary;
-  background: $mb-color-primary;
+  border-color: var(--color-primary, #0d50d5);
+  background: var(--color-primary, #0d50d5);
 }
 
 .mb-refund-sheet__checkbox-dot {
   width: 14rpx;
   height: 14rpx;
   border-radius: $mb-radius-full;
-  background: $mb-color-text-inverse;
+  background: var(--color-text-inverse, #ffffff);
 }
 
 .mb-refund-sheet__image {
@@ -486,7 +486,7 @@ function getRefundableAmount(item) {
   width: 112rpx;
   height: 112rpx;
   border-radius: $mb-radius-md;
-  background: #f3f5f9;
+  background: var(--color-bg-surface, #f3f5f9);
 }
 
 .mb-refund-sheet__image--placeholder {
@@ -499,7 +499,11 @@ function getRefundableAmount(item) {
   width: 52rpx;
   height: 40rpx;
   border-radius: $mb-radius-sm;
-  background: linear-gradient(135deg, rgba(13, 80, 213, 0.14), rgba(25, 27, 35, 0.06));
+  background: linear-gradient(
+    135deg,
+    var(--color-primary-soft, rgba(13, 80, 213, 0.14)),
+    var(--color-divider, rgba(25, 27, 35, 0.06))
+  );
 }
 
 .mb-refund-sheet__info {
@@ -513,7 +517,7 @@ function getRefundableAmount(item) {
   font-size: $mb-font-md;
   font-weight: 600;
   line-height: 1.38;
-  color: $mb-color-text-title;
+  color: var(--color-text-title, #191b23);
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
 }
@@ -525,8 +529,8 @@ function getRefundableAmount(item) {
   padding: 4rpx 10rpx;
   overflow: hidden;
   border-radius: $mb-radius-sm;
-  background: #f5f7fb;
-  color: $mb-color-text-tertiary;
+  background: var(--color-bg-surface, #f5f7fb);
+  color: var(--color-text-tertiary, #737686);
   font-size: $mb-font-sm;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -543,11 +547,11 @@ function getRefundableAmount(item) {
 .mb-refund-sheet__quantity,
 .mb-refund-sheet__amount {
   font-size: $mb-font-xs;
-  color: $mb-color-text-secondary;
+  color: var(--color-text-secondary, #434654);
 }
 
 .mb-refund-sheet__amount {
-  color: $mb-color-primary;
+  color: var(--color-primary, #0d50d5);
   font-weight: 600;
 }
 
@@ -557,9 +561,9 @@ function getRefundableAmount(item) {
   align-items: center;
   height: 52rpx;
   overflow: hidden;
-  border: 1rpx solid $mb-color-divider;
+  border: 1rpx solid var(--color-divider, #f0f2f5);
   border-radius: $mb-radius-full;
-  background: $mb-color-bg;
+  background: var(--color-bg, #ffffff);
 }
 
 .mb-refund-sheet__stepper-btn {
@@ -577,7 +581,7 @@ function getRefundableAmount(item) {
 .mb-refund-sheet__stepper-text {
   font-size: $mb-font-lg;
   line-height: 1;
-  color: $mb-color-primary;
+  color: var(--color-primary, #0d50d5);
 }
 
 .mb-refund-sheet__stepper-value {
@@ -585,7 +589,7 @@ function getRefundableAmount(item) {
   text-align: center;
   font-size: $mb-font-sm;
   font-weight: 700;
-  color: $mb-color-text-title;
+  color: var(--color-text-title, #191b23);
 }
 
 .mb-refund-sheet__empty {
@@ -595,15 +599,15 @@ function getRefundableAmount(item) {
 
 .mb-refund-sheet__empty-text {
   font-size: $mb-font-sm;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
 }
 
 .mb-refund-sheet__footer {
   flex-shrink: 0;
   padding: $mb-spacing-sm $mb-spacing-lg;
   padding-bottom: calc(#{$mb-spacing-sm} + env(safe-area-inset-bottom));
-  border-top: 1rpx solid $mb-color-divider;
-  background: $mb-color-bg;
+  border-top: 1rpx solid var(--color-divider, #f0f2f5);
+  background: var(--color-bg, #ffffff);
 }
 
 .mb-refund-sheet__summary {
@@ -616,12 +620,12 @@ function getRefundableAmount(item) {
 .mb-refund-sheet__summary-main {
   font-size: $mb-font-sm;
   font-weight: 700;
-  color: $mb-color-text-title;
+  color: var(--color-text-title, #191b23);
 }
 
 .mb-refund-sheet__summary-sub {
   font-size: $mb-font-sm;
-  color: $mb-color-text-secondary;
+  color: var(--color-text-secondary, #434654);
 }
 
 .mb-refund-sheet__actions {
@@ -641,13 +645,13 @@ function getRefundableAmount(item) {
 
 .mb-refund-sheet__cancel {
   flex: 1;
-  border: 1rpx solid rgba(13, 80, 213, 0.32);
-  background: $mb-color-bg;
+  border: 1rpx solid var(--color-primary-border, rgba(13, 80, 213, 0.32));
+  background: var(--color-bg, #ffffff);
 }
 
 .mb-refund-sheet__confirm {
   flex: 1.4;
-  background: $mb-color-primary;
+  background: var(--color-primary, #0d50d5);
 }
 
 .mb-refund-sheet__confirm--disabled {
@@ -661,10 +665,10 @@ function getRefundableAmount(item) {
 }
 
 .mb-refund-sheet__cancel-text {
-  color: $mb-color-primary;
+  color: var(--color-primary, #0d50d5);
 }
 
 .mb-refund-sheet__confirm-text {
-  color: $mb-color-text-inverse;
+  color: var(--color-text-inverse, #ffffff);
 }
 </style>

@@ -330,7 +330,7 @@ watch(currentStock, (stock) => {
 }
 
 .mb-spec__tag--active {
-  background: rgba(13, 80, 213, 0.08);
+  background: var(--color-primary-soft, rgba(13, 80, 213, 0.08));
   border-color: var(--color-primary, #0d50d5);
 }
 
@@ -402,7 +402,7 @@ watch(currentStock, (stock) => {
 }
 
 .mb-spec__btn--cart {
-  background: #ffffff;
+  background: var(--color-bg, #ffffff);
   border: 2rpx solid var(--color-primary, #0d50d5);
 }
 
@@ -427,10 +427,10 @@ watch(currentStock, (stock) => {
 }
 
 .mb-spec__btn-text--light {
-  color: #ffffff;
+  color: var(--color-text-inverse, #ffffff);
 }
 
 .mb-spec__btn--cart-full .mb-spec__btn-text {
-  color: #ffffff;
+  color: var(--color-text-inverse, #ffffff);
 }
 </style>

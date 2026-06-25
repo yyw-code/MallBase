@@ -1,5 +1,9 @@
 <template>
-  <view class="goods-detail">
+  <view
+    class="goods-detail"
+    :class="[`theme-${decorateStore.resolvedThemeMode}`]"
+    :style="decorateStore.themeStyle"
+  >
     <!-- Loading skeleton -->
     <view v-if="loading" class="goods-detail__loading">
       <view class="goods-detail__skeleton-swiper" />
@@ -286,12 +290,14 @@
 </template>
 
 <script setup>
+import { useDecorateStore } from '@/store/decorate'
 import { ref, computed, nextTick } from 'vue'
 import { onLoad, onShareAppMessage, onShareTimeline } from '@dcloudio/uni-app'
 import { getGoodsDetail } from '@/api/goods/goods'
 import { getReviewList } from '@/api/goods/review'
 import { useCartStore } from '@/store/cart'
 import { useAppStore } from '@/store/app'
+const decorateStore = useDecorateStore()
 
 const MEDIA_HEIGHT = 422
 const REVIEW_PREVIEW_LIMIT = 3
@@ -802,7 +808,7 @@ function onBuyNow({ sku, quantity }) {
 <style lang="scss" scoped>
 .goods-detail {
   min-height: 100vh;
-  background: $mb-color-bg-secondary;
+  background: var(--color-bg-secondary, #faf8ff);
 }
 
 // ---------- Floating media actions ----------
@@ -865,9 +871,9 @@ function onBuyNow({ sku, quantity }) {
   height: 750rpx;
   background: linear-gradient(
     90deg,
-    $mb-color-bg-secondary 25%,
-    $mb-color-bg-surface 50%,
-    $mb-color-bg-secondary 75%
+    var(--color-bg-secondary, #faf8ff) 25%,
+    var(--color-bg-surface, #f3f3fe) 50%,
+    var(--color-bg-secondary, #faf8ff) 75%
   );
   background-size: 200% 100%;
   animation: detail-shimmer 1.5s infinite ease-in-out;
@@ -885,7 +891,7 @@ function onBuyNow({ sku, quantity }) {
 // ---------- Scroll ----------
 .goods-detail__scroll {
   height: 100vh;
-  background: $mb-color-bg-secondary;
+  background: var(--color-bg-secondary, #faf8ff);
 }
 
 // ---------- Swiper ----------
@@ -946,7 +952,7 @@ function onBuyNow({ sku, quantity }) {
 // ---------- Price section ----------
 .goods-detail__price-section {
   padding: $mb-spacing-lg $mb-spacing-page $mb-spacing-sm;
-  background: $mb-color-bg;
+  background: var(--color-bg, #ffffff);
   margin: 0;
   border-radius: 0;
   border: 0;
@@ -968,14 +974,14 @@ function onBuyNow({ sku, quantity }) {
 .goods-detail__price-symbol {
   font-size: $mb-font-xl;
   font-weight: 700;
-  color: $mb-color-price;
+  color: var(--color-price, #ff5a1f);
   line-height: 1;
 }
 
 .goods-detail__price-value {
   font-size: 46rpx;
   font-weight: 800;
-  color: $mb-color-price;
+  color: var(--color-price, #ff5a1f);
   line-height: 1;
   letter-spacing: 0;
 }
@@ -987,7 +993,7 @@ function onBuyNow({ sku, quantity }) {
 
 .goods-detail__original-price-text {
   font-size: $mb-font-sm;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
   text-decoration: line-through;
 }
 
@@ -995,19 +1001,19 @@ function onBuyNow({ sku, quantity }) {
   flex-shrink: 0;
   padding: 4rpx 16rpx;
   border-radius: $mb-radius-sm;
-  background: $mb-color-bg-secondary;
+  background: var(--color-bg-secondary, #faf8ff);
 }
 
 .goods-detail__stock-text {
   font-size: $mb-font-sm;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
   line-height: 1.4;
 }
 
 // ---------- Title section ----------
 .goods-detail__title-section {
   padding: 0 $mb-spacing-page $mb-spacing-lg;
-  background: $mb-color-bg;
+  background: var(--color-bg, #ffffff);
   margin: 0;
   border-left: 0;
   border-right: 0;
@@ -1016,7 +1022,7 @@ function onBuyNow({ sku, quantity }) {
 .goods-detail__name {
   font-size: $mb-font-lg;
   font-weight: 700;
-  color: $mb-color-text-title;
+  color: var(--color-text-title, #191b23);
   line-height: 1.45;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -1028,7 +1034,7 @@ function onBuyNow({ sku, quantity }) {
   display: block;
   margin-top: $mb-spacing-xs;
   font-size: $mb-font-md;
-  color: $mb-color-text-secondary;
+  color: var(--color-text-secondary, #434654);
   line-height: 1.5;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -1043,10 +1049,10 @@ function onBuyNow({ sku, quantity }) {
   justify-content: space-between;
   gap: $mb-spacing-sm;
   padding: $mb-spacing-md $mb-spacing-page;
-  background: $mb-color-bg;
+  background: var(--color-bg, #ffffff);
   margin: 0;
-  border-top: 1rpx solid $mb-color-divider;
-  border-bottom: 1rpx solid $mb-color-divider;
+  border-top: 1rpx solid var(--color-divider, #f0f2f5);
+  border-bottom: 1rpx solid var(--color-divider, #f0f2f5);
   border-radius: 0;
 }
 
@@ -1063,18 +1069,18 @@ function onBuyNow({ sku, quantity }) {
   width: 10rpx;
   height: 10rpx;
   border-radius: $mb-radius-full;
-  background: $mb-color-primary;
+  background: var(--color-primary, #0d50d5);
 }
 
 .goods-detail__guarantee-title {
   font-size: $mb-font-sm;
-  color: $mb-color-text-secondary;
+  color: var(--color-text-secondary, #434654);
 }
 
 // ---------- Divider ----------
 .goods-detail__divider {
   height: $mb-spacing-sm;
-  background: $mb-color-bg-secondary;
+  background: var(--color-bg-secondary, #faf8ff);
 }
 
 // ---------- Cell ----------
@@ -1083,20 +1089,20 @@ function onBuyNow({ sku, quantity }) {
   align-items: center;
   justify-content: space-between;
   padding: $mb-spacing-lg $mb-spacing-page;
-  background: $mb-color-bg;
+  background: var(--color-bg, #ffffff);
   border: 0;
   border-radius: 0;
   margin: 0;
 
   &:active {
-    background: $mb-color-bg-secondary;
+    background: var(--color-bg-secondary, #faf8ff);
   }
 }
 
 .goods-detail__cell-label {
   font-size: $mb-font-md;
   font-weight: 600;
-  color: $mb-color-text;
+  color: var(--color-text, #191b23);
   flex-shrink: 0;
 }
 
@@ -1111,7 +1117,7 @@ function onBuyNow({ sku, quantity }) {
 
 .goods-detail__cell-value {
   font-size: $mb-font-md;
-  color: $mb-color-text-secondary;
+  color: var(--color-text-secondary, #434654);
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -1119,13 +1125,13 @@ function onBuyNow({ sku, quantity }) {
 
 .goods-detail__cell-arrow {
   font-size: 22rpx;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
   flex-shrink: 0;
 }
 
 // ---------- Review section ----------
 .goods-detail__review-section {
-  background: $mb-color-bg;
+  background: var(--color-bg, #ffffff);
   padding: $mb-spacing-md $mb-spacing-page $mb-spacing-lg;
   margin: 0;
   border: 0;
@@ -1149,13 +1155,13 @@ function onBuyNow({ sku, quantity }) {
 .goods-detail__review-title {
   font-size: $mb-font-xl;
   font-weight: 700;
-  color: $mb-color-text-title;
+  color: var(--color-text-title, #191b23);
   letter-spacing: -0.5rpx;
 }
 
 .goods-detail__review-total {
   font-size: $mb-font-md;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
   font-weight: 600;
 }
 
@@ -1171,13 +1177,13 @@ function onBuyNow({ sku, quantity }) {
 
 .goods-detail__review-view-all-text {
   font-size: $mb-font-md;
-  color: $mb-color-primary;
+  color: var(--color-primary, #0d50d5);
   font-weight: 600;
 }
 
 .goods-detail__review-view-all-arrow {
   font-size: 22rpx;
-  color: $mb-color-primary;
+  color: var(--color-primary, #0d50d5);
   line-height: 1;
 }
 
@@ -1185,19 +1191,19 @@ function onBuyNow({ sku, quantity }) {
 .goods-detail__review-empty {
   padding: $mb-spacing-lg 0;
   text-align: center;
-  background: $mb-color-bg;
+  background: var(--color-bg, #ffffff);
   border-radius: $mb-radius-lg;
 }
 
 .goods-detail__review-empty-text {
   font-size: $mb-font-md;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
 }
 
 .goods-detail__review-item {
   padding: $mb-spacing-lg;
-  background: $mb-color-bg;
-  border: 1rpx solid $mb-color-divider;
+  background: var(--color-bg, #ffffff);
+  border: 1rpx solid var(--color-divider, #f0f2f5);
   border-radius: $mb-radius-lg;
   margin-bottom: $mb-spacing-md;
   box-shadow: 0 4rpx 24rpx rgba(25, 27, 35, 0.04);
@@ -1213,7 +1219,7 @@ function onBuyNow({ sku, quantity }) {
   width: 88rpx;
   height: 88rpx;
   border-radius: $mb-radius-full;
-  background: linear-gradient(135deg, $mb-color-primary 0%, $mb-color-primary-light 100%);
+  background: linear-gradient(135deg, var(--color-primary, #0d50d5) 0%, var(--color-primary-light, #386bef) 100%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1249,7 +1255,7 @@ function onBuyNow({ sku, quantity }) {
 .goods-detail__review-user-name {
   font-size: $mb-font-md;
   font-weight: 700;
-  color: $mb-color-text;
+  color: var(--color-text, #191b23);
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -1265,19 +1271,19 @@ function onBuyNow({ sku, quantity }) {
 
 .goods-detail__review-star {
   font-size: 26rpx;
-  color: $mb-color-border-light;
+  color: var(--color-border, #c3c5d7);
   line-height: 1;
 }
 
 .goods-detail__review-star--active {
-  color: $mb-color-star;
+  color: var(--color-warning, #f0ad4e);
 }
 
 .goods-detail__review-meta {
   display: block;
   margin-top: 6rpx;
   font-size: $mb-font-xs;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
   line-height: 1.4;
 }
 
@@ -1285,7 +1291,7 @@ function onBuyNow({ sku, quantity }) {
   display: block;
   margin-top: $mb-spacing-md;
   font-size: $mb-font-md;
-  color: $mb-color-text;
+  color: var(--color-text, #191b23);
   line-height: 1.6;
   word-break: break-word;
 }
@@ -1301,14 +1307,14 @@ function onBuyNow({ sku, quantity }) {
   width: 168rpx;
   height: 168rpx;
   border-radius: $mb-radius-md;
-  background: $mb-color-bg-secondary;
+  background: var(--color-bg-secondary, #faf8ff);
 }
 
 .goods-detail__review-append {
   margin-top: $mb-spacing-md;
   padding: $mb-spacing-md;
   border-radius: $mb-radius-md;
-  background: $mb-color-bg-secondary;
+  background: var(--color-bg-secondary, #faf8ff);
 }
 
 .goods-detail__review-append-header {
@@ -1320,13 +1326,13 @@ function onBuyNow({ sku, quantity }) {
 .goods-detail__review-append-label {
   font-size: $mb-font-sm;
   font-weight: 700;
-  color: $mb-color-text-title;
+  color: var(--color-text-title, #191b23);
   line-height: 1.4;
 }
 
 .goods-detail__review-append-time {
   font-size: $mb-font-xs;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
   line-height: 1.4;
 }
 
@@ -1334,7 +1340,7 @@ function onBuyNow({ sku, quantity }) {
   display: block;
   margin-top: $mb-spacing-sm;
   font-size: $mb-font-sm;
-  color: $mb-color-text-secondary;
+  color: var(--color-text-secondary, #434654);
   line-height: 1.6;
   word-break: break-word;
 }
@@ -1343,28 +1349,28 @@ function onBuyNow({ sku, quantity }) {
   margin-top: $mb-spacing-md;
   padding: $mb-spacing-md;
   border-radius: $mb-radius-md;
-  background: $mb-color-bg-surface;
+  background: var(--color-bg-surface, #f3f3fe);
 }
 
 .goods-detail__review-reply-prefix {
   font-size: $mb-font-sm;
   font-weight: 700;
-  color: $mb-color-primary;
+  color: var(--color-primary, #0d50d5);
   line-height: 1.5;
 }
 
 .goods-detail__review-reply-text {
   font-size: $mb-font-sm;
-  color: $mb-color-primary;
+  color: var(--color-primary, #0d50d5);
   line-height: 1.5;
 }
 
 // ---------- Content section ----------
 .goods-detail__content-section {
-  background: $mb-color-bg;
+  background: var(--color-bg, #ffffff);
   padding: $mb-spacing-xl 0 $mb-spacing-xl;
   margin: 0 $mb-spacing-md $mb-spacing-md;
-  border: 1rpx solid $mb-color-divider;
+  border: 1rpx solid var(--color-divider, #f0f2f5);
   border-radius: $mb-radius-xl;
   width: auto;
   max-width: 100vw;
@@ -1384,12 +1390,12 @@ function onBuyNow({ sku, quantity }) {
 .goods-detail__content-line {
   flex: 1;
   height: 1rpx;
-  background: $mb-color-border;
+  background: var(--color-border, #e0e4e8);
 }
 
 .goods-detail__content-title {
   font-size: $mb-font-sm;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
   flex-shrink: 0;
   letter-spacing: 4rpx;
 }
@@ -1401,7 +1407,7 @@ function onBuyNow({ sku, quantity }) {
   box-sizing: border-box;
   font-size: $mb-font-md;
   line-height: 1.7;
-  color: $mb-color-text;
+  color: var(--color-text, #191b23);
   word-break: break-all;
   overflow: hidden;
 }
@@ -1413,7 +1419,7 @@ function onBuyNow({ sku, quantity }) {
 
 .goods-detail__content-empty-text {
   font-size: $mb-font-md;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
 }
 
 // ---------- Bottom spacer ----------
@@ -1428,8 +1434,8 @@ function onBuyNow({ sku, quantity }) {
   right: 0;
   bottom: 0;
   z-index: 998;
-  background: $mb-color-bg;
-  border-top: 1rpx solid $mb-color-divider;
+  background: var(--color-bg, #ffffff);
+  border-top: 1rpx solid var(--color-divider, #f0f2f5);
   padding-bottom: env(safe-area-inset-bottom);
   box-shadow: 0 -4rpx 12rpx rgba(25, 27, 35, 0.04);
 }
@@ -1475,7 +1481,7 @@ function onBuyNow({ sku, quantity }) {
 
 .goods-detail__bar-icon-label {
   font-size: 20rpx;
-  color: $mb-color-text-secondary;
+  color: var(--color-text-secondary, #434654);
   line-height: 1;
 }
 
@@ -1491,7 +1497,7 @@ function onBuyNow({ sku, quantity }) {
   height: 28rpx;
   padding: 0 8rpx;
   border-radius: $mb-radius-full;
-  background: $mb-color-error;
+  background: var(--color-error, #ba1a1a);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1525,22 +1531,22 @@ function onBuyNow({ sku, quantity }) {
 }
 
 .goods-detail__bar-btn--cart {
-  background: $mb-color-bg;
-  border: 2rpx solid $mb-color-primary;
+  background: var(--color-bg, #ffffff);
+  border: 2rpx solid var(--color-primary, #0d50d5);
 }
 
 .goods-detail__bar-btn--buy {
-  background: linear-gradient(135deg, $mb-color-primary 0%, $mb-color-primary-light 100%);
+  background: linear-gradient(135deg, var(--color-primary, #0d50d5) 0%, var(--color-primary-light, #386bef) 100%);
   box-shadow: 0 6rpx 16rpx rgba(13, 80, 213, 0.2);
 }
 
 .goods-detail__bar-btn-text {
   font-size: $mb-font-md;
   font-weight: 600;
-  color: $mb-color-primary;
+  color: var(--color-primary, #0d50d5);
 }
 
 .goods-detail__bar-btn-text--light {
-  color: $mb-color-text-inverse;
+  color: var(--color-text-inverse, #ffffff);
 }
 </style>

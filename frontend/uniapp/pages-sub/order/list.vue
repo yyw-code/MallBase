@@ -1,5 +1,7 @@
 <script setup>
+import { useDecorateStore } from '@/store/decorate'
 import { onLoad } from '@dcloudio/uni-app'
+const decorateStore = useDecorateStore()
 
 onLoad((query) => {
   const tab = query?.tab || ''
@@ -11,7 +13,11 @@ onLoad((query) => {
 </script>
 
 <template>
-  <view class="page">
+  <view
+    class="page"
+    :class="[`theme-${decorateStore.resolvedThemeMode}`]"
+    :style="decorateStore.themeStyle"
+  >
     <mb-navbar title="我的订单" />
   </view>
 </template>
@@ -19,6 +25,6 @@ onLoad((query) => {
 <style scoped>
 .page {
   min-height: 100vh;
-  background: #faf8ff;
+  background: var(--color-bg-secondary, #faf8ff);
 }
 </style>

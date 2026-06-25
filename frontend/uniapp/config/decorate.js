@@ -345,6 +345,11 @@ export const DEFAULT_DECORATE_CONFIG = {
     },
   },
   theme: {
+    setting: {
+      user_select_enabled: 1,
+      admin_theme_mode: "system",
+      admin_theme_id: null,
+    },
     policy: {
       allow_user_select: 1,
       default_mode: "system",

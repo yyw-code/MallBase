@@ -357,10 +357,7 @@ function goGoodsDetail(item) {
       <!-- Safe area -->
       <view class="bottom-bar__safe-area" />
     </view>
-    <mb-custom-tabbar
-      v-if="decorateStore.tabbarMode === 'custom'"
-      current="/pages/cart/index"
-    />
+    <mb-custom-tabbar current="/pages/cart/index" />
   </view>
 </template>
 
@@ -370,7 +367,7 @@ function goGoodsDetail(item) {
    =========================== */
 .page {
   min-height: 100vh;
-  background-color: $mb-color-bg-secondary;
+  background-color: var(--color-bg-secondary, #faf8ff);
 }
 
 /* ===========================
@@ -379,7 +376,7 @@ function goGoodsDetail(item) {
 .navbar-edit {
   font-size: $mb-font-md;
   font-weight: 500;
-  color: $mb-color-text;
+  color: var(--color-text, #191b23);
 }
 
 /* ===========================
@@ -400,9 +397,9 @@ function goGoodsDetail(item) {
   display: flex;
   align-items: center;
   padding: $mb-spacing-md;
-  background-color: $mb-color-bg;
+  background-color: var(--color-bg, #ffffff);
   border-radius: $mb-radius-lg;
-  border: 1rpx solid $mb-color-divider;
+  border: 1rpx solid var(--color-divider, #f0f2f5);
   margin-bottom: $mb-spacing-md;
 }
 
@@ -416,7 +413,7 @@ function goGoodsDetail(item) {
   width: 44rpx;
   height: 44rpx;
   border-radius: 50%;
-  border: 3rpx solid $mb-color-border;
+  border: 3rpx solid var(--color-border, #e0e4e8);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -424,18 +421,18 @@ function goGoodsDetail(item) {
 }
 
 .checkbox--checked {
-  background-color: $mb-color-primary;
-  border-color: $mb-color-primary;
+  background-color: var(--color-primary, #0d50d5);
+  border-color: var(--color-primary, #0d50d5);
 }
 
 .checkbox--disabled {
-  background-color: $mb-color-divider;
-  border-color: $mb-color-divider;
+  background-color: var(--color-divider, #f0f2f5);
+  border-color: var(--color-divider, #f0f2f5);
 }
 
 .checkbox__tick {
   font-size: 24rpx;
-  color: $mb-color-text-inverse;
+  color: var(--color-text-inverse, #ffffff);
   font-weight: 700;
   line-height: 1;
 }
@@ -448,7 +445,7 @@ function goGoodsDetail(item) {
   height: 180rpx;
   border-radius: $mb-radius-lg;
   overflow: hidden;
-  background-color: $mb-color-bg-surface;
+  background-color: var(--color-bg-surface, #f3f3fe);
   margin-right: $mb-spacing-md;
 }
 
@@ -473,7 +470,7 @@ function goGoodsDetail(item) {
 
 .cart-card__invalid-text {
   font-size: $mb-font-xs;
-  color: $mb-color-text-inverse;
+  color: var(--color-text-inverse, #ffffff);
   font-weight: 500;
 }
 
@@ -490,7 +487,7 @@ function goGoodsDetail(item) {
 .cart-card__name {
   font-size: $mb-font-md;
   font-weight: 500;
-  color: $mb-color-text;
+  color: var(--color-text, #191b23);
   line-height: 1.4;
   display: -webkit-box;
   -webkit-box-orient: vertical;
@@ -500,13 +497,13 @@ function goGoodsDetail(item) {
 }
 
 .cart-card__name--faded {
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
 }
 
 .cart-card__spec {
   font-size: $mb-font-sm;
-  color: $mb-color-text-tertiary;
-  background-color: $mb-color-bg-surface;
+  color: var(--color-text-tertiary, #737686);
+  background-color: var(--color-bg-surface, #f3f3fe);
   padding: 4rpx 14rpx;
   border-radius: $mb-radius-sm;
   align-self: flex-start;
@@ -525,13 +522,13 @@ function goGoodsDetail(item) {
 .cart-card__delete-btn {
   padding: 8rpx 24rpx;
   border-radius: $mb-radius-sm;
-  border: 2rpx solid $mb-color-border;
+  border: 2rpx solid var(--color-border, #e0e4e8);
   background-color: transparent;
 }
 
 .cart-card__delete-text {
   font-size: $mb-font-sm;
-  color: $mb-color-text-secondary;
+  color: var(--color-text-secondary, #434654);
   font-weight: 500;
 }
 
@@ -553,12 +550,12 @@ function goGoodsDetail(item) {
 .invalid-section__title {
   font-size: $mb-font-md;
   font-weight: 600;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
 }
 
 .invalid-section__clear {
   font-size: $mb-font-sm;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
 }
 
 /* ===========================
@@ -572,7 +569,7 @@ function goGoodsDetail(item) {
   display: flex;
   align-items: center;
   padding: $mb-spacing-md;
-  background-color: $mb-color-bg;
+  background-color: var(--color-bg, #ffffff);
   border-radius: $mb-radius-lg;
   margin-bottom: $mb-spacing-md;
 }
@@ -581,7 +578,7 @@ function goGoodsDetail(item) {
   width: 44rpx;
   height: 44rpx;
   border-radius: 50%;
-  background-color: $mb-color-divider;
+  background-color: var(--color-divider, #f0f2f5);
   margin-right: $mb-spacing-sm;
   flex-shrink: 0;
 }
@@ -590,7 +587,7 @@ function goGoodsDetail(item) {
   width: 180rpx;
   height: 180rpx;
   border-radius: $mb-radius-md;
-  background-color: $mb-color-divider;
+  background-color: var(--color-divider, #f0f2f5);
   margin-right: $mb-spacing-md;
   flex-shrink: 0;
 }
@@ -607,9 +604,9 @@ function goGoodsDetail(item) {
   border-radius: 12rpx;
   background: linear-gradient(
     90deg,
-    $mb-color-divider 25%,
-    $mb-color-bg-secondary 50%,
-    $mb-color-divider 75%
+    var(--color-divider, #f0f2f5) 25%,
+    var(--color-bg-secondary, #faf8ff) 50%,
+    var(--color-divider, #f0f2f5) 75%
   );
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
@@ -645,8 +642,8 @@ function goGoodsDetail(item) {
   right: 0;
   bottom: 0;
   z-index: 100;
-  background-color: $mb-color-bg;
-  border-top: 1rpx solid $mb-color-divider;
+  background-color: var(--color-bg, #ffffff);
+  border-top: 1rpx solid var(--color-divider, #f0f2f5);
 }
 
 /* #ifdef H5 */
@@ -676,7 +673,7 @@ function goGoodsDetail(item) {
 
 .bottom-bar__select-label {
   font-size: $mb-font-md;
-  color: $mb-color-text;
+  color: var(--color-text, #191b23);
   margin-left: $mb-spacing-sm;
 }
 
@@ -692,7 +689,7 @@ function goGoodsDetail(item) {
 
 .bottom-bar__total-label {
   font-size: $mb-font-md;
-  color: $mb-color-text-secondary;
+  color: var(--color-text-secondary, #434654);
   flex-shrink: 0;
   margin-right: 4rpx;
 }
@@ -704,13 +701,13 @@ function goGoodsDetail(item) {
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: $mb-color-primary;
+  background-color: var(--color-primary, #0d50d5);
   border-radius: $mb-radius-full;
   transition: opacity 0.15s;
 }
 
 .bottom-bar__checkout--delete {
-  background-color: $mb-color-error;
+  background-color: var(--color-error, #ba1a1a);
 }
 
 .bottom-bar__checkout--disabled {
@@ -721,7 +718,7 @@ function goGoodsDetail(item) {
 .bottom-bar__checkout-text {
   font-size: $mb-font-md;
   font-weight: 600;
-  color: $mb-color-text-inverse;
+  color: var(--color-text-inverse, #ffffff);
   white-space: nowrap;
 }
 

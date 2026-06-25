@@ -1,5 +1,9 @@
 <template>
-  <view class="page">
+  <view
+    class="page"
+    :class="[`theme-${decorateStore.resolvedThemeMode}`]"
+    :style="decorateStore.themeStyle"
+  >
     <view class="nebula-bg" />
     <view class="blob blob--1" />
     <view class="blob blob--2" />
@@ -66,10 +70,12 @@
 </template>
 
 <script setup>
+import { useDecorateStore } from '@/store/decorate'
 import { computed, ref } from 'vue'
 import { onLoad, onUnload } from '@dcloudio/uni-app'
 import { useUserStore } from '@/store/user'
 import { sendSmsCode, wechatBindMobile } from '@/api/user/auth'
+const decorateStore = useDecorateStore()
 
 const userStore = useUserStore()
 
@@ -183,7 +189,8 @@ async function handleBind() {
   try {
     const data = await wechatBindMobile(openid.value, phone.value, smsCode.value)
     userStore.setToken(data.access_token, data.refresh_token)
-    userStore.fetchUserInfo()
+    await userStore.fetchUserInfo()
+    await decorateStore.fetchMyThemePreference({ force: true })
 
     uni.showToast({ title: '绑定成功', icon: 'success' })
     setTimeout(() => {

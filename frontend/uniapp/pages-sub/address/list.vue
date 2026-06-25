@@ -1,5 +1,9 @@
 <template>
-  <view class="addr-list">
+  <view
+    class="addr-list"
+    :class="[`theme-${decorateStore.resolvedThemeMode}`]"
+    :style="decorateStore.themeStyle"
+  >
     <mb-navbar :title="selectMode ? '选择地址' : '收货地址'" />
 
     <!-- Section header -->
@@ -93,9 +97,11 @@
 </template>
 
 <script setup>
+import { useDecorateStore } from '@/store/decorate'
 import { ref } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
 import { getAddressList } from '@/api/user/address'
+const decorateStore = useDecorateStore()
 
 const selectMode = ref(false)
 const loading = ref(true)
@@ -160,7 +166,7 @@ function stopCardTap() {}
 <style lang="scss" scoped>
 .addr-list {
   min-height: 100vh;
-  background: $mb-color-bg-secondary;
+  background: var(--color-bg-secondary, #faf8ff);
 }
 
 .addr-list__loading {
@@ -179,7 +185,7 @@ function stopCardTap() {}
   display: block;
   font-size: $mb-font-xxl;
   font-weight: 800;
-  color: $mb-color-text-title;
+  color: var(--color-text-title, #191b23);
   letter-spacing: 0;
 }
 
@@ -187,7 +193,7 @@ function stopCardTap() {}
   display: block;
   margin-top: $mb-spacing-xs;
   font-size: $mb-font-sm;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
   letter-spacing: 0;
 }
 
@@ -199,11 +205,11 @@ function stopCardTap() {}
 
 // ---- Address card ----
 .addr-card {
-  background: $mb-color-bg;
+  background: var(--color-bg, #ffffff);
   border-radius: $mb-radius-lg;
   padding: $mb-spacing-lg;
   margin-bottom: $mb-spacing-md;
-  border: 1rpx solid $mb-color-border;
+  border: 1rpx solid var(--color-border, #e0e4e8);
 }
 
 .addr-card__body {
@@ -217,7 +223,7 @@ function stopCardTap() {}
   width: 58rpx;
   height: 58rpx;
   border-radius: 16rpx;
-  background: rgba($mb-color-primary, 0.08);
+  background: var(--color-primary-soft, rgba(13, 80, 213, 0.08));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -237,7 +243,7 @@ function stopCardTap() {}
   width: 28rpx;
   height: 28rpx;
   border-radius: 50% 50% 50% 0;
-  background: $mb-color-primary;
+  background: var(--color-primary, #0d50d5);
   transform: rotate(-45deg);
 
   &::after {
@@ -248,7 +254,7 @@ function stopCardTap() {}
     width: 10rpx;
     height: 10rpx;
     border-radius: 50%;
-    background: $mb-color-bg;
+    background: var(--color-bg, #ffffff);
     transform: translate(-50%, -50%);
   }
 }
@@ -260,7 +266,7 @@ function stopCardTap() {}
   width: 4rpx;
   height: 10rpx;
   border-radius: 0 0 2rpx 2rpx;
-  background: $mb-color-primary;
+  background: var(--color-primary, #0d50d5);
   transform: translateX(-50%);
 }
 
@@ -280,17 +286,17 @@ function stopCardTap() {}
 .addr-card__name {
   font-size: $mb-font-lg;
   font-weight: 700;
-  color: $mb-color-text-title;
+  color: var(--color-text-title, #191b23);
 }
 
 .addr-card__phone {
   font-size: $mb-font-md;
-  color: $mb-color-text;
+  color: var(--color-text, #191b23);
   letter-spacing: 0.03em;
 }
 
 .addr-card__badge {
-  background: rgba($mb-color-primary, 0.08);
+  background: var(--color-primary-soft, rgba(13, 80, 213, 0.08));
   padding: 4rpx 16rpx;
   border-radius: $mb-radius-sm;
   margin-left: $mb-spacing-xs;
@@ -298,13 +304,13 @@ function stopCardTap() {}
 
 .addr-card__badge-text {
   font-size: $mb-font-xs;
-  color: $mb-color-primary;
+  color: var(--color-primary, #0d50d5);
   font-weight: 600;
 }
 
 .addr-card__detail {
   font-size: $mb-font-md;
-  color: $mb-color-text-secondary;
+  color: var(--color-text-secondary, #434654);
   line-height: 1.6;
 }
 
@@ -312,7 +318,7 @@ function stopCardTap() {}
   display: block;
   margin-top: $mb-spacing-xs;
   font-size: $mb-font-sm;
-  color: $mb-color-error;
+  color: var(--color-error, #ba1a1a);
 }
 
 .addr-card__action {
@@ -338,7 +344,7 @@ function stopCardTap() {}
   right: 0;
   bottom: 0;
   z-index: 100;
-  background: $mb-color-bg;
+  background: var(--color-bg, #ffffff);
   padding: $mb-spacing-md $mb-spacing-page;
   padding-bottom: calc(#{$mb-spacing-md} + env(safe-area-inset-bottom));
   box-shadow: $mb-shadow-bar;

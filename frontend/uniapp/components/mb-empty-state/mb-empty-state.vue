@@ -56,8 +56,8 @@ const iconClass = computed(() => (normalizedIcon.value ? 'mb-empty__icon--text' 
   height: 112rpx;
   border-radius: var(--radius-lg, 20rpx);
   margin-bottom: 24rpx;
-  background: rgba(13, 80, 213, 0.06);
-  border: 1rpx solid rgba(13, 80, 213, 0.12);
+  background: var(--color-primary-softer, rgba(13, 80, 213, 0.06));
+  border: 1rpx solid var(--color-primary-border, rgba(13, 80, 213, 0.12));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -94,7 +94,7 @@ const iconClass = computed(() => (normalizedIcon.value ? 'mb-empty__icon--text' 
   height: 34rpx;
   border: 4rpx solid var(--color-primary, #0d50d5);
   border-radius: 8rpx;
-  background: rgba(255, 255, 255, 0.65);
+  background: var(--color-bg, rgba(255, 255, 255, 0.65));
 }
 
 .mb-empty__box-body::after {

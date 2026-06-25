@@ -1,5 +1,9 @@
 <template>
-  <view class="page">
+  <view
+    class="page"
+    :class="[`theme-${decorateStore.resolvedThemeMode}`]"
+    :style="decorateStore.themeStyle"
+  >
     <mb-navbar title="修改密码" />
 
     <view class="page-content">
@@ -70,8 +74,10 @@
 </template>
 
 <script setup>
+import { useDecorateStore } from '@/store/decorate'
 import { ref } from 'vue'
 import { updateMyPassword } from '@/api/user/user'
+const decorateStore = useDecorateStore()
 
 const oldPassword = ref('')
 const newPassword = ref('')
@@ -126,7 +132,7 @@ async function handleSubmit() {
 <style lang="scss" scoped>
 .page {
   min-height: 100vh;
-  background: $mb-color-bg-secondary;
+  background: var(--color-bg-secondary, #faf8ff);
 }
 
 .page-content {
@@ -139,9 +145,9 @@ async function handleSubmit() {
   flex-direction: column;
   gap: $mb-spacing-lg;
   padding: $mb-spacing-lg;
-  background: $mb-color-bg;
+  background: var(--color-bg, #ffffff);
   border-radius: $mb-radius-lg;
-  border: 1rpx solid $mb-color-border;
+  border: 1rpx solid var(--color-border, #e0e4e8);
 }
 
 .form-group {
@@ -153,7 +159,7 @@ async function handleSubmit() {
 .form-label {
   font-size: 26rpx;
   font-weight: 500;
-  color: $mb-color-text-secondary;
+  color: var(--color-text-secondary, #434654);
   padding-left: 8rpx;
 }
 
@@ -162,26 +168,26 @@ async function handleSubmit() {
   align-items: center;
   height: 100rpx;
   border-radius: $mb-radius-sm;
-  background: $mb-color-bg-secondary;
-  border: 1rpx solid $mb-color-border;
+  background: var(--color-bg-secondary, #faf8ff);
+  border: 1rpx solid var(--color-border, #e0e4e8);
   padding: 0 32rpx;
   transition: border-color 0.2s, background-color 0.2s;
 
   &:focus-within {
     border-color: rgba(13, 80, 213, 0.3);
-    background: $mb-color-bg;
+    background: var(--color-bg, #ffffff);
   }
 }
 
 .pill-input {
   flex: 1;
   font-size: 30rpx;
-  color: $mb-color-text;
+  color: var(--color-text, #191b23);
   height: 100%;
 }
 
 .placeholder {
-  color: $mb-color-border-light;
+  color: var(--color-border, #c3c5d7);
 }
 
 // ---- Eye toggle ----
@@ -198,7 +204,7 @@ async function handleSubmit() {
 .eye-shape {
   width: 36rpx;
   height: 24rpx;
-  border: 2rpx solid $mb-color-text-tertiary;
+  border: 2rpx solid var(--color-text-tertiary, #737686);
   border-radius: 50%;
   position: relative;
 
@@ -211,7 +217,7 @@ async function handleSubmit() {
     width: 10rpx;
     height: 10rpx;
     border-radius: 50%;
-    background: $mb-color-text-tertiary;
+    background: var(--color-text-tertiary, #737686);
   }
 }
 
@@ -221,7 +227,7 @@ async function handleSubmit() {
   left: 50%;
   width: 2rpx;
   height: 32rpx;
-  background: $mb-color-text-tertiary;
+  background: var(--color-text-tertiary, #737686);
   transform: translateX(-50%) rotate(45deg);
 }
 
@@ -229,7 +235,7 @@ async function handleSubmit() {
 .primary-btn {
   height: 100rpx;
   border-radius: $mb-radius-sm;
-  background: $mb-color-primary;
+  background: var(--color-primary, #0d50d5);
   display: flex;
   align-items: center;
   justify-content: center;
