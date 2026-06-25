@@ -25,11 +25,13 @@ export const useAppStore = defineStore('app', {
     siteConfig: null,
   }),
   actions: {
-    async fetchBasicConfig() {
+    async fetchBasicConfig(options = {}) {
       try {
-        const data = await get('/client/api/setting/basic')
+        const params = options.force ? { _t: Date.now() } : undefined
+        const data = await get('/client/api/setting/basic', params)
         this.siteConfig = data
         updateH5DocumentMeta(data)
+        return data
       } catch (e) { /* non-blocking */ }
     }
   }

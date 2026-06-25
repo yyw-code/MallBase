@@ -4,12 +4,11 @@ import { onShow } from "@dcloudio/uni-app";
 import { getPayMethods } from "@/api/config";
 import { getWalletInfo } from "@/api/user/wallet";
 import config from "@/config/index";
-import { useAppStore } from "@/store/app";
 import { useDecorateStore } from "@/store/decorate";
 import { useUserStore } from "@/store/user";
+import { openCustomerService } from "@/utils/customer-service";
 
 const userStore = useUserStore();
-const appStore = useAppStore();
 const decorateStore = useDecorateStore();
 
 const wallet = ref({
@@ -279,11 +278,6 @@ function isCustomerServiceEntry(item) {
     key === "customer_service" ||
     label.includes("客服")
   );
-}
-
-function getCustomerServicePhone() {
-  const raw = appStore.siteConfig?.client_customer_service_phone || "";
-  return String(raw).replace(/[\s-]/g, "");
 }
 
 function showWalletBalance(module) {
@@ -816,22 +810,7 @@ function goWalletRecords() {
 }
 
 async function callCustomerService() {
-  if (!appStore.siteConfig) {
-    await appStore.fetchBasicConfig();
-  }
-
-  const phone = getCustomerServicePhone();
-  if (!phone) {
-    uni.showToast({ title: "未配置客服手机号", icon: "none" });
-    return;
-  }
-
-  uni.makePhoneCall({
-    phoneNumber: phone,
-    fail() {
-      uni.showToast({ title: "拨号失败", icon: "none" });
-    },
-  });
+  await openCustomerService();
 }
 
 async function goCell(cell) {

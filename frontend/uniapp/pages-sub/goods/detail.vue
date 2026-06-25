@@ -297,6 +297,7 @@ import { getGoodsDetail } from '@/api/goods/goods'
 import { getReviewList } from '@/api/goods/review'
 import { useCartStore } from '@/store/cart'
 import { useAppStore } from '@/store/app'
+import { openCustomerService } from '@/utils/customer-service'
 const decorateStore = useDecorateStore()
 
 const MEDIA_HEIGHT = 422
@@ -746,13 +747,8 @@ onShareTimeline(() => {
   return { title, query, imageUrl }
 })
 
-function contactService() {
-  // #ifdef MP-WEIXIN
-  // handled by button open-type="contact"
-  // #endif
-  // #ifndef MP-WEIXIN
-  uni.showToast({ title: '请联系在线客服', icon: 'none' })
-  // #endif
+async function contactService() {
+  await openCustomerService()
 }
 
 function goBack() {
