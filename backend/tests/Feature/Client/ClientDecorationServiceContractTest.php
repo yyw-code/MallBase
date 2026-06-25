@@ -231,11 +231,11 @@ final class ClientDecorationServiceContractTest extends TestCase
         }
     }
 
-    public function testThemeServiceProtectsSystemThemeAndRequiresPublishedCustomPolicy(): void
+    public function testThemeServiceProtectsSystemThemeAndRequiresPublishedCustomSetting(): void
     {
-        $this->requireDbTables(['client_theme', 'client_theme_policy']);
+        $this->requireDbTables(['client_theme', 'setting', 'setting_group']);
         $service = $this->makeService('app\\service\\admin\\client\\ClientThemeService');
-        $this->requireMethods($service, ['update', 'delete', 'savePolicy', 'getPolicy']);
+        $this->requireMethods($service, ['update', 'delete', 'saveSetting', 'getSetting', 'savePolicy', 'getPolicy']);
 
         Db::startTrans();
         try {
@@ -272,6 +272,62 @@ final class ClientDecorationServiceContractTest extends TestCase
                 'sort' => 4,
             ]);
 
+            $this->deleteThemeSettingRows();
+            if ($this->safeTableExists('client_theme_policy')) {
+                Db::name('client_theme_policy')->where('id', 1)->delete();
+            }
+            if ($this->safeTableExists('client_theme_setting')) {
+                Db::name('client_theme_setting')->where('id', 1)->delete();
+            }
+
+            $defaultSetting = $service->getSetting();
+            $this->assertSame(1, (int) $defaultSetting['user_select_enabled']);
+            $this->assertSame('system', $defaultSetting['admin_theme_mode']);
+            $this->assertNull($defaultSetting['admin_theme_id']);
+            $this->assertSame(
+                'system',
+                Db::name('setting')->where('code', 'client_theme_admin_mode')->value('value')
+            );
+
+            $this->writeThemeSettingRows([
+                'user_select_enabled' => 0,
+                'admin_theme_mode' => 'custom',
+                'admin_theme_id' => 99999999,
+            ]);
+            $staleCustomSetting = $service->getSetting();
+            $this->assertSame(0, (int) $staleCustomSetting['user_select_enabled']);
+            $this->assertSame('system', $staleCustomSetting['admin_theme_mode']);
+            $this->assertNull($staleCustomSetting['admin_theme_id']);
+
+            if ($this->safeTableExists('client_theme_policy')) {
+                $this->deleteThemeSettingRows();
+                Db::name('client_theme_policy')->insert([
+                    'id' => 1,
+                    'allow_user_select' => 0,
+                    'default_mode' => 'custom',
+                    'default_theme_id' => $secondPublishedCustomId,
+                ]);
+                $migratedPolicySetting = $service->getSetting();
+                $this->assertSame(0, (int) $migratedPolicySetting['user_select_enabled']);
+                $this->assertSame('custom', $migratedPolicySetting['admin_theme_mode']);
+                $this->assertSame($secondPublishedCustomId, (int) $migratedPolicySetting['admin_theme_id']);
+            }
+
+            if ($this->safeTableExists('client_theme_setting')) {
+                $this->deleteThemeSettingRows();
+                Db::name('client_theme_setting')->where('id', 1)->delete();
+                Db::name('client_theme_setting')->insert([
+                    'id' => 1,
+                    'user_select_enabled' => 1,
+                    'admin_theme_mode' => 'custom',
+                    'admin_theme_id' => $publishedCustomId,
+                ]);
+                $migratedSetting = $service->getSetting();
+                $this->assertSame(1, (int) $migratedSetting['user_select_enabled']);
+                $this->assertSame('custom', $migratedSetting['admin_theme_mode']);
+                $this->assertSame($publishedCustomId, (int) $migratedSetting['admin_theme_id']);
+            }
+
             $updateError = $this->captureBusinessException(fn() => $service->update($systemThemeId, [
                 'name' => 'CodexTest 系统主题修改',
                 'type' => 'light',
@@ -284,25 +340,31 @@ final class ClientDecorationServiceContractTest extends TestCase
             $this->assertNotNull($deleteError);
             $this->assertStringContainsString('系统主题', $deleteError->getMessage());
 
-            $draftPolicyError = $this->captureBusinessException(fn() => $service->savePolicy([
-                'allow_user_select' => 1,
-                'default_mode' => 'custom',
-                'default_theme_id' => $draftCustomId,
+            $draftSettingError = $this->captureBusinessException(fn() => $service->saveSetting([
+                'user_select_enabled' => 1,
+                'admin_theme_mode' => 'custom',
+                'admin_theme_id' => $draftCustomId,
             ]));
-            $this->assertNotNull($draftPolicyError);
-            $this->assertStringContainsString('已发布', $draftPolicyError->getMessage());
+            $this->assertNotNull($draftSettingError);
+            $this->assertStringContainsString('未发布', $draftSettingError->getMessage());
 
-            $savedPolicy = $service->savePolicy([
-                'allow_user_select' => 1,
-                'default_mode' => 'custom',
-                'default_theme_id' => $publishedCustomId,
+            $savedSetting = $service->saveSetting([
+                'user_select_enabled' => 1,
+                'admin_theme_mode' => 'custom',
+                'admin_theme_id' => $publishedCustomId,
             ]);
-            $this->assertIsArray($savedPolicy);
+            $this->assertIsArray($savedSetting);
 
-            $policy = $service->getPolicy();
-            $this->assertIsArray($policy);
-            $this->assertSame('custom', $policy['default_mode']);
-            $this->assertSame($publishedCustomId, (int) $policy['default_theme_id']);
+            $setting = $service->getSetting();
+            $this->assertIsArray($setting);
+            $this->assertSame(1, (int) $setting['user_select_enabled']);
+            $this->assertSame('custom', $setting['admin_theme_mode']);
+            $this->assertSame($publishedCustomId, (int) $setting['admin_theme_id']);
+
+            $legacyPolicy = $service->getPolicy();
+            $this->assertSame(1, (int) $legacyPolicy['allow_user_select']);
+            $this->assertSame('custom', $legacyPolicy['default_mode']);
+            $this->assertSame($publishedCustomId, (int) $legacyPolicy['default_theme_id']);
 
             $this->assertTrue($service->delete($publishedCustomId));
             $deletedTheme = Db::name('client_theme')->where('id', $publishedCustomId)->find();
@@ -310,19 +372,28 @@ final class ClientDecorationServiceContractTest extends TestCase
             $this->assertSame(0, (int) $deletedTheme['status']);
             $this->assertNotEmpty($deletedTheme['delete_time']);
 
-            $resetPolicy = $service->getPolicy();
-            $this->assertSame(1, (int) $resetPolicy['allow_user_select']);
-            $this->assertSame('system', $resetPolicy['default_mode']);
-            $this->assertNull($resetPolicy['default_theme_id']);
+            $resetSetting = $service->getSetting();
+            $this->assertSame(1, (int) $resetSetting['user_select_enabled']);
+            $this->assertSame('system', $resetSetting['admin_theme_mode']);
+            $this->assertNull($resetSetting['admin_theme_id']);
 
-            $this->assertIsArray($service->savePolicy([
-                'allow_user_select' => 0,
+            $this->assertIsArray($service->saveSetting([
+                'user_select_enabled' => 0,
+                'admin_theme_mode' => 'custom',
+                'admin_theme_id' => $secondPublishedCustomId,
+            ]));
+            $disabledSetting = $service->getSetting();
+            $this->assertSame(0, (int) $disabledSetting['user_select_enabled']);
+            $this->assertSame($secondPublishedCustomId, (int) $disabledSetting['admin_theme_id']);
+
+            $legacySavedPolicy = $service->savePolicy([
+                'allow_user_select' => 1,
                 'default_mode' => 'custom',
                 'default_theme_id' => $secondPublishedCustomId,
-            ]));
-            $disabledPolicy = $service->getPolicy();
-            $this->assertSame(0, (int) $disabledPolicy['allow_user_select']);
-            $this->assertSame($secondPublishedCustomId, (int) $disabledPolicy['default_theme_id']);
+            ]);
+            $this->assertSame(1, (int) $legacySavedPolicy['allow_user_select']);
+            $this->assertSame('custom', $legacySavedPolicy['default_mode']);
+            $this->assertSame($secondPublishedCustomId, (int) $legacySavedPolicy['default_theme_id']);
         } finally {
             Db::rollback();
         }
@@ -330,7 +401,7 @@ final class ClientDecorationServiceContractTest extends TestCase
 
     public function testDecorationThemesReturnPublishedCustomListAndPolicyDefault(): void
     {
-        $this->requireDbTables(['client_theme', 'client_theme_policy']);
+        $this->requireDbTables(['client_theme', 'setting', 'setting_group']);
         $service = $this->makeService('app\\service\\client\\DecorationService');
         $this->requireMethods($service, ['themes']);
 
@@ -361,15 +432,16 @@ final class ClientDecorationServiceContractTest extends TestCase
                 'sort' => 93,
             ]);
 
-            Db::name('client_theme_policy')->where('id', 1)->delete();
-            Db::name('client_theme_policy')->insert([
-                'id' => 1,
-                'allow_user_select' => 0,
-                'default_mode' => 'custom',
-                'default_theme_id' => $customBId,
+            $this->writeThemeSettingRows([
+                'user_select_enabled' => 0,
+                'admin_theme_mode' => 'custom',
+                'admin_theme_id' => $customBId,
             ]);
 
             $themes = $service->themes();
+            $this->assertSame(0, (int) $themes['setting']['user_select_enabled']);
+            $this->assertSame('custom', $themes['setting']['admin_theme_mode']);
+            $this->assertSame($customBId, (int) $themes['setting']['admin_theme_id']);
             $this->assertSame(0, (int) $themes['policy']['allow_user_select']);
             $this->assertSame('custom', $themes['policy']['default_mode']);
             $this->assertSame($customBId, (int) $themes['policy']['default_theme_id']);
@@ -400,12 +472,111 @@ final class ClientDecorationServiceContractTest extends TestCase
         }
     }
 
+    public function testUserThemePreferenceUsesAccountPreferenceAndAdminFallback(): void
+    {
+        $this->requireDbTables(['client_theme', 'setting', 'setting_group', 'user', 'user_theme_preference']);
+        $service = $this->makeService('app\\service\\client\\UserThemePreferenceService');
+        $themeService = $this->makeService('app\\service\\admin\\client\\ClientThemeService');
+        $this->requireMethods($service, ['getCurrent', 'saveCurrent']);
+        $this->requireMethods($themeService, ['delete']);
+
+        Db::startTrans();
+        try {
+            $userId = $this->insertUser('CodexTest 主题用户');
+            $draftCustomId = (int) Db::name('client_theme')->insertGetId([
+                'name' => 'CodexTest 用户偏好草稿主题',
+                'type' => 'custom',
+                'tokens' => $this->makeThemeTokens('#111111'),
+                'is_system' => 0,
+                'status' => 0,
+                'sort' => 101,
+            ]);
+            $publishedCustomId = (int) Db::name('client_theme')->insertGetId([
+                'name' => 'CodexTest 用户偏好已发布主题',
+                'type' => 'custom',
+                'tokens' => $this->makeThemeTokens('#222222'),
+                'is_system' => 0,
+                'status' => 1,
+                'sort' => 102,
+            ]);
+
+            $this->writeThemeSettingRows([
+                'user_select_enabled' => 1,
+                'admin_theme_mode' => 'dark',
+                'admin_theme_id' => null,
+            ]);
+
+            $defaultResult = $service->getCurrent($userId);
+            $this->assertNull($defaultResult['preference']);
+            $this->assertSame('dark', $defaultResult['effective']['theme_mode']);
+            $this->assertNull($defaultResult['effective']['theme_id']);
+            $this->assertSame('admin', $defaultResult['effective']['source']);
+
+            $systemResult = $service->saveCurrent($userId, ['theme_mode' => 'system']);
+            $this->assertSame('system', $systemResult['preference']['theme_mode']);
+            $this->assertNull($systemResult['preference']['theme_id']);
+            $this->assertSame('user', $systemResult['effective']['source']);
+
+            $draftError = $this->captureBusinessException(fn() => $service->saveCurrent($userId, [
+                'theme_mode' => 'custom',
+                'theme_id' => $draftCustomId,
+            ]));
+            $this->assertNotNull($draftError);
+            $this->assertStringContainsString('未发布', $draftError->getMessage());
+
+            $customResult = $service->saveCurrent($userId, [
+                'theme_mode' => 'custom',
+                'theme_id' => $publishedCustomId,
+            ]);
+            $this->assertSame('custom', $customResult['preference']['theme_mode']);
+            $this->assertSame($publishedCustomId, (int) $customResult['preference']['theme_id']);
+            $this->assertSame('custom', $customResult['effective']['theme_mode']);
+            $this->assertSame($publishedCustomId, (int) $customResult['effective']['theme_id']);
+            $this->assertSame('user', $customResult['effective']['source']);
+
+            $this->writeThemeSettingRows([
+                'user_select_enabled' => 0,
+                'admin_theme_mode' => 'dark',
+                'admin_theme_id' => null,
+            ]);
+            $disabledResult = $service->getCurrent($userId);
+            $this->assertSame('custom', $disabledResult['preference']['theme_mode']);
+            $this->assertSame('dark', $disabledResult['effective']['theme_mode']);
+            $this->assertSame('admin', $disabledResult['effective']['source']);
+
+            $disabledError = $this->captureBusinessException(fn() => $service->saveCurrent($userId, [
+                'theme_mode' => 'light',
+            ]));
+            $this->assertNotNull($disabledError);
+            $this->assertStringContainsString('管理员', $disabledError->getMessage());
+
+            $this->writeThemeSettingRows([
+                'user_select_enabled' => 1,
+                'admin_theme_mode' => 'dark',
+                'admin_theme_id' => null,
+            ]);
+            $this->assertTrue($themeService->delete($publishedCustomId));
+            $this->assertSame(
+                0,
+                (int) Db::name('user_theme_preference')->where('user_id', $userId)->count()
+            );
+
+            $afterDelete = $service->getCurrent($userId);
+            $this->assertNull($afterDelete['preference']);
+            $this->assertSame('dark', $afterDelete['effective']['theme_mode']);
+            $this->assertSame('admin', $afterDelete['effective']['source']);
+        } finally {
+            Db::rollback();
+        }
+    }
+
     public function testDecorationConfigReturnsActiveOrSystemHomeProfileTabbarAndTheme(): void
     {
         $this->requireDbTables([
             'client_decoration_scheme',
             'client_theme',
-            'client_theme_policy',
+            'setting',
+            'setting_group',
         ]);
         $service = $this->makeService('app\\service\\client\\DecorationService');
         $this->requireMethods($service, ['config']);
@@ -427,6 +598,7 @@ final class ClientDecorationServiceContractTest extends TestCase
         $this->assertLessThanOrEqual(5, count($tabbarItems));
 
         $this->assertArrayHasKey('policy', $config['theme']);
+        $this->assertArrayHasKey('setting', $config['theme']);
         $this->assertArrayHasKey('themes', $config['theme']);
         $this->assertIsArray($config['theme']['themes']);
     }
@@ -925,6 +1097,20 @@ final class ClientDecorationServiceContractTest extends TestCase
         } catch (Throwable) {
             // 清理失败不覆盖测试主体结果。
         }
+
+        try {
+            if ($this->safeTableExists('user_theme_preference')) {
+                $userIds = Db::name('user')->whereLike('nickname', 'CodexTest%')->column('id');
+                if (!empty($userIds)) {
+                    Db::name('user_theme_preference')->whereIn('user_id', $userIds)->delete();
+                }
+            }
+            if ($this->safeTableExists('user')) {
+                Db::name('user')->whereLike('nickname', 'CodexTest%')->delete();
+            }
+        } catch (Throwable) {
+            // 清理失败不覆盖测试主体结果。
+        }
     }
 
     private function makePagesJson(string $homeTitle): string
@@ -985,6 +1171,103 @@ final class ClientDecorationServiceContractTest extends TestCase
             'colorBorder' => '#e0e4e8',
             'colorPrice' => '#ff5a1f',
         ], JSON_UNESCAPED_UNICODE);
+    }
+
+    private function insertUser(string $nickname): int
+    {
+        return (int) Db::name('user')->insertGetId([
+            'username' => null,
+            'mobile' => '139' . str_pad((string) random_int(1, 99999999), 8, '0', STR_PAD_LEFT),
+            'email' => null,
+            'password' => password_hash('codex-test-password', PASSWORD_DEFAULT),
+            'nickname' => $nickname,
+            'real_name' => null,
+            'avatar' => null,
+            'gender' => 0,
+            'birthday' => null,
+            'province' => null,
+            'city' => null,
+            'district' => null,
+            'bio' => null,
+            'mobile_verified' => 0,
+            'register_type' => 'h5',
+            'register_ip' => '127.0.0.1',
+            'last_login_time' => null,
+            'last_login_ip' => null,
+            'status' => 1,
+            'remark' => null,
+            'delete_time' => null,
+        ]);
+    }
+
+    private function deleteThemeSettingRows(): void
+    {
+        Db::name('setting')
+            ->whereIn('code', [
+                'client_theme_user_select_enabled',
+                'client_theme_admin_mode',
+                'client_theme_admin_theme_id',
+            ])
+            ->delete();
+        app()->make(\app\service\SystemSettingService::class)->flush();
+    }
+
+    /**
+     * @param array{user_select_enabled:int, admin_theme_mode:string, admin_theme_id:int|null} $setting
+     */
+    private function writeThemeSettingRows(array $setting): void
+    {
+        $this->deleteThemeSettingRows();
+
+        $groupId = (int) Db::name('setting_group')->where('code', 'ClientConfig')->value('id');
+        if ($groupId <= 0) {
+            $this->markTestSkipped('ClientConfig 设置分组不存在，跳过主题设置测试。');
+        }
+
+        Db::name('setting')->insertAll([
+            [
+                'group_id' => $groupId,
+                'name' => '允许用户自选主题',
+                'code' => 'client_theme_user_select_enabled',
+                'value' => (string) $setting['user_select_enabled'],
+                'type' => 'switch',
+                'options' => null,
+                'rules' => null,
+                'placeholder' => null,
+                'remark' => '开启后用户选择优先；关闭后管理员指定主题强制生效',
+                'sort' => 130,
+            ],
+            [
+                'group_id' => $groupId,
+                'name' => '管理员指定主题模式',
+                'code' => 'client_theme_admin_mode',
+                'value' => $setting['admin_theme_mode'],
+                'type' => 'select',
+                'options' => json_encode([
+                    ['label' => '跟随系统', 'value' => 'system'],
+                    ['label' => '浅色', 'value' => 'light'],
+                    ['label' => '深色', 'value' => 'dark'],
+                    ['label' => '自定义', 'value' => 'custom'],
+                ], JSON_UNESCAPED_UNICODE),
+                'rules' => null,
+                'placeholder' => null,
+                'remark' => '管理员统一指定的客户端主题模式',
+                'sort' => 140,
+            ],
+            [
+                'group_id' => $groupId,
+                'name' => '管理员指定自定义主题ID',
+                'code' => 'client_theme_admin_theme_id',
+                'value' => $setting['admin_theme_id'] === null ? '' : (string) $setting['admin_theme_id'],
+                'type' => 'input',
+                'options' => null,
+                'rules' => null,
+                'placeholder' => null,
+                'remark' => '仅管理员指定主题模式为自定义时有效',
+                'sort' => 150,
+            ],
+        ]);
+        app()->make(\app\service\SystemSettingService::class)->flush();
     }
 
     /**

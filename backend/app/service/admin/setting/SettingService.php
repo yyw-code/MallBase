@@ -24,6 +24,9 @@ class SettingService extends BaseService
 {
     private const HIDDEN_SETTING_CODES = [
         'client_home_banners',
+        'client_theme_admin_mode',
+        'client_theme_admin_theme_id',
+        'client_theme_user_select_enabled',
     ];
 
     /**

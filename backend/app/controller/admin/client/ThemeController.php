@@ -110,6 +110,19 @@ class ThemeController extends BaseController
         return $this->success($policy, '保存成功');
     }
 
+    public function setting()
+    {
+        $setting = $this->service()->getSetting();
+        return $this->success($setting, '获取成功');
+    }
+
+    public function saveSetting()
+    {
+        $data = $this->request->param(['user_select_enabled', 'admin_theme_mode', 'admin_theme_id']);
+        $setting = $this->service()->saveSetting($data);
+        return $this->success($setting, '保存成功');
+    }
+
     protected function normalizeTokensForValidate($tokens): array
     {
         if (is_array($tokens)) {

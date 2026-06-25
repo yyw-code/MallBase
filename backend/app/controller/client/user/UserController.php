@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace app\controller\client\user;
 
 use app\service\client\SmsAuthService;
+use app\service\client\UserThemePreferenceService;
 use app\service\client\UserService;
 use app\service\client\WechatAppFactory;
 use app\service\client\WechatService;
@@ -292,6 +293,29 @@ class UserController extends BaseController
 
         $this->service()->updatePassword((int) $userId, $data['old_password'], $data['password']);
         return $this->success(null, '修改成功');
+    }
+
+    public function getMyTheme()
+    {
+        $userId = $this->request->user_id ?? null;
+        if (empty($userId)) {
+            return $this->error('未登录');
+        }
+
+        $result = app()->make(UserThemePreferenceService::class)->getCurrent((int) $userId);
+        return $this->success($result, '获取成功');
+    }
+
+    public function saveMyTheme()
+    {
+        $userId = $this->request->user_id ?? null;
+        if (empty($userId)) {
+            return $this->error('未登录');
+        }
+
+        $data = $this->request->param(['theme_mode', 'theme_id']);
+        $result = app()->make(UserThemePreferenceService::class)->saveCurrent((int) $userId, $data);
+        return $this->success($result, '保存成功');
     }
 
     /**

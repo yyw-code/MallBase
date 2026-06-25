@@ -37,6 +37,12 @@ export namespace ClientThemeApi {
     default_mode: ThemeMode;
     default_theme_id?: null | number;
   }
+
+  export interface ThemeSetting {
+    admin_theme_id?: null | number;
+    admin_theme_mode: ThemeMode;
+    user_select_enabled: number;
+  }
 }
 
 export async function getClientThemeListApi(
@@ -85,4 +91,16 @@ export async function updateClientThemePolicyApi(
   data: ClientThemeApi.ThemePolicy,
 ) {
   return requestClient.put('/client/theme/policy', data);
+}
+
+export async function getClientThemeSettingApi() {
+  return requestClient.get<ClientThemeApi.ThemeSetting>(
+    '/client/theme/setting',
+  );
+}
+
+export async function updateClientThemeSettingApi(
+  data: ClientThemeApi.ThemeSetting,
+) {
+  return requestClient.put('/client/theme/setting', data);
 }

@@ -5,9 +5,9 @@ namespace app\service\client;
 
 use app\model\client\ClientDecorationScheme;
 use app\model\client\ClientTheme;
-use app\model\client\ClientThemePolicy;
 use app\service\upload\AssetHydrator;
 use mall_base\base\BaseService;
+use think\facade\Db;
 
 /**
  * 客户端装修读取服务
@@ -16,6 +16,23 @@ use mall_base\base\BaseService;
 class DecorationService extends BaseService
 {
     protected string $modelClass = ClientDecorationScheme::class;
+
+    private const THEME_SETTING_ID = 1;
+    private const SETTING_USER_SELECT_ENABLED = 'client_theme_user_select_enabled';
+    private const SETTING_ADMIN_MODE = 'client_theme_admin_mode';
+    private const SETTING_ADMIN_THEME_ID = 'client_theme_admin_theme_id';
+
+    private const MODE_SYSTEM = 'system';
+    private const MODE_LIGHT = 'light';
+    private const MODE_DARK = 'dark';
+    private const MODE_CUSTOM = 'custom';
+
+    private const VALID_THEME_MODES = [
+        self::MODE_SYSTEM,
+        self::MODE_LIGHT,
+        self::MODE_DARK,
+        self::MODE_CUSTOM,
+    ];
 
     /**
      * 获取客户端装修总配置。
@@ -42,17 +59,12 @@ class DecorationService extends BaseService
     /**
      * 获取客户端主题配置。
      *
-     * @return array{policy: array<string, mixed>, themes: array<int, array<string, mixed>>}
+     * @return array{policy: array<string, mixed>, setting: array<string, mixed>, themes: array<int, array<string, mixed>>}
      */
     public function themes(): array
     {
-        $policy = $this->model(ClientThemePolicy::class)->find(ClientThemePolicy::POLICY_ID);
-        $policy = $policy ? $policy->toArray() : [
-            'id' => ClientThemePolicy::POLICY_ID,
-            'allow_user_select' => 1,
-            'default_mode' => ClientThemePolicy::MODE_SYSTEM,
-            'default_theme_id' => null,
-        ];
+        $setting = $this->getThemeSetting();
+        $policy = $this->themeSettingToLegacyPolicy($setting);
 
         $themes = $this->model(ClientTheme::class)
             ->where('status', ClientTheme::STATUS_PUBLISHED)
@@ -69,7 +81,113 @@ class DecorationService extends BaseService
 
         $tokens = $this->firstThemeTokens($themes, ClientTheme::TYPE_LIGHT);
 
-        return compact('policy', 'themes', 'tokens');
+        return compact('policy', 'setting', 'themes', 'tokens');
+    }
+
+    protected function getThemeSetting(): array
+    {
+        $setting = [
+            'user_select_enabled' => getSystemSetting(self::SETTING_USER_SELECT_ENABLED),
+            'admin_theme_mode' => getSystemSetting(self::SETTING_ADMIN_MODE),
+            'admin_theme_id' => getSystemSetting(self::SETTING_ADMIN_THEME_ID),
+        ];
+
+        if (
+            $setting['user_select_enabled'] !== null
+            || $setting['admin_theme_mode'] !== null
+            || $setting['admin_theme_id'] !== null
+        ) {
+            return $this->normalizeThemeSetting($setting);
+        }
+
+        $legacy = $this->findLegacyClientThemeSettingArray() ?? $this->findLegacyPolicySettingArray();
+        if ($legacy !== null) {
+            return $this->normalizeThemeSetting($legacy);
+        }
+
+        return $this->normalizeThemeSetting([]);
+    }
+
+    protected function themeSettingToLegacyPolicy(array $setting): array
+    {
+        return [
+            'id' => self::THEME_SETTING_ID,
+            'allow_user_select' => (int) ($setting['user_select_enabled'] ?? 1),
+            'default_mode' => (string) ($setting['admin_theme_mode'] ?? self::MODE_SYSTEM),
+            'default_theme_id' => $setting['admin_theme_id'] ?? null,
+        ];
+    }
+
+    protected function normalizeThemeSetting(array $setting): array
+    {
+        $mode = (string) ($setting['admin_theme_mode'] ?? $setting['default_mode'] ?? self::MODE_SYSTEM);
+        if (!in_array($mode, self::VALID_THEME_MODES, true)) {
+            $mode = self::MODE_SYSTEM;
+        }
+        $themeId = $setting['admin_theme_id'] ?? $setting['default_theme_id'] ?? null;
+        $themeId = $themeId === null || $themeId === '' ? null : (int) $themeId;
+        if ($mode !== self::MODE_CUSTOM) {
+            $themeId = null;
+        }
+
+        return [
+            'id' => self::THEME_SETTING_ID,
+            'user_select_enabled' => (int) ($setting['user_select_enabled'] ?? $setting['allow_user_select'] ?? 1) === 1 ? 1 : 0,
+            'admin_theme_mode' => $mode,
+            'admin_theme_id' => $themeId,
+        ];
+    }
+
+    protected function findLegacyClientThemeSettingArray(): ?array
+    {
+        $row = $this->findLegacyTableRow('client_theme_setting');
+        if ($row === null) {
+            return null;
+        }
+
+        return [
+            'user_select_enabled' => $row['user_select_enabled'] ?? 1,
+            'admin_theme_mode' => $row['admin_theme_mode'] ?? self::MODE_SYSTEM,
+            'admin_theme_id' => $row['admin_theme_id'] ?? null,
+        ];
+    }
+
+    protected function findLegacyPolicySettingArray(): ?array
+    {
+        $row = $this->findLegacyTableRow('client_theme_policy');
+        if ($row === null) {
+            return null;
+        }
+
+        return [
+            'allow_user_select' => $row['allow_user_select'] ?? 1,
+            'default_mode' => $row['default_mode'] ?? self::MODE_SYSTEM,
+            'default_theme_id' => $row['default_theme_id'] ?? null,
+        ];
+    }
+
+    protected function findLegacyTableRow(string $table): ?array
+    {
+        try {
+            if (!$this->tableExists($table)) {
+                return null;
+            }
+            $row = Db::name($table)->where('id', self::THEME_SETTING_ID)->find();
+            return is_array($row) ? $row : null;
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    protected function tableExists(string $logicalName): bool
+    {
+        $tableName = (string) config('database.connections.mysql.prefix', '') . $logicalName;
+        $result = Db::query(
+            'SELECT COUNT(*) AS c FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?',
+            [$tableName]
+        );
+
+        return ((int) ($result[0]['c'] ?? 0)) > 0;
     }
 
     /**

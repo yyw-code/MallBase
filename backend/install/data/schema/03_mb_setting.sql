@@ -241,7 +241,10 @@ INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`
 (105, '分享默认封面', 'client_share_cover', '/static/client/share-cover.png', 'image', NULL, NULL, NULL, '推荐 5:4，建议 500×400 PNG/JPG，<200KB', 70),
 (105, '商品保障', 'client_goods_guarantees', '[{"title":"正品保障","desc":"平台严选商品来源","icon":"shield"},{"title":"极速发货","desc":"现货商品优先出库","icon":"truck"},{"title":"七天无理由","desc":"符合条件可无理由退货","icon":"refresh"},{"title":"售后无忧","desc":"订单售后进度可追踪","icon":"service"}]', 'json', NULL, NULL, NULL, '客户端商品详情页保障说明，JSON 数组', 80),
 (105, '用户协议', 'client_agreement', '', 'editor', NULL, NULL, NULL, NULL, 90),
-(105, '隐私政策', 'client_privacy', '', 'editor', NULL, NULL, NULL, NULL, 100);
+(105, '隐私政策', 'client_privacy', '', 'editor', NULL, NULL, NULL, NULL, 100),
+(105, '允许用户自选主题', 'client_theme_user_select_enabled', '1', 'switch', NULL, NULL, NULL, '开启后用户选择优先；关闭后管理员指定主题强制生效', 130),
+(105, '管理员指定主题模式', 'client_theme_admin_mode', 'system', 'select', '[{"label":"跟随系统","value":"system"},{"label":"浅色","value":"light"},{"label":"深色","value":"dark"},{"label":"自定义","value":"custom"}]', NULL, NULL, '管理员统一指定的客户端主题模式', 140),
+(105, '管理员指定自定义主题ID', 'client_theme_admin_theme_id', '', 'input', NULL, NULL, NULL, '仅管理员指定主题模式为自定义时有效', 150);
 
 -- 设置项：106 OrderConfig 订单配置
 INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`, `rules`, `placeholder`, `remark`, `sort`) VALUES

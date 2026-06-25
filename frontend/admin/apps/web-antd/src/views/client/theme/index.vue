@@ -13,10 +13,10 @@ import {
   deleteClientThemeApi,
   getClientThemeInfoApi,
   getClientThemeListApi,
-  getClientThemePolicyApi,
+  getClientThemeSettingApi,
   publishClientThemeApi,
   updateClientThemeApi,
-  updateClientThemePolicyApi,
+  updateClientThemeSettingApi,
 } from '#/api/client';
 import { useTableCrud } from '#/composables/useTableCrud';
 
@@ -25,6 +25,7 @@ import ClientPhonePreview from '../components/ClientPhonePreview.vue';
 defineOptions({ name: 'ClientThemeManagement' });
 
 type TokenRow = {
+  core?: boolean;
   desc?: string;
   key: string;
   label: string;
@@ -62,32 +63,23 @@ const TOKEN_DEFS: TokenRow[] = [
     desc: '按钮、链接、选中态等主色',
     key: 'colorPrimary',
     label: '品牌主色',
+    core: true,
     required: true,
     value: '#0d50d5',
-  },
-  {
-    desc: '浅色按钮和弱主色背景',
-    key: 'colorPrimaryLight',
-    label: '品牌浅色',
-    value: '#386bef',
   },
   {
     desc: '页面最底层背景',
     key: 'colorBg',
     label: '页面背景',
+    core: true,
     required: true,
     value: '#ffffff',
-  },
-  {
-    desc: '次级页面背景',
-    key: 'colorBgSecondary',
-    label: '次级背景',
-    value: '#faf8ff',
   },
   {
     desc: '卡片、模块、弹层背景',
     key: 'colorBgSurface',
     label: '卡片背景',
+    core: true,
     required: true,
     value: '#f3f3fe',
   },
@@ -95,6 +87,7 @@ const TOKEN_DEFS: TokenRow[] = [
     desc: '标题和正文主文字',
     key: 'colorText',
     label: '主文字',
+    core: true,
     required: true,
     value: '#191b23',
   },
@@ -102,52 +95,25 @@ const TOKEN_DEFS: TokenRow[] = [
     desc: '说明、辅助信息文字',
     key: 'colorTextSecondary',
     label: '次级文字',
+    core: true,
     required: true,
     value: '#434654',
-  },
-  {
-    desc: '弱提示和占位文字',
-    key: 'colorTextTertiary',
-    label: '弱文字',
-    value: '#737686',
   },
   {
     desc: '卡片、输入框边框',
     key: 'colorBorder',
     label: '边框',
+    core: true,
     required: true,
     value: '#e0e4e8',
-  },
-  {
-    desc: '列表和模块分隔线',
-    key: 'colorDivider',
-    label: '分割线',
-    value: '#f0f2f5',
   },
   {
     desc: '价格、促销价、金额强调',
     key: 'colorPrice',
     label: '价格色',
+    core: true,
     required: true,
     value: '#ff5a1f',
-  },
-  {
-    desc: '错误和危险操作',
-    key: 'colorError',
-    label: '错误色',
-    value: '#ba1a1a',
-  },
-  {
-    desc: '成功状态',
-    key: 'colorSuccess',
-    label: '成功色',
-    value: '#34c759',
-  },
-  {
-    desc: '警告状态',
-    key: 'colorWarning',
-    label: '警告色',
-    value: '#f0ad4e',
   },
 ];
 
@@ -159,9 +125,34 @@ const SUMMARY_TOKEN_KEYS = [
   'colorPrice',
 ];
 
-const DEFAULT_PREVIEW_TOKENS = Object.fromEntries(
-  TOKEN_DEFS.map((item) => [item.key, item.value]),
-) as Record<string, string>;
+const DERIVED_PREVIEW_TOKENS: Record<string, string> = {
+  colorBgSecondary: '#faf8ff',
+  colorDivider: '#f0f2f5',
+  colorError: '#ba1a1a',
+  colorPrimaryLight: '#386bef',
+  colorSuccess: '#34c759',
+  colorTextTertiary: '#737686',
+  colorWarning: '#f0ad4e',
+};
+
+const HIDDEN_TOKEN_KEYS = new Set([
+  'colorErrorSoft',
+  'colorPageBg',
+  'colorPriceSoft',
+  'colorPrimaryBorder',
+  'colorPrimarySoft',
+  'colorPrimarySofter',
+  'colorSuccessSoft',
+  'colorTextInverse',
+  'colorTextTitle',
+  'colorWarningSoft',
+  ...Object.keys(DERIVED_PREVIEW_TOKENS),
+]);
+
+const DEFAULT_PREVIEW_TOKENS = {
+  ...DERIVED_PREVIEW_TOKENS,
+  ...Object.fromEntries(TOKEN_DEFS.map((item) => [item.key, item.value])),
+} as Record<string, string>;
 
 const activeTab = ref<'setting' | 'themes'>('setting');
 
@@ -195,21 +186,11 @@ const searchParams = ref<ClientThemeApi.ListParams>({
   type: undefined,
 });
 
-const columns = [
-  { dataIndex: 'name', title: '主题名称', width: 200 },
-  { dataIndex: 'type', title: '类型', width: 110 },
-  { dataIndex: 'tokens', title: '配色摘要', width: 360 },
-  { dataIndex: 'sort', title: '排序', width: 90 },
-  { dataIndex: 'status', title: '状态', width: 100 },
-  { dataIndex: 'update_time', title: '更新时间', width: 170 },
-  { fixed: 'right', key: 'action', title: '操作', width: 240 },
-];
-
-const policyLoading = ref(false);
-const policyForm = reactive<ClientThemeApi.ThemePolicy>({
-  allow_user_select: 1,
-  default_mode: 'system',
-  default_theme_id: null,
+const settingLoading = ref(false);
+const settingForm = reactive<ClientThemeApi.ThemeSetting>({
+  admin_theme_id: null,
+  admin_theme_mode: 'system',
+  user_select_enabled: 1,
 });
 
 const themeOptions = computed(() =>
@@ -222,14 +203,14 @@ const themeOptions = computed(() =>
 );
 
 const currentModeDesc = computed(
-  () => modeMap.value[policyForm.default_mode]?.desc || '',
+  () => modeMap.value[settingForm.admin_theme_mode]?.desc || '',
 );
 
 const publishedThemes = computed(() =>
   tableData.value.filter((item) => item.status === 1),
 );
 
-const previewThemeCards = computed(() => publishedThemes.value.slice(0, 4));
+const previewThemeCards = computed(() => tableData.value);
 
 const getThemeTokens = (theme?: ClientThemeApi.ThemeItem | null) => ({
   ...DEFAULT_PREVIEW_TOKENS,
@@ -238,17 +219,17 @@ const getThemeTokens = (theme?: ClientThemeApi.ThemeItem | null) => ({
 
 const getDefaultCustomTheme = () =>
   publishedThemes.value.find(
-    (item) => item.id === policyForm.default_theme_id && item.type === 'custom',
+    (item) => item.id === settingForm.admin_theme_id && item.type === 'custom',
   );
 
 const getThemeByType = (type: ClientThemeApi.ThemeType) =>
   publishedThemes.value.find((item) => item.type === type);
 
 const currentPreviewTheme = computed(() => {
-  if (policyForm.default_mode === 'custom') {
+  if (settingForm.admin_theme_mode === 'custom') {
     return getDefaultCustomTheme() || getThemeByType('custom');
   }
-  if (policyForm.default_mode === 'dark') {
+  if (settingForm.admin_theme_mode === 'dark') {
     return getThemeByType('dark');
   }
   return getThemeByType('light');
@@ -258,10 +239,10 @@ const currentPreviewTokens = computed(() =>
   getThemeTokens(currentPreviewTheme.value),
 );
 
-const policyPriorityDesc = computed(() =>
-  policyForm.allow_user_select
-    ? '开启后，后台默认主题作为首次进入和兜底配置；用户在客户端选择主题后，以用户个人选择为准。'
-    : '关闭后，客户端隐藏主题选择入口，所有用户统一使用后台设置的默认模式。',
+const settingPriorityDesc = computed(() =>
+  settingForm.user_select_enabled
+    ? '开启后，用户在客户端选择主题后以用户个人选择为准；未选择时使用管理员指定主题。'
+    : '关闭后客户端忽略用户个人选择，实际主题由管理员指定主题统一控制。',
 );
 
 const isSystemTheme = (record: ClientThemeApi.ThemeItem) =>
@@ -277,43 +258,43 @@ const resetSearch = () => {
   loadData(searchParams.value);
 };
 
-const loadPolicy = async () => {
+const loadSetting = async () => {
   try {
-    const policy = await getClientThemePolicyApi();
-    Object.assign(policyForm, {
-      allow_user_select: policy.allow_user_select ?? 1,
-      default_mode: policy.default_mode || 'system',
-      default_theme_id: policy.default_theme_id ?? null,
+    const setting = await getClientThemeSettingApi();
+    Object.assign(settingForm, {
+      admin_theme_id: setting.admin_theme_id ?? null,
+      admin_theme_mode: setting.admin_theme_mode || 'system',
+      user_select_enabled: setting.user_select_enabled ?? 1,
     });
   } catch (error) {
     console.error('加载主题设置失败:', error);
   }
 };
 
-const handleSavePolicy = async () => {
-  policyLoading.value = true;
+const handleSaveSetting = async () => {
+  settingLoading.value = true;
   try {
-    await updateClientThemePolicyApi({
-      allow_user_select: policyForm.allow_user_select,
-      default_mode: policyForm.default_mode,
-      default_theme_id:
-        policyForm.default_mode === 'custom'
-          ? policyForm.default_theme_id || null
+    await updateClientThemeSettingApi({
+      admin_theme_id:
+        settingForm.admin_theme_mode === 'custom'
+          ? settingForm.admin_theme_id || null
           : null,
+      admin_theme_mode: settingForm.admin_theme_mode,
+      user_select_enabled: settingForm.user_select_enabled,
     });
     message.success('主题设置已保存');
   } catch (error) {
     console.error('保存主题设置失败:', error);
   } finally {
-    policyLoading.value = false;
+    settingLoading.value = false;
   }
 };
 
 watch(
-  () => policyForm.default_mode,
+  () => settingForm.admin_theme_mode,
   (mode) => {
     if (mode !== 'custom') {
-      policyForm.default_theme_id = null;
+      settingForm.admin_theme_id = null;
     }
   },
 );
@@ -324,6 +305,7 @@ const formRef = ref<FormInstance>();
 const editingId = ref<null | number>(null);
 
 const formData = reactive({
+  advancedTokenRows: [] as TokenRow[],
   name: '',
   sort: 0,
   status: 0,
@@ -339,12 +321,17 @@ const modalTitle = computed(() => (editingId.value ? '编辑主题' : '新增主
 
 const tokenRowsFromTokens = (tokens?: Record<string, string>) => {
   const source = tokens || {};
-  const rows = TOKEN_DEFS.map((item) => ({
+  return TOKEN_DEFS.map((item) => ({
     ...item,
     value: source[item.key] || item.value,
   }));
+};
+
+const advancedRowsFromTokens = (tokens?: Record<string, string>) => {
+  const source = tokens || {};
+  const rows: TokenRow[] = [];
   Object.entries(source).forEach(([key, value]) => {
-    if (!tokenDefMap.value[key]) {
+    if (!tokenDefMap.value[key] && !HIDDEN_TOKEN_KEYS.has(key)) {
       rows.push({
         key,
         label: key,
@@ -358,6 +345,7 @@ const tokenRowsFromTokens = (tokens?: Record<string, string>) => {
 const resetForm = () => {
   formRef.value?.resetFields();
   Object.assign(formData, {
+    advancedTokenRows: [],
     name: '',
     sort: 0,
     status: 0,
@@ -368,7 +356,7 @@ const resetForm = () => {
 
 const rowsToTokens = () => {
   const tokens: Record<string, string> = {};
-  for (const row of formData.tokenRows) {
+  for (const row of [...formData.tokenRows, ...formData.advancedTokenRows]) {
     const key = row.key.trim();
     if (key && row.value) {
       tokens[key] = row.value;
@@ -398,6 +386,7 @@ const handleEdit = async (record: ClientThemeApi.ThemeItem) => {
     editingId.value = detail.id;
     resetForm();
     Object.assign(formData, {
+      advancedTokenRows: advancedRowsFromTokens(detail.tokens),
       name: detail.name,
       sort: detail.sort ?? 0,
       status: detail.status ?? 0,
@@ -412,7 +401,7 @@ const handleEdit = async (record: ClientThemeApi.ThemeItem) => {
 };
 
 const addTokenRow = () => {
-  formData.tokenRows.push({
+  formData.advancedTokenRows.push({
     key: '',
     label: '自定义颜色',
     value: '#1677ff',
@@ -420,11 +409,7 @@ const addTokenRow = () => {
 };
 
 const removeTokenRow = (index: number) => {
-  if (formData.tokenRows[index]?.required) {
-    message.warning('核心颜色不能删除');
-    return;
-  }
-  formData.tokenRows.splice(index, 1);
+  formData.advancedTokenRows.splice(index, 1);
 };
 
 const handleSubmit = async () => {
@@ -498,17 +483,14 @@ const handleDelete = (record: ClientThemeApi.ThemeItem) => {
   });
 };
 
-const handleTableChange = (newPagination: {
-  current?: number;
-  pageSize?: number;
-}) => {
-  pagination.current = newPagination.current ?? pagination.current;
-  pagination.pageSize = newPagination.pageSize ?? pagination.pageSize;
+const handlePreviewPageChange = (page: number, pageSize: number) => {
+  pagination.current = page;
+  pagination.pageSize = pageSize;
   loadData(searchParams.value);
 };
 
 onMounted(async () => {
-  await Promise.all([loadData(searchParams.value), loadPolicy()]);
+  await Promise.all([loadData(searchParams.value), loadSetting()]);
 });
 </script>
 
@@ -516,11 +498,11 @@ onMounted(async () => {
   <div class="theme-page">
     <a-tabs v-model:active-key="activeTab">
       <a-tab-pane key="setting" tab="主题设置">
-        <a-card title="客户端主题策略">
+        <a-card title="客户端主题设置">
           <a-alert
             class="mb-4"
             message="主题生效规则"
-            :description="policyPriorityDesc"
+            :description="settingPriorityDesc"
             show-icon
             type="info"
           />
@@ -528,19 +510,19 @@ onMounted(async () => {
             <section class="setting-form">
               <a-form
                 :label-col="{ style: { width: '108px' } }"
-                :model="policyForm"
+                :model="settingForm"
               >
-                <a-form-item label="允许用户选择">
+                <a-form-item label="允许用户自选">
                   <a-switch
-                    v-model:checked="policyForm.allow_user_select"
+                    v-model:checked="settingForm.user_select_enabled"
                     :checked-value="1"
                     :un-checked-value="0"
                     checked-children="开启"
                     un-checked-children="关闭"
                   />
                 </a-form-item>
-                <a-form-item label="默认模式">
-                  <a-radio-group v-model:value="policyForm.default_mode">
+                <a-form-item label="管理员指定">
+                  <a-radio-group v-model:value="settingForm.admin_theme_mode">
                     <a-radio-button
                       v-for="item in MODE_OPTIONS"
                       :key="item.value"
@@ -550,10 +532,10 @@ onMounted(async () => {
                     </a-radio-button>
                   </a-radio-group>
                 </a-form-item>
-                <a-form-item label="默认主题">
+                <a-form-item label="指定主题">
                   <a-select
-                    v-model:value="policyForm.default_theme_id"
-                    :disabled="policyForm.default_mode !== 'custom'"
+                    v-model:value="settingForm.admin_theme_id"
+                    :disabled="settingForm.admin_theme_mode !== 'custom'"
                     :options="themeOptions"
                     allow-clear
                     placeholder="选择已发布的自定义主题"
@@ -563,8 +545,8 @@ onMounted(async () => {
                 <a-form-item>
                   <a-button
                     type="primary"
-                    :loading="policyLoading"
-                    @click="handleSavePolicy"
+                    :loading="settingLoading"
+                    @click="handleSaveSetting"
                   >
                     保存设置
                   </a-button>
@@ -574,7 +556,7 @@ onMounted(async () => {
 
             <section class="setting-preview">
               <div class="preview-title">
-                <strong>当前策略预览</strong>
+                <strong>当前设置预览</strong>
                 <span>{{ currentPreviewTheme?.name || '系统默认主题' }}</span>
               </div>
               <ClientPhonePreview
@@ -583,21 +565,25 @@ onMounted(async () => {
                 current-path="/pages/profile/index"
                 :theme-tokens="currentPreviewTokens"
               />
-              <div class="preview-policy">
+              <div class="preview-setting">
                 <div class="preview-row">
                   <span>用户端入口</span>
                   <strong>{{
-                    policyForm.allow_user_select ? '显示' : '隐藏'
+                    settingForm.user_select_enabled
+                      ? '显示'
+                      : '显示，点击提示管理员统一设置'
                   }}</strong>
                 </div>
                 <div class="preview-row">
-                  <span>后台默认</span>
-                  <strong>{{ modeMap[policyForm.default_mode]?.label }}</strong>
+                  <span>管理员指定</span>
+                  <strong>{{
+                    modeMap[settingForm.admin_theme_mode]?.label
+                  }}</strong>
                 </div>
                 <div class="preview-row">
                   <span>优先级</span>
                   <strong>{{
-                    policyForm.allow_user_select
+                    settingForm.user_select_enabled
                       ? '用户选择优先'
                       : '后台统一控制'
                   }}</strong>
@@ -668,55 +654,39 @@ onMounted(async () => {
             </a-form-item>
           </a-form>
 
-          <div v-if="previewThemeCards.length > 0" class="theme-preview-grid">
-            <article
-              v-for="record in previewThemeCards"
-              :key="record.id"
-              class="theme-preview-card"
-            >
-              <div class="theme-preview-card__head">
-                <div>
-                  <strong>{{ record.name }}</strong>
-                  <span>{{ typeMap[record.type]?.label || record.type }}</span>
+          <a-spin :spinning="loading">
+            <a-empty
+              v-if="previewThemeCards.length === 0"
+              class="theme-preview-empty"
+              description="暂无主题"
+            />
+            <div v-else class="theme-preview-grid">
+              <article
+                v-for="record in previewThemeCards"
+                :key="record.id"
+                class="theme-preview-card"
+              >
+                <div class="theme-preview-card__head">
+                  <div>
+                    <strong>{{ record.name }}</strong>
+                    <span>{{
+                      typeMap[record.type]?.label || record.type
+                    }}</span>
+                  </div>
+                  <a-space :size="4">
+                    <a-tag v-if="isSystemTheme(record)">系统</a-tag>
+                    <a-tag :color="record.status === 1 ? 'green' : 'default'">
+                      {{ record.status === 1 ? '已发布' : '草稿' }}
+                    </a-tag>
+                  </a-space>
                 </div>
-                <a-tag :color="typeMap[record.type]?.color || 'default'">
-                  {{ record.status === 1 ? '已发布' : '草稿' }}
-                </a-tag>
-              </div>
-              <ClientPhonePreview
-                kind="home"
-                size="compact"
-                current-path="/pages/index/index"
-                :theme-tokens="getThemeTokens(record)"
-              />
-            </article>
-          </div>
-
-          <a-table
-            :columns="columns"
-            :data-source="tableData"
-            :loading="loading"
-            :pagination="pagination"
-            :scroll="{ x: 1180 }"
-            row-key="id"
-            @change="handleTableChange"
-          >
-            <template #bodyCell="{ column, record }">
-              <template v-if="column.dataIndex === 'name'">
-                <div class="theme-name-cell">
-                  <strong>{{ record.name }}</strong>
-                  <a-tag v-if="isSystemTheme(record)">系统</a-tag>
-                </div>
-              </template>
-
-              <template v-if="column.dataIndex === 'type'">
-                <a-tag :color="typeMap[record.type]?.color || 'default'">
-                  {{ typeMap[record.type]?.label || record.type }}
-                </a-tag>
-              </template>
-
-              <template v-if="column.dataIndex === 'tokens'">
-                <div class="token-summary">
+                <ClientPhonePreview
+                  kind="home"
+                  size="compact"
+                  current-path="/pages/index/index"
+                  :theme-tokens="getThemeTokens(record)"
+                />
+                <div class="theme-preview-card__summary token-summary">
                   <div
                     v-for="key in SUMMARY_TOKEN_KEYS"
                     :key="key"
@@ -731,59 +701,65 @@ onMounted(async () => {
                     <em>{{ record.tokens?.[key] || '-' }}</em>
                   </div>
                 </div>
-              </template>
+                <div class="theme-preview-card__actions">
+                  <a-space v-if="isSystemTheme(record)">
+                    <a-tag>系统内置</a-tag>
+                    <a-button
+                      type="link"
+                      size="small"
+                      @click="handleCopy(record)"
+                    >
+                      复制
+                    </a-button>
+                  </a-space>
+                  <a-space v-else wrap>
+                    <a-button
+                      type="link"
+                      size="small"
+                      @click="handleEdit(record)"
+                    >
+                      编辑
+                    </a-button>
+                    <a-button
+                      type="link"
+                      size="small"
+                      @click="handleCopy(record)"
+                    >
+                      复制
+                    </a-button>
+                    <a-button
+                      v-if="record.status !== 1"
+                      type="link"
+                      size="small"
+                      @click="handlePublish(record)"
+                    >
+                      发布
+                    </a-button>
+                    <a-button
+                      type="link"
+                      danger
+                      size="small"
+                      @click="handleDelete(record)"
+                    >
+                      删除
+                    </a-button>
+                  </a-space>
+                </div>
+              </article>
+            </div>
+          </a-spin>
 
-              <template v-if="column.dataIndex === 'status'">
-                <a-tag :color="record.status === 1 ? 'green' : 'default'">
-                  {{ record.status === 1 ? '已发布' : '草稿' }}
-                </a-tag>
-              </template>
-
-              <template v-if="column.key === 'action'">
-                <a-space v-if="isSystemTheme(record)">
-                  <a-tag>系统内置</a-tag>
-                  <a-button
-                    type="link"
-                    size="small"
-                    @click="handleCopy(record)"
-                  >
-                    复制
-                  </a-button>
-                </a-space>
-                <a-space v-else>
-                  <a-button
-                    type="link"
-                    size="small"
-                    @click="handleEdit(record)"
-                  >
-                    编辑
-                  </a-button>
-                  <a-button
-                    type="link"
-                    size="small"
-                    @click="handleCopy(record)"
-                  >
-                    复制
-                  </a-button>
-                  <a-button
-                    type="link"
-                    size="small"
-                    @click="handlePublish(record)"
-                  >
-                    发布
-                  </a-button>
-                  <a-button
-                    type="link"
-                    danger
-                    size="small"
-                    @click="handleDelete(record)"
-                  >
-                    删除
-                  </a-button>
-                </a-space>
-              </template>
-            </template>
-          </a-table>
+          <div v-if="pagination.total > 0" class="theme-pagination">
+            <a-pagination
+              :current="pagination.current"
+              :page-size="pagination.pageSize"
+              :show-size-changer="pagination.showSizeChanger"
+              :show-total="pagination.showTotal"
+              :total="pagination.total"
+              @change="handlePreviewPageChange"
+              @show-size-change="handlePreviewPageChange"
+            />
+          </div>
         </a-card>
       </a-tab-pane>
     </a-tabs>
@@ -841,13 +817,7 @@ onMounted(async () => {
                   <strong>{{ row.label }}</strong>
                   <span>{{ row.desc || row.key || '自定义主题变量' }}</span>
                 </div>
-                <a-input
-                  v-if="!row.required && !tokenDefMap[row.key]"
-                  v-model:value="row.key"
-                  allow-clear
-                  placeholder="变量编码，如 colorAccent"
-                />
-                <div v-else class="token-code">{{ row.key }}</div>
+                <div class="token-code">{{ row.key }}</div>
                 <a-input
                   v-model:value="row.value"
                   allow-clear
@@ -861,13 +831,53 @@ onMounted(async () => {
                     />
                   </template>
                 </a-input>
-                <a-button danger size="small" @click="removeTokenRow(index)">
-                  删除
-                </a-button>
+                <a-tag color="blue">核心</a-tag>
               </div>
-              <a-button size="small" @click="addTokenRow">
-                添加自定义颜色
-              </a-button>
+              <a-collapse ghost>
+                <a-collapse-panel key="advanced" header="高级自定义颜色">
+                  <div class="advanced-hint">
+                    仅当客户端页面或组件使用到该变量时才会生效。
+                  </div>
+                  <div
+                    v-for="(row, index) in formData.advancedTokenRows"
+                    :key="`${row.key}_${index}`"
+                    class="token-row"
+                  >
+                    <div class="token-info">
+                      <strong>{{ row.label || '自定义颜色' }}</strong>
+                      <span>{{ row.desc || row.key || '自定义主题变量' }}</span>
+                    </div>
+                    <a-input
+                      v-model:value="row.key"
+                      allow-clear
+                      placeholder="变量编码，如 colorAccent"
+                    />
+                    <a-input
+                      v-model:value="row.value"
+                      allow-clear
+                      placeholder="#1677ff"
+                    >
+                      <template #addonAfter>
+                        <input
+                          v-model="row.value"
+                          class="color-input"
+                          type="color"
+                        />
+                      </template>
+                    </a-input>
+                    <a-button
+                      danger
+                      size="small"
+                      @click="removeTokenRow(index)"
+                    >
+                      删除
+                    </a-button>
+                  </div>
+                  <a-button size="small" @click="addTokenRow">
+                    添加自定义颜色
+                  </a-button>
+                </a-collapse-panel>
+              </a-collapse>
             </div>
           </a-form-item>
         </a-form>
@@ -931,7 +941,7 @@ onMounted(async () => {
   white-space: nowrap;
 }
 
-.preview-policy {
+.preview-setting {
   margin-top: 16px;
 }
 
@@ -1008,10 +1018,28 @@ onMounted(async () => {
   background: hsl(var(--muted) / 28%);
 }
 
-.theme-name-cell {
+.theme-preview-card__summary {
+  padding: 12px 14px 0;
+}
+
+.theme-preview-card__actions {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  justify-content: flex-end;
+  min-height: 42px;
+  padding: 8px 12px 12px;
+}
+
+.theme-pagination {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 18px;
+}
+
+.theme-preview-empty {
+  padding: 56px 0;
+  border: 1px dashed hsl(var(--border));
+  border-radius: 8px;
+  background: hsl(var(--muted) / 18%);
 }
 
 .token-summary {
@@ -1054,6 +1082,12 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+.advanced-hint {
+  margin-bottom: 10px;
+  color: hsl(var(--muted-foreground));
+  font-size: 12px;
 }
 
 .token-row {

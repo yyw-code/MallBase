@@ -29,6 +29,8 @@ Route::group('user/my', function () {
     Route::get('info', 'getMyInfo');
     Route::put('info', 'updateMyInfo');
     Route::put('password', 'updateMyPassword');
+    Route::get('theme', 'getMyTheme');
+    Route::put('theme', 'saveMyTheme');
     Route::post('logout', 'logout');
 })->prefix('client.user.UserController/')->middleware([JwtAuth::class]);
 

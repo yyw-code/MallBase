@@ -59,6 +59,8 @@ Route::group('client/theme', function () {
     Route::post('copy/:id', 'copy')->name('SystemClientThemeCopy')->option(['_alias' => '复制主题', '_desc' => '复制客户端主题', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::put('publish/:id', 'publish')->name('SystemClientThemePublish')->option(['_alias' => '发布主题', '_desc' => '发布客户端主题', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::delete('delete/:id', 'delete')->name('SystemClientThemeDelete')->option(['_alias' => '删除主题', '_desc' => '删除客户端主题', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
+    Route::get('setting', 'setting')->name('SystemClientThemeSetting')->option(['_alias' => '主题设置', '_desc' => '获取客户端主题设置', '_auth' => true, '_type' => Permission::TYPE_API]);
+    Route::put('setting', 'saveSetting')->name('SystemClientThemeSettingSave')->option(['_alias' => '保存主题设置', '_desc' => '保存客户端主题设置', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::get('policy', 'policy')->name('SystemClientThemePolicy')->option(['_alias' => '主题策略', '_desc' => '获取客户端主题策略', '_auth' => true, '_type' => Permission::TYPE_API]);
     Route::put('policy', 'savePolicy')->name('SystemClientThemePolicySave')->option(['_alias' => '保存主题策略', '_desc' => '保存客户端主题策略', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
 })->prefix('admin.client.ThemeController/')
@@ -66,7 +68,7 @@ Route::group('client/theme', function () {
     ->option([
         '_group_name' => '主题设置',
         '_group_code' => 'SystemClientTheme',
-        '_group_name_desc' => '客户端主题与主题策略管理',
+        '_group_name_desc' => '客户端主题与主题设置管理',
         '_parent' => 'SystemClientDiy',
         '_icon' => 'lucide:palette',
         '_path' => '/client/theme',
