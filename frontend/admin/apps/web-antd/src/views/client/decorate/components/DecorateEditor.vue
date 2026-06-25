@@ -4,7 +4,6 @@ import type { GoodsApi, GoodsCategoryApi } from '#/api/goods';
 
 import { computed, ref } from 'vue';
 
-import { IconPicker } from '@vben/common-ui';
 import { IconifyIcon } from '@vben/icons';
 
 import RichTextEditor from '#/components/rich-text-editor/index.vue';
@@ -107,9 +106,16 @@ const navDragIndex = ref<null | number>(null);
 const navDropIndex = ref<null | number>(null);
 const profileEntryDragIndex = ref<null | number>(null);
 const profileEntryDropIndex = ref<null | number>(null);
-const entryCardIconPrefix = ref(props.iconPrefix || 'ant-design');
-
 type ProfileTextStyleField =
+  | 'backgroundColorEnd'
+  | 'backgroundColorStart'
+  | 'backgroundGradientDirection'
+  | 'backgroundHeight'
+  | 'backgroundImage'
+  | 'backgroundMode'
+  | 'backgroundPosition'
+  | 'backgroundRadius'
+  | 'backgroundWidth'
   | 'color'
   | 'fontSize'
   | 'fontStyle'
@@ -122,6 +128,7 @@ type ProfileTextStyleRole =
   | 'itemLabel'
   | 'meta'
   | 'more'
+  | 'placeholder'
   | 'primaryAction'
   | 'subtitle'
   | 'title';
@@ -163,6 +170,26 @@ const gradientDirectionOptions = [
   { label: '左斜', value: 'diagonalLeft' },
   { label: '右斜', value: 'diagonalRight' },
 ];
+
+const titleBackgroundPositionOptions = [
+  { label: '左上', value: 'topLeft' },
+  { label: '上', value: 'top' },
+  { label: '右上', value: 'topRight' },
+  { label: '左', value: 'centerLeft' },
+  { label: '居中', value: 'center' },
+  { label: '右', value: 'centerRight' },
+  { label: '左下', value: 'bottomLeft' },
+  { label: '下', value: 'bottom' },
+  { label: '右下', value: 'bottomRight' },
+];
+
+const cubeLayoutDisplayLimitMap: Record<string, number> = {
+  four: 4,
+  one: 1,
+  two: 2,
+};
+
+const maxCubeEditableItems = 12;
 
 const visibilityOptions = [
   { label: '隐藏', value: false },
@@ -302,6 +329,92 @@ const profileTextStyleDefaults: Record<
       textAlign: 'left',
     },
   },
+  entryCard: {
+    subtitle: {
+      color: '#737686',
+      fontSize: 24,
+      fontWeight: '400',
+      textAlign: 'left',
+    },
+    title: {
+      color: '#191b23',
+      fontSize: 30,
+      fontWeight: '700',
+      textAlign: 'left',
+    },
+  },
+  imageCube: {
+    itemLabel: {
+      backgroundColorEnd: '#ffffff',
+      backgroundColorStart: '#ffffff',
+      backgroundGradientDirection: 'horizontal',
+      backgroundHeight: 26,
+      backgroundMode: 'color',
+      backgroundPosition: 'bottom',
+      backgroundRadius: 12,
+      backgroundWidth: 100,
+      color: '#191b23',
+      fontSize: 28,
+      fontWeight: '700',
+      textAlign: 'center',
+    },
+  },
+  navGrid: {
+    itemLabel: {
+      color: '#434654',
+      fontSize: 24,
+      fontWeight: '400',
+      textAlign: 'center',
+    },
+  },
+  productGroup: {
+    more: {
+      color: '#737686',
+      fontSize: 24,
+      fontWeight: '400',
+      textAlign: 'right',
+    },
+    subtitle: {
+      color: '#737686',
+      fontSize: 22,
+      fontWeight: '400',
+      textAlign: 'left',
+    },
+    title: {
+      color: '#191b23',
+      fontSize: 30,
+      fontWeight: '700',
+      textAlign: 'left',
+    },
+  },
+  search: {
+    placeholder: {
+      color: '#737686',
+      fontSize: 24,
+      fontWeight: '400',
+      textAlign: 'left',
+    },
+  },
+  title: {
+    more: {
+      color: '#737686',
+      fontSize: 24,
+      fontWeight: '400',
+      textAlign: 'right',
+    },
+    subtitle: {
+      color: '#737686',
+      fontSize: 24,
+      fontWeight: '400',
+      textAlign: 'left',
+    },
+    title: {
+      color: '#191b23',
+      fontSize: 32,
+      fontWeight: '800',
+      textAlign: 'left',
+    },
+  },
 };
 
 const profileTextStyleFieldsByType: Record<
@@ -335,8 +448,41 @@ const profileTextStyleFieldsByType: Record<
   ],
 };
 
-const profileTextStyleFields = computed(
-  () => profileTextStyleFieldsByType[editableProfileType.value] || [],
+const homeTextStyleFieldsByType: Record<
+  string,
+  Array<{ label: string; role: ProfileTextStyleRole }>
+> = {
+  entryCard: [
+    { label: '卡片标题', role: 'title' },
+    { label: '卡片副标题', role: 'subtitle' },
+  ],
+  imageCube: [{ label: '图片标题', role: 'itemLabel' }],
+  navGrid: [{ label: '入口文字', role: 'itemLabel' }],
+  productGroup: [
+    { label: '组件标题', role: 'title' },
+    { label: '组件副标题', role: 'subtitle' },
+    { label: '更多文字', role: 'more' },
+  ],
+  search: [{ label: '占位文字', role: 'placeholder' }],
+  title: [
+    { label: '组件标题', role: 'title' },
+    { label: '组件副标题', role: 'subtitle' },
+    { label: '更多文字', role: 'more' },
+  ],
+};
+
+const editableTextStyleType = computed(() => {
+  if (!editableModule.value) return '';
+  const type = String(editableModule.value.type || '');
+  return props.activeType === 'profile'
+    ? props.normalizeProfileModuleType(type)
+    : type;
+});
+
+const moduleTextStyleFields = computed(() =>
+  props.activeType === 'profile'
+    ? profileTextStyleFieldsByType[editableProfileType.value] || []
+    : homeTextStyleFieldsByType[editableTextStyleType.value] || [],
 );
 
 const normalizeProfileTextAlign = (value: unknown) => {
@@ -345,6 +491,29 @@ const normalizeProfileTextAlign = (value: unknown) => {
     ? align
     : '';
 };
+
+const normalizeTextBackgroundMode = (value: unknown) =>
+  backgroundModeOptions.some((item) => item.value === value)
+    ? String(value)
+    : 'color';
+
+const normalizeTextGradientDirection = (value: unknown) =>
+  gradientDirectionOptions.some((item) => item.value === value)
+    ? String(value)
+    : 'horizontal';
+
+const normalizeTextBackgroundPosition = (value: unknown) =>
+  titleBackgroundPositionOptions.some((item) => item.value === value)
+    ? String(value)
+    : 'bottom';
+
+const isImageCubeTitleTextStyle = (
+  module: ModuleItem | null,
+  role: ProfileTextStyleRole,
+) =>
+  props.activeType === 'home' &&
+  module?.type === 'imageCube' &&
+  role === 'itemLabel';
 
 const normalizeStyleColorValue = (value: unknown, fallback = '#ffffff') => {
   const color = typeof value === 'string' ? value.trim() : '';
@@ -1189,7 +1358,7 @@ const getCubeItems = (module: ModuleItem) => {
   }
   const source = getCubeSource(config);
   const items = source
-    .slice(0, 4)
+    .slice(0, maxCubeEditableItems)
     .map((item: any, index: number) => normalizeCubeItem(item, index));
   syncCubeItems(module, items);
   return items;
@@ -1199,6 +1368,24 @@ const selectedCubeItems = computed<any[]>(() =>
   editableModule.value?.type === 'imageCube' && editableModule.value.config
     ? getCubeItems(editableModule.value)
     : [],
+);
+
+const normalizeCubeLayout = (value: unknown) =>
+  Object.prototype.hasOwnProperty.call(
+    cubeLayoutDisplayLimitMap,
+    String(value || ''),
+  )
+    ? String(value)
+    : 'four';
+
+const getCubeDisplayLimit = (module: ModuleItem | null) =>
+  cubeLayoutDisplayLimitMap[
+    normalizeCubeLayout(module?.config?.layout || module?.props?.layout)
+  ] ?? 4;
+
+const selectedCubeVisibleCount = computed(
+  () =>
+    selectedCubeItems.value.filter((item) => getConfigItemVisible(item)).length,
 );
 
 const normalizeProfileEntryItem = (
@@ -1359,8 +1546,9 @@ const updateProfileItemImage = (item: any, value: any) => {
   setProfileItemImageRemoved(item, true);
 };
 
-const createCubeItem = (index: number) => ({
+const createCubeItem = (index: number, visible = true) => ({
   id: createLocalId('cube_item'),
+  enabled: visible,
   image: createDemoAssetFile(
     String(57 + (index % 4)),
     [
@@ -1380,14 +1568,17 @@ const createCubeItem = (index: number) => ({
   title:
     ['新品上架', '精选榜单', '会员专享', '限时满减'][index % 4] ||
     `图片${index + 1}`,
+  visible,
 });
 
 const addSelectedCubeItem = () => {
-  if (!editableModule.value) return;
-  const items = getCubeItems(editableModule.value);
-  if (items.length >= 4) return;
-  items.push(createCubeItem(items.length));
-  syncCubeItems(editableModule.value, items);
+  const module = editableModule.value;
+  if (!module) return;
+  const items = getCubeItems(module);
+  if (items.length >= maxCubeEditableItems) return;
+  const visible = selectedCubeVisibleCount.value < getCubeDisplayLimit(module);
+  items.push(createCubeItem(items.length, visible));
+  syncCubeItems(module, items);
 };
 
 const removeSelectedCubeItem = (index: number) => {
@@ -1419,6 +1610,20 @@ const getProfileEntryItemsForText = (module: ModuleItem | null) => {
   return [];
 };
 
+const getHomeEntryItemsForText = (module: ModuleItem | null) => {
+  const config = module?.config || {};
+  if (Array.isArray(config.items)) return config.items;
+  if (Array.isArray(config.list)) return config.list;
+  if (Array.isArray(config.images)) return config.images;
+  return [];
+};
+
+const getHomeEntryLabel = (item: any) => {
+  if (typeof item === 'string') return item;
+  const label = item?.label || item?.title || item?.text || item?.name || '';
+  return String(label || '').trim() || '内容项';
+};
+
 const joinPreviewTexts = (items: string[], fallback = '当前未显示') => {
   const texts = items.map((item) => item.trim()).filter(Boolean);
   if (texts.length === 0) return fallback;
@@ -1430,12 +1635,54 @@ const profileTextStyleTargetText = (
   role: ProfileTextStyleRole,
 ) => {
   const config = module?.config || {};
-  const type = module
-    ? props.normalizeProfileModuleType(String(module.type || ''))
-    : '';
+  const type = module ? editableTextStyleType.value : '';
+  if (props.activeType === 'home') {
+    const items = getHomeEntryItemsForText(module);
+    if (type === 'search') {
+      return role === 'placeholder'
+        ? String(config.placeholder || '搜索商品、分类或品牌')
+        : '当前未显示';
+    }
+    if (type === 'navGrid') {
+      const targets: Partial<Record<ProfileTextStyleRole, string>> = {
+        itemLabel: joinPreviewTexts(
+          items.map((item: any) => getHomeEntryLabel(item)),
+        ),
+      };
+      return targets[role] || '当前未显示';
+    }
+    if (type === 'entryCard') {
+      const targets: Partial<Record<ProfileTextStyleRole, string>> = {
+        subtitle: String(config.subtitle || config.path || '点击查看'),
+        title: String(config.title || '入口卡片'),
+      };
+      return targets[role] || '当前未显示';
+    }
+    if (type === 'imageCube') {
+      return role === 'itemLabel'
+        ? joinPreviewTexts(items.map((item: any) => getHomeEntryLabel(item)))
+        : '当前未显示';
+    }
+    if (type === 'productGroup') {
+      const targets: Partial<Record<ProfileTextStyleRole, string>> = {
+        more: String(config.moreText || config.more_text || '查看全部'),
+        subtitle: String(config.subtitle || '精选好物实时更新'),
+        title: String(config.title || '精选好物'),
+      };
+      return targets[role] || '当前未显示';
+    }
+    if (type === 'title') {
+      const targets: Partial<Record<ProfileTextStyleRole, string>> = {
+        more: String(config.more_text || config.moreText || '查看全部'),
+        subtitle: String(config.sub_title || config.subtitle || '当前未显示'),
+        title: String(config.title || config.text || '标题'),
+      };
+      return targets[role] || '当前未显示';
+    }
+  }
   const items = getProfileEntryItemsForText(module);
   if (type === 'userInfo') {
-    const targets: Record<ProfileTextStyleRole, string> = {
+    const targets: Partial<Record<ProfileTextStyleRole, string>> = {
       action: '资料编辑',
       amount: '当前未显示',
       iconText: '当前未显示',
@@ -1446,10 +1693,10 @@ const profileTextStyleTargetText = (
       subtitle: '登录后享受更多服务',
       title: '点击登录 / MallBase 用户',
     };
-    return targets[role];
+    return targets[role] || '当前未显示';
   }
   if (type === 'walletEntry') {
-    const targets: Record<ProfileTextStyleRole, string> = {
+    const targets: Partial<Record<ProfileTextStyleRole, string>> = {
       action:
         config.show_balance !== false && config.show_records !== false
           ? '余额明细'
@@ -1465,10 +1712,10 @@ const profileTextStyleTargetText = (
       subtitle: '当前未显示',
       title: String(config.title || '我的余额'),
     };
-    return targets[role];
+    return targets[role] || '当前未显示';
   }
   if (type === 'orderEntry') {
-    const targets: Record<ProfileTextStyleRole, string> = {
+    const targets: Partial<Record<ProfileTextStyleRole, string>> = {
       action: '当前未显示',
       amount: '当前未显示',
       iconText: '当前未显示',
@@ -1481,10 +1728,10 @@ const profileTextStyleTargetText = (
       subtitle: '当前未显示',
       title: String(config.title || '我的订单'),
     };
-    return targets[role];
+    return targets[role] || '当前未显示';
   }
   if (['customMenu', 'serviceMenu'].includes(type)) {
-    const targets: Record<ProfileTextStyleRole, string> = {
+    const targets: Partial<Record<ProfileTextStyleRole, string>> = {
       action: '当前未显示',
       amount: '当前未显示',
       iconText: '当前未显示',
@@ -1499,7 +1746,7 @@ const profileTextStyleTargetText = (
         config.title || (type === 'customMenu' ? '自定义菜单' : '我的服务'),
       ),
     };
-    return targets[role];
+    return targets[role] || '当前未显示';
   }
   return '';
 };
@@ -1508,9 +1755,7 @@ const getProfileTextStyleDefault = (
   module: ModuleItem | null,
   role: ProfileTextStyleRole,
 ) => {
-  const type = module
-    ? props.normalizeProfileModuleType(String(module.type || ''))
-    : '';
+  const type = module ? editableTextStyleType.value : '';
   const defaults = {
     ...profileTextStyleDefaults[type]?.[role],
   } as Partial<Record<ProfileTextStyleField, any>>;
@@ -1543,6 +1788,15 @@ const getProfileTextStyleValue = (
 ) => {
   const style = getProfileTextStyle(config, role);
   const aliasMap: Record<ProfileTextStyleField, string> = {
+    backgroundColorEnd: 'background_color_end',
+    backgroundColorStart: 'background_color_start',
+    backgroundGradientDirection: 'background_gradient_direction',
+    backgroundHeight: 'background_height',
+    backgroundImage: 'background_image',
+    backgroundMode: 'background_mode',
+    backgroundPosition: 'background_position',
+    backgroundRadius: 'background_radius',
+    backgroundWidth: 'background_width',
     color: 'color',
     fontSize: 'font_size',
     fontStyle: 'font_style',
@@ -1565,6 +1819,12 @@ const getProfileTextStyleColorInputValue = (
   module: ModuleItem | null,
   role: ProfileTextStyleRole,
 ) => getColorInputValue(getProfileTextStyleDisplayValue(module, role, 'color'));
+
+const getProfileTextStyleFieldColorInputValue = (
+  module: ModuleItem | null,
+  role: ProfileTextStyleRole,
+  field: ProfileTextStyleField,
+) => getColorInputValue(getProfileTextStyleDisplayValue(module, role, field));
 
 const ensureProfileTextStyle = (
   config: Record<string, any>,
@@ -1597,7 +1857,11 @@ const isProfileTextDefaultValue = (
 ) => {
   const defaultValue = getProfileTextStyleDefault(module, role)[field];
   if (defaultValue === undefined || defaultValue === null) return false;
-  if (field === 'color') {
+  if (
+    field === 'color' ||
+    field === 'backgroundColorStart' ||
+    field === 'backgroundColorEnd'
+  ) {
     return (
       String(value || '').toLowerCase() ===
       String(defaultValue || '').toLowerCase()
@@ -1614,17 +1878,88 @@ const updateProfileTextStyleField = (
 ) => {
   if (!module?.config) return;
   const style = ensureProfileTextStyle(module.config, role);
-  if (field === 'fontSize') {
+  if (
+    field === 'fontSize' ||
+    field === 'backgroundHeight' ||
+    field === 'backgroundRadius' ||
+    field === 'backgroundWidth'
+  ) {
+    const hasNumberValue =
+      value !== '' && value !== null && value !== undefined;
     const numberValue = Number(value);
-    if (Number.isFinite(numberValue) && numberValue > 0) {
-      const fontSize = Math.max(16, Math.min(Math.round(numberValue), 80));
-      if (isProfileTextDefaultValue(module, role, field, fontSize)) {
-        delete style.fontSize;
+    if (
+      hasNumberValue &&
+      Number.isFinite(numberValue) &&
+      (field === 'backgroundRadius' ? numberValue >= 0 : numberValue > 0)
+    ) {
+      let limits = { max: 80, min: 16 };
+      switch (field) {
+        case 'backgroundHeight': {
+          limits = { max: 100, min: 10 };
+
+          break;
+        }
+        case 'backgroundRadius': {
+          limits = { max: 80, min: 0 };
+
+          break;
+        }
+        case 'backgroundWidth': {
+          limits = { max: 100, min: 20 };
+
+          break;
+        }
+        // No default
+      }
+      const numberStyleValue = Math.max(
+        limits.min,
+        Math.min(Math.round(numberValue), limits.max),
+      );
+      if (isProfileTextDefaultValue(module, role, field, numberStyleValue)) {
+        delete style[field];
       } else {
-        style.fontSize = fontSize;
+        style[field] = numberStyleValue;
       }
     } else {
-      delete style.fontSize;
+      delete style[field];
+    }
+    return;
+  }
+  if (field === 'backgroundPosition') {
+    const position = normalizeTextBackgroundPosition(value);
+    if (position && !isProfileTextDefaultValue(module, role, field, position)) {
+      style.backgroundPosition = position;
+    } else {
+      delete style.backgroundPosition;
+    }
+    return;
+  }
+  if (field === 'backgroundMode') {
+    const mode = normalizeTextBackgroundMode(value);
+    if (mode && !isProfileTextDefaultValue(module, role, field, mode)) {
+      style.backgroundMode = mode;
+    } else {
+      delete style.backgroundMode;
+    }
+    return;
+  }
+  if (field === 'backgroundGradientDirection') {
+    const direction = normalizeTextGradientDirection(value);
+    if (
+      direction &&
+      !isProfileTextDefaultValue(module, role, field, direction)
+    ) {
+      style.backgroundGradientDirection = direction;
+    } else {
+      delete style.backgroundGradientDirection;
+    }
+    return;
+  }
+  if (field === 'backgroundImage') {
+    if (value) {
+      style.backgroundImage = value;
+    } else {
+      delete style.backgroundImage;
     }
     return;
   }
@@ -1660,9 +1995,9 @@ const updateProfileTextStyleField = (
   }
   const color = typeof value === 'string' ? value.trim() : '';
   if (color && !isProfileTextDefaultValue(module, role, field, color)) {
-    style.color = color;
+    style[field] = color;
   } else {
-    delete style.color;
+    delete style[field];
   }
 };
 
@@ -1675,6 +2010,16 @@ const updateProfileTextStyleColorFromEvent = (
   updateProfileTextStyleField(module, role, 'color', value);
 };
 
+const updateProfileTextStyleFieldColorFromEvent = (
+  module: ModuleItem | null,
+  role: ProfileTextStyleRole,
+  field: ProfileTextStyleField,
+  event: Event,
+) => {
+  const value = (event.target as HTMLInputElement | null)?.value;
+  updateProfileTextStyleField(module, role, field, value);
+};
+
 const resetProfileTextStyles = (module: ModuleItem | null) => {
   if (!module?.config) return;
   delete module.config.textStyles;
@@ -1683,42 +2028,17 @@ const resetProfileTextStyles = (module: ModuleItem | null) => {
   delete module.config.text_visibility;
 };
 
-const getProfileItemVisible = (item: any) =>
+const getConfigItemVisible = (item: any) =>
   item?.enabled !== false && item?.visible !== false;
 
-const updateProfileItemVisible = (item: any, checked: boolean) => {
+const updateConfigItemVisible = (item: any, checked: boolean) => {
   if (!item || typeof item !== 'object') return;
   item.enabled = checked;
   item.visible = checked;
 };
 
-const updateSelectedEntryIconColor = (event: Event) => {
-  const value = (event.target as HTMLInputElement | null)?.value;
-  if (value && editableModule.value?.config) {
-    editableModule.value.config.icon_color = value;
-  }
-};
-
-const updateSelectedEntryIconBackground = (event: Event) => {
-  const value = (event.target as HTMLInputElement | null)?.value;
-  if (value && editableModule.value?.config) {
-    editableModule.value.config.icon_background = value;
-  }
-};
-
-const updateSelectedTitleColor = (event: Event) => {
-  const value = (event.target as HTMLInputElement | null)?.value;
-  if (value && editableModule.value?.config) {
-    editableModule.value.config.title_color = value;
-  }
-};
-
-const updateSelectedSubTitleColor = (event: Event) => {
-  const value = (event.target as HTMLInputElement | null)?.value;
-  if (value && editableModule.value?.config) {
-    editableModule.value.config.sub_color = value;
-  }
-};
+const getProfileItemVisible = getConfigItemVisible;
+const updateProfileItemVisible = updateConfigItemVisible;
 </script>
 
 <template>
@@ -2115,6 +2435,18 @@ const updateSelectedSubTitleColor = (event: Event) => {
                         <strong>轮播图 {{ bannerIndex(itemIndex) + 1 }}</strong>
                       </div>
                       <a-space>
+                        <span class="entry-row__visibility">
+                          <span>显示</span>
+                          <a-switch
+                            :checked="getConfigItemVisible(item)"
+                            :disabled="isReadonlyScheme"
+                            size="small"
+                            @change="
+                              (checked: boolean) =>
+                                updateConfigItemVisible(item, checked)
+                            "
+                          />
+                        </span>
                         <a-button
                           :disabled="bannerIndex(itemIndex) === 0"
                           size="small"
@@ -2253,25 +2585,44 @@ const updateSelectedSubTitleColor = (event: Event) => {
                         type="image"
                       />
                     </div>
-                    <a-input v-model:value="item.title" placeholder="标题" />
+                    <a-input
+                      v-model:value="item.title"
+                      class="entry-row__title"
+                      placeholder="标题"
+                    />
                     <TargetPicker
                       v-model:value="item.path"
+                      class="entry-row__target"
                       :disabled="isReadonlyScheme"
                       placeholder="跳转目标"
                     />
-                    <a-button
-                      danger
-                      size="small"
-                      @click="
-                        $emit(
-                          'removeConfigItem',
-                          editableModule.config.items,
-                          itemIndex,
-                        )
-                      "
-                    >
-                      删除
-                    </a-button>
+                    <div class="entry-row__actions">
+                      <div class="entry-row__visibility">
+                        <span>显示</span>
+                        <a-switch
+                          :checked="getConfigItemVisible(item)"
+                          :disabled="isReadonlyScheme"
+                          size="small"
+                          @change="
+                            (checked: boolean) =>
+                              updateConfigItemVisible(item, checked)
+                          "
+                        />
+                      </div>
+                      <a-button
+                        danger
+                        size="small"
+                        @click="
+                          $emit(
+                            'removeConfigItem',
+                            editableModule.config.items,
+                            itemIndex,
+                          )
+                        "
+                      >
+                        删除
+                      </a-button>
+                    </div>
                   </div>
                   <a-button
                     size="small"
@@ -2302,13 +2653,27 @@ const updateSelectedSubTitleColor = (event: Event) => {
                       <div class="banner-item-title">
                         <strong>图片 {{ itemIndex + 1 }}</strong>
                       </div>
-                      <a-button
-                        danger
-                        size="small"
-                        @click="removeSelectedCubeItem(itemIndex)"
-                      >
-                        删除
-                      </a-button>
+                      <a-space>
+                        <span class="entry-row__visibility">
+                          <span>显示</span>
+                          <a-switch
+                            :checked="getConfigItemVisible(item)"
+                            :disabled="isReadonlyScheme"
+                            size="small"
+                            @change="
+                              (checked: boolean) =>
+                                updateConfigItemVisible(item, checked)
+                            "
+                          />
+                        </span>
+                        <a-button
+                          danger
+                          size="small"
+                          @click="removeSelectedCubeItem(itemIndex)"
+                        >
+                          删除
+                        </a-button>
+                      </a-space>
                     </div>
                     <div class="banner-item-row__body">
                       <div class="banner-item-row__image">
@@ -2338,7 +2703,8 @@ const updateSelectedSubTitleColor = (event: Event) => {
                   </div>
                   <a-button
                     :disabled="
-                      isReadonlyScheme || selectedCubeItems.length >= 4
+                      isReadonlyScheme ||
+                      selectedCubeItems.length >= maxCubeEditableItems
                     "
                     size="small"
                     type="dashed"
@@ -2409,97 +2775,13 @@ const updateSelectedSubTitleColor = (event: Event) => {
                   placeholder="输入链接或选择跳转目标"
                 />
               </a-form-item>
-              <a-form-item label="图标类型">
-                <a-segmented
-                  v-model:value="editableModule.config.icon_mode"
-                  :options="[
-                    { label: '图标', value: 'icon' },
-                    { label: '图片', value: 'image' },
-                  ]"
-                />
-              </a-form-item>
-              <a-form-item
-                v-if="editableModule.config.icon_mode !== 'image'"
-                label="图标"
-              >
-                <div class="flex flex-col" style="width: 100%">
-                  <div class="mb-2">
-                    <a-select
-                      v-model:value="entryCardIconPrefix"
-                      placeholder="选择图标集"
-                      style="width: 200px"
-                    >
-                      <a-select-option value="ant-design">
-                        Ant Design
-                      </a-select-option>
-                      <a-select-option value="lucide">Lucide</a-select-option>
-                      <a-select-option value="mdi">
-                        Material Design
-                      </a-select-option>
-                      <a-select-option value="carbon">Carbon</a-select-option>
-                      <a-select-option value="mdi-light">
-                        MDI Light
-                      </a-select-option>
-                    </a-select>
-                    <span class="sm ml-2 text-gray-400">
-                      也可直接输入，如：lucide:shield
-                    </span>
-                  </div>
-                  <IconPicker
-                    v-model="editableModule.config.icon"
-                    :prefix="entryCardIconPrefix"
-                    placeholder="请选择图标"
-                    style="width: 100%"
-                  />
-                </div>
-              </a-form-item>
-              <a-form-item v-else label="图标图片">
+              <a-form-item label="图标图片">
                 <Upload
                   v-model:value="editableModule.config.icon_image"
                   :disabled="isReadonlyScheme"
                   module="client"
                   type="image"
                 />
-              </a-form-item>
-              <a-form-item label="图标颜色">
-                <a-input
-                  v-model:value="editableModule.config.icon_color"
-                  allow-clear
-                  placeholder="跟随主题色"
-                >
-                  <template #addonAfter>
-                    <input
-                      :value="
-                        getColorInputValue(editableModule.config.icon_color)
-                      "
-                      aria-label="选择图标颜色"
-                      class="color-input"
-                      type="color"
-                      @input="updateSelectedEntryIconColor"
-                    />
-                  </template>
-                </a-input>
-              </a-form-item>
-              <a-form-item label="图标背景">
-                <a-input
-                  v-model:value="editableModule.config.icon_background"
-                  allow-clear
-                  placeholder="跟随主题浅色"
-                >
-                  <template #addonAfter>
-                    <input
-                      :value="
-                        getColorInputValue(
-                          editableModule.config.icon_background,
-                        )
-                      "
-                      aria-label="选择图标背景色"
-                      class="color-input"
-                      type="color"
-                      @input="updateSelectedEntryIconBackground"
-                    />
-                  </template>
-                </a-input>
               </a-form-item>
               <a-form-item label="背景图">
                 <Upload
@@ -2520,101 +2802,6 @@ const updateSelectedSubTitleColor = (event: Event) => {
               </a-form-item>
               <a-form-item label="副标题">
                 <a-input v-model:value="editableModule.config.sub_title" />
-              </a-form-item>
-              <div class="property-subsection__title">文字样式</div>
-              <a-form-item label="对齐方式">
-                <a-segmented
-                  v-model:value="editableModule.config.title_align"
-                  :options="[
-                    { label: '左', value: 'left' },
-                    { label: '中', value: 'center' },
-                    { label: '右', value: 'right' },
-                  ]"
-                />
-              </a-form-item>
-              <div class="style-grid">
-                <a-form-item label="标题字号">
-                  <a-input-number
-                    v-model:value="editableModule.config.title_font_size"
-                    :min="18"
-                    :max="72"
-                    addon-after="rpx"
-                    class="w-full"
-                  />
-                </a-form-item>
-                <a-form-item label="副标字号">
-                  <a-input-number
-                    v-model:value="editableModule.config.sub_font_size"
-                    :min="16"
-                    :max="56"
-                    addon-after="rpx"
-                    class="w-full"
-                  />
-                </a-form-item>
-              </div>
-              <a-form-item label="主标题">
-                <a-space>
-                  <a-checkbox
-                    v-model:checked="editableModule.config.title_bold"
-                  >
-                    加粗
-                  </a-checkbox>
-                  <a-checkbox
-                    v-model:checked="editableModule.config.title_italic"
-                  >
-                    斜体
-                  </a-checkbox>
-                </a-space>
-              </a-form-item>
-              <a-form-item label="标题颜色">
-                <a-input
-                  v-model:value="editableModule.config.title_color"
-                  allow-clear
-                  placeholder="跟随主题标题色"
-                >
-                  <template #addonAfter>
-                    <input
-                      :value="
-                        getColorInputValue(editableModule.config.title_color)
-                      "
-                      aria-label="选择标题颜色"
-                      class="color-input"
-                      type="color"
-                      @input="updateSelectedTitleColor"
-                    />
-                  </template>
-                </a-input>
-              </a-form-item>
-              <a-form-item label="副标题">
-                <a-space>
-                  <a-checkbox v-model:checked="editableModule.config.sub_bold">
-                    加粗
-                  </a-checkbox>
-                  <a-checkbox
-                    v-model:checked="editableModule.config.sub_italic"
-                  >
-                    斜体
-                  </a-checkbox>
-                </a-space>
-              </a-form-item>
-              <a-form-item label="副标颜色">
-                <a-input
-                  v-model:value="editableModule.config.sub_color"
-                  allow-clear
-                  placeholder="跟随主题辅助色"
-                >
-                  <template #addonAfter>
-                    <input
-                      :value="
-                        getColorInputValue(editableModule.config.sub_color)
-                      "
-                      aria-label="选择副标题颜色"
-                      class="color-input"
-                      type="color"
-                      @input="updateSelectedSubTitleColor"
-                    />
-                  </template>
-                </a-input>
               </a-form-item>
               <div class="property-subsection__title">更多链接</div>
               <a-form-item label="更多文字">
@@ -2673,6 +2860,524 @@ const updateSelectedSubTitleColor = (event: Event) => {
                 />
               </a-form-item>
             </template>
+          </div>
+
+          <div
+            v-if="
+              activeType === 'home' &&
+              editableModule.config &&
+              moduleTextStyleFields.length > 0
+            "
+            class="property-section"
+          >
+            <div class="property-subsection__head">
+              <div class="property-section__title">文字样式</div>
+              <a-button
+                :disabled="isReadonlyScheme"
+                size="small"
+                type="link"
+                @click="resetProfileTextStyles(editableModule)"
+              >
+                重置
+              </a-button>
+            </div>
+            <div class="profile-text-style-list">
+              <div
+                v-for="item in moduleTextStyleFields"
+                :key="item.role"
+                class="profile-text-style-card"
+              >
+                <div class="profile-text-style-card__head">
+                  <span class="profile-text-style-card__title">
+                    <strong>{{ item.label }}</strong>
+                    <small
+                      :title="
+                        profileTextStyleTargetText(editableModule, item.role)
+                      "
+                    >
+                      {{
+                        profileTextStyleTargetText(editableModule, item.role)
+                      }}
+                    </small>
+                  </span>
+                </div>
+                <div class="profile-text-style-card__body">
+                  <div
+                    v-if="isImageCubeTitleTextStyle(editableModule, item.role)"
+                    class="profile-text-style-card__background-title"
+                  >
+                    标题文字
+                  </div>
+                  <div class="profile-text-style-color">
+                    <input
+                      :value="
+                        getProfileTextStyleColorInputValue(
+                          editableModule,
+                          item.role,
+                        )
+                      "
+                      :aria-label="`选择${item.label}颜色`"
+                      :disabled="isReadonlyScheme"
+                      class="style-color-field__picker"
+                      type="color"
+                      @input="
+                        (event: Event) =>
+                          updateProfileTextStyleColorFromEvent(
+                            editableModule,
+                            item.role,
+                            event,
+                          )
+                      "
+                    />
+                    <a-input
+                      :value="
+                        getProfileTextStyleDisplayValue(
+                          editableModule,
+                          item.role,
+                          'color',
+                        )
+                      "
+                      allow-clear
+                      :disabled="isReadonlyScheme"
+                      placeholder="跟随默认"
+                      @update:value="
+                        (value: string) =>
+                          updateProfileTextStyleField(
+                            editableModule,
+                            item.role,
+                            'color',
+                            value,
+                          )
+                      "
+                    />
+                  </div>
+                  <a-input-number
+                    :value="
+                      getProfileTextStyleDisplayValue(
+                        editableModule,
+                        item.role,
+                        'fontSize',
+                      )
+                    "
+                    :min="16"
+                    :max="80"
+                    addon-after="rpx"
+                    :disabled="isReadonlyScheme"
+                    placeholder="字号"
+                    class="profile-text-style-card__number"
+                    @change="
+                      (value: unknown) =>
+                        updateProfileTextStyleField(
+                          editableModule,
+                          item.role,
+                          'fontSize',
+                          value,
+                        )
+                    "
+                  />
+                  <a-select
+                    :value="
+                      getProfileTextStyleDisplayValue(
+                        editableModule,
+                        item.role,
+                        'fontWeight',
+                      )
+                    "
+                    :options="profileTextWeightOptions"
+                    allow-clear
+                    :disabled="isReadonlyScheme"
+                    placeholder="粗细"
+                    @change="
+                      (value: unknown) =>
+                        updateProfileTextStyleField(
+                          editableModule,
+                          item.role,
+                          'fontWeight',
+                          value,
+                        )
+                    "
+                  />
+                  <a-select
+                    :value="
+                      getProfileTextStyleDisplayValue(
+                        editableModule,
+                        item.role,
+                        'textAlign',
+                      )
+                    "
+                    :options="profileTextAlignOptions"
+                    allow-clear
+                    :disabled="isReadonlyScheme"
+                    placeholder="对齐"
+                    @change="
+                      (value: unknown) =>
+                        updateProfileTextStyleField(
+                          editableModule,
+                          item.role,
+                          'textAlign',
+                          value,
+                        )
+                    "
+                  />
+                  <a-checkbox
+                    :checked="
+                      getProfileTextStyleDisplayValue(
+                        editableModule,
+                        item.role,
+                        'fontStyle',
+                      ) === 'italic'
+                    "
+                    :disabled="isReadonlyScheme"
+                    class="profile-text-style-card__toggle"
+                    @change="
+                      (event: any) =>
+                        updateProfileTextStyleField(
+                          editableModule,
+                          item.role,
+                          'fontStyle',
+                          event.target.checked ? 'italic' : '',
+                        )
+                    "
+                  >
+                    斜体
+                  </a-checkbox>
+                </div>
+                <div
+                  v-if="isImageCubeTitleTextStyle(editableModule, item.role)"
+                  class="profile-text-style-card__background"
+                >
+                  <div class="profile-text-style-card__background-title">
+                    标题背景
+                  </div>
+                  <a-segmented
+                    :value="
+                      getProfileTextStyleDisplayValue(
+                        editableModule,
+                        item.role,
+                        'backgroundMode',
+                      )
+                    "
+                    :disabled="isReadonlyScheme"
+                    :options="backgroundModeOptions"
+                    @change="
+                      (value: unknown) =>
+                        updateProfileTextStyleField(
+                          editableModule,
+                          item.role,
+                          'backgroundMode',
+                          value,
+                        )
+                    "
+                  />
+                  <div
+                    v-if="
+                      getProfileTextStyleDisplayValue(
+                        editableModule,
+                        item.role,
+                        'backgroundMode',
+                      ) === 'image'
+                    "
+                    class="profile-text-style-card__upload"
+                  >
+                    <Upload
+                      :value="
+                        getProfileTextStyleDisplayValue(
+                          editableModule,
+                          item.role,
+                          'backgroundImage',
+                        )
+                      "
+                      :disabled="isReadonlyScheme"
+                      module="client"
+                      type="image"
+                      @update:value="
+                        (value: unknown) =>
+                          updateProfileTextStyleField(
+                            editableModule,
+                            item.role,
+                            'backgroundImage',
+                            value,
+                          )
+                      "
+                    />
+                  </div>
+                  <template v-else>
+                    <div class="profile-text-style-background-grid">
+                      <div class="profile-text-style-background-field">
+                        <span class="profile-text-style-background-label">
+                          起始颜色
+                        </span>
+                        <div class="profile-text-style-color">
+                          <input
+                            :value="
+                              getProfileTextStyleFieldColorInputValue(
+                                editableModule,
+                                item.role,
+                                'backgroundColorStart',
+                              )
+                            "
+                            aria-label="选择标题背景起始颜色"
+                            :disabled="isReadonlyScheme"
+                            class="style-color-field__picker"
+                            type="color"
+                            @input="
+                              (event: Event) =>
+                                updateProfileTextStyleFieldColorFromEvent(
+                                  editableModule,
+                                  item.role,
+                                  'backgroundColorStart',
+                                  event,
+                                )
+                            "
+                          />
+                          <a-input
+                            :value="
+                              getProfileTextStyleDisplayValue(
+                                editableModule,
+                                item.role,
+                                'backgroundColorStart',
+                              )
+                            "
+                            allow-clear
+                            :disabled="isReadonlyScheme"
+                            placeholder="起始颜色"
+                            @update:value="
+                              (value: string) =>
+                                updateProfileTextStyleField(
+                                  editableModule,
+                                  item.role,
+                                  'backgroundColorStart',
+                                  value,
+                                )
+                            "
+                          />
+                        </div>
+                      </div>
+                      <div class="profile-text-style-background-field">
+                        <span class="profile-text-style-background-label">
+                          结束颜色
+                        </span>
+                        <div class="profile-text-style-color">
+                          <input
+                            :value="
+                              getProfileTextStyleFieldColorInputValue(
+                                editableModule,
+                                item.role,
+                                'backgroundColorEnd',
+                              )
+                            "
+                            aria-label="选择标题背景结束颜色"
+                            :disabled="isReadonlyScheme"
+                            class="style-color-field__picker"
+                            type="color"
+                            @input="
+                              (event: Event) =>
+                                updateProfileTextStyleFieldColorFromEvent(
+                                  editableModule,
+                                  item.role,
+                                  'backgroundColorEnd',
+                                  event,
+                                )
+                            "
+                          />
+                          <a-input
+                            :value="
+                              getProfileTextStyleDisplayValue(
+                                editableModule,
+                                item.role,
+                                'backgroundColorEnd',
+                              )
+                            "
+                            allow-clear
+                            :disabled="isReadonlyScheme"
+                            placeholder="结束颜色"
+                            @update:value="
+                              (value: string) =>
+                                updateProfileTextStyleField(
+                                  editableModule,
+                                  item.role,
+                                  'backgroundColorEnd',
+                                  value,
+                                )
+                            "
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <div class="profile-text-style-background-field">
+                      <span class="profile-text-style-background-label">
+                        渐变方向
+                      </span>
+                      <a-radio-group
+                        :value="
+                          getProfileTextStyleDisplayValue(
+                            editableModule,
+                            item.role,
+                            'backgroundGradientDirection',
+                          )
+                        "
+                        :options="gradientDirectionOptions"
+                        :disabled="isReadonlyScheme"
+                        @update:value="
+                          (value: unknown) =>
+                            updateProfileTextStyleField(
+                              editableModule,
+                              item.role,
+                              'backgroundGradientDirection',
+                              value,
+                            )
+                        "
+                      />
+                    </div>
+                  </template>
+                  <div class="profile-text-style-background-grid">
+                    <div class="profile-text-style-background-field">
+                      <span class="profile-text-style-background-label">
+                        背景宽度
+                      </span>
+                      <a-input-number
+                        :value="
+                          getProfileTextStyleDisplayValue(
+                            editableModule,
+                            item.role,
+                            'backgroundWidth',
+                          )
+                        "
+                        :min="20"
+                        :max="100"
+                        addon-after="%"
+                        :disabled="isReadonlyScheme"
+                        placeholder="背景宽度"
+                        @change="
+                          (value: unknown) =>
+                            updateProfileTextStyleField(
+                              editableModule,
+                              item.role,
+                              'backgroundWidth',
+                              value,
+                            )
+                        "
+                      />
+                    </div>
+                    <div class="profile-text-style-background-field">
+                      <span class="profile-text-style-background-label">
+                        背景高度
+                      </span>
+                      <a-input-number
+                        :value="
+                          getProfileTextStyleDisplayValue(
+                            editableModule,
+                            item.role,
+                            'backgroundHeight',
+                          )
+                        "
+                        :min="10"
+                        :max="100"
+                        addon-after="%"
+                        :disabled="isReadonlyScheme"
+                        placeholder="背景高度"
+                        @change="
+                          (value: unknown) =>
+                            updateProfileTextStyleField(
+                              editableModule,
+                              item.role,
+                              'backgroundHeight',
+                              value,
+                            )
+                        "
+                      />
+                    </div>
+                  </div>
+                  <div class="profile-text-style-background-field">
+                    <span class="profile-text-style-background-label">
+                      背景圆角
+                    </span>
+                    <div class="style-range-control">
+                      <a-slider
+                        :value="
+                          getProfileTextStyleDisplayValue(
+                            editableModule,
+                            item.role,
+                            'backgroundRadius',
+                          )
+                        "
+                        :min="0"
+                        :max="80"
+                        :disabled="isReadonlyScheme"
+                        class="style-range-control__slider"
+                        @change="
+                          (value: unknown) =>
+                            updateProfileTextStyleField(
+                              editableModule,
+                              item.role,
+                              'backgroundRadius',
+                              value,
+                            )
+                        "
+                      />
+                      <a-input-number
+                        :value="
+                          getProfileTextStyleDisplayValue(
+                            editableModule,
+                            item.role,
+                            'backgroundRadius',
+                          )
+                        "
+                        :min="0"
+                        :max="80"
+                        addon-after="rpx"
+                        :disabled="isReadonlyScheme"
+                        class="style-range-control__number"
+                        placeholder="背景圆角"
+                        @change="
+                          (value: unknown) =>
+                            updateProfileTextStyleField(
+                              editableModule,
+                              item.role,
+                              'backgroundRadius',
+                              value,
+                            )
+                        "
+                      />
+                    </div>
+                  </div>
+                  <div class="profile-text-style-background-field">
+                    <span class="profile-text-style-background-label">
+                      定位位置
+                    </span>
+                    <a-radio-group
+                      :value="
+                        getProfileTextStyleDisplayValue(
+                          editableModule,
+                          item.role,
+                          'backgroundPosition',
+                        )
+                      "
+                      :disabled="isReadonlyScheme"
+                      button-style="solid"
+                      class="title-position-radio-grid"
+                      @change="
+                        (event: any) =>
+                          updateProfileTextStyleField(
+                            editableModule,
+                            item.role,
+                            'backgroundPosition',
+                            event.target.value,
+                          )
+                      "
+                    >
+                      <a-radio-button
+                        v-for="position in titleBackgroundPositionOptions"
+                        :key="position.value"
+                        :value="position.value"
+                      >
+                        {{ position.label }}
+                      </a-radio-button>
+                    </a-radio-group>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
 
           <div
@@ -2863,7 +3568,7 @@ const updateSelectedSubTitleColor = (event: Event) => {
               </a-form-item>
             </template>
 
-            <template v-if="profileTextStyleFields.length > 0">
+            <template v-if="moduleTextStyleFields.length > 0">
               <div class="property-subsection__head">
                 <div class="property-subsection__title">文字样式</div>
                 <a-button
@@ -2877,7 +3582,7 @@ const updateSelectedSubTitleColor = (event: Event) => {
               </div>
               <div class="profile-text-style-list">
                 <div
-                  v-for="item in profileTextStyleFields"
+                  v-for="item in moduleTextStyleFields"
                   :key="item.role"
                   class="profile-text-style-card"
                 >

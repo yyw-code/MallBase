@@ -43,13 +43,20 @@ export namespace ClientDecorateApi {
   }
 
   export interface TabbarItem {
+    activeIcon?: any;
     icon?: any;
+    iconPath?: any;
     icon_mode?: 'icon' | 'upload';
     id: string;
     path: string;
     selected_icon?: any;
     selected_icon_mode?: 'icon' | 'upload';
+    selectedIconPath?: any;
     text: string;
+  }
+
+  export interface TabbarSchemeSchema {
+    items: TabbarItem[];
   }
 
   export interface HomeSchemeSchema {
@@ -62,7 +69,8 @@ export namespace ClientDecorateApi {
     | DecorationModule[]
     | HomeSchemeSchema
     | ProfileModule[]
-    | TabbarItem[];
+    | TabbarItem[]
+    | TabbarSchemeSchema;
 
   export interface SchemeItem {
     id: number;

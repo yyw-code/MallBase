@@ -668,14 +668,23 @@ function isProfileEntryImageRemoved(item: any) {
   return item?.imageRemoved === true || item?.image_removed === true;
 }
 
-function moduleList(module: ModuleItem) {
+function rawModuleList(module: ModuleItem) {
   const list = [
     module.props?.list,
     module.props?.items,
     module.props?.images,
   ].find((value) => Array.isArray(value) && value.length > 0);
+  return Array.isArray(list) ? list : [];
+}
+
+function hasConfiguredModuleItems(module: ModuleItem) {
+  return rawModuleList(module).length > 0;
+}
+
+function moduleList(module: ModuleItem) {
+  const list = rawModuleList(module);
   let source: any[] = [];
-  if (Array.isArray(list)) {
+  if (list.length > 0) {
     source = list;
   } else if (module.type === 'orderShortcut') {
     source = DEFAULT_PROFILE_ORDER_ITEMS;
@@ -888,14 +897,6 @@ function entryCardBoxStyle(module: ModuleItem) {
   return style;
 }
 
-function entryCardIconStyle(module: ModuleItem) {
-  const props = module.props || {};
-  return {
-    background: props.icon_background || props.iconBackground || undefined,
-    color: props.icon_color || props.iconColor || undefined,
-  };
-}
-
 function titleSubtitle(module: ModuleItem) {
   return module.props?.subtitle || module.props?.sub_title || '';
 }
@@ -934,14 +935,16 @@ function titleBoxStyle(module: ModuleItem) {
 }
 
 function titleMainStyle(module: ModuleItem) {
+  const textAlign =
+    homeTextStyle(module, 'title').textAlign || titleAlign(module);
   return {
-    textAlign: titleAlign(module),
+    textAlign,
   };
 }
 
 function titleTextStyle(module: ModuleItem) {
   const props = module.props || {};
-  return {
+  const fallbackStyle = {
     color: props.title_color || props.titleColor || undefined,
     fontSize: `${toPreviewPx(
       clampNumber(props.title_font_size ?? props.titleFontSize, 32, 18, 72),
@@ -950,11 +953,15 @@ function titleTextStyle(module: ModuleItem) {
     fontWeight:
       props.title_bold === false || props.titleBold === false ? '500' : '800',
   };
+  return {
+    ...fallbackStyle,
+    ...homeTextStyle(module, 'title'),
+  };
 }
 
 function titleSubStyle(module: ModuleItem) {
   const props = module.props || {};
-  return {
+  const fallbackStyle = {
     color: props.sub_color || props.subColor || undefined,
     fontSize: `${toPreviewPx(
       clampNumber(props.sub_font_size ?? props.subFontSize, 24, 16, 56),
@@ -962,6 +969,14 @@ function titleSubStyle(module: ModuleItem) {
     fontStyle: props.sub_italic || props.subItalic ? 'italic' : undefined,
     fontWeight: props.sub_bold || props.subBold ? '700' : undefined,
   };
+  return {
+    ...fallbackStyle,
+    ...homeTextStyle(module, 'subtitle'),
+  };
+}
+
+function titleMoreStyle(module: ModuleItem) {
+  return homeTextStyle(module, 'more');
 }
 
 function navColumns(module: ModuleItem) {
@@ -1062,11 +1077,16 @@ function profileTextVisible(_module: ModuleItem, _role: string) {
   return true;
 }
 
-function profileTextStyle(module: ModuleItem, role: string) {
+function profileTextStyleConfig(module: ModuleItem, role: string) {
   const props = module.props || {};
   const textStyles = props.textStyles || props.text_styles || {};
   const styleConfig = textStyles?.[role];
-  if (!styleConfig || typeof styleConfig !== 'object') return {};
+  return styleConfig && typeof styleConfig === 'object' ? styleConfig : {};
+}
+
+function profileTextStyle(module: ModuleItem, role: string) {
+  const styleConfig = profileTextStyleConfig(module, role);
+  if (Object.keys(styleConfig).length === 0) return {};
   const style: Record<string, string> = {};
   const color = styleColor(styleConfig.color);
   if (color) style.color = color;
@@ -1088,6 +1108,15 @@ function profileTextStyle(module: ModuleItem, role: string) {
   );
   if (textAlign) style.textAlign = textAlign;
   return style;
+}
+
+const homeTextStyle = profileTextStyle;
+
+function textAlignJustifyContent(value: unknown) {
+  const align = normalizePreviewTextAlign(value);
+  if (align === 'center') return 'center';
+  if (align === 'right') return 'flex-end';
+  return 'flex-start';
 }
 
 function gradientDirection(value: unknown) {
@@ -1419,6 +1448,129 @@ function imageList(module: ModuleItem) {
     .filter(Boolean);
 }
 
+function cubeLayout(module: ModuleItem) {
+  const layout = String(module.props?.layout || 'four');
+  return ['four', 'one', 'two'].includes(layout) ? layout : 'four';
+}
+
+function cubeDisplayLimit(module: ModuleItem) {
+  const map: Record<string, number> = {
+    four: 4,
+    one: 1,
+    two: 2,
+  };
+  return map[cubeLayout(module)] || map.four;
+}
+
+function imageCubePreviewItems(module: ModuleItem) {
+  const items = moduleList(module);
+  if (items.length > 0 || hasConfiguredModuleItems(module)) {
+    return items
+      .map((item: any, index: number) => ({
+        image: getImage(item),
+        title:
+          (typeof item === 'string' && !getImage(item) ? item : '') ||
+          item?.title ||
+          item?.label ||
+          item?.text ||
+          item?.name ||
+          module.props?.titles?.[index] ||
+          '',
+      }))
+      .filter((item) => item.image || item.title);
+  }
+  return (
+    module.props.titles || ['精选榜单', '本周值得买', '会员专享', '新品榜']
+  ).map((title: string) => ({ image: '', title }));
+}
+
+function cubeTitlePositionStyle(value: unknown) {
+  const position = String(value || 'bottom');
+  const style: Record<string, string> = {
+    bottom: 'auto',
+    left: 'auto',
+    right: 'auto',
+    top: 'auto',
+    transform: 'none',
+  };
+  const offset = '8px';
+  if (position.includes('top')) {
+    style.top = offset;
+  } else if (position.includes('center')) {
+    style.top = '50%';
+    style.transform = 'translateY(-50%)';
+  } else {
+    style.bottom = offset;
+  }
+  if (position.endsWith('Left')) {
+    style.left = offset;
+  } else if (position.endsWith('Right')) {
+    style.right = offset;
+  } else {
+    style.left = '50%';
+    style.transform =
+      style.transform === 'translateY(-50%)'
+        ? 'translate(-50%, -50%)'
+        : 'translateX(-50%)';
+  }
+  return style;
+}
+
+function cubeTitleStyle(module: ModuleItem) {
+  const styleConfig = profileTextStyleConfig(module, 'itemLabel');
+  const style: Record<string, string> = {
+    ...homeTextStyle(module, 'itemLabel'),
+  };
+  const backgroundMode = String(
+    styleConfig.backgroundMode ?? styleConfig.background_mode ?? 'color',
+  );
+  const backgroundImage = getImage(
+    styleConfig.backgroundImage ?? styleConfig.background_image ?? '',
+  );
+  if (backgroundMode === 'image' && backgroundImage) {
+    style.backgroundImage = `url("${backgroundImage}")`;
+    style.backgroundPosition = 'center';
+    style.backgroundSize = 'cover';
+  } else {
+    const background = gradientBackground(
+      styleConfig.backgroundColorStart ?? styleConfig.background_color_start,
+      styleConfig.backgroundColorEnd ?? styleConfig.background_color_end,
+      styleConfig.backgroundGradientDirection ??
+        styleConfig.background_gradient_direction,
+    );
+    if (background) style.background = background;
+  }
+  const height = Number(
+    styleConfig.backgroundHeight ?? styleConfig.background_height ?? 26,
+  );
+  style.height = `${clampNumber(height, 26, 10, 100)}%`;
+  const width = Number(
+    styleConfig.backgroundWidth ?? styleConfig.background_width ?? 100,
+  );
+  style.width = `${clampNumber(width, 100, 20, 100)}%`;
+  style.maxHeight = 'calc(100% - 16px)';
+  style.maxWidth = 'calc(100% - 16px)';
+  const radius = Number(
+    styleConfig.backgroundRadius ?? styleConfig.background_radius ?? 12,
+  );
+  style.borderRadius = `${toPreviewPx(clampNumber(radius, 12, 0, 80))}px`;
+  Object.assign(
+    style,
+    cubeTitlePositionStyle(
+      styleConfig.backgroundPosition ?? styleConfig.background_position,
+    ),
+  );
+  const align =
+    style.textAlign ||
+    normalizePreviewTextAlign(
+      styleConfig.textAlign ?? styleConfig.text_align,
+    ) ||
+    'center';
+  style.textAlign = align;
+  style.justifyContent = textAlignJustifyContent(align);
+  return style;
+}
+
 function productLayout(module: ModuleItem) {
   const layout = module.props?.layout || 'grid';
   return ['grid', 'large', 'list', 'scroll'].includes(layout) ? layout : 'grid';
@@ -1735,7 +1887,9 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
                   :style="moduleBoxStyle(module)"
                 >
                   <span class="home-search__icon"></span>
-                  <span>{{ module.props.placeholder || '搜索商品' }}</span>
+                  <span :style="homeTextStyle(module, 'placeholder')">
+                    {{ module.props.placeholder || '搜索商品' }}
+                  </span>
                 </div>
 
                 <div
@@ -1746,7 +1900,10 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
                   "
                 >
                   <img v-if="bannerImage(module)" :src="bannerImage(module)" />
-                  <div v-else class="home-banner__fallback">
+                  <div
+                    v-else-if="!hasConfiguredModuleItems(module)"
+                    class="home-banner__fallback"
+                  >
                     <small>{{ module.props.subtitle || 'NEW ARRIVAL' }}</small>
                     <strong>{{
                       module.props.title || '夏日好物限时满减'
@@ -1776,7 +1933,9 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
                       />
                       <template v-else>{{ getFallbackIcon(item) }}</template>
                     </span>
-                    <span>{{ getLabel(item) }}</span>
+                    <span :style="homeTextStyle(module, 'itemLabel')">
+                      {{ getLabel(item) }}
+                    </span>
                   </div>
                 </div>
 
@@ -1786,34 +1945,20 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
                   :style="entryCardBoxStyle(module)"
                 >
                   <span
+                    v-if="entryCardIconImage(module)"
                     class="home-entry-card__icon"
-                    :style="entryCardIconStyle(module)"
                   >
-                    <img
-                      v-if="
-                        module.props.icon_mode === 'image' &&
-                        entryCardIconImage(module)
-                      "
-                      :src="entryCardIconImage(module)"
-                    />
-                    <IconifyIcon
-                      v-else-if="isIconifyName(module.props.icon)"
-                      :icon="module.props.icon"
-                    />
-                    <template v-else>
-                      {{
-                        getFallbackIcon({
-                          icon: module.props.icon,
-                          title: module.props.title,
-                        })
-                      }}
-                    </template>
+                    <img :src="entryCardIconImage(module)" />
                   </span>
                   <div>
-                    <strong>{{ module.props.title || '入口卡片' }}</strong>
-                    <small>{{
-                      module.props.subtitle || module.props.path || '点击查看'
-                    }}</small>
+                    <strong :style="homeTextStyle(module, 'title')">
+                      {{ module.props.title || '入口卡片' }}
+                    </strong>
+                    <small :style="homeTextStyle(module, 'subtitle')">
+                      {{
+                        module.props.subtitle || module.props.path || '点击查看'
+                      }}
+                    </small>
                   </div>
                   <em v-if="module.props.show_arrow !== false">›</em>
                 </div>
@@ -1821,23 +1966,24 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
                 <div
                   v-else-if="module.type === 'imageCube'"
                   class="home-cube"
+                  :class="`home-cube--${cubeDisplayLimit(module)}`"
                   :style="moduleBoxStyle(module)"
                 >
                   <div
-                    v-for="(item, itemIndex) in (imageList(module).length > 0
-                      ? imageList(module)
-                      : module.props.titles || [
-                          '精选榜单',
-                          '本周值得买',
-                          '会员专享',
-                          '新品榜',
-                        ]
-                    ).slice(0, 4)"
+                    v-for="(item, itemIndex) in imageCubePreviewItems(
+                      module,
+                    ).slice(0, cubeDisplayLimit(module))"
                     :key="itemIndex"
                     class="home-cube__item"
                   >
-                    <img v-if="isImageLike(item)" :src="item" />
-                    <strong v-else>{{ item }}</strong>
+                    <img v-if="item.image" :src="item.image" />
+                    <strong
+                      v-if="item.title"
+                      class="home-cube__title"
+                      :style="cubeTitleStyle(module)"
+                    >
+                      {{ item.title }}
+                    </strong>
                   </div>
                 </div>
 
@@ -1847,8 +1993,20 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
                   :style="moduleBoxStyle(module)"
                 >
                   <div class="home-section-head">
-                    <strong>{{ module.props.title || '猜你喜欢' }}</strong>
-                    <span>{{ module.props.moreText || '查看全部' }}</span>
+                    <div class="home-section-head__main">
+                      <strong :style="homeTextStyle(module, 'title')">
+                        {{ module.props.title || '猜你喜欢' }}
+                      </strong>
+                      <small
+                        v-if="module.props.subtitle"
+                        :style="homeTextStyle(module, 'subtitle')"
+                      >
+                        {{ module.props.subtitle }}
+                      </small>
+                    </div>
+                    <span :style="homeTextStyle(module, 'more')">
+                      {{ module.props.moreText || '查看全部' }}
+                    </span>
                   </div>
                   <div
                     class="home-product-list"
@@ -1901,6 +2059,7 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
                   <span
                     v-if="titleMoreText(module)"
                     class="home-section-head__more"
+                    :style="titleMoreStyle(module)"
                   >
                     {{ titleMoreText(module) }}
                     <em>›</em>
@@ -3079,8 +3238,16 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
 
 .home-cube {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
   gap: 8px;
+}
+
+.home-cube--1 {
+  grid-template-columns: 1fr;
+}
+
+.home-cube--2,
+.home-cube--4 {
+  grid-template-columns: repeat(2, 1fr);
 }
 
 .home-entry-card {
@@ -3134,6 +3301,7 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
 }
 
 .home-cube__item {
+  position: relative;
   display: grid;
   min-height: 92px;
   padding: 12px;
@@ -3147,6 +3315,26 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
       transparent 36%
     ),
     var(--mb-preview-bg-surface);
+}
+
+.home-cube__title {
+  position: absolute;
+  bottom: 8px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  width: calc(100% - 16px);
+  height: 26%;
+  max-width: calc(100% - 16px);
+  max-height: calc(100% - 16px);
+  padding: 4px 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  left: 50%;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.78);
+  transform: translateX(-50%);
 }
 
 .client-phone-preview--compact .home-cube__item {

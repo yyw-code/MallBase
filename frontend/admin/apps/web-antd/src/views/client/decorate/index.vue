@@ -23,7 +23,7 @@ import {
   getClientDecorateSchemeInfoApi,
   getClientDecorateSchemeListApi,
   getClientThemeListApi,
-  getClientThemePolicyApi,
+  getClientThemeSettingApi,
   updateClientDecorateSchemeApi,
 } from '#/api/client';
 import { getGoodsCategoryTreeApi, getGoodsListApi } from '#/api/goods';
@@ -70,10 +70,10 @@ const DEFAULT_THEME_TOKENS = {
   colorTextTitle: '#191b23',
 };
 
-const DEFAULT_THEME_POLICY: ClientThemeApi.ThemePolicy = {
-  allow_user_select: 1,
-  default_mode: 'system',
-  default_theme_id: null,
+const DEFAULT_THEME_SETTING: ClientThemeApi.ThemeSetting = {
+  admin_theme_id: null,
+  admin_theme_mode: 'system',
+  user_select_enabled: 1,
 };
 
 const DEFAULT_HOME_PAGE_STYLE: PageStyle = {
@@ -636,8 +636,8 @@ const themeList = ref<ClientThemeApi.ThemeItem[]>([]);
 const previewCategoryTree = ref<GoodsCategoryApi.CategoryItem[]>([]);
 const previewGoods = ref<GoodsApi.GoodsItem | null>(null);
 const previewGoodsList = ref<GoodsApi.GoodsItem[]>([]);
-const themePolicy = ref<ClientThemeApi.ThemePolicy>({
-  ...DEFAULT_THEME_POLICY,
+const themeSetting = ref<ClientThemeApi.ThemeSetting>({
+  ...DEFAULT_THEME_SETTING,
 });
 const overviewSchemes = reactive<
   Record<ClientDecorateApi.SchemeType, ClientDecorateApi.SchemeItem[]>
@@ -810,16 +810,16 @@ const getThemeByType = (type: ClientThemeApi.ThemeType) =>
 const getDefaultCustomTheme = () =>
   themeList.value.find(
     (item) =>
-      item.id === themePolicy.value.default_theme_id &&
+      item.id === themeSetting.value.admin_theme_id &&
       item.status === 1 &&
       item.type === 'custom',
   );
 
 const resolveCurrentTheme = () => {
-  if (themePolicy.value.default_mode === 'custom') {
+  if (themeSetting.value.admin_theme_mode === 'custom') {
     return getDefaultCustomTheme() || getThemeByType('custom');
   }
-  if (themePolicy.value.default_mode === 'dark') {
+  if (themeSetting.value.admin_theme_mode === 'dark') {
     return getThemeByType('dark');
   }
   return getThemeByType('light');
@@ -931,7 +931,7 @@ const currentThemeName = computed(() => {
     light: '浅色主题',
     system: '跟随系统',
   };
-  return modeName[themePolicy.value.default_mode] || '默认主题';
+  return modeName[themeSetting.value.admin_theme_mode] || '默认主题';
 });
 
 const currentThemeSwatches = computed(() =>
@@ -1320,9 +1320,11 @@ const normalizeProfileDisplay = (value: unknown) =>
 const PROFILE_TEXT_STYLE_ROLES = [
   'action',
   'amount',
+  'iconText',
   'itemLabel',
   'meta',
   'more',
+  'placeholder',
   'primaryAction',
   'subtitle',
   'title',
@@ -1334,6 +1336,12 @@ const PROFILE_TEXT_STYLE_ROLES_BY_TYPE: Record<string, string[]> = {
   serviceMenu: ['itemLabel', 'title'],
   userInfo: ['meta', 'subtitle', 'title'],
   walletEntry: ['action', 'amount', 'meta', 'primaryAction', 'title'],
+  entryCard: ['subtitle', 'title'],
+  imageCube: ['itemLabel'],
+  navGrid: ['itemLabel'],
+  productGroup: ['more', 'subtitle', 'title'],
+  search: ['placeholder'],
+  title: ['more', 'subtitle', 'title'],
 };
 
 const getProfileTextStyleRoles = (type?: string) =>
@@ -1341,6 +1349,34 @@ const getProfileTextStyleRoles = (type?: string) =>
 
 const normalizeProfileTextAlign = (value: unknown) =>
   ['center', 'left', 'right'].includes(String(value)) ? String(value) : '';
+
+const normalizeProfileTextBackgroundMode = (value: unknown) =>
+  ['color', 'image'].includes(String(value)) ? String(value) : '';
+
+const normalizeProfileTextGradientDirection = (value: unknown) =>
+  ['diagonalLeft', 'diagonalRight', 'horizontal', 'vertical'].includes(
+    String(value),
+  )
+    ? String(value)
+    : '';
+
+const normalizeProfileTextBackgroundPosition = (value: unknown) =>
+  [
+    'bottom',
+    'bottomLeft',
+    'bottomRight',
+    'center',
+    'centerLeft',
+    'centerRight',
+    'top',
+    'topLeft',
+    'topRight',
+  ].includes(String(value))
+    ? String(value)
+    : '';
+
+const normalizeCubeLayout = (value: unknown) =>
+  ['four', 'one', 'two'].includes(String(value)) ? String(value) : 'four';
 
 const normalizeProfileTextStyles = (
   value: unknown,
@@ -1385,9 +1421,143 @@ const normalizeProfileTextStyles = (
         if (textAlign) {
           style.textAlign = textAlign;
         }
+        const backgroundMode = normalizeProfileTextBackgroundMode(
+          rawStyle.backgroundMode ?? rawStyle.background_mode,
+        );
+        if (backgroundMode) {
+          style.backgroundMode = backgroundMode;
+        }
+        const backgroundColorStart = String(
+          rawStyle.backgroundColorStart ??
+            rawStyle.background_color_start ??
+            '',
+        ).trim();
+        if (backgroundColorStart) {
+          style.backgroundColorStart = backgroundColorStart;
+        }
+        const backgroundColorEnd = String(
+          rawStyle.backgroundColorEnd ?? rawStyle.background_color_end ?? '',
+        ).trim();
+        if (backgroundColorEnd) {
+          style.backgroundColorEnd = backgroundColorEnd;
+        }
+        const backgroundGradientDirection =
+          normalizeProfileTextGradientDirection(
+            rawStyle.backgroundGradientDirection ??
+              rawStyle.background_gradient_direction,
+          );
+        if (backgroundGradientDirection) {
+          style.backgroundGradientDirection = backgroundGradientDirection;
+        }
+        const backgroundImage = normalizeEditorUploadImage(
+          rawStyle.backgroundImage ?? rawStyle.background_image ?? '',
+        );
+        if (backgroundImage) {
+          style.backgroundImage = backgroundImage;
+        }
+        const backgroundHeight = Number(
+          rawStyle.backgroundHeight ?? rawStyle.background_height,
+        );
+        if (Number.isFinite(backgroundHeight) && backgroundHeight > 0) {
+          style.backgroundHeight = clampNumber(backgroundHeight, 26, 10, 100);
+        }
+        const backgroundWidth = Number(
+          rawStyle.backgroundWidth ?? rawStyle.background_width,
+        );
+        if (Number.isFinite(backgroundWidth) && backgroundWidth > 0) {
+          style.backgroundWidth = clampNumber(backgroundWidth, 100, 20, 100);
+        }
+        const backgroundRadius = Number(
+          rawStyle.backgroundRadius ?? rawStyle.background_radius,
+        );
+        if (Number.isFinite(backgroundRadius) && backgroundRadius >= 0) {
+          style.backgroundRadius = clampNumber(backgroundRadius, 12, 0, 80);
+        }
+        const backgroundPosition = normalizeProfileTextBackgroundPosition(
+          rawStyle.backgroundPosition ?? rawStyle.background_position,
+        );
+        if (backgroundPosition) {
+          style.backgroundPosition = backgroundPosition;
+        }
         return [role, Object.keys(style).length > 0 ? style : undefined];
       })
       .filter(([, style]) => style !== undefined),
+  );
+};
+
+const buildTitleLegacyTextStyles = (config: Record<string, any>) => {
+  const titleAlign = normalizeProfileTextAlign(
+    config.title_align || config.titleAlign || config.text_align,
+  );
+  const legacyStyles: Record<string, Record<string, any>> = {};
+  const titleStyle: Record<string, any> = {};
+  if (typeof config.title_color === 'string' && config.title_color.trim()) {
+    titleStyle.color = config.title_color.trim();
+  } else if (
+    typeof config.titleColor === 'string' &&
+    config.titleColor.trim()
+  ) {
+    titleStyle.color = config.titleColor.trim();
+  }
+  titleStyle.fontSize = clampNumber(
+    config.title_font_size || config.titleFontSize || config.font_size,
+    32,
+    18,
+    72,
+  );
+  titleStyle.fontWeight =
+    config.title_bold === false || config.titleBold === false ? '500' : '800';
+  if (config.title_italic || config.titleItalic) {
+    titleStyle.fontStyle = 'italic';
+  }
+  if (titleAlign) {
+    titleStyle.textAlign = titleAlign;
+  }
+  legacyStyles.title = titleStyle;
+
+  const subtitleStyle: Record<string, any> = {};
+  if (typeof config.sub_color === 'string' && config.sub_color.trim()) {
+    subtitleStyle.color = config.sub_color.trim();
+  } else if (typeof config.subColor === 'string' && config.subColor.trim()) {
+    subtitleStyle.color = config.subColor.trim();
+  }
+  subtitleStyle.fontSize = clampNumber(
+    config.sub_font_size || config.subFontSize,
+    24,
+    16,
+    56,
+  );
+  if (config.sub_bold || config.subBold) {
+    subtitleStyle.fontWeight = '700';
+  }
+  if (config.sub_italic || config.subItalic) {
+    subtitleStyle.fontStyle = 'italic';
+  }
+  if (titleAlign) {
+    subtitleStyle.textAlign = titleAlign;
+  }
+  legacyStyles.subtitle = subtitleStyle;
+
+  return normalizeProfileTextStyles(legacyStyles, [
+    'more',
+    'subtitle',
+    'title',
+  ]);
+};
+
+const mergeMissingTextStyles = (
+  primary: Record<string, any>,
+  fallback: Record<string, any>,
+) => {
+  const roles = new Set([...Object.keys(fallback), ...Object.keys(primary)]);
+  return Object.fromEntries(
+    [...roles].map((role) => [
+      role,
+      {
+        ...fallback[role],
+        ...primary[role],
+      },
+    ]),
   );
 };
 
@@ -1830,10 +2000,21 @@ const normalizeEditorConfig = (
       styleDefaults.borderColor;
     normalizeShadowStyle(config);
   }
-  if (isProfileModule) {
-    const profileTextStyleRoles = getProfileTextStyleRoles(profileType);
+  if (isHomeModule || isProfileModule) {
+    const textStyleType = isProfileModule ? profileType : type;
+    const profileTextStyleRoles = getProfileTextStyleRoles(textStyleType);
+    const legacyTextStyles =
+      isHomeModule && type === 'title'
+        ? buildTitleLegacyTextStyles(rawConfig || config)
+        : {};
     const textStyles = normalizeProfileTextStyles(
-      rawConfig?.textStyles ?? rawConfig?.text_styles ?? config.textStyles,
+      mergeMissingTextStyles(
+        normalizeProfileTextStyles(
+          rawConfig?.textStyles ?? rawConfig?.text_styles ?? config.textStyles,
+          profileTextStyleRoles,
+        ),
+        legacyTextStyles,
+      ),
       profileTextStyleRoles,
     );
     if (Object.keys(textStyles).length > 0) {
@@ -1977,16 +2158,23 @@ const normalizeEditorConfig = (
       config.link_url ||
       config.url ||
       '';
-    config.icon = config.icon || 'lucide:mouse-pointer-click';
-    config.icon_mode = config.icon_mode || config.iconMode || 'icon';
-    config.icon_color = config.icon_color || config.iconColor || '';
-    config.icon_background =
-      config.icon_background || config.iconBackground || '';
-    config.icon_image = config.icon_image || config.iconImage || '';
+    config.icon_image = normalizeEditorUploadImage(
+      config.icon_image || config.iconImage || '',
+    );
+    delete config.icon;
+    delete config.iconMode;
+    delete config.icon_mode;
+    delete config.iconColor;
+    delete config.icon_color;
+    delete config.iconBackground;
+    delete config.icon_background;
     config.background_image =
       config.background_image || config.backgroundImage || '';
     config.show_arrow =
       config.show_arrow === undefined ? true : Boolean(config.show_arrow);
+  }
+  if (type === 'imageCube') {
+    config.layout = normalizeCubeLayout(config.layout);
   }
   if (type === 'richText') {
     config.content = config.content || config.html || '';
@@ -2127,11 +2315,7 @@ const defaultHomeConfig = (
         '61',
         'decorate-entry-category.png',
       ),
-      icon: 'lucide:folder-tree',
-      icon_background: '',
-      icon_color: '',
       icon_image: createDemoAssetFile('61', 'decorate-entry-category.png'),
-      icon_mode: 'image',
       padding: 24,
       path: '/pages/category/index',
       radius: 24,
@@ -2146,6 +2330,22 @@ const defaultHomeConfig = (
       list: clone(DEFAULT_CUBE_ITEMS),
       layout: 'four',
       radius: 20,
+      textStyles: {
+        itemLabel: {
+          backgroundColorEnd: '#ffffff',
+          backgroundColorStart: '#ffffff',
+          backgroundGradientDirection: 'horizontal',
+          backgroundHeight: 26,
+          backgroundMode: 'color',
+          backgroundPosition: 'bottom',
+          backgroundRadius: 12,
+          backgroundWidth: 100,
+          color: '#191b23',
+          fontSize: 28,
+          fontWeight: '700',
+          textAlign: 'center',
+        },
+      },
       titles: ['精选榜单', '本周值得买', '会员专享', '新品榜'],
     }),
     navGrid: withStyle({
@@ -2363,14 +2563,14 @@ const warnReadonlyScheme = () => {
 
 const loadThemes = async () => {
   try {
-    const [themes, policy] = await Promise.all([
+    const [themes, setting] = await Promise.all([
       getClientThemeListApi({ limit: 100, page: 1, status: 1 }),
-      getClientThemePolicyApi(),
+      getClientThemeSettingApi(),
     ]);
     themeList.value = themes.list || [];
-    themePolicy.value = {
-      ...DEFAULT_THEME_POLICY,
-      ...policy,
+    themeSetting.value = {
+      ...DEFAULT_THEME_SETTING,
+      ...setting,
     };
   } catch (error) {
     console.error('加载客户端主题失败:', error);
@@ -2608,15 +2808,40 @@ const normalizeSchemaForClient = (
             true,
           );
         }
+        if (activeType.value === 'home' && moduleType === 'entryCard') {
+          props.icon_image = normalizeEditorUploadImage(
+            props.icon_image || props.iconImage || '',
+          );
+          delete props.icon;
+          delete props.iconMode;
+          delete props.icon_mode;
+          delete props.iconColor;
+          delete props.icon_color;
+          delete props.iconBackground;
+          delete props.icon_background;
+        }
+        if (activeType.value === 'home' && moduleType === 'imageCube') {
+          props.layout = normalizeCubeLayout(props.layout);
+        }
         if (activeType.value === 'home' || activeType.value === 'profile') {
           syncProfilePaddingCompat(props);
           syncProfileMarginCompat(props);
           normalizeShadowStyle(props);
         }
-        if (activeType.value === 'profile') {
+        if (activeType.value === 'home' || activeType.value === 'profile') {
           const profileTextStyleRoles = getProfileTextStyleRoles(moduleType);
+          const legacyTextStyles =
+            activeType.value === 'home' && moduleType === 'title'
+              ? buildTitleLegacyTextStyles(props)
+              : {};
           const textStyles = normalizeProfileTextStyles(
-            props.textStyles ?? props.text_styles,
+            mergeMissingTextStyles(
+              normalizeProfileTextStyles(
+                props.textStyles ?? props.text_styles,
+                profileTextStyleRoles,
+              ),
+              legacyTextStyles,
+            ),
             profileTextStyleRoles,
           );
           if (Object.keys(textStyles).length > 0) {
@@ -2625,9 +2850,9 @@ const normalizeSchemaForClient = (
             delete props.textStyles;
           }
           delete props.text_styles;
-          delete props.textVisibility;
-          delete props.text_visibility;
         }
+        delete props.textVisibility;
+        delete props.text_visibility;
 
         return {
           enabled: item.enabled !== false,
@@ -3124,7 +3349,6 @@ const resetModuleContent = (module: ModuleItem) => {
     }
   }
   if (
-    activeType.value === 'profile' &&
     currentConfig.textStyles &&
     typeof currentConfig.textStyles === 'object'
   ) {
