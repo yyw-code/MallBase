@@ -202,14 +202,14 @@ const DEFAULT_PROFILE_SERVICE_IMAGES = DEFAULT_PROFILE_SERVICE_ITEMS.map(
 
 const DEFAULT_PROFILE_STYLE = {
   background: '',
-  backgroundColorEnd: '#ffffff',
-  backgroundColorStart: '#ffffff',
+  backgroundColorEnd: '',
+  backgroundColorStart: '',
   backgroundGradientDirection: 'horizontal',
   backgroundMode: 'color',
   background_image: '',
-  borderColor: '#e5e5e5',
+  borderColor: '',
   borderEnabled: true,
-  borderStyle: 'dashed',
+  borderStyle: 'solid',
   borderWidth: 1,
   marginBottom: 0,
   marginLeft: 0,
@@ -821,6 +821,19 @@ function isImageLike(value: unknown) {
   );
 }
 
+function resolvePreviewImageValue(value: unknown) {
+  if (!value || typeof value !== 'object') return value;
+  const source = value as Record<string, any>;
+  return (
+    source.full_url ||
+    source.fullUrl ||
+    source.preview_url ||
+    source.previewUrl ||
+    source.url ||
+    ''
+  );
+}
+
 function getEntryIcon(item: any) {
   return item?.icon || item?.selected_icon || '';
 }
@@ -976,6 +989,58 @@ function styleBoolean(value: unknown, fallback = false) {
   return Boolean(value);
 }
 
+function normalizeHexColor(value: unknown) {
+  const color = styleColor(value).toLowerCase();
+  const shortHex = color.match(/^#([\da-f])([\da-f])([\da-f])$/i);
+  if (shortHex) {
+    return `#${shortHex[1]}${shortHex[1]}${shortHex[2]}${shortHex[2]}${shortHex[3]}${shortHex[3]}`;
+  }
+  return color;
+}
+
+function isDefaultProfileSurfaceColor(value: unknown) {
+  return ['#f3f3fe', '#faf8ff', '#ffffff'].includes(normalizeHexColor(value));
+}
+
+function isDefaultProfileBorderColor(value: unknown) {
+  return ['#e0e4e8', '#e5e5e5', '#f0f2f5'].includes(normalizeHexColor(value));
+}
+
+function shouldUseThemeModuleSurface(
+  props: Record<string, any>,
+  mode: string,
+  backgroundImage: string,
+) {
+  if (mode !== 'color' || backgroundImage) return false;
+  const colors = [
+    props.background,
+    props.backgroundColorStart || props.background_color_start,
+    props.backgroundColorEnd || props.background_color_end,
+    props.bottomBackground || props.bottom_background,
+  ]
+    .map((item) => styleColor(item))
+    .filter(Boolean);
+  return (
+    colors.length > 0 &&
+    colors.every((item) => isDefaultProfileSurfaceColor(item))
+  );
+}
+
+function shouldUseThemeModuleBorder(props: Record<string, any>) {
+  const borderEnabled = props.borderEnabled ?? props.border_enabled;
+  if (!styleBoolean(borderEnabled, true)) return false;
+  const borderWidth = Number(props.borderWidth ?? props.border_width ?? 1);
+  const borderStyle = String(
+    props.borderStyle || props.border_style || 'solid',
+  );
+  const borderColor = props.borderColor || props.border_color || '';
+  return (
+    borderWidth === 1 &&
+    borderStyle === 'dashed' &&
+    isDefaultProfileBorderColor(borderColor)
+  );
+}
+
 function normalizePreviewFontWeight(value: unknown) {
   const weight = String(value || '');
   return ['400', '500', '600', '700', '800', '900'].includes(weight)
@@ -1117,6 +1182,11 @@ function moduleBackgroundStyle(module: ModuleItem) {
   const backgroundImage = getImage(
     props.background_image || props.backgroundImage || '',
   );
+  const useThemeSurface = shouldUseThemeModuleSurface(
+    props,
+    mode,
+    backgroundImage,
+  );
 
   if (mode === 'image' && backgroundImage) {
     style.backgroundImage = `url("${backgroundImage}")`;
@@ -1129,15 +1199,17 @@ function moduleBackgroundStyle(module: ModuleItem) {
     return style;
   }
 
-  const background = gradientBackground(
-    props.backgroundColorStart ||
-      props.background_color_start ||
-      props.background,
-    props.backgroundColorEnd || props.background_color_end,
-    props.backgroundGradientDirection || props.background_gradient_direction,
-    props.bottomBackground || props.bottom_background,
-  );
-  if (background) style.background = background;
+  if (!useThemeSurface) {
+    const background = gradientBackground(
+      props.backgroundColorStart ||
+        props.background_color_start ||
+        props.background,
+      props.backgroundColorEnd || props.background_color_end,
+      props.backgroundGradientDirection || props.background_gradient_direction,
+      props.bottomBackground || props.bottom_background,
+    );
+    if (background) style.background = background;
+  }
   return style;
 }
 
@@ -1167,10 +1239,22 @@ function pageBackgroundStyle(pageStyle: Record<string, any>) {
 
 const homePageStyle = computed(() => {
   const pageStyle = props.pageStyle || {};
-  const paddingY = pageStyle.paddingY ?? pageStyle.padding_y ?? 0;
+  const paddingY = pageStyle.paddingY ?? pageStyle.padding_y;
   const paddingX = pageStyle.paddingX ?? pageStyle.padding_x ?? 28;
+  const paddingTop =
+    pageStyle.paddingTop ?? pageStyle.padding_top ?? paddingY ?? 0;
+  const paddingRight =
+    pageStyle.paddingRight ?? pageStyle.padding_right ?? paddingX;
+  const paddingBottom =
+    pageStyle.paddingBottom ?? pageStyle.padding_bottom ?? paddingY ?? 0;
+  const paddingLeft =
+    pageStyle.paddingLeft ?? pageStyle.padding_left ?? paddingX;
   return {
-    padding: `${toPreviewPx(paddingY)}px ${toPreviewPx(paddingX)}px`,
+    ...pageBackgroundStyle(pageStyle),
+    paddingBottom: `${toPreviewPx(paddingBottom)}px`,
+    paddingLeft: `${toPreviewPx(paddingLeft)}px`,
+    paddingRight: `${toPreviewPx(paddingRight)}px`,
+    paddingTop: `${toPreviewPx(paddingTop)}px`,
   };
 });
 
@@ -1255,7 +1339,10 @@ function moduleBoxStyle(
   const borderEnabled = props.borderEnabled ?? props.border_enabled;
   if (borderEnabled === false) {
     style.border = '0';
-  } else if (borderEnabled !== undefined) {
+  } else if (
+    borderEnabled !== undefined &&
+    !shouldUseThemeModuleBorder(props)
+  ) {
     const borderWidth = toPreviewPx(props.borderWidth ?? props.border_width, 1);
     const borderStyle = props.borderStyle || props.border_style || 'solid';
     const borderColor =
@@ -1432,9 +1519,10 @@ function moduleIsHidden(module: ModuleItem) {
 
 function getTabbarIcon(item: ModuleItem) {
   const active = item.path === props.currentPath;
-  return active
+  const icon = active
     ? item.selected_icon || item.icon || ''
     : item.icon || item.selected_icon || '';
+  return resolvePreviewImageValue(icon);
 }
 
 function getTabbarIconType(item: ModuleItem) {
@@ -2224,8 +2312,17 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
                 kind === 'tabbar' && interactive && selectedModuleId === item.id
               "
               class="preview-selected-badge preview-selected-badge--tabbar"
+              :class="[
+                {
+                  'preview-selected-badge--edge-start':
+                    Number(item.__previewIndex) === 0,
+                  'preview-selected-badge--edge-end':
+                    Number(item.__previewIndex) ===
+                    normalizedTabbarItems.length - 1,
+                },
+              ]"
             >
-              {{ item.text }}
+              <span class="preview-selected-label">{{ item.text }}</span>
               <span class="preview-selected-actions">
                 <button
                   type="button"
@@ -2605,10 +2702,44 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
 }
 
 .preview-selected-badge--tabbar {
-  top: -40px;
+  top: -32px;
   left: 50%;
+  gap: 4px;
+  width: max-content;
+  max-width: none;
+  min-height: 26px;
+  padding: 2px 3px 2px 8px;
+  color: var(--mb-preview-primary);
   white-space: nowrap;
+  border: 1px solid
+    color-mix(in srgb, var(--mb-preview-primary) 28%, transparent);
+  background: color-mix(
+    in srgb,
+    var(--mb-preview-bg) 92%,
+    var(--mb-preview-primary) 8%
+  );
+  box-shadow: 0 8px 18px rgb(15 23 42 / 14%);
   transform: translateX(-50%);
+}
+
+.preview-selected-badge--tabbar.preview-selected-badge--edge-start {
+  left: 0;
+  transform: translateX(0);
+}
+
+.preview-selected-badge--tabbar.preview-selected-badge--edge-end {
+  right: 0;
+  left: auto;
+  transform: translateX(0);
+}
+
+.preview-selected-label {
+  display: inline-block;
+  white-space: nowrap;
+}
+
+.preview-selected-badge--tabbar .preview-selected-label {
+  line-height: 20px;
 }
 
 .preview-selected-title {
@@ -2664,45 +2795,11 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
   gap: 3px;
 }
 
-.preview-selected-actions button {
-  display: grid;
-  width: 20px;
-  height: 20px;
-  padding: 0;
-  color: white;
-  cursor: pointer;
-  border: 0;
-  border-radius: 999px;
-  background: rgb(255 255 255 / 18%);
-  place-items: center;
-  font-size: 12px;
-  line-height: 1;
-}
-
-.preview-selected-actions button:hover {
-  background: rgb(255 255 255 / 28%);
-}
-
-.preview-selected-actions button.danger {
-  color: #fff;
-  background: #ff4d4f;
-}
-
-.preview-selected-actions button.drag {
-  letter-spacing: -2px;
-}
-
-.preview-external-actions {
-  position: absolute;
-  top: 50%;
-  left: calc(100% + 10px);
-  display: inline-flex;
-  flex-direction: column;
+.preview-selected-badge--tabbar .preview-selected-actions {
   gap: 4px;
-  pointer-events: auto;
-  transform: translateY(-50%);
 }
 
+.preview-selected-actions button,
 .preview-external-actions button {
   display: grid;
   width: 24px;
@@ -2719,16 +2816,31 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
   line-height: 1;
 }
 
+.preview-selected-actions button:hover,
 .preview-external-actions button:hover {
   background: var(--mb-preview-primary-light);
 }
 
+.preview-selected-actions button.danger,
 .preview-external-actions button.danger {
+  color: #fff;
   background: #ff4d4f;
 }
 
+.preview-selected-actions button.drag,
 .preview-external-actions button.drag {
   letter-spacing: -2px;
+}
+
+.preview-external-actions {
+  position: absolute;
+  top: 50%;
+  left: calc(100% + 10px);
+  display: inline-flex;
+  flex-direction: column;
+  gap: 4px;
+  pointer-events: auto;
+  transform: translateY(-50%);
 }
 
 .preview-drop-placeholder {
@@ -3841,9 +3953,11 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
 
 .client-phone-preview__tabbar-item.selected {
   color: var(--mb-preview-primary);
-  outline: 2px solid var(--mb-preview-primary);
-  outline-offset: 2px;
-  border-radius: 10px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--mb-preview-primary) 8%, transparent);
+  box-shadow:
+    inset 0 0 0 2px var(--mb-preview-primary),
+    0 4px 10px color-mix(in srgb, var(--mb-preview-primary) 16%, transparent);
 }
 
 .tabbar-icon {

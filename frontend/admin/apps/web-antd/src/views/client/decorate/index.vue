@@ -49,6 +49,8 @@ type PageStyle = {
   paddingY?: number;
 };
 type UploadFileInfo = {
+  full_url?: string;
+  fullUrl?: string;
   name?: string;
   url?: number | string;
 };
@@ -75,6 +77,16 @@ const DEFAULT_THEME_POLICY: ClientThemeApi.ThemePolicy = {
 };
 
 const DEFAULT_HOME_PAGE_STYLE: PageStyle = {
+  backgroundColorEnd: '',
+  backgroundColorStart: '',
+  backgroundGradientDirection: 'horizontal',
+  backgroundMode: 'color',
+  background_image: '',
+  padding: 14,
+  paddingBottom: 0,
+  paddingLeft: 28,
+  paddingRight: 28,
+  paddingTop: 0,
   paddingX: 28,
   paddingY: 0,
 };
@@ -115,7 +127,15 @@ const PROFILE_STYLE_DEFAULTS = {
   shadowSpread: 0,
 };
 
-const PROFILE_MODULE_STYLE_FIELDS = [
+const HOME_STYLE_DEFAULTS = {
+  ...PROFILE_STYLE_DEFAULTS,
+  backgroundColorEnd: '',
+  backgroundColorStart: '',
+  borderEnabled: false,
+  borderStyle: 'solid',
+};
+
+const MODULE_STYLE_FIELDS = [
   'background',
   'backgroundColorEnd',
   'backgroundColorStart',
@@ -663,7 +683,7 @@ const schemeForm = reactive<{
   schema: [],
   sort: 0,
   status: 1,
-  tabbar_mode: 'native',
+  tabbar_mode: 'custom',
 });
 
 const getSchemeSchemaList = (
@@ -692,40 +712,44 @@ const normalizePageStyle = (value: any, type: ClientDecorateApi.SchemeType) => {
     value?.paddingX ?? value?.padding_x,
     defaults.paddingX,
   );
-  if (type === 'profile') {
+  if (type === 'home' || type === 'profile') {
+    const paddingY = normalizePageSpacingNumber(
+      value?.paddingY ?? value?.padding_y,
+      defaults.paddingY,
+    );
     const paddingTop = normalizePageSpacingNumber(
       value?.paddingTop ?? value?.padding_top ?? value?.paddingY,
-      DEFAULT_PROFILE_PAGE_STYLE.paddingTop,
+      defaults.paddingTop ?? paddingY,
     );
     const paddingRight = normalizePageSpacingNumber(
       value?.paddingRight ?? value?.padding_right ?? value?.paddingX,
-      DEFAULT_PROFILE_PAGE_STYLE.paddingRight,
+      defaults.paddingRight ?? paddingX,
     );
     const paddingBottom = normalizePageSpacingNumber(
       value?.paddingBottom ?? value?.padding_bottom ?? value?.paddingY,
-      DEFAULT_PROFILE_PAGE_STYLE.paddingBottom,
+      defaults.paddingBottom ?? paddingY,
     );
     const paddingLeft = normalizePageSpacingNumber(
       value?.paddingLeft ?? value?.padding_left ?? value?.paddingX,
-      DEFAULT_PROFILE_PAGE_STYLE.paddingLeft,
+      defaults.paddingLeft ?? paddingX,
     );
     return {
       backgroundColorEnd:
         value?.backgroundColorEnd ??
         value?.background_color_end ??
-        DEFAULT_PROFILE_PAGE_STYLE.backgroundColorEnd,
+        defaults.backgroundColorEnd,
       backgroundColorStart:
         value?.backgroundColorStart ??
         value?.background_color_start ??
-        DEFAULT_PROFILE_PAGE_STYLE.backgroundColorStart,
+        defaults.backgroundColorStart,
       backgroundGradientDirection:
         value?.backgroundGradientDirection ??
         value?.background_gradient_direction ??
-        DEFAULT_PROFILE_PAGE_STYLE.backgroundGradientDirection,
+        defaults.backgroundGradientDirection,
       backgroundMode:
         value?.backgroundMode ??
         value?.background_mode ??
-        DEFAULT_PROFILE_PAGE_STYLE.backgroundMode,
+        defaults.backgroundMode,
       background_image: normalizeEditorUploadImage(
         value?.background_image && typeof value.background_image !== 'object'
           ? {
@@ -759,13 +783,7 @@ const normalizePageStyle = (value: any, type: ClientDecorateApi.SchemeType) => {
           : Math.round((paddingTop + paddingBottom) / 2),
     };
   }
-  return {
-    paddingX,
-    paddingY: normalizePageSpacingNumber(
-      value?.paddingY ?? value?.padding_y,
-      DEFAULT_HOME_PAGE_STYLE.paddingY,
-    ),
-  };
+  return { ...DEFAULT_HOME_PAGE_STYLE };
 };
 
 const getSchemePageStyle = (
@@ -781,7 +799,9 @@ const getActiveSchemeByType = (type: ClientDecorateApi.SchemeType) =>
 const getOverviewModules = (type: ClientDecorateApi.SchemeType) =>
   getSchemeSchemaList(getActiveSchemeByType(type), type).map(
     (item: ModuleItem, index: number) =>
-      type === 'tabbar' ? item : normalizeEditorModule(item, index, type),
+      type === 'tabbar'
+        ? normalizeTabbarEditorItem(item, index)
+        : normalizeEditorModule(item, index, type),
   );
 
 const getThemeByType = (type: ClientThemeApi.ThemeType) =>
@@ -985,6 +1005,186 @@ const selectedModuleId = computed(() => selectedModule.value?.id || null);
 
 const createId = (prefix: string) =>
   `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+const TABBAR_STATIC_IMAGE_URLS = import.meta.glob(
+  '../../../../../../../uniapp/static/images/tabbar/*.png',
+  {
+    eager: true,
+    import: 'default',
+    query: '?url',
+  },
+) as Record<string, string>;
+
+const TABBAR_DEFAULT_IMAGE_KEYS = [
+  'home',
+  'category',
+  'cart',
+  'order',
+  'profile',
+];
+
+const getTabbarStaticImagePath = (key: string, active = false) =>
+  `static/images/tabbar/${key}${active ? '-active' : ''}.png`;
+
+const getDefaultTabbarImageKey = (item: ModuleItem = {}, index = 0) => {
+  const text = String(item.text || item.label || item.title || '');
+  const path = String(item.path || item.pagePath || item.url || '');
+  if (path.includes('/pages/index/') || text.includes('首页')) return 'home';
+  if (path.includes('/pages/category/') || text.includes('分类'))
+    return 'category';
+  if (path.includes('/pages/cart/') || text.includes('购物车')) return 'cart';
+  if (path.includes('/pages/order/') || text.includes('订单')) return 'order';
+  if (path.includes('/pages/profile/') || text.includes('我的'))
+    return 'profile';
+  return TABBAR_DEFAULT_IMAGE_KEYS[index % TABBAR_DEFAULT_IMAGE_KEYS.length]!;
+};
+
+const getDefaultTabbarImagePath = (
+  item: ModuleItem = {},
+  index = 0,
+  active = false,
+) => getTabbarStaticImagePath(getDefaultTabbarImageKey(item, index), active);
+
+const resolveTabbarStaticImageFullUrl = (value: any) => {
+  if (!value || typeof value !== 'string') return '';
+  const normalized = value.replace(/^\/+/, '');
+  if (!normalized.startsWith('static/images/tabbar/')) return '';
+  const filename = normalized.split('/').pop();
+  if (!filename) return '';
+  const matched = Object.entries(TABBAR_STATIC_IMAGE_URLS).find(([path]) =>
+    path.endsWith(`/${filename}`),
+  );
+  return matched?.[1] || '';
+};
+
+const resolveTabbarIconValue = (item: ModuleItem, active = false) =>
+  active
+    ? (item.selected_icon ??
+      item.selectedIconPath ??
+      item.activeIcon ??
+      item.active_icon ??
+      item.icon ??
+      item.iconPath ??
+      '')
+    : (item.icon ?? item.iconPath ?? item.icon_path ?? '');
+
+const isTabbarImageIcon = (value: any) => {
+  const raw =
+    value && typeof value === 'object'
+      ? value.full_url ||
+        value.fullUrl ||
+        value.url ||
+        value.response?.url ||
+        ''
+      : value;
+  if (!raw || typeof raw !== 'string') return false;
+  return (
+    /^(?:https?:)?\/\//.test(raw) ||
+    raw.startsWith('/') ||
+    raw.startsWith('static/') ||
+    raw.startsWith('upload/') ||
+    /\.(?:avif|gif|jpe?g|png|svg|webp)(?:[?#].*)?$/i.test(raw)
+  );
+};
+
+const normalizeTabbarIconValueForEditor = (
+  value: any,
+  item: ModuleItem = {},
+  index = 0,
+  active = false,
+) => {
+  if (!value || !isTabbarImageIcon(value)) {
+    value = getDefaultTabbarImagePath(item, index, active);
+  }
+
+  if (typeof value === 'object') {
+    const url =
+      value.url ||
+      value.path ||
+      value.src ||
+      value.asset_id ||
+      value.response?.url ||
+      '';
+    if (!url) return '';
+    const fullUrl =
+      value.full_url ||
+      value.fullUrl ||
+      value.response?.full_url ||
+      value.response?.fullUrl ||
+      resolveTabbarStaticImageFullUrl(String(url));
+
+    return {
+      ...value,
+      full_url: fullUrl,
+      name: value.name || value.original_name || extractUploadName(String(url)),
+      url: String(url),
+    };
+  }
+
+  const url = String(value);
+  return {
+    full_url: resolveTabbarStaticImageFullUrl(url),
+    name: extractUploadName(url),
+    url,
+  };
+};
+
+const normalizeTabbarEditorItem = (
+  item: ModuleItem,
+  index: number,
+): ModuleItem => {
+  const rawIcon = resolveTabbarIconValue(item);
+  const rawSelectedIcon = resolveTabbarIconValue(item, true) || rawIcon;
+  const icon = normalizeTabbarIconValueForEditor(rawIcon, item, index);
+  const selectedIcon = normalizeTabbarIconValueForEditor(
+    rawSelectedIcon,
+    item,
+    index,
+    true,
+  );
+
+  return {
+    ...item,
+    activeIcon: selectedIcon,
+    icon,
+    iconPath: icon,
+    icon_mode: 'upload',
+    id: item.id || item.key || `tabbar_${index}`,
+    path: item.path || item.pagePath || item.url || '',
+    selected_icon: selectedIcon,
+    selected_icon_mode: 'upload',
+    selectedIconPath: selectedIcon,
+    text: item.text || item.label || item.title || '导航',
+    type: item.type || 'tabbarItem',
+  };
+};
+
+const normalizeTabbarEditorItems = (items: ModuleItem[]) =>
+  (Array.isArray(items) ? items : [])
+    .slice(0, 5)
+    .map((item, index) => normalizeTabbarEditorItem(item, index));
+
+const normalizeTabbarSaveItem = (item: ModuleItem, index: number) => {
+  const normalized = normalizeTabbarEditorItem(item, index);
+  const icon = normalizeUploadValue(normalized.icon);
+  const selectedIcon =
+    normalizeUploadValue(normalized.selected_icon) ||
+    normalizeUploadValue(icon);
+
+  return {
+    activeIcon: selectedIcon,
+    enabled: normalized.enabled !== false,
+    icon,
+    iconPath: icon,
+    icon_mode: normalized.icon_mode,
+    id: normalized.id,
+    path: normalized.path,
+    selected_icon: selectedIcon,
+    selected_icon_mode: normalized.selected_icon_mode,
+    selectedIconPath: selectedIcon,
+    text: normalized.text,
+  };
+};
 
 const cloneSerializableValue = (
   value: any,
@@ -1361,6 +1561,21 @@ const getProfileStyleDefaults = (type: string): Record<string, any> => {
   );
 };
 
+const getHomeStyleDefaults = (): Record<string, any> =>
+  clone({
+    ...HOME_STYLE_DEFAULTS,
+    background: '',
+    marginBottom: 0,
+    marginLeft: 0,
+    marginRight: 0,
+    marginTop: 0,
+    padding: 0,
+    paddingX: 0,
+    paddingY: 0,
+    radius: 0,
+    widthPercent: 100,
+  });
+
 const normalizeUploadValue = (value: any): any => {
   if (Array.isArray(value)) {
     return value.map((item) => normalizeUploadValue(item));
@@ -1396,7 +1611,7 @@ const selectModuleFromPreview = (module: ModuleItem) => {
 
 const getTabbarPreviewItems = () =>
   activeType.value === 'tabbar' && schemeForm.schema.length > 0
-    ? schemeForm.schema
+    ? normalizeTabbarEditorItems(schemeForm.schema)
     : DEFAULT_TABBAR_PREVIEW_ITEMS;
 
 const normalizeBannerImageValue = (value: any, index: number) => {
@@ -1429,6 +1644,7 @@ const normalizeBannerImageValue = (value: any, index: number) => {
 const normalizeEditorConfig = (
   type: string,
   rawConfig: Record<string, any>,
+  schemeType: ClientDecorateApi.SchemeType = activeType.value,
 ) => {
   const profileTypes = new Set([
     'customMenu',
@@ -1437,12 +1653,22 @@ const normalizeEditorConfig = (
     'userInfo',
     'walletEntry',
   ]);
-  const config = profileTypes.has(normalizeProfileModuleType(type))
-    ? {
-        ...getProfileStyleDefaults(type),
-        ...clone(rawConfig || {}),
-      }
-    : clone(rawConfig || {});
+  const profileType = normalizeProfileModuleType(type);
+  const isProfileModule =
+    schemeType === 'profile' && profileTypes.has(profileType);
+  const isHomeModule = schemeType === 'home';
+  let config = clone(rawConfig || {});
+  if (isProfileModule) {
+    config = {
+      ...getProfileStyleDefaults(type),
+      ...config,
+    };
+  } else if (isHomeModule) {
+    config = {
+      ...getHomeStyleDefaults(),
+      ...config,
+    };
+  }
   config.widthPercent = Number(
     rawConfig?.widthPercent ??
       rawConfig?.width_percent ??
@@ -1519,8 +1745,10 @@ const normalizeEditorConfig = (
     typeof rawConfig?.background === 'string' && rawConfig.background.trim()
       ? rawConfig.background
       : undefined;
-  const profileType = normalizeProfileModuleType(type);
-  if (profileTypes.has(profileType)) {
+  if (isHomeModule || isProfileModule) {
+    const styleDefaults = isProfileModule
+      ? PROFILE_STYLE_DEFAULTS
+      : HOME_STYLE_DEFAULTS;
     config.backgroundMode =
       rawConfig?.backgroundMode ??
       rawConfig?.background_mode ??
@@ -1531,19 +1759,19 @@ const normalizeEditorConfig = (
       rawConfig?.background_color_start ??
       rawBackground ??
       config.backgroundColorStart ??
-      PROFILE_STYLE_DEFAULTS.backgroundColorStart;
+      styleDefaults.backgroundColorStart;
     config.backgroundColorEnd =
       rawConfig?.backgroundColorEnd ??
       rawConfig?.background_color_end ??
       rawBackground ??
       config.backgroundColorEnd ??
       config.backgroundColorStart ??
-      PROFILE_STYLE_DEFAULTS.backgroundColorEnd;
+      styleDefaults.backgroundColorEnd;
     config.backgroundGradientDirection =
       rawConfig?.backgroundGradientDirection ??
       rawConfig?.background_gradient_direction ??
       config.backgroundGradientDirection ??
-      PROFILE_STYLE_DEFAULTS.backgroundGradientDirection;
+      styleDefaults.backgroundGradientDirection;
     config.background_image = normalizeEditorUploadImage(
       rawConfig?.background_image &&
         typeof rawConfig.background_image !== 'object'
@@ -1570,37 +1798,39 @@ const normalizeEditorConfig = (
       rawConfig?.marginLeft ??
         rawConfig?.margin_left ??
         config.marginLeft ??
-        PROFILE_STYLE_DEFAULTS.marginLeft,
+        styleDefaults.marginLeft,
     );
     config.marginRight = Number(
       rawConfig?.marginRight ??
         rawConfig?.margin_right ??
         config.marginRight ??
-        PROFILE_STYLE_DEFAULTS.marginRight,
+        styleDefaults.marginRight,
     );
     config.borderEnabled = normalizeBooleanValue(
       rawConfig?.borderEnabled ??
         rawConfig?.border_enabled ??
         config.borderEnabled,
-      PROFILE_STYLE_DEFAULTS.borderEnabled,
+      styleDefaults.borderEnabled,
     );
     config.borderStyle =
       rawConfig?.borderStyle ??
       rawConfig?.border_style ??
       config.borderStyle ??
-      PROFILE_STYLE_DEFAULTS.borderStyle;
+      styleDefaults.borderStyle;
     config.borderWidth = Number(
       rawConfig?.borderWidth ??
         rawConfig?.border_width ??
         config.borderWidth ??
-        PROFILE_STYLE_DEFAULTS.borderWidth,
+        styleDefaults.borderWidth,
     );
     config.borderColor =
       rawConfig?.borderColor ??
       rawConfig?.border_color ??
       config.borderColor ??
-      PROFILE_STYLE_DEFAULTS.borderColor;
+      styleDefaults.borderColor;
     normalizeShadowStyle(config);
+  }
+  if (isProfileModule) {
     const profileTextStyleRoles = getProfileTextStyleRoles(profileType);
     const textStyles = normalizeProfileTextStyles(
       rawConfig?.textStyles ?? rawConfig?.text_styles ?? config.textStyles,
@@ -1832,7 +2062,7 @@ const normalizeEditorConfig = (
       true,
     );
   }
-  if (profileTypes.has(type)) {
+  if (isHomeModule || isProfileModule) {
     syncProfilePaddingCompat(config);
     syncProfileMarginCompat(config);
   }
@@ -1847,11 +2077,15 @@ const normalizeEditorModule = (
   const rawType = String(item.type || item.component || '');
   const type = normalizeModuleTypeByScheme(rawType, schemeType);
   const rawTitle = item.title || item.label || '';
-  const config = normalizeEditorConfig(type, {
-    ...(item.data && typeof item.data === 'object' ? item.data : {}),
-    ...(item.props && typeof item.props === 'object' ? item.props : {}),
-    ...(item.config && typeof item.config === 'object' ? item.config : {}),
-  });
+  const config = normalizeEditorConfig(
+    type,
+    {
+      ...(item.data && typeof item.data === 'object' ? item.data : {}),
+      ...(item.props && typeof item.props === 'object' ? item.props : {}),
+      ...(item.config && typeof item.config === 'object' ? item.config : {}),
+    },
+    schemeType,
+  );
   return {
     ...item,
     config,
@@ -1870,12 +2104,7 @@ const defaultHomeConfig = (
   type: ClientDecorateApi.ComponentType,
 ): Record<string, any> => {
   const withStyle = (config: Record<string, any>) => ({
-    background: '',
-    marginBottom: 0,
-    marginTop: 0,
-    padding: 0,
-    radius: 0,
-    widthPercent: 100,
+    ...getHomeStyleDefaults(),
     ...config,
   });
   const defaults: Partial<
@@ -2083,29 +2312,25 @@ const defaultProfileConfig = (type: string): Record<string, any> => {
   return clone(config);
 };
 
-const defaultTabbarItem = (): ModuleItem => ({
-  icon: 'ant-design:appstore-outlined',
-  icon_mode: 'icon',
+const defaultTabbarItem = (key = 'category'): ModuleItem => ({
+  icon: getTabbarStaticImagePath(key),
+  icon_mode: 'upload',
   id: createId('tabbar'),
   path: '',
-  selected_icon: 'ant-design:appstore-filled',
-  selected_icon_mode: 'icon',
+  selected_icon: getTabbarStaticImagePath(key, true),
+  selected_icon_mode: 'upload',
   text: '导航',
 });
 
 const defaultTabbarItems = (): ModuleItem[] => [
   {
-    ...defaultTabbarItem(),
-    icon: 'ant-design:home-outlined',
+    ...defaultTabbarItem('home'),
     path: '/pages/index/index',
-    selected_icon: 'ant-design:home-filled',
     text: '首页',
   },
   {
-    ...defaultTabbarItem(),
-    icon: 'ant-design:user-outlined',
+    ...defaultTabbarItem('profile'),
     path: '/pages/profile/index',
-    selected_icon: 'ant-design:user-filled',
     text: '我的',
   },
 ];
@@ -2120,7 +2345,7 @@ const resetSchemeForm = (type = activeType.value) => {
     schema: type === 'tabbar' ? defaultTabbarItems() : [],
     sort: 0,
     status: 1,
-    tabbar_mode: 'native',
+    tabbar_mode: type === 'tabbar' ? 'custom' : 'native',
   });
 };
 
@@ -2200,13 +2425,14 @@ const loadSchemeDetail = async (id: number) => {
         : getSchemePageStyle(detail, activeType.value),
     schema:
       activeType.value === 'tabbar'
-        ? clone(schema)
+        ? normalizeTabbarEditorItems(clone(schema))
         : clone(schema).map((item: ModuleItem, index: number) =>
             normalizeEditorModule(item, index, activeType.value),
           ),
     sort: detail.sort || 0,
     status: detail.status ?? 1,
-    tabbar_mode: detail.tabbar_mode || 'native',
+    tabbar_mode:
+      activeType.value === 'tabbar' ? 'custom' : detail.tabbar_mode || 'native',
   });
   selectedIndex.value = 0;
 };
@@ -2322,7 +2548,12 @@ const normalizeSchemaForClient = (
   schema: ModuleItem[],
 ): ClientDecorateApi.SchemeSchema => {
   if (activeType.value === 'tabbar') {
-    return stripRuntimePreviewFields(normalizeUploadValue(clone(schema)));
+    const items = normalizeTabbarEditorItems(clone(schema)).map((item, index) =>
+      normalizeTabbarSaveItem(item, index),
+    );
+    return {
+      items: stripRuntimePreviewFields(normalizeUploadValue(items)),
+    };
   }
 
   const modules = stripRuntimePreviewFields(
@@ -2377,10 +2608,12 @@ const normalizeSchemaForClient = (
             true,
           );
         }
-        if (activeType.value === 'profile') {
+        if (activeType.value === 'home' || activeType.value === 'profile') {
           syncProfilePaddingCompat(props);
           syncProfileMarginCompat(props);
           normalizeShadowStyle(props);
+        }
+        if (activeType.value === 'profile') {
           const profileTextStyleRoles = getProfileTextStyleRoles(moduleType);
           const textStyles = normalizeProfileTextStyles(
             props.textStyles ?? props.text_styles,
@@ -2536,7 +2769,9 @@ const addModuleByType = (type: string, insertIndex?: number) => {
       message.warning('底部导航最多 5 项');
       return;
     }
-    item = defaultTabbarItem();
+    item = defaultTabbarItem(
+      TABBAR_DEFAULT_IMAGE_KEYS[schemeForm.schema.length] || 'category',
+    );
   } else if (activeType.value === 'profile') {
     item = {
       config: defaultProfileConfig(moduleType),
@@ -2820,7 +3055,7 @@ const updateHomePageStyle = (field: string, value: unknown) => {
     ? normalizePageSpacingNumber(value)
     : value;
   (schemeForm.pageStyle as Record<string, unknown>)[field] = nextValue;
-  if (activeType.value === 'profile') {
+  if (activeType.value === 'home' || activeType.value === 'profile') {
     Object.assign(
       schemeForm.pageStyle,
       normalizePageStyle(schemeForm.pageStyle, activeType.value),
@@ -2847,13 +3082,16 @@ const resetModuleConfig = (module: ModuleItem) => {
   message.success('已重置组件属性');
 };
 
-const resetProfileModuleStyle = (module: ModuleItem) => {
+const resetModuleStyle = (module: ModuleItem) => {
   if (warnReadonlyScheme()) return;
-  if (!module || activeType.value !== 'profile') return;
-  const type = normalizeProfileModuleType(String(module.type || ''));
-  const defaults = defaultProfileConfig(type);
+  if (!module || activeType.value === 'tabbar') return;
+  const type = String(module.type || '');
+  const defaults =
+    activeType.value === 'profile'
+      ? defaultProfileConfig(normalizeProfileModuleType(type))
+      : defaultHomeConfig(type as ClientDecorateApi.ComponentType);
   const nextConfig = { ...module.config };
-  PROFILE_MODULE_STYLE_FIELDS.forEach((field) => {
+  MODULE_STYLE_FIELDS.forEach((field) => {
     if (field in defaults) {
       nextConfig[field] = clone(defaults[field]);
     } else {
@@ -2867,28 +3105,35 @@ const resetProfileModuleStyle = (module: ModuleItem) => {
   message.success('已重置基础样式');
 };
 
-const resetProfileModuleContent = (module: ModuleItem) => {
+const resetModuleContent = (module: ModuleItem) => {
   if (warnReadonlyScheme()) return;
-  if (!module || activeType.value !== 'profile') return;
-  const type = normalizeProfileModuleType(String(module.type || ''));
+  if (!module || activeType.value === 'tabbar') return;
+  const rawType = String(module.type || '');
+  const type =
+    activeType.value === 'profile'
+      ? normalizeProfileModuleType(rawType)
+      : rawType;
   const currentConfig = { ...module.config };
   syncProfilePaddingCompat(currentConfig);
   syncProfileMarginCompat(currentConfig);
   normalizeShadowStyle(currentConfig);
   const styleSnapshot: Record<string, any> = {};
-  for (const field of PROFILE_MODULE_STYLE_FIELDS) {
+  for (const field of MODULE_STYLE_FIELDS) {
     if (field in currentConfig) {
       styleSnapshot[field] = clone(currentConfig[field]);
     }
   }
   if (
+    activeType.value === 'profile' &&
     currentConfig.textStyles &&
     typeof currentConfig.textStyles === 'object'
   ) {
     styleSnapshot.textStyles = clone(currentConfig.textStyles);
   }
   module.config = {
-    ...defaultProfileConfig(type),
+    ...(activeType.value === 'profile'
+      ? defaultProfileConfig(type)
+      : defaultHomeConfig(type as ClientDecorateApi.ComponentType)),
     ...styleSnapshot,
   };
   syncProfilePaddingCompat(module.config);
@@ -3091,9 +3336,9 @@ onBeforeUnmount(resetMouseDrag);
       @palette-click="handlePaletteClick"
       @palette-mouse-down="handlePaletteMouseDown"
       @remove-config-item="removeConfigItem"
-      @reset-module-content="resetProfileModuleContent"
+      @reset-module-content="resetModuleContent"
       @reset-module-config="resetModuleConfig"
-      @reset-module-style="resetProfileModuleStyle"
+      @reset-module-style="resetModuleStyle"
       @reset-page-style="resetHomePageStyle"
       @select-module="selectModuleFromPreview"
       @update-page-style="updateHomePageStyle"
@@ -3139,15 +3384,6 @@ onBeforeUnmount(resetMouseDrag);
             <a-radio :value="1">启用</a-radio>
             <a-radio :value="0">禁用</a-radio>
           </a-radio-group>
-        </a-form-item>
-        <a-form-item v-if="activeType === 'tabbar'" label="模式">
-          <a-segmented
-            v-model:value="schemeForm.tabbar_mode"
-            :options="[
-              { label: '原生', value: 'native' },
-              { label: '自绘', value: 'custom' },
-            ]"
-          />
         </a-form-item>
       </a-form>
       <a-alert

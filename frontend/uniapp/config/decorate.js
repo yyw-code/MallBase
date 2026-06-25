@@ -177,14 +177,14 @@ export const DEFAULT_HOME_MODULES = [
 
 const DEFAULT_PROFILE_STYLE = {
   background: "",
-  backgroundColorEnd: "#ffffff",
-  backgroundColorStart: "#ffffff",
+  backgroundColorEnd: "",
+  backgroundColorStart: "",
   backgroundGradientDirection: "horizontal",
   backgroundMode: "color",
   background_image: "",
-  borderColor: "#e5e5e5",
+  borderColor: "",
   borderEnabled: true,
-  borderStyle: "dashed",
+  borderStyle: "solid",
   borderWidth: 1,
   marginBottom: 0,
   marginLeft: 0,
@@ -317,6 +317,16 @@ export const DEFAULT_DECORATE_CONFIG = {
   home: {
     modules: DEFAULT_HOME_MODULES,
     pageStyle: {
+      backgroundColorEnd: "",
+      backgroundColorStart: "",
+      backgroundGradientDirection: "horizontal",
+      backgroundMode: "color",
+      background_image: "",
+      padding: 14,
+      paddingBottom: 0,
+      paddingLeft: 28,
+      paddingRight: 28,
+      paddingTop: 0,
       paddingX: 28,
       paddingY: 0,
     },
@@ -329,7 +339,7 @@ export const DEFAULT_DECORATE_CONFIG = {
     },
   },
   tabbar: {
-    mode: "native",
+    mode: "custom",
     schema: {
       items: DEFAULT_TABBAR_ITEMS,
     },
@@ -338,6 +348,7 @@ export const DEFAULT_DECORATE_CONFIG = {
     policy: {
       allow_user_select: 1,
       default_mode: "system",
+      default_theme_id: null,
     },
     themes: {
       light: DEFAULT_LIGHT_THEME,

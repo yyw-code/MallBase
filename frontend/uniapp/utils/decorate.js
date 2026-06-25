@@ -7,23 +7,65 @@ const TABBAR_PAGES = DEFAULT_TABBAR_ITEMS.map((item) =>
   normalizePath(item.pagePath),
 );
 
+const TABBAR_DEFAULT_KEYWORDS = [
+  {
+    key: "home",
+    match: (item) =>
+      item.pagePath.includes("/pages/index/") || item.text.includes("首页"),
+  },
+  {
+    key: "category",
+    match: (item) =>
+      item.pagePath.includes("/pages/category/") || item.text.includes("分类"),
+  },
+  {
+    key: "cart",
+    match: (item) =>
+      item.pagePath.includes("/pages/cart/") || item.text.includes("购物车"),
+  },
+  {
+    key: "order",
+    match: (item) =>
+      item.pagePath.includes("/pages/order/") || item.text.includes("订单"),
+  },
+  {
+    key: "profile",
+    match: (item) =>
+      item.pagePath.includes("/pages/profile/") || item.text.includes("我的"),
+  },
+];
+
+function getDefaultTabbarKey(item, index) {
+  const matched = TABBAR_DEFAULT_KEYWORDS.find((option) => option.match(item));
+  if (matched) return matched.key;
+  const fallback = DEFAULT_TABBAR_ITEMS[index % DEFAULT_TABBAR_ITEMS.length];
+  return fallback?.key || "home";
+}
+
+function getDefaultTabbarAsset(item, index, active = false) {
+  const key = getDefaultTabbarKey(item, index);
+  return `/static/images/tabbar/${key}${active ? "-active" : ""}.png`;
+}
+
 export function mergeDecorateConfig(config) {
   const source = isPlainObject(config) ? config : {};
+  const sourceTheme = isPlainObject(source.theme) ? source.theme : {};
+  const sourceThemes =
+    Array.isArray(sourceTheme.themes) || isPlainObject(sourceTheme.themes)
+      ? sourceTheme.themes
+      : DEFAULT_DECORATE_CONFIG.theme.themes;
   return {
     home: normalizeSchema(source.home, DEFAULT_DECORATE_CONFIG.home),
     profile: normalizeSchema(source.profile, DEFAULT_DECORATE_CONFIG.profile),
     tabbar: normalizeTabbar(source.tabbar),
     theme: {
       ...DEFAULT_DECORATE_CONFIG.theme,
-      ...(isPlainObject(source.theme) ? source.theme : {}),
+      ...sourceTheme,
       policy: {
         ...DEFAULT_DECORATE_CONFIG.theme.policy,
-        ...(isPlainObject(source.theme?.policy) ? source.theme.policy : {}),
+        ...(isPlainObject(sourceTheme.policy) ? sourceTheme.policy : {}),
       },
-      themes: {
-        ...DEFAULT_DECORATE_CONFIG.theme.themes,
-        ...(isPlainObject(source.theme?.themes) ? source.theme.themes : {}),
-      },
+      themes: sourceThemes,
     },
   };
 }
@@ -56,32 +98,115 @@ export function normalizeSchema(schema, fallback) {
 
 export function normalizePageStyle(style, fallback = {}) {
   const source = isPlainObject(style) ? style : {};
-  return {
-    paddingX: Number(
-      source.paddingX ??
-        source.padding_x ??
-        fallback.paddingX ??
-        fallback.padding_x ??
-        28,
-    ),
-    paddingTop: Number(
-      source.paddingTop ??
-        source.padding_top ??
-        source.paddingY ??
-        source.padding_y ??
-        fallback.paddingTop ??
-        fallback.padding_top ??
-        fallback.paddingY ??
-        fallback.padding_y ??
-        0,
-    ),
-    paddingY: Number(
+  const paddingX = Number(
+    source.paddingX ??
+      source.padding_x ??
+      fallback.paddingX ??
+      fallback.padding_x ??
+      28,
+  );
+  const paddingY = Number(
+    source.paddingY ??
+      source.padding_y ??
+      fallback.paddingY ??
+      fallback.padding_y ??
+      0,
+  );
+  const paddingTop = Number(
+    source.paddingTop ??
+      source.padding_top ??
       source.paddingY ??
-        source.padding_y ??
-        fallback.paddingY ??
-        fallback.padding_y ??
-        0,
-    ),
+      source.padding_y ??
+      fallback.paddingTop ??
+      fallback.padding_top ??
+      fallback.paddingY ??
+      fallback.padding_y ??
+      0,
+  );
+  const paddingRight = Number(
+    source.paddingRight ??
+      source.padding_right ??
+      source.paddingX ??
+      source.padding_x ??
+      fallback.paddingRight ??
+      fallback.padding_right ??
+      fallback.paddingX ??
+      fallback.padding_x ??
+      28,
+  );
+  const paddingBottom = Number(
+    source.paddingBottom ??
+      source.padding_bottom ??
+      source.paddingY ??
+      source.padding_y ??
+      fallback.paddingBottom ??
+      fallback.padding_bottom ??
+      fallback.paddingY ??
+      fallback.padding_y ??
+      0,
+  );
+  const paddingLeft = Number(
+    source.paddingLeft ??
+      source.padding_left ??
+      source.paddingX ??
+      source.padding_x ??
+      fallback.paddingLeft ??
+      fallback.padding_left ??
+      fallback.paddingX ??
+      fallback.padding_x ??
+      28,
+  );
+  return {
+    backgroundColorEnd:
+      source.backgroundColorEnd ??
+      source.background_color_end ??
+      fallback.backgroundColorEnd ??
+      fallback.background_color_end ??
+      "",
+    backgroundColorStart:
+      source.backgroundColorStart ??
+      source.background_color_start ??
+      fallback.backgroundColorStart ??
+      fallback.background_color_start ??
+      "",
+    backgroundGradientDirection:
+      source.backgroundGradientDirection ??
+      source.background_gradient_direction ??
+      fallback.backgroundGradientDirection ??
+      fallback.background_gradient_direction ??
+      "horizontal",
+    backgroundMode:
+      source.backgroundMode ??
+      source.background_mode ??
+      fallback.backgroundMode ??
+      fallback.background_mode ??
+      "color",
+    background_image:
+      source.background_image ??
+      source.backgroundImage ??
+      fallback.background_image ??
+      fallback.backgroundImage ??
+      "",
+    padding:
+      paddingTop === paddingRight &&
+      paddingRight === paddingBottom &&
+      paddingBottom === paddingLeft
+        ? paddingTop
+        : Math.round(
+            (paddingTop + paddingRight + paddingBottom + paddingLeft) / 4,
+          ),
+    paddingBottom,
+    paddingLeft,
+    paddingRight,
+    paddingTop,
+    paddingX:
+      paddingLeft === paddingRight
+        ? paddingLeft
+        : Math.round((paddingLeft + paddingRight) / 2),
+    paddingY:
+      paddingTop === paddingBottom
+        ? paddingTop
+        : Math.round((paddingTop + paddingBottom) / 2),
   };
 }
 
@@ -114,7 +239,7 @@ export function normalizeTabbar(tabbar) {
   const rawItems = Array.isArray(schema.items) ? schema.items : source.items;
   const items = normalizeTabbarItems(rawItems);
   return {
-    mode: source.mode === 'custom' ? 'custom' : 'native',
+    mode: 'custom',
     schema: {
       ...schema,
       items,
@@ -128,19 +253,42 @@ export function normalizeTabbarItems(items) {
   const normalized = list
     .filter((item) => item && item.visible !== false && item.enabled !== false)
     .slice(0, 5)
-    .map((item, index) => ({
-      key: item.key || item.name || `tab-${index}`,
-      text: item.text || item.label || item.title || '',
-      pagePath: normalizePath(item.pagePath || item.path || item.url || ''),
-      iconPath: normalizeAssetPath(item.iconPath || item.icon || ''),
-      selectedIconPath: normalizeAssetPath(
-        item.selectedIconPath ||
-          item.activeIcon ||
-          item.active_icon ||
-          item.iconPath ||
-          '',
-      ),
-    }))
+    .map((item, index) => {
+      const baseItem = {
+        key: item.key || item.name || `tab-${index}`,
+        text: item.text || item.label || item.title || "",
+        pagePath: normalizePath(item.pagePath || item.path || item.url || ""),
+      };
+      const iconPath = normalizeTabbarAsset(
+        [
+          item.icon,
+          item.icon_full_url,
+          item.iconFullUrl,
+          item.iconPath,
+          item.icon_path,
+        ],
+        getDefaultTabbarAsset(baseItem, index),
+      );
+      return {
+        ...baseItem,
+        iconPath,
+        selectedIconPath: normalizeTabbarAsset(
+          [
+            item.selected_icon,
+            item.selectedIcon,
+            item.selected_icon_full_url,
+            item.selectedIconFullUrl,
+            item.selectedIconPath,
+            item.selected_icon_path,
+            item.activeIcon,
+            item.active_icon,
+            item.icon,
+            item.iconPath,
+          ],
+          getDefaultTabbarAsset(baseItem, index, true) || iconPath,
+        ),
+      };
+    })
     .filter((item) => item.text && item.pagePath);
 
   return normalized.length >= 2 ? normalized : DEFAULT_TABBAR_ITEMS;
@@ -151,15 +299,50 @@ export function normalizePath(path) {
   return path.startsWith('/') ? path : `/${path}`;
 }
 
-export function normalizeAssetPath(path) {
-  if (path && typeof path === 'object') {
-    path = path.full_url || path.fullUrl || path.url || '';
+function normalizeTabbarAsset(values, fallback = "") {
+  for (const value of values) {
+    const normalized = normalizeAssetPath(value);
+    if (normalized) return normalized;
   }
-  if (!path) return '';
-  path = String(path);
-  if (/^https?:\/\//.test(path)) return path;
-  if (path.includes(':')) return '';
-  return path.startsWith('/') ? path : `/${path}`;
+  return normalizeAssetPath(fallback);
+}
+
+function getAssetRawValue(path) {
+  if (path && typeof path === "object") {
+    return (
+      path.full_url ||
+      path.fullUrl ||
+      path.url ||
+      path.path ||
+      path.src ||
+      path.response?.full_url ||
+      path.response?.fullUrl ||
+      path.response?.url ||
+      ""
+    );
+  }
+  return path;
+}
+
+export function normalizeAssetPath(path) {
+  path = getAssetRawValue(path);
+  if (!path) return "";
+  path = String(path).trim();
+  if (!path || /^\d+$/.test(path)) return "";
+  if (/^(?:https?:)?\/\//.test(path) || path.startsWith("data:image/")) {
+    return path;
+  }
+  if (path.includes(":")) return "";
+  if (/^(?:\/)?(?:static|upload)\//.test(path)) {
+    return path.startsWith("/") ? path : `/${path}`;
+  }
+  if (/^\/.+\.(?:avif|gif|jpe?g|png|svg|webp)(?:[?#].*)?$/i.test(path)) {
+    return path;
+  }
+  if (/^.+\.(?:avif|gif|jpe?g|png|svg|webp)(?:[?#].*)?$/i.test(path)) {
+    return `/${path.replace(/^\/+/, "")}`;
+  }
+  return "";
 }
 
 export function isTabbarPage(path) {

@@ -1,6 +1,4 @@
 <script lang="ts" setup>
-import type { PaddingSideField } from '../utils/useModuleSpacing';
-
 import type { ClientDecorateApi } from '#/api/client';
 import type { GoodsApi, GoodsCategoryApi } from '#/api/goods';
 
@@ -13,16 +11,10 @@ import RichTextEditor from '#/components/rich-text-editor/index.vue';
 import Upload from '#/components/upload/index.vue';
 
 import ClientPhonePreview from '../../components/ClientPhonePreview.vue';
-import {
-  getModulePaddingOverall,
-  getModulePaddingSide,
-  paddingSideFields,
-  updateModulePaddingAll,
-  updateModulePaddingSide,
-} from '../utils/useModuleSpacing';
+import { paddingSideFields } from '../utils/useModuleSpacing';
+import ModuleStylePanel from './ModuleStylePanel.vue';
 import PageLinkPicker from './PageLinkPicker.vue';
 import ProductSourcePicker from './ProductSourcePicker.vue';
-import ProfileModuleStylePanel from './ProfileModuleStylePanel.vue';
 import SpacingControl from './SpacingControl.vue';
 import TargetPicker from './TargetPicker.vue';
 
@@ -103,15 +95,6 @@ const editableProfileType = computed(() =>
     ? props.normalizeProfileModuleType(String(editableModule.value.type || ''))
     : '',
 );
-const getSelectedModulePaddingSide = (field: string) =>
-  getModulePaddingSide(editableModule.value, field as PaddingSideField);
-const updateSelectedModulePaddingSide = (field: string, value: unknown) => {
-  updateModulePaddingSide(
-    editableModule.value,
-    field as PaddingSideField,
-    value,
-  );
-};
 const isProfileEntryModule = computed(() =>
   ['customMenu', 'orderEntry', 'serviceMenu'].includes(
     editableProfileType.value,
@@ -160,6 +143,13 @@ const profilePagePaddingDefaults: Record<string, number> = {
   paddingLeft: 28,
   paddingRight: 28,
   paddingTop: 10,
+};
+
+const homePagePaddingDefaults: Record<string, number> = {
+  paddingBottom: 0,
+  paddingLeft: 28,
+  paddingRight: 28,
+  paddingTop: 0,
 };
 
 const backgroundModeOptions = [
@@ -375,7 +365,7 @@ const getProfileStyleColorInputValue = (
     profileStyleColorDefaults[field] || '#ffffff',
   );
 
-const getProfilePageStyleColorInputValue = (field: string) =>
+const getPageStyleColorInputValue = (field: string) =>
   normalizeStyleColorValue(
     props.schemeForm.pageStyle[field],
     profilePageStyleColorDefaults[field] || '#ffffff',
@@ -435,48 +425,51 @@ const normalizeSpacingControlNumber = (value: unknown, fallback = 0) => {
   return Math.max(0, Math.min(Math.round(numberValue), 160));
 };
 
-const getProfilePagePaddingSide = (field: string) => {
+const getPagePaddingDefault = (field: string) =>
+  props.activeType === 'profile'
+    ? profilePagePaddingDefaults[field]
+    : homePagePaddingDefaults[field];
+
+const getPagePaddingSide = (field: string) => {
   const pageStyle = props.schemeForm.pageStyle;
   if (field === 'paddingTop') {
     return normalizeSpacingControlNumber(
       pageStyle.paddingTop ?? pageStyle.padding_top ?? pageStyle.paddingY,
-      profilePagePaddingDefaults.paddingTop,
+      getPagePaddingDefault(field),
     );
   }
   if (field === 'paddingRight') {
     return normalizeSpacingControlNumber(
       pageStyle.paddingRight ?? pageStyle.padding_right ?? pageStyle.paddingX,
-      profilePagePaddingDefaults.paddingRight,
+      getPagePaddingDefault(field),
     );
   }
   if (field === 'paddingBottom') {
     return normalizeSpacingControlNumber(
       pageStyle.paddingBottom ?? pageStyle.padding_bottom ?? pageStyle.paddingY,
-      profilePagePaddingDefaults.paddingBottom,
+      getPagePaddingDefault(field),
     );
   }
   return normalizeSpacingControlNumber(
     pageStyle.paddingLeft ?? pageStyle.padding_left ?? pageStyle.paddingX,
-    profilePagePaddingDefaults.paddingLeft,
+    getPagePaddingDefault(field),
   );
 };
 
-const getProfilePagePaddingOverall = () => {
-  const sides = paddingSideFields.map((item) =>
-    getProfilePagePaddingSide(item.field),
-  );
+const getPagePaddingOverall = () => {
+  const sides = paddingSideFields.map((item) => getPagePaddingSide(item.field));
   if (sides.every((value) => value === sides[0])) return sides[0] || 0;
   return Math.round(sides.reduce((total, value) => total + value, 0) / 4);
 };
 
-const updateProfilePagePaddingAll = (value: unknown) => {
+const updatePagePaddingAll = (value: unknown) => {
   const nextValue = normalizeSpacingControlNumber(value);
   paddingSideFields.forEach((item) => {
     emit('updatePageStyle', item.field, nextValue);
   });
 };
 
-const updateProfilePagePaddingSide = (field: string, value: unknown) => {
+const updatePagePaddingSide = (field: string, value: unknown) => {
   emit('updatePageStyle', field, normalizeSpacingControlNumber(value));
 };
 
@@ -1699,13 +1692,6 @@ const updateProfileItemVisible = (item: any, checked: boolean) => {
   item.visible = checked;
 };
 
-const updateSelectedBackgroundColor = (event: Event) => {
-  const value = (event.target as HTMLInputElement | null)?.value;
-  if (value && editableModule.value?.config) {
-    editableModule.value.config.background = value;
-  }
-};
-
 const updateSelectedEntryIconColor = (event: Event) => {
   const value = (event.target as HTMLInputElement | null)?.value;
   if (value && editableModule.value?.config) {
@@ -1786,12 +1772,15 @@ const updateSelectedSubTitleColor = (event: Event) => {
       <div class="panel-title">
         <div>
           <strong>{{ activeTypeLabel }}画布</strong>
-          <span>手机预览就是编辑画布，组件可直接拖入和选中配置。</span>
+          <span class="panel-title__desc">
+            手机预览就是编辑画布，组件可直接拖入和选中配置。
+          </span>
         </div>
-        <a-space>
+        <a-space class="panel-title__actions">
           <a-button
             v-if="activeType === 'tabbar'"
             :disabled="isReadonlyScheme || schemeForm.schema.length >= 5"
+            class="panel-title__add"
             size="small"
             type="primary"
             @click="$emit('paletteClick', 'tabbarItem')"
@@ -1865,142 +1854,108 @@ const updateSelectedSubTitleColor = (event: Event) => {
                 重置
               </a-button>
             </div>
-            <template v-if="activeType === 'profile'">
-              <div class="profile-style-settings">
-                <div class="style-control-row">
-                  <div class="style-control-row__label">背景设置</div>
-                  <div class="style-control-row__body">
-                    <a-radio-group
-                      :value="schemeForm.pageStyle.backgroundMode"
-                      :options="backgroundModeOptions"
-                      @update:value="
-                        (value: unknown) =>
-                          updatePageStyleField('backgroundMode', value)
-                      "
-                    />
-                  </div>
+            <div class="profile-style-settings">
+              <div class="style-control-row">
+                <div class="style-control-row__label">背景设置</div>
+                <div class="style-control-row__body">
+                  <a-radio-group
+                    :value="schemeForm.pageStyle.backgroundMode"
+                    :options="backgroundModeOptions"
+                    @update:value="
+                      (value: unknown) =>
+                        updatePageStyleField('backgroundMode', value)
+                    "
+                  />
                 </div>
+              </div>
 
-                <template
-                  v-if="schemeForm.pageStyle.backgroundMode !== 'image'"
-                >
-                  <div class="style-control-row">
-                    <div class="style-control-row__label">背景颜色</div>
-                    <div class="style-control-row__body">
-                      <div class="style-color-stack">
-                        <div
-                          v-for="field in [
-                            'backgroundColorStart',
-                            'backgroundColorEnd',
-                          ]"
-                          :key="field"
-                          class="style-color-field style-color-field--no-action"
-                        >
-                          <input
-                            :aria-label="`选择页面${field}颜色`"
-                            class="style-color-field__picker"
-                            type="color"
-                            :value="getProfilePageStyleColorInputValue(field)"
-                            @input="
-                              (event: Event) =>
-                                updatePageStyleColorFromEvent(field, event)
-                            "
-                          />
-                          <a-input
-                            :value="schemeForm.pageStyle[field]"
-                            allow-clear
-                            class="style-color-field__input"
-                            placeholder="跟随主题背景"
-                            @change="() => updatePageStyleColorByField(field)"
-                            @update:value="
-                              (value: string) =>
-                                $emit('updatePageStyle', field, value)
-                            "
-                          />
-                        </div>
+              <template v-if="schemeForm.pageStyle.backgroundMode !== 'image'">
+                <div class="style-control-row">
+                  <div class="style-control-row__label">背景颜色</div>
+                  <div class="style-control-row__body">
+                    <div class="style-color-stack">
+                      <div
+                        v-for="field in [
+                          'backgroundColorStart',
+                          'backgroundColorEnd',
+                        ]"
+                        :key="field"
+                        class="style-color-field style-color-field--no-action"
+                      >
+                        <input
+                          :aria-label="`选择页面${field}颜色`"
+                          class="style-color-field__picker"
+                          type="color"
+                          :value="getPageStyleColorInputValue(field)"
+                          @input="
+                            (event: Event) =>
+                              updatePageStyleColorFromEvent(field, event)
+                          "
+                        />
+                        <a-input
+                          :value="schemeForm.pageStyle[field]"
+                          allow-clear
+                          class="style-color-field__input"
+                          placeholder="跟随主题背景"
+                          @change="() => updatePageStyleColorByField(field)"
+                          @update:value="
+                            (value: string) =>
+                              $emit('updatePageStyle', field, value)
+                          "
+                        />
                       </div>
                     </div>
                   </div>
+                </div>
 
-                  <div class="style-control-row">
-                    <div class="style-control-row__label">渐变方向</div>
-                    <div class="style-control-row__body">
-                      <a-radio-group
-                        :value="
-                          schemeForm.pageStyle.backgroundGradientDirection
-                        "
-                        :options="gradientDirectionOptions"
-                        @change="syncPageBackgroundShortcut"
-                        @update:value="
-                          (value: unknown) =>
-                            updatePageStyleField(
-                              'backgroundGradientDirection',
-                              value,
-                            )
-                        "
-                      />
-                    </div>
-                  </div>
-                </template>
-
-                <div v-else class="style-control-row">
-                  <div class="style-control-row__label">背景图片</div>
+                <div class="style-control-row">
+                  <div class="style-control-row__label">渐变方向</div>
                   <div class="style-control-row__body">
-                    <Upload
-                      :value="schemeForm.pageStyle.background_image"
-                      :disabled="isReadonlyScheme"
-                      module="client"
-                      type="image"
+                    <a-radio-group
+                      :value="schemeForm.pageStyle.backgroundGradientDirection"
+                      :options="gradientDirectionOptions"
+                      @change="syncPageBackgroundShortcut"
                       @update:value="
                         (value: unknown) =>
-                          updatePageStyleField('background_image', value)
+                          updatePageStyleField(
+                            'backgroundGradientDirection',
+                            value,
+                          )
                       "
                     />
                   </div>
                 </div>
+              </template>
 
-                <div class="style-control-row style-control-row--spacing">
-                  <div class="style-control-row__label">页面内边距</div>
-                  <div class="style-control-row__body">
-                    <SpacingControl
-                      :disabled="isReadonlyScheme"
-                      :get-side-value="getProfilePagePaddingSide"
-                      :overall-value="getProfilePagePaddingOverall()"
-                      :side-fields="paddingSideFields"
-                      @update:all="updateProfilePagePaddingAll"
-                      @update:side="updateProfilePagePaddingSide"
-                    />
-                  </div>
+              <div v-else class="style-control-row">
+                <div class="style-control-row__label">背景图片</div>
+                <div class="style-control-row__body">
+                  <Upload
+                    :value="schemeForm.pageStyle.background_image"
+                    :disabled="isReadonlyScheme"
+                    module="client"
+                    type="image"
+                    @update:value="
+                      (value: unknown) =>
+                        updatePageStyleField('background_image', value)
+                    "
+                  />
                 </div>
               </div>
-            </template>
-            <div v-else class="style-grid">
-              <a-form-item label="上下内边距">
-                <a-input-number
-                  :value="schemeForm.pageStyle.paddingY"
-                  :min="0"
-                  :max="120"
-                  addon-after="rpx"
-                  class="w-full"
-                  @change="
-                    (value: unknown) =>
-                      $emit('updatePageStyle', 'paddingY', value)
-                  "
-                />
-              </a-form-item>
-              <a-form-item label="左右内边距">
-                <a-input-number
-                  :value="schemeForm.pageStyle.paddingX"
-                  :min="0"
-                  :max="120"
-                  addon-after="rpx"
-                  class="w-full"
-                  @change="
-                    (value: unknown) =>
-                      $emit('updatePageStyle', 'paddingX', value)
-                  "
-                />
-              </a-form-item>
+
+              <div class="style-control-row style-control-row--spacing">
+                <div class="style-control-row__label">页面内边距</div>
+                <div class="style-control-row__body">
+                  <SpacingControl
+                    :disabled="isReadonlyScheme"
+                    :get-side-value="getPagePaddingSide"
+                    :overall-value="getPagePaddingOverall()"
+                    :side-fields="paddingSideFields"
+                    @update:all="updatePagePaddingAll"
+                    @update:side="updatePagePaddingSide"
+                  />
+                </div>
+              </div>
             </div>
           </div>
         </a-form>
@@ -2027,8 +1982,8 @@ const updateSelectedSubTitleColor = (event: Event) => {
               </a-form-item>
             </div>
             <template v-if="editableModule.config">
-              <ProfileModuleStylePanel
-                v-if="activeType === 'profile'"
+              <ModuleStylePanel
+                v-if="activeType === 'home' || activeType === 'profile'"
                 :background-mode-options="backgroundModeOptions"
                 :border-style-options="borderStyleOptions"
                 :disabled="isReadonlyScheme"
@@ -2049,89 +2004,6 @@ const updateSelectedSubTitleColor = (event: Event) => {
                 :visibility-options="visibilityOptions"
                 @reset="$emit('resetModuleStyle', $event)"
               />
-              <div v-else class="property-section">
-                <div class="property-section__head">
-                  <div class="property-section__title">基础样式</div>
-                  <a-button
-                    :disabled="isReadonlyScheme"
-                    size="small"
-                    type="link"
-                    @click="$emit('resetModuleConfig', editableModule)"
-                  >
-                    重置
-                  </a-button>
-                </div>
-                <div class="style-grid">
-                  <a-form-item label="宽度">
-                    <a-input-number
-                      v-model:value="editableModule.config.widthPercent"
-                      :min="50"
-                      :max="100"
-                      addon-after="%"
-                      class="w-full"
-                    />
-                  </a-form-item>
-                  <a-form-item label="上边距">
-                    <a-input-number
-                      v-model:value="editableModule.config.marginTop"
-                      :min="0"
-                      :max="120"
-                      addon-after="rpx"
-                      class="w-full"
-                    />
-                  </a-form-item>
-                  <a-form-item label="下边距">
-                    <a-input-number
-                      v-model:value="editableModule.config.marginBottom"
-                      :min="0"
-                      :max="120"
-                      addon-after="rpx"
-                      class="w-full"
-                    />
-                  </a-form-item>
-                  <a-form-item label="圆角">
-                    <a-input-number
-                      v-model:value="editableModule.config.radius"
-                      :min="0"
-                      :max="80"
-                      addon-after="rpx"
-                      class="w-full"
-                    />
-                  </a-form-item>
-                  <a-form-item class="property-form-item--full" label="内边距">
-                    <SpacingControl
-                      :disabled="isReadonlyScheme"
-                      :get-side-value="getSelectedModulePaddingSide"
-                      :overall-value="getModulePaddingOverall(editableModule)"
-                      :side-fields="paddingSideFields"
-                      @update:all="
-                        (value: unknown) =>
-                          updateModulePaddingAll(editableModule, value)
-                      "
-                      @update:side="updateSelectedModulePaddingSide"
-                    />
-                  </a-form-item>
-                  <a-form-item label="背景色">
-                    <a-input
-                      v-model:value="editableModule.config.background"
-                      allow-clear
-                      placeholder="跟随主题背景"
-                    >
-                      <template #addonAfter>
-                        <input
-                          :value="
-                            getColorInputValue(editableModule.config.background)
-                          "
-                          aria-label="选择背景色"
-                          class="color-input"
-                          type="color"
-                          @input="updateSelectedBackgroundColor"
-                        />
-                      </template>
-                    </a-input>
-                  </a-form-item>
-                </div>
-              </div>
             </template>
           </template>
 
@@ -2152,54 +2024,20 @@ const updateSelectedSubTitleColor = (event: Event) => {
                 />
               </a-form-item>
               <a-form-item label="默认图标">
-                <a-segmented
-                  v-model:value="editableModule.icon_mode"
-                  :options="[
-                    { label: '图标', value: 'icon' },
-                    { label: '图片', value: 'upload' },
-                  ]"
+                <Upload
+                  v-model:value="editableModule.icon"
+                  :disabled="isReadonlyScheme"
+                  module="client"
+                  type="image"
                 />
-                <div class="mt-3">
-                  <Upload
-                    v-if="editableModule.icon_mode === 'upload'"
-                    v-model:value="editableModule.icon"
-                    :disabled="isReadonlyScheme"
-                    module="client"
-                    type="image"
-                  />
-                  <IconPicker
-                    v-else
-                    v-model="editableModule.icon"
-                    :prefix="iconPrefix"
-                    placeholder="选择默认图标"
-                    style="width: 100%"
-                  />
-                </div>
               </a-form-item>
               <a-form-item label="选中图标">
-                <a-segmented
-                  v-model:value="editableModule.selected_icon_mode"
-                  :options="[
-                    { label: '图标', value: 'icon' },
-                    { label: '图片', value: 'upload' },
-                  ]"
+                <Upload
+                  v-model:value="editableModule.selected_icon"
+                  :disabled="isReadonlyScheme"
+                  module="client"
+                  type="image"
                 />
-                <div class="mt-3">
-                  <Upload
-                    v-if="editableModule.selected_icon_mode === 'upload'"
-                    v-model:value="editableModule.selected_icon"
-                    :disabled="isReadonlyScheme"
-                    module="client"
-                    type="image"
-                  />
-                  <IconPicker
-                    v-else
-                    v-model="editableModule.selected_icon"
-                    :prefix="iconPrefix"
-                    placeholder="选择选中图标"
-                    style="width: 100%"
-                  />
-                </div>
               </a-form-item>
             </div>
           </template>
@@ -2208,7 +2046,17 @@ const updateSelectedSubTitleColor = (event: Event) => {
             v-if="activeType === 'home' && editableModule.config"
             class="property-section"
           >
-            <div class="property-section__title">组件内容</div>
+            <div class="property-section__head">
+              <div class="property-section__title">组件内容</div>
+              <a-button
+                :disabled="isReadonlyScheme"
+                size="small"
+                type="link"
+                @click="$emit('resetModuleContent', editableModule)"
+              >
+                重置
+              </a-button>
+            </div>
             <template v-if="editableModule.type === 'search'">
               <a-form-item label="占位文案">
                 <a-input v-model:value="editableModule.config.placeholder" />

@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { onPullDownRefresh, onReachBottom, onShareAppMessage, onShareTimeline } from '@dcloudio/uni-app'
 import { useAppStore } from '@/store/app'
 import { useDecorateStore } from '@/store/decorate'
+import { normalizeAssetPath } from '@/utils/decorate'
 
 const appStore = useAppStore()
 const decorateStore = useDecorateStore()
@@ -12,15 +13,65 @@ const systemInfo = uni.getSystemInfoSync()
 const statusBarHeight = systemInfo.statusBarHeight || 0
 
 const homeModules = computed(() => decorateStore.homeModules)
+
+function pageBackgroundStyle(pageStyle) {
+  const mode = pageStyle.backgroundMode || pageStyle.background_mode || 'color'
+  const image = normalizeAssetPath(
+    pageStyle.background_image || pageStyle.backgroundImage || '',
+  )
+
+  if (mode === 'image' && image) {
+    return {
+      backgroundImage: `url("${image}")`,
+      backgroundPosition: 'center',
+      backgroundSize: 'cover',
+    }
+  }
+
+  const start =
+    pageStyle.backgroundColorStart || pageStyle.background_color_start
+  const end = pageStyle.backgroundColorEnd || pageStyle.background_color_end
+  if (!start && !end) return {}
+  if (!end || String(start).toLowerCase() === String(end).toLowerCase()) {
+    return { background: start || end }
+  }
+  const directions = {
+    diagonalLeft: '135deg',
+    diagonalRight: '45deg',
+    horizontal: '90deg',
+    vertical: '180deg',
+  }
+  const direction =
+    directions[
+      pageStyle.backgroundGradientDirection ||
+        pageStyle.background_gradient_direction
+    ] ||
+    directions.horizontal
+  return { background: `linear-gradient(${direction}, ${start}, ${end})` }
+}
+
 const homeStyle = computed(() => {
   const pageStyle = decorateStore.homePageStyle || {}
-  const paddingY = Number(pageStyle.paddingY ?? pageStyle.padding_y ?? 0)
   const paddingX = Number(pageStyle.paddingX ?? pageStyle.padding_x ?? 28)
+  const paddingY = Number(pageStyle.paddingY ?? pageStyle.padding_y ?? 0)
+  const paddingTop = Number(
+    pageStyle.paddingTop ?? pageStyle.padding_top ?? paddingY,
+  )
+  const paddingRight = Number(
+    pageStyle.paddingRight ?? pageStyle.padding_right ?? paddingX,
+  )
+  const paddingBottom = Number(
+    pageStyle.paddingBottom ?? pageStyle.padding_bottom ?? paddingY,
+  )
+  const paddingLeft = Number(
+    pageStyle.paddingLeft ?? pageStyle.padding_left ?? paddingX,
+  )
   return {
-    paddingTop: `calc(${statusBarHeight}px + ${paddingY}rpx)`,
-    paddingRight: `${paddingX}rpx`,
-    paddingBottom: `${paddingY}rpx`,
-    paddingLeft: `${paddingX}rpx`,
+    ...pageBackgroundStyle(pageStyle),
+    paddingTop: `calc(${statusBarHeight}px + ${paddingTop}rpx)`,
+    paddingRight: `${paddingRight}rpx`,
+    paddingBottom: `${paddingBottom}rpx`,
+    paddingLeft: `${paddingLeft}rpx`,
   }
 })
 
@@ -76,10 +127,7 @@ onShareTimeline(() => {
 
       <view v-if="decorateStore.tabbarMode === 'custom'" class="bottom-spacer" />
     </view>
-    <mb-custom-tabbar
-      v-if="decorateStore.tabbarMode === 'custom'"
-      current="/pages/index/index"
-    />
+    <mb-custom-tabbar current="/pages/index/index" />
   </view>
 </template>
 

@@ -57,7 +57,7 @@ const emit = defineEmits<{
 
 const editableModule = computed(() => props.module);
 
-const profileColorFields = ['backgroundColorStart', 'backgroundColorEnd'];
+const moduleColorFields = ['backgroundColorStart', 'backgroundColorEnd'];
 
 const getPaddingSideValue = (field: string) =>
   getModulePaddingSide(editableModule.value, field as PaddingSideField);
@@ -94,6 +94,27 @@ const updateMarginSide = (field: string, value: unknown) => {
 
     <div class="profile-style-settings">
       <div class="style-control-row">
+        <div class="style-control-row__label">组件宽度</div>
+        <div class="style-control-row__body">
+          <div class="style-range-control">
+            <a-slider
+              v-model:value="editableModule.config.widthPercent"
+              :max="100"
+              :min="50"
+              class="style-range-control__slider"
+            />
+            <a-input-number
+              v-model:value="editableModule.config.widthPercent"
+              :max="100"
+              :min="50"
+              addon-after="%"
+              class="style-range-control__number"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div class="style-control-row">
         <div class="style-control-row__label">背景设置</div>
         <div class="style-control-row__body">
           <a-radio-group
@@ -109,7 +130,7 @@ const updateMarginSide = (field: string, value: unknown) => {
           <div class="style-control-row__body">
             <div class="style-color-stack">
               <div
-                v-for="field in profileColorFields"
+                v-for="field in moduleColorFields"
                 :key="field"
                 class="style-color-field style-color-field--no-action"
               >

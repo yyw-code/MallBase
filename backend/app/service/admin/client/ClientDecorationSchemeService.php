@@ -376,7 +376,7 @@ class ClientDecorationSchemeService extends BaseService
                 'pageStyle' => $this->defaultProfilePageStyle(),
             ],
             ClientDecorationScheme::TYPE_TABBAR => ['items' => []],
-            default => ['components' => [], 'modules' => [], 'pageStyle' => ['paddingY' => 0, 'paddingX' => 28]],
+            default => ['components' => [], 'modules' => [], 'pageStyle' => $this->defaultHomePageStyle()],
         };
     }
 
@@ -389,9 +389,7 @@ class ClientDecorationSchemeService extends BaseService
             if ($isList) {
                 $schema = ['components' => $schema, 'modules' => $schema];
             }
-            if (!isset($schema['pageStyle']) || !is_array($schema['pageStyle'])) {
-                $schema['pageStyle'] = ['paddingY' => 0, 'paddingX' => 28];
-            }
+            $schema['pageStyle'] = $this->normalizeHomePageStyle($schema['pageStyle'] ?? []);
             if (!isset($schema['components']) && isset($schema['modules']) && is_array($schema['modules'])) {
                 $schema['components'] = $schema['modules'];
             }
@@ -443,6 +441,7 @@ class ClientDecorationSchemeService extends BaseService
                 }
             }
             $props = $this->stripRuntimePreviewFields($props);
+            $props = $this->normalizeModuleStyleAliases($props);
 
             $type = (string) ($item['type'] ?? $item['component'] ?? '');
             if ($type === 'banner') {
@@ -468,6 +467,27 @@ class ClientDecorationSchemeService extends BaseService
     /**
      * @return array<string, mixed>
      */
+    protected function defaultHomePageStyle(): array
+    {
+        return [
+            'backgroundColorEnd' => '',
+            'backgroundColorStart' => '',
+            'backgroundGradientDirection' => 'horizontal',
+            'backgroundMode' => 'color',
+            'background_image' => '',
+            'padding' => 14,
+            'paddingBottom' => 0,
+            'paddingLeft' => 28,
+            'paddingRight' => 28,
+            'paddingTop' => 0,
+            'paddingX' => 28,
+            'paddingY' => 0,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
     protected function defaultProfilePageStyle(): array
     {
         return [
@@ -483,6 +503,38 @@ class ClientDecorationSchemeService extends BaseService
             'paddingTop' => 10,
             'paddingX' => 28,
             'paddingY' => 17,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function normalizeHomePageStyle(mixed $pageStyle): array
+    {
+        $style = is_array($pageStyle) ? $pageStyle : [];
+        $defaults = $this->defaultHomePageStyle();
+        $paddingX = (int) ($style['paddingX'] ?? $style['padding_x'] ?? $defaults['paddingX']);
+        $paddingY = (int) ($style['paddingY'] ?? $style['padding_y'] ?? $defaults['paddingY']);
+        $paddingTop = (int) ($style['paddingTop'] ?? $style['padding_top'] ?? $style['paddingY'] ?? $style['padding_y'] ?? $defaults['paddingTop']);
+        $paddingRight = (int) ($style['paddingRight'] ?? $style['padding_right'] ?? $style['paddingX'] ?? $style['padding_x'] ?? $defaults['paddingRight']);
+        $paddingBottom = (int) ($style['paddingBottom'] ?? $style['padding_bottom'] ?? $style['paddingY'] ?? $style['padding_y'] ?? $defaults['paddingBottom']);
+        $paddingLeft = (int) ($style['paddingLeft'] ?? $style['padding_left'] ?? $style['paddingX'] ?? $style['padding_x'] ?? $defaults['paddingLeft']);
+
+        return [
+            'backgroundColorEnd' => (string) ($style['backgroundColorEnd'] ?? $style['background_color_end'] ?? $defaults['backgroundColorEnd']),
+            'backgroundColorStart' => (string) ($style['backgroundColorStart'] ?? $style['background_color_start'] ?? $defaults['backgroundColorStart']),
+            'backgroundGradientDirection' => (string) ($style['backgroundGradientDirection'] ?? $style['background_gradient_direction'] ?? $defaults['backgroundGradientDirection']),
+            'backgroundMode' => (string) ($style['backgroundMode'] ?? $style['background_mode'] ?? $defaults['backgroundMode']),
+            'background_image' => $style['background_image'] ?? $style['backgroundImage'] ?? $defaults['background_image'],
+            'padding' => $paddingTop === $paddingRight && $paddingRight === $paddingBottom && $paddingBottom === $paddingLeft
+                ? $paddingTop
+                : (int) round(($paddingTop + $paddingRight + $paddingBottom + $paddingLeft) / 4),
+            'paddingBottom' => $paddingBottom,
+            'paddingLeft' => $paddingLeft,
+            'paddingRight' => $paddingRight,
+            'paddingTop' => $paddingTop,
+            'paddingX' => $paddingLeft === $paddingRight ? $paddingLeft : (int) round(($paddingLeft + $paddingRight) / 2),
+            'paddingY' => $paddingTop === $paddingBottom ? $paddingTop : (int) round(($paddingTop + $paddingBottom) / 2),
         ];
     }
 
@@ -592,6 +644,51 @@ class ClientDecorationSchemeService extends BaseService
         unset($item);
 
         $props['items'] = $items;
+
+        return $props;
+    }
+
+    /**
+     * @param array<string, mixed> $props
+     * @return array<string, mixed>
+     */
+    protected function normalizeModuleStyleAliases(array $props): array
+    {
+        $aliases = [
+            'backgroundColorEnd' => 'background_color_end',
+            'backgroundColorStart' => 'background_color_start',
+            'backgroundGradientDirection' => 'background_gradient_direction',
+            'backgroundMode' => 'background_mode',
+            'borderColor' => 'border_color',
+            'borderEnabled' => 'border_enabled',
+            'borderStyle' => 'border_style',
+            'borderWidth' => 'border_width',
+            'marginBottom' => 'margin_bottom',
+            'marginLeft' => 'margin_left',
+            'marginRight' => 'margin_right',
+            'marginTop' => 'margin_top',
+            'paddingBottom' => 'padding_bottom',
+            'paddingLeft' => 'padding_left',
+            'paddingRight' => 'padding_right',
+            'paddingTop' => 'padding_top',
+            'paddingX' => 'padding_x',
+            'paddingY' => 'padding_y',
+            'radius' => 'border_radius',
+            'shadowBlur' => 'shadow_blur',
+            'shadowColor' => 'shadow_color',
+            'shadowEnabled' => 'shadow_enabled',
+            'shadowOffsetX' => 'shadow_offset_x',
+            'shadowOffsetY' => 'shadow_offset_y',
+            'shadowOpacity' => 'shadow_opacity',
+            'shadowSpread' => 'shadow_spread',
+            'widthPercent' => 'width_percent',
+        ];
+
+        foreach ($aliases as $target => $source) {
+            if (array_key_exists($source, $props)) {
+                $props[$target] = $props[$source];
+            }
+        }
 
         return $props;
     }

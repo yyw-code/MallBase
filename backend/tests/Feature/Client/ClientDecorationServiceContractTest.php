@@ -258,10 +258,18 @@ final class ClientDecorationServiceContractTest extends TestCase
             $publishedCustomId = (int) Db::name('client_theme')->insertGetId([
                 'name' => 'CodexTest 已发布主题',
                 'type' => 'custom',
-                'tokens' => json_encode(['colorPrimary' => '#222222'], JSON_UNESCAPED_UNICODE),
+                'tokens' => $this->makeThemeTokens('#222222'),
                 'is_system' => 0,
                 'status' => 1,
                 'sort' => 3,
+            ]);
+            $secondPublishedCustomId = (int) Db::name('client_theme')->insertGetId([
+                'name' => 'CodexTest 第二个已发布主题',
+                'type' => 'custom',
+                'tokens' => $this->makeThemeTokens('#333333'),
+                'is_system' => 0,
+                'status' => 1,
+                'sort' => 4,
             ]);
 
             $updateError = $this->captureBusinessException(fn() => $service->update($systemThemeId, [
@@ -295,6 +303,98 @@ final class ClientDecorationServiceContractTest extends TestCase
             $this->assertIsArray($policy);
             $this->assertSame('custom', $policy['default_mode']);
             $this->assertSame($publishedCustomId, (int) $policy['default_theme_id']);
+
+            $this->assertTrue($service->delete($publishedCustomId));
+            $deletedTheme = Db::name('client_theme')->where('id', $publishedCustomId)->find();
+            $this->assertIsArray($deletedTheme);
+            $this->assertSame(0, (int) $deletedTheme['status']);
+            $this->assertNotEmpty($deletedTheme['delete_time']);
+
+            $resetPolicy = $service->getPolicy();
+            $this->assertSame(1, (int) $resetPolicy['allow_user_select']);
+            $this->assertSame('system', $resetPolicy['default_mode']);
+            $this->assertNull($resetPolicy['default_theme_id']);
+
+            $this->assertIsArray($service->savePolicy([
+                'allow_user_select' => 0,
+                'default_mode' => 'custom',
+                'default_theme_id' => $secondPublishedCustomId,
+            ]));
+            $disabledPolicy = $service->getPolicy();
+            $this->assertSame(0, (int) $disabledPolicy['allow_user_select']);
+            $this->assertSame($secondPublishedCustomId, (int) $disabledPolicy['default_theme_id']);
+        } finally {
+            Db::rollback();
+        }
+    }
+
+    public function testDecorationThemesReturnPublishedCustomListAndPolicyDefault(): void
+    {
+        $this->requireDbTables(['client_theme', 'client_theme_policy']);
+        $service = $this->makeService('app\\service\\client\\DecorationService');
+        $this->requireMethods($service, ['themes']);
+
+        Db::startTrans();
+        try {
+            $draftCustomId = (int) Db::name('client_theme')->insertGetId([
+                'name' => 'CodexTest 接口草稿主题',
+                'type' => 'custom',
+                'tokens' => $this->makeThemeTokens('#111111'),
+                'is_system' => 0,
+                'status' => 0,
+                'sort' => 91,
+            ]);
+            $customAId = (int) Db::name('client_theme')->insertGetId([
+                'name' => 'CodexTest 接口已发布主题A',
+                'type' => 'custom',
+                'tokens' => $this->makeThemeTokens('#222222'),
+                'is_system' => 0,
+                'status' => 1,
+                'sort' => 92,
+            ]);
+            $customBId = (int) Db::name('client_theme')->insertGetId([
+                'name' => 'CodexTest 接口已发布主题B',
+                'type' => 'custom',
+                'tokens' => $this->makeThemeTokens('#333333'),
+                'is_system' => 0,
+                'status' => 1,
+                'sort' => 93,
+            ]);
+
+            Db::name('client_theme_policy')->where('id', 1)->delete();
+            Db::name('client_theme_policy')->insert([
+                'id' => 1,
+                'allow_user_select' => 0,
+                'default_mode' => 'custom',
+                'default_theme_id' => $customBId,
+            ]);
+
+            $themes = $service->themes();
+            $this->assertSame(0, (int) $themes['policy']['allow_user_select']);
+            $this->assertSame('custom', $themes['policy']['default_mode']);
+            $this->assertSame($customBId, (int) $themes['policy']['default_theme_id']);
+
+            $codexThemeNames = array_values(array_map(
+                static fn(array $item): string => (string) $item['name'],
+                array_filter(
+                    $themes['themes'],
+                    static fn(array $item): bool => str_starts_with((string) $item['name'], 'CodexTest 接口')
+                )
+            ));
+            $this->assertContains('CodexTest 接口已发布主题A', $codexThemeNames);
+            $this->assertContains('CodexTest 接口已发布主题B', $codexThemeNames);
+            $this->assertNotContains('CodexTest 接口草稿主题', $codexThemeNames);
+
+            $customIds = array_map(
+                static fn(array $item): int => (int) $item['id'],
+                array_filter(
+                    $themes['themes'],
+                    static fn(array $item): bool => str_starts_with((string) $item['name'], 'CodexTest 接口')
+                )
+            );
+            $this->assertContains($customAId, $customIds);
+            $this->assertContains($customBId, $customIds);
+            $this->assertNotContains($draftCustomId, $customIds);
         } finally {
             Db::rollback();
         }
@@ -388,13 +488,15 @@ final class ClientDecorationServiceContractTest extends TestCase
         $this->assertSame(28, $modules['userInfo']['props']['paddingX']);
         $this->assertSame(28, $modules['userInfo']['props']['paddingY']);
         $this->assertSame(0, $modules['userInfo']['props']['radius']);
-        $this->assertSame('#ffffff', $modules['orderEntry']['props']['backgroundColorStart']);
+        $this->assertSame('', $modules['orderEntry']['props']['backgroundColorStart']);
+        $this->assertSame('', $modules['orderEntry']['props']['backgroundColorEnd']);
         $this->assertArrayNotHasKey('bottomBackground', $modules['orderEntry']['props']);
         $this->assertArrayNotHasKey('componentBackgroundStart', $modules['orderEntry']['props']);
         $this->assertArrayNotHasKey('componentBackgroundEnd', $modules['orderEntry']['props']);
         $this->assertArrayNotHasKey('textColor', $modules['orderEntry']['props']);
         $this->assertTrue($modules['orderEntry']['props']['borderEnabled']);
-        $this->assertSame('dashed', $modules['orderEntry']['props']['borderStyle']);
+        $this->assertSame('', $modules['orderEntry']['props']['borderColor']);
+        $this->assertSame('solid', $modules['orderEntry']['props']['borderStyle']);
         $this->assertFalse($modules['orderEntry']['props']['shadowEnabled']);
         $this->assertSame(30, $modules['orderEntry']['props']['shadowBlur']);
         $this->assertSame('#0f172a', $modules['orderEntry']['props']['shadowColor']);
@@ -485,6 +587,76 @@ final class ClientDecorationServiceContractTest extends TestCase
         $this->assertTrue($props['items'][1]['imageRemoved']);
         $this->assertTrue($props['items'][1]['image_removed']);
         $this->assertArrayNotHasKey('textVisibility', $props);
+    }
+
+    public function testDecorationHomeKeepsPageAndModuleStyleAliases(): void
+    {
+        $service = $this->makeDecorationServiceForSchemaNormalization();
+        $method = $this->schemaNormalizerMethod($service);
+        $schema = $method->invoke($service, 'home', [
+            'pageStyle' => [
+                'background_color_end' => '#eeeeee',
+                'background_color_start' => '#ffffff',
+                'background_gradient_direction' => 'diagonalRight',
+                'background_image' => '88',
+                'background_mode' => 'image',
+                'padding_bottom' => 8,
+                'padding_left' => 20,
+                'padding_right' => 12,
+                'padding_top' => 4,
+                'padding_x' => 28,
+                'padding_y' => 0,
+            ],
+            'components' => [
+                [
+                    'id' => 'home-search',
+                    'type' => 'search',
+                    'props' => [
+                        'border_enabled' => true,
+                        'border_width' => 2,
+                        'margin_left' => 5,
+                        'margin_right' => 6,
+                        'padding_bottom' => 3,
+                        'padding_left' => 4,
+                        'padding_right' => 2,
+                        'padding_top' => 1,
+                        'preview_goods' => [['id' => 1]],
+                        'shadow_blur' => 20,
+                        'shadow_enabled' => true,
+                    ],
+                ],
+            ],
+        ]);
+
+        $this->assertSame('#ffffff', $schema['pageStyle']['backgroundColorStart']);
+        $this->assertSame('#eeeeee', $schema['pageStyle']['backgroundColorEnd']);
+        $this->assertSame('diagonalRight', $schema['pageStyle']['backgroundGradientDirection']);
+        $this->assertSame('image', $schema['pageStyle']['backgroundMode']);
+        $this->assertSame('88', $schema['pageStyle']['background_image']);
+        $this->assertSame(4, $schema['pageStyle']['paddingTop']);
+        $this->assertSame(12, $schema['pageStyle']['paddingRight']);
+        $this->assertSame(8, $schema['pageStyle']['paddingBottom']);
+        $this->assertSame(20, $schema['pageStyle']['paddingLeft']);
+        $this->assertSame(16, $schema['pageStyle']['paddingX']);
+        $this->assertSame(6, $schema['pageStyle']['paddingY']);
+        $this->assertSame(11, $schema['pageStyle']['padding']);
+
+        $this->assertCount(1, $schema['components']);
+        $this->assertCount(1, $schema['modules']);
+        $componentProps = $schema['components'][0]['props'];
+        $moduleProps = $schema['modules'][0]['props'];
+        $this->assertArrayNotHasKey('preview_goods', $componentProps);
+        $this->assertSame($componentProps, $moduleProps);
+        $this->assertSame(1, $componentProps['paddingTop']);
+        $this->assertSame(2, $componentProps['paddingRight']);
+        $this->assertSame(3, $componentProps['paddingBottom']);
+        $this->assertSame(4, $componentProps['paddingLeft']);
+        $this->assertSame(5, $componentProps['marginLeft']);
+        $this->assertSame(6, $componentProps['marginRight']);
+        $this->assertTrue($componentProps['borderEnabled']);
+        $this->assertSame(2, $componentProps['borderWidth']);
+        $this->assertTrue($componentProps['shadowEnabled']);
+        $this->assertSame(20, $componentProps['shadowBlur']);
     }
 
     public function testDecorationProfileKeepsLegacyThemeEntryKeyForRuntimeCompatibility(): void
@@ -800,6 +972,19 @@ final class ClientDecorationServiceContractTest extends TestCase
         }
 
         return null;
+    }
+
+    private function makeThemeTokens(string $primary): string
+    {
+        return (string) json_encode([
+            'colorPrimary' => $primary,
+            'colorBg' => '#ffffff',
+            'colorBgSurface' => '#f3f3fe',
+            'colorText' => '#191b23',
+            'colorTextSecondary' => '#434654',
+            'colorBorder' => '#e0e4e8',
+            'colorPrice' => '#ff5a1f',
+        ], JSON_UNESCAPED_UNICODE);
     }
 
     /**
