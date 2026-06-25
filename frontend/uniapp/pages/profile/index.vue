@@ -145,7 +145,6 @@ const walletRecharge = computed(() =>
   formatAmount(wallet.value.total_recharge),
 );
 const walletConsume = computed(() => formatAmount(wallet.value.total_consume));
-const themeOptions = computed(() => decorateStore.availableThemeOptions);
 
 const profileModules = computed(() => {
   const modules = Array.isArray(decorateStore.profileModules)
@@ -244,7 +243,11 @@ function moduleList(module) {
     .filter((item) => item && typeof item === "object")
     .filter((item) => {
       if (item.requireBalanceEnabled) return balancePaymentEnabled.value;
-      return item.visible !== false && item.enabled !== false;
+      return (
+        item.visible !== false &&
+        item.enabled !== false &&
+        decorateStore.isEntryAvailable(item)
+      );
     })
     .map((item, index) => {
       const imageRemoved = isProfileEntryImageRemoved(item);
@@ -266,7 +269,7 @@ function moduleList(module) {
 }
 
 function isThemeEntry(item) {
-  return item?.action === "theme" || item?.key === "theme";
+  return decorateStore.isThemeSelectorTarget(item);
 }
 
 function isCustomerServiceEntry(item) {
@@ -457,15 +460,11 @@ function normalizeHexColor(value) {
 }
 
 function isDefaultProfileSurfaceColor(value) {
-  return ["#ffffff", "#faf8ff", "#f3f3fe"].includes(
-    normalizeHexColor(value),
-  );
+  return ["#ffffff", "#faf8ff", "#f3f3fe"].includes(normalizeHexColor(value));
 }
 
 function isDefaultProfileBorderColor(value) {
-  return ["#e5e5e5", "#e0e4e8", "#f0f2f5"].includes(
-    normalizeHexColor(value),
-  );
+  return ["#e5e5e5", "#e0e4e8", "#f0f2f5"].includes(normalizeHexColor(value));
 }
 
 function shouldUseThemeModuleSurface(props, backgroundMode, backgroundImage) {
@@ -488,7 +487,9 @@ function shouldUseThemeModuleBorder(props) {
   const borderEnabled = props.borderEnabled ?? props.border_enabled;
   if (!styleBoolean(borderEnabled, true)) return false;
   const borderWidth = Number(props.borderWidth ?? props.border_width ?? 1);
-  const borderStyle = String(props.borderStyle || props.border_style || "solid");
+  const borderStyle = String(
+    props.borderStyle || props.border_style || "solid",
+  );
   const borderColor = props.borderColor || props.border_color || "";
   return (
     borderWidth === 1 &&
@@ -814,8 +815,8 @@ async function callCustomerService() {
 }
 
 async function goCell(cell) {
-  if (isThemeEntry(cell) && !cell.path && !cell.url) {
-    showThemeSelector();
+  if (isThemeEntry(cell)) {
+    await showThemeSelector();
     return;
   }
   if (isCustomerServiceEntry(cell) && !cell.path && !cell.url) {
@@ -833,25 +834,8 @@ async function goCell(cell) {
   uni.navigateTo({ url: cell.path || cell.url });
 }
 
-function showThemeSelector() {
-  if (!decorateStore.allowUserThemeSelect) {
-    uni.showToast({ title: "主题由管理员统一设置", icon: "none" });
-    return;
-  }
-  uni.showActionSheet({
-    itemList: themeOptions.value.map((item) => item.label),
-    async success(res) {
-      const selected = themeOptions.value[res.tapIndex];
-      if (!selected) return;
-      const changed = await decorateStore.setThemeMode(selected.mode, {
-        theme_id: selected.theme_id,
-      });
-      if (!changed) {
-        return;
-      }
-      uni.showToast({ title: `已切换为${selected.label}`, icon: "none" });
-    },
-  });
+async function showThemeSelector() {
+  await decorateStore.openThemeSelector();
 }
 
 function handleLogout() {

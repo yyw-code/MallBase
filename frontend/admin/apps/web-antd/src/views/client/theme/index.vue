@@ -571,7 +571,7 @@ onMounted(async () => {
                   <strong>{{
                     settingForm.user_select_enabled
                       ? '显示'
-                      : '显示，点击提示管理员统一设置'
+                      : '隐藏，历史入口点击提示管理员统一设置'
                   }}</strong>
                 </div>
                 <div class="preview-row">

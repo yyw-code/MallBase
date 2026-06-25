@@ -20,6 +20,8 @@ import { mergeDecorateConfig } from '@/utils/decorate'
 
 const CONFIG_STORAGE_KEY = 'mb_decorate_config'
 const TOKEN_STORAGE_KEY = 'mb_access_token'
+const THEME_ACTION_PATH = 'mb-action://theme'
+const THEME_PAGE_PATH = '/pages-sub/user/theme'
 
 let stopThemeListener = null
 
@@ -48,6 +50,28 @@ function writeThemeSelectionCache(selection) {
     mode: selection.mode,
     theme_id: selection.theme_id || null,
   })
+}
+
+function pickTargetValue(target) {
+  if (typeof target === 'string') return target
+  if (!target || typeof target !== 'object') return ''
+  return (
+    target.path ||
+    target.url ||
+    target.link ||
+    target.link_url ||
+    target.linkUrl ||
+    target.target_path ||
+    target.targetPath ||
+    ''
+  )
+}
+
+function normalizeTargetPath(value) {
+  const path = String(value || '').split('?')[0]
+  if (!path) return ''
+  if (path.includes('://')) return path
+  return `/${path.replace(/^\/+/, '')}`
 }
 
 export const useDecorateStore = defineStore('decorate', {
@@ -326,6 +350,66 @@ export const useDecorateStore = defineStore('decorate', {
       writeThemeSelectionCache(nextSelection)
       this.applyThemeState()
       return true
+    },
+
+    isThemeSelectorTarget(target) {
+      if (!target) return false
+      if (typeof target === 'object') {
+        const action = String(target.action || target.key || '').toLowerCase()
+        if (action === 'theme') return true
+      }
+
+      const normalized = normalizeTargetPath(pickTargetValue(target))
+      return normalized === THEME_ACTION_PATH || normalized === THEME_PAGE_PATH
+    },
+
+    isEntryAvailable(item) {
+      return !this.isThemeSelectorTarget(item)
+    },
+
+    filterAvailableEntries(items) {
+      if (!Array.isArray(items)) return []
+      return items.filter((item) => this.isEntryAvailable(item))
+    },
+
+    async openThemeSelector() {
+      if (!this.allowUserThemeSelect) {
+        uni.showToast({ title: '主题由管理员统一设置', icon: 'none' })
+        return false
+      }
+
+      const options = this.availableThemeOptions
+      if (!options.length) {
+        uni.showToast({ title: '暂无可选主题', icon: 'none' })
+        return false
+      }
+
+      const store = this
+      return new Promise((resolve) => {
+        uni.showActionSheet({
+          itemList: options.map((item) => item.label),
+          async success(res) {
+            const selected = options[res.tapIndex]
+            if (!selected) {
+              resolve(false)
+              return
+            }
+            const changed = await store.setThemeMode(selected.mode, {
+              theme_id: selected.theme_id,
+            })
+            if (changed) {
+              uni.showToast({
+                title: `已切换为${selected.label}`,
+                icon: 'none',
+              })
+            }
+            resolve(changed)
+          },
+          fail() {
+            resolve(false)
+          },
+        })
+      })
     },
 
     applyThemeState() {

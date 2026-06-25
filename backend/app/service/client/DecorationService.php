@@ -21,6 +21,8 @@ class DecorationService extends BaseService
     private const SETTING_USER_SELECT_ENABLED = 'client_theme_user_select_enabled';
     private const SETTING_ADMIN_MODE = 'client_theme_admin_mode';
     private const SETTING_ADMIN_THEME_ID = 'client_theme_admin_theme_id';
+    private const THEME_ACTION_PATH = 'mb-action://theme';
+    private const THEME_PAGE_PATH = '/pages-sub/user/theme';
 
     private const MODE_SYSTEM = 'system';
     private const MODE_LIGHT = 'light';
@@ -272,6 +274,7 @@ class DecorationService extends BaseService
                 $schema['modules'] = $schema['components'];
             }
             $schema['modules'] = $this->normalizeModuleListForClient($schema['modules'] ?? []);
+            $schema['modules'] = $this->normalizeProfileServiceMenuModules($schema['modules']);
         }
 
         if ($type === ClientDecorationScheme::TYPE_TABBAR && $isList) {
@@ -437,12 +440,121 @@ class DecorationService extends BaseService
     }
 
     /**
+     * 将历史 customMenu 收敛到 serviceMenu，避免客户端重复渲染入口菜单。
+     *
+     * @param array<int, array<string, mixed>> $modules
+     * @return array<int, array<string, mixed>>
+     */
+    protected function normalizeProfileServiceMenuModules(array $modules): array
+    {
+        $hasServiceMenu = false;
+        foreach ($modules as $module) {
+            if (($module['type'] ?? '') === 'serviceMenu') {
+                $hasServiceMenu = true;
+                break;
+            }
+        }
+
+        $result = [];
+        $serviceIndex = null;
+        $customItems = [];
+
+        foreach ($modules as $module) {
+            $type = (string) ($module['type'] ?? '');
+            if ($type === 'customMenu') {
+                if (!$hasServiceMenu && $serviceIndex === null) {
+                    $module['type'] = 'serviceMenu';
+                    $module['title'] = (string) ($module['title'] ?? '我的服务');
+                    $result[] = $module;
+                    $serviceIndex = count($result) - 1;
+                    continue;
+                }
+
+                $customItems = array_merge($customItems, $this->profileModuleEntryItems($module));
+                continue;
+            }
+
+            $result[] = $module;
+            if ($type === 'serviceMenu' && $serviceIndex === null) {
+                $serviceIndex = count($result) - 1;
+            }
+        }
+
+        if ($serviceIndex !== null && $customItems !== []) {
+            $props = is_array($result[$serviceIndex]['props'] ?? null)
+                ? $result[$serviceIndex]['props']
+                : [];
+            $items = $this->mergeProfileEntryItems(
+                $this->profileModuleEntryItems($result[$serviceIndex]),
+                $customItems
+            );
+            $props['items'] = $items;
+            $props['list'] = $items;
+            $result[$serviceIndex]['props'] = $props;
+        }
+
+        return array_values($result);
+    }
+
+    /**
+     * @param array<string, mixed> $module
+     * @return array<int, array<string, mixed>>
+     */
+    protected function profileModuleEntryItems(array $module): array
+    {
+        $props = is_array($module['props'] ?? null) ? $module['props'] : [];
+        $items = $props['items'] ?? $props['list'] ?? [];
+        if (!is_array($items)) {
+            return [];
+        }
+
+        return array_values(array_filter($items, static fn ($item): bool => is_array($item)));
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $base
+     * @param array<int, array<string, mixed>> $extra
+     * @return array<int, array<string, mixed>>
+     */
+    protected function mergeProfileEntryItems(array $base, array $extra): array
+    {
+        $items = [];
+        $seen = [];
+        foreach (array_merge($base, $extra) as $item) {
+            $key = $this->profileEntryUniqueKey($item);
+            if (isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+            $items[] = $item;
+        }
+
+        return $items;
+    }
+
+    /**
+     * @param array<string, mixed> $item
+     */
+    protected function profileEntryUniqueKey(array $item): string
+    {
+        foreach (['action', 'key', 'path', 'url', 'link', 'target_path', 'label', 'title', 'text'] as $field) {
+            $value = trim((string) ($item[$field] ?? ''));
+            if ($value !== '') {
+                return $field . ':' . mb_strtolower($value);
+            }
+        }
+
+        return sha1(json_encode($item, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '');
+    }
+
+    /**
      * @param array<string, mixed> $props
      * @return array<string, mixed>
      */
     protected function applyDefaultClientProps(string $type, array $props): array
     {
-        $props = array_merge($this->defaultProfileStyleProps($type), $props);
+        $profileType = $type === 'customMenu' ? 'serviceMenu' : $type;
+        $props = array_merge($this->defaultProfileStyleProps($profileType), $props);
         $props = $this->normalizeProfileStyleAliases($props);
         unset($props['textVisibility']);
         unset($props['text_visibility']);
@@ -521,7 +633,7 @@ class DecorationService extends BaseService
             $props['list'] = $items;
         }
 
-        if (in_array($type, ['customMenu', 'serviceMenu'], true)) {
+        if ($profileType === 'serviceMenu') {
             $items = $props['items'] ?? $props['list'] ?? [];
             if (!is_array($items) || $items === []) {
                 $items = $this->defaultProfileServiceItems();
@@ -648,6 +760,17 @@ class DecorationService extends BaseService
                     ?? $item['icon_image']
                     ?? $item['iconImage']
                     ?? '');
+            $path = (string) ($item['path'] ?? $item['url'] ?? $item['link'] ?? $item['target_path'] ?? $item['targetPath'] ?? '');
+            if (
+                ($item['action'] ?? '') === 'theme'
+                || ($item['key'] ?? '') === 'theme'
+                || $this->normalizeTargetPath($path) === self::THEME_ACTION_PATH
+                || $this->normalizeTargetPath($path) === self::THEME_PAGE_PATH
+            ) {
+                $item['key'] = 'theme';
+                $path = '';
+                unset($item['url'], $item['link'], $item['target_path'], $item['targetPath']);
+            }
             if (($item['action'] ?? '') === 'theme' && empty($item['key'])) {
                 $item['key'] = 'theme';
             }
@@ -673,7 +796,7 @@ class DecorationService extends BaseService
                     ? ''
                     : ($image !== '' && $image !== null ? $image : $this->defaultProfileEntryImage($type, $index)),
                 'label' => $label,
-                'path' => (string) ($item['path'] ?? $item['url'] ?? $item['link'] ?? ''),
+                'path' => $path,
                 'title' => $label,
             ]);
             if ($imageRemoved) {
@@ -685,6 +808,19 @@ class DecorationService extends BaseService
         }
 
         return $normalized;
+    }
+
+    protected function normalizeTargetPath(string $path): string
+    {
+        $path = strtok($path, '?') ?: $path;
+        if ($path === '') {
+            return '';
+        }
+        if (str_contains($path, '://')) {
+            return $path;
+        }
+
+        return '/' . ltrim($path, '/');
     }
 
     protected function defaultProfileEntryImage(string $type, int $index): string
@@ -739,7 +875,6 @@ class DecorationService extends BaseService
             'widthPercent' => 100,
         ];
         $map = [
-            'customMenu' => $base,
             'orderEntry' => array_merge($base, ['paddingX' => 28, 'paddingY' => 28]),
             'orderShortcut' => array_merge($base, ['paddingX' => 28, 'paddingY' => 28]),
             'profileHeader' => array_merge($base, ['paddingX' => 28, 'paddingY' => 28, 'radius' => 0]),

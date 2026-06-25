@@ -271,15 +271,10 @@ const PROFILE_MODULES = [
     label: '服务菜单',
     type: 'serviceMenu',
   },
-  {
-    desc: '管理员自定义入口',
-    icon: 'lucide:menu-square',
-    label: '自定义菜单',
-    type: 'customMenu',
-  },
 ];
 
 const PROFILE_TYPE_ALIAS: Record<string, string> = {
+  customMenu: 'serviceMenu',
   orderShortcut: 'orderEntry',
   profileHeader: 'userInfo',
   walletCard: 'walletEntry',
@@ -862,7 +857,7 @@ const paletteGroups = computed(() => {
     return [
       { items: pick(['userInfo', 'walletEntry']), title: '基础组件' },
       {
-        items: pick(['orderEntry', 'serviceMenu', 'customMenu']),
+        items: pick(['orderEntry', 'serviceMenu']),
         title: '入口组件',
       },
     ].filter((group) => group.items.length > 0);
@@ -1327,7 +1322,6 @@ const PROFILE_TEXT_STYLE_ROLES = [
 ];
 
 const PROFILE_TEXT_STYLE_ROLES_BY_TYPE: Record<string, string[]> = {
-  customMenu: ['itemLabel', 'title'],
   orderEntry: ['itemLabel', 'more', 'title'],
   serviceMenu: ['itemLabel', 'title'],
   userInfo: ['meta', 'subtitle', 'title'],
@@ -1686,7 +1680,6 @@ const normalizeProfileItems = (
 
 const getProfileDefaultTitle = (type: string) => {
   if (type === 'orderEntry') return '我的订单';
-  if (type === 'customMenu') return '自定义菜单';
   return '我的服务';
 };
 
@@ -1703,7 +1696,6 @@ const getProfileStyleDefaults = (type: string): Record<string, any> => {
     widthPercent: 100,
   };
   const defaults: Record<string, Record<string, any>> = {
-    customMenu: base,
     orderEntry: {
       ...base,
       paddingX: 28,
@@ -1813,7 +1805,6 @@ const normalizeEditorConfig = (
   schemeType: ClientDecorateApi.SchemeType = activeType.value,
 ) => {
   const profileTypes = new Set([
-    'customMenu',
     'orderEntry',
     'serviceMenu',
     'userInfo',
@@ -1826,7 +1817,7 @@ const normalizeEditorConfig = (
   let config = clone(rawConfig || {});
   if (isProfileModule) {
     config = {
-      ...getProfileStyleDefaults(type),
+      ...getProfileStyleDefaults(profileType),
       ...config,
     };
   } else if (isHomeModule) {
@@ -2213,7 +2204,7 @@ const normalizeEditorConfig = (
       };
     });
   }
-  if (['customMenu', 'orderEntry', 'serviceMenu'].includes(type)) {
+  if (['orderEntry', 'serviceMenu'].includes(type)) {
     let sourceItems: any[] = [];
     if (Array.isArray(config.items) && config.items.length > 0) {
       sourceItems = config.items;
@@ -2469,12 +2460,6 @@ const defaultProfileConfig = (type: string): Record<string, any> => {
     ...config,
   });
   const defaults: Record<string, Record<string, any>> = {
-    customMenu: withStyle('customMenu', {
-      columns: 4,
-      display: 'grid',
-      items: defaultProfileServiceItems(),
-      title: '自定义菜单',
-    }),
     orderEntry: withStyle('orderEntry', {
       display: 'grid',
       items: defaultProfileOrderItems(),
@@ -2762,7 +2747,7 @@ const normalizeSchemaForClient = (
         );
         if (
           activeType.value === 'profile' &&
-          ['customMenu', 'orderEntry', 'serviceMenu'].includes(moduleType)
+          ['orderEntry', 'serviceMenu'].includes(moduleType)
         ) {
           let sourceItems: any[] = [];
           if (Array.isArray(props.items) && props.items.length > 0) {

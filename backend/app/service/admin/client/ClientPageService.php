@@ -15,6 +15,8 @@ class ClientPageService extends BaseService
 {
     protected string $modelClass = ClientPage::class;
 
+    private const THEME_SETTING_PAGE_PATH = '/pages-sub/user/theme';
+
     protected function buildListQuery(array $where)
     {
         return $this->model()
@@ -73,6 +75,10 @@ class ClientPageService extends BaseService
             ->order('id', 'desc')
             ->select()
             ->toArray();
+        $list = array_values(array_filter(
+            $list,
+            fn (array $item): bool => $this->normalizePagePath((string) ($item['path'] ?? '')) !== self::THEME_SETTING_PAGE_PATH
+        ));
 
         $groupMap = [];
         foreach ($this->categoryLabels() as $key => $label) {
@@ -181,6 +187,11 @@ class ClientPageService extends BaseService
             'source' => (string) ($item['source'] ?? ClientPage::SOURCE_AUTO),
             'remark' => $item['remark'] ?? null,
         ];
+    }
+
+    protected function normalizePagePath(string $path): string
+    {
+        return '/' . ltrim(strtok($path, '?') ?: $path, '/');
     }
 
     public function delete(int $id): bool

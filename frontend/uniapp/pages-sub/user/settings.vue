@@ -62,7 +62,7 @@
       <view class="section">
         <text class="section__title">偏好</text>
         <view class="cell-group">
-          <view class="cell" @tap="goTheme">
+          <view v-if="decorateStore.allowUserThemeSelect" class="cell" @tap="goTheme">
             <view class="cell__main">
               <view class="cell__icon cell__icon--theme">
                 <view class="theme-icon" />
@@ -231,8 +231,8 @@ function goChangePassword() {
   uni.navigateTo({ url: '/pages-sub/user/change-password' })
 }
 
-function goTheme() {
-  uni.navigateTo({ url: '/pages-sub/user/theme' })
+async function goTheme() {
+  await decorateStore.openThemeSelector()
 }
 
 function goAbout() {

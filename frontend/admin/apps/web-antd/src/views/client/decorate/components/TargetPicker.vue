@@ -414,6 +414,16 @@ const queryParams = (path: string) => {
 };
 
 const activateByPath = (path: string) => {
+  for (const section of targetSections.value) {
+    for (const group of section.groups) {
+      if (group.items.some((item) => item.path === path)) {
+        activeSectionKey.value = section.key;
+        activeGroupKey.value = group.key;
+        return;
+      }
+    }
+  }
+
   const cleanPath = path.split('?')[0] || '';
   if (cleanPath === GOODS_DETAIL_PATH) {
     activeSectionKey.value = 'goods';

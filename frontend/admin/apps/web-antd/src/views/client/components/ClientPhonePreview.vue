@@ -67,6 +67,9 @@ const selectedModuleFrameReady = ref(false);
 const selectedModuleFrameStyle = ref<Record<string, string>>({});
 let bannerPreviewTimer: ReturnType<typeof setInterval> | undefined;
 
+const THEME_ACTION_PATH = 'mb-action://theme';
+const THEME_PAGE_PATH = '/pages-sub/user/theme';
+
 onMounted(() => {
   bannerPreviewTimer = setInterval(() => {
     bannerPreviewTick.value += 1;
@@ -534,6 +537,36 @@ watch(
   { flush: 'post' },
 );
 
+function sameStyleValue(
+  current: Record<string, string>,
+  next: Record<string, string>,
+) {
+  const currentKeys = Object.keys(current);
+  const nextKeys = Object.keys(next);
+  return (
+    currentKeys.length === nextKeys.length &&
+    nextKeys.every((key) => current[key] === next[key])
+  );
+}
+
+function setStyleIfChanged(
+  target: typeof selectedModuleFrameStyle,
+  next: Record<string, string>,
+) {
+  if (!sameStyleValue(target.value, next)) {
+    target.value = next;
+  }
+}
+
+function setReadyIfChanged(
+  target: typeof selectedModuleFrameReady,
+  next: boolean,
+) {
+  if (target.value !== next) {
+    target.value = next;
+  }
+}
+
 const categorySidebarItems = computed(() => {
   if (props.categoryTree.length > 0) return props.categoryTree;
   return CATEGORY_ITEMS.map((name, index) => ({
@@ -687,13 +720,40 @@ function moduleList(module: ModuleItem) {
     source = DEFAULT_PROFILE_SERVICE_ITEMS;
   }
   return source
-    .filter((item: any) => item?.enabled !== false && item?.visible !== false)
+    .filter(
+      (item: any) =>
+        item?.enabled !== false &&
+        item?.visible !== false &&
+        !isThemeSelectorTarget(item),
+    )
     .map((item: any, index: number) => {
       if (isProfileEntryImageRemoved(item)) return item;
       if (getImage(item)) return item;
       const image = defaultProfileEntryImage(module.type, index);
       return image ? { ...item, image } : item;
     });
+}
+
+function normalizeTargetPath(value: unknown) {
+  const path = String(value || '').split('?')[0];
+  if (!path) return '';
+  if (path.includes('://')) return path;
+  return `/${path.replace(/^\/+/, '')}`;
+}
+
+function isThemeSelectorTarget(item: any) {
+  const action = String(item?.action || item?.key || '').toLowerCase();
+  if (action === 'theme') return true;
+  const path = normalizeTargetPath(
+    item?.path ||
+      item?.url ||
+      item?.link ||
+      item?.link_url ||
+      item?.linkUrl ||
+      item?.target_path ||
+      item?.targetPath,
+  );
+  return path === THEME_ACTION_PATH || path === THEME_PAGE_PATH;
 }
 
 function getImage(item: any): string {
@@ -1735,8 +1795,8 @@ function isTabbarDropAppend() {
 
 function updateSelectedModuleControlPosition() {
   if (!selectedModuleForControls.value) {
-    selectedModuleControlReady.value = false;
-    selectedModuleFrameReady.value = false;
+    setReadyIfChanged(selectedModuleControlReady, false);
+    setReadyIfChanged(selectedModuleFrameReady, false);
     return;
   }
 
@@ -1749,20 +1809,20 @@ function updateSelectedModuleControlPosition() {
       '.client-phone-preview__device',
     );
     if (!root || !target || !device) {
-      selectedModuleControlReady.value = false;
-      selectedModuleFrameReady.value = false;
+      setReadyIfChanged(selectedModuleControlReady, false);
+      setReadyIfChanged(selectedModuleFrameReady, false);
       return;
     }
 
     const rootRect = root.getBoundingClientRect();
     const deviceRect = device.getBoundingClientRect();
     const targetRect = target.getBoundingClientRect();
-    selectedModuleFrameStyle.value = {
+    setStyleIfChanged(selectedModuleFrameStyle, {
       height: `${targetRect.height}px`,
       left: `${targetRect.left - deviceRect.left - device.clientLeft}px`,
       top: `${targetRect.top - deviceRect.top - device.clientTop}px`,
       width: `${targetRect.width}px`,
-    };
+    });
     const rawControlTop = targetRect.top - rootRect.top + targetRect.height / 2;
     const controlTopMin =
       deviceRect.top -
@@ -1784,11 +1844,11 @@ function updateSelectedModuleControlPosition() {
             controlTopMax,
           )
         : rawControlTop;
-    selectedModuleControlStyle.value = {
+    setStyleIfChanged(selectedModuleControlStyle, {
       top: `${controlTop}px`,
-    };
-    selectedModuleFrameReady.value = true;
-    selectedModuleControlReady.value = true;
+    });
+    setReadyIfChanged(selectedModuleFrameReady, true);
+    setReadyIfChanged(selectedModuleControlReady, true);
   });
 }
 

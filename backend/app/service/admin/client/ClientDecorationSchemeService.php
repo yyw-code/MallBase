@@ -109,6 +109,44 @@ class ClientDecorationSchemeService extends BaseService
         ];
     }
 
+    /**
+     * 批量收敛历史个人中心 customMenu 数据。
+     *
+     * @return array{scanned:int, updated:int, skipped:int}
+     */
+    public function migrateLegacyProfileCustomMenu(bool $dryRun = true): array
+    {
+        $schemes = $this->model()
+            ->where('type', ClientDecorationScheme::TYPE_PROFILE)
+            ->whereRaw('CAST(`schema` AS CHAR) LIKE ?', ['%customMenu%'])
+            ->whereNull('delete_time')
+            ->select();
+
+        $scanned = 0;
+        $updated = 0;
+        $skipped = 0;
+
+        foreach ($schemes as $scheme) {
+            $scanned++;
+            $schema = $this->normalizeSchemaByType(
+                ClientDecorationScheme::TYPE_PROFILE,
+                $scheme->schema ?? []
+            );
+            $encoded = json_encode($schema, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            if ($encoded !== false && str_contains($encoded, 'customMenu')) {
+                $skipped++;
+                continue;
+            }
+
+            if (!$dryRun) {
+                $scheme->save(['schema' => $schema]);
+            }
+            $updated++;
+        }
+
+        return compact('scanned', 'updated', 'skipped');
+    }
+
     public function create(array $data): int
     {
         $payload = $this->normalizePayload($data);
@@ -409,6 +447,7 @@ class ClientDecorationSchemeService extends BaseService
                 $schema['modules'] = $schema['components'];
             }
             $schema['modules'] = $this->normalizeModuleListForClient($schema['modules'] ?? []);
+            $schema['modules'] = $this->normalizeProfileServiceMenuModules($schema['modules']);
         }
 
         if ($type === ClientDecorationScheme::TYPE_TABBAR && $isList) {
@@ -462,6 +501,114 @@ class ClientDecorationSchemeService extends BaseService
         }
 
         return array_values(array_filter($list, fn (array $item): bool => $item['type'] !== ''));
+    }
+
+    /**
+     * 将历史 customMenu 收敛到 serviceMenu，避免保存结果继续生产重复入口组件。
+     *
+     * @param array<int, array<string, mixed>> $modules
+     * @return array<int, array<string, mixed>>
+     */
+    protected function normalizeProfileServiceMenuModules(array $modules): array
+    {
+        $hasServiceMenu = false;
+        foreach ($modules as $module) {
+            if (($module['type'] ?? '') === 'serviceMenu') {
+                $hasServiceMenu = true;
+                break;
+            }
+        }
+
+        $result = [];
+        $serviceIndex = null;
+        $customItems = [];
+
+        foreach ($modules as $module) {
+            $type = (string) ($module['type'] ?? '');
+            if ($type === 'customMenu') {
+                if (!$hasServiceMenu && $serviceIndex === null) {
+                    $module['type'] = 'serviceMenu';
+                    $module['title'] = (string) ($module['title'] ?? '我的服务');
+                    $result[] = $module;
+                    $serviceIndex = count($result) - 1;
+                    continue;
+                }
+
+                $customItems = array_merge($customItems, $this->profileModuleEntryItems($module));
+                continue;
+            }
+
+            $result[] = $module;
+            if ($type === 'serviceMenu' && $serviceIndex === null) {
+                $serviceIndex = count($result) - 1;
+            }
+        }
+
+        if ($serviceIndex !== null && $customItems !== []) {
+            $props = is_array($result[$serviceIndex]['props'] ?? null)
+                ? $result[$serviceIndex]['props']
+                : [];
+            $items = $this->mergeProfileEntryItems(
+                $this->profileModuleEntryItems($result[$serviceIndex]),
+                $customItems
+            );
+            $props['items'] = $items;
+            $props['list'] = $items;
+            $result[$serviceIndex]['props'] = $props;
+        }
+
+        return array_values($result);
+    }
+
+    /**
+     * @param array<string, mixed> $module
+     * @return array<int, array<string, mixed>>
+     */
+    protected function profileModuleEntryItems(array $module): array
+    {
+        $props = is_array($module['props'] ?? null) ? $module['props'] : [];
+        $items = $props['items'] ?? $props['list'] ?? [];
+        if (!is_array($items)) {
+            return [];
+        }
+
+        return array_values(array_filter($items, static fn ($item): bool => is_array($item)));
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $base
+     * @param array<int, array<string, mixed>> $extra
+     * @return array<int, array<string, mixed>>
+     */
+    protected function mergeProfileEntryItems(array $base, array $extra): array
+    {
+        $items = [];
+        $seen = [];
+        foreach (array_merge($base, $extra) as $item) {
+            $key = $this->profileEntryUniqueKey($item);
+            if (isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+            $items[] = $item;
+        }
+
+        return $items;
+    }
+
+    /**
+     * @param array<string, mixed> $item
+     */
+    protected function profileEntryUniqueKey(array $item): string
+    {
+        foreach (['action', 'key', 'path', 'url', 'link', 'target_path', 'label', 'title', 'text'] as $field) {
+            $value = trim((string) ($item[$field] ?? ''));
+            if ($value !== '') {
+                return $field . ':' . mb_strtolower($value);
+            }
+        }
+
+        return sha1(json_encode($item, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '');
     }
 
     /**

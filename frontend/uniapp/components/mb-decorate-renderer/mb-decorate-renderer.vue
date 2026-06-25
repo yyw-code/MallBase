@@ -299,6 +299,7 @@
 import { reactive, watch } from "vue";
 import { getGoodsList } from "@/api/goods/goods";
 import config from "@/config/index";
+import { useDecorateStore } from "@/store/decorate";
 import { buildGoodsParams, openDecorateLink } from "@/utils/decorate";
 
 const props = defineProps({
@@ -308,6 +309,7 @@ const props = defineProps({
   },
 });
 
+const decorateStore = useDecorateStore();
 const productStates = reactive({});
 
 watch(
@@ -321,7 +323,9 @@ watch(
 );
 
 function getList(module) {
-  return getRawList(module).filter((item) => itemVisible(item));
+  return getRawList(module).filter(
+    (item) => itemVisible(item) && decorateStore.isEntryAvailable(item),
+  );
 }
 
 function getRawList(module) {
@@ -809,7 +813,7 @@ function cubeTitleStyle(module) {
 }
 
 function openEntryCard(module) {
-  openDecorateLink(
+  openRendererTarget(
     module.props?.path ||
       module.props?.target_path ||
       module.props?.link_url ||
@@ -889,12 +893,12 @@ function titleSubStyle(module) {
 }
 
 function openTitleMore(module) {
-  openDecorateLink(titleMorePath(module));
+  openRendererTarget(titleMorePath(module));
 }
 
 function openItem(item) {
   if (typeof item === "string") return;
-  openDecorateLink(item);
+  openRendererTarget(item);
 }
 
 function looksLikeImageUrl(url) {
@@ -918,7 +922,7 @@ function normalizeImageUrl(url) {
 }
 
 function openSearch(module) {
-  openDecorateLink(
+  openRendererTarget(
     module.props.url ||
       module.props.path ||
       module.props.target_path ||
@@ -954,10 +958,18 @@ function hasProductHead(module) {
 function openMore(module) {
   const morePath = productMorePath(module);
   if (morePath) {
-    openDecorateLink(morePath);
+    openRendererTarget(morePath);
     return;
   }
-  openDecorateLink("/pages-sub/goods/list");
+  openRendererTarget("/pages-sub/goods/list");
+}
+
+async function openRendererTarget(target) {
+  if (decorateStore.isThemeSelectorTarget(target)) {
+    await decorateStore.openThemeSelector();
+    return;
+  }
+  openDecorateLink(target);
 }
 
 function resolveGoodsId(goods) {

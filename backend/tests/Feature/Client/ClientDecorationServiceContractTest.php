@@ -169,6 +169,42 @@ final class ClientDecorationServiceContractTest extends TestCase
         $this->assertStringContainsString('底部导航必须配置2到5个入口', $tabbarError->getMessage());
     }
 
+    public function testDecorationTargetPickerDoesNotExposeThemeEntry(): void
+    {
+        $this->requireDbTables(['client_page', 'goods', 'goods_category', 'goods_brand', 'goods_tag']);
+        $service = $this->makeService('app\\service\\admin\\client\\ClientDecorationSchemeService');
+
+        Db::startTrans();
+        try {
+            Db::name('client_page')->where('path', '/pages-sub/user/theme')->delete();
+            Db::name('client_page')->insert([
+                'name' => 'CodexTest 主题设置页',
+                'path' => '/pages-sub/user/theme',
+                'page_type' => 'subpackage',
+                'category' => 'user',
+                'package_root' => 'pages-sub',
+                'need_login' => 1,
+                'source' => 'system',
+                'remark' => null,
+                'sort' => 1,
+                'status' => 1,
+            ]);
+
+            $result = $service->getTargetPicker(['keyword' => 'CodexTest 不存在的跳转目标']);
+            $this->assertSame([], $result['sections']);
+
+            $pagePaths = [];
+            foreach ($result['pages']['groups'] as $group) {
+                foreach ($group['items'] as $item) {
+                    $pagePaths[] = $item['path'];
+                }
+            }
+            $this->assertNotContains('/pages-sub/user/theme', $pagePaths);
+        } finally {
+            Db::rollback();
+        }
+    }
+
     public function testDecorationSchemeCopyActivateCreatesSnapshotAndKeepsSingleActiveType(): void
     {
         $this->requireDbTables(['client_decoration_scheme', 'client_decoration_snapshot']);
@@ -857,6 +893,78 @@ final class ClientDecorationServiceContractTest extends TestCase
         $this->assertSame('theme', $item['key']);
         $this->assertSame('', $item['path']);
         $this->assertArrayNotHasKey('action', $item);
+    }
+
+    public function testDecorationProfileNormalizesThemeActionPathForRuntimeCompatibility(): void
+    {
+        $service = $this->makeDecorationServiceForSchemaNormalization();
+        $method = $this->schemaNormalizerMethod($service);
+        $schema = $method->invoke($service, 'profile', [
+            'modules' => [
+                [
+                    'id' => 'profile-service',
+                    'type' => 'serviceMenu',
+                    'props' => [
+                        'items' => [
+                            [
+                                'label' => '主题设置',
+                                'path' => 'mb-action://theme',
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ]);
+
+        $item = $schema['modules'][0]['props']['items'][0];
+        $this->assertSame('theme', $item['key']);
+        $this->assertSame('', $item['path']);
+        $this->assertArrayNotHasKey('action', $item);
+    }
+
+    public function testDecorationProfileMergesLegacyCustomMenuIntoServiceMenu(): void
+    {
+        $service = $this->makeDecorationServiceForSchemaNormalization();
+        $method = $this->schemaNormalizerMethod($service);
+        $schema = $method->invoke($service, 'profile', [
+            'modules' => [
+                [
+                    'id' => 'profile-service',
+                    'type' => 'serviceMenu',
+                    'props' => [
+                        'items' => [
+                            [
+                                'label' => '地址管理',
+                                'path' => '/pages-sub/address/list',
+                            ],
+                        ],
+                    ],
+                ],
+                [
+                    'id' => 'profile-custom',
+                    'type' => 'customMenu',
+                    'props' => [
+                        'items' => [
+                            [
+                                'label' => '地址管理',
+                                'path' => '/pages-sub/address/list',
+                            ],
+                            [
+                                'label' => '售后服务',
+                                'path' => '/pages-sub/refund/list',
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ]);
+
+        $modules = array_column($schema['modules'], null, 'type');
+        $this->assertArrayHasKey('serviceMenu', $modules);
+        $this->assertArrayNotHasKey('customMenu', $modules);
+        $this->assertCount(2, $modules['serviceMenu']['props']['items']);
+        $this->assertSame('地址管理', $modules['serviceMenu']['props']['items'][0]['label']);
+        $this->assertSame('售后服务', $modules['serviceMenu']['props']['items'][1]['label']);
     }
 
     public function testDecorationProductSourcePickerHydratesGoodsMainImageAssetUrl(): void

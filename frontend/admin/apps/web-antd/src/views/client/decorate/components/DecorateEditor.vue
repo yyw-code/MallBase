@@ -95,9 +95,7 @@ const editableProfileType = computed(() =>
     : '',
 );
 const isProfileEntryModule = computed(() =>
-  ['customMenu', 'orderEntry', 'serviceMenu'].includes(
-    editableProfileType.value,
-  ),
+  ['orderEntry', 'serviceMenu'].includes(editableProfileType.value),
 );
 
 const bannerDragIndex = ref<null | number>(null);
@@ -211,6 +209,45 @@ const profileTextWeightOptions = [
   { label: '特粗', value: '900' },
 ];
 
+const THEME_ACTION_PATH = 'mb-action://theme';
+const THEME_PAGE_PATH = '/pages-sub/user/theme';
+
+const normalizeTargetPickerPath = (value: any) => {
+  const path = String(value || '').split('?')[0];
+  if (!path) return '';
+  if (path.includes('://')) return path;
+  return `/${path.replace(/^\/+/, '')}`;
+};
+
+const isThemeActionTarget = (value: any) => {
+  const path = normalizeTargetPickerPath(value);
+  return path === THEME_ACTION_PATH || path === THEME_PAGE_PATH;
+};
+
+const isThemeProfileEntryItem = (item: any) => {
+  if (!item || typeof item !== 'object') return false;
+  if (item.action === 'theme' || item.key === 'theme') return true;
+  return [
+    item.path,
+    item.url,
+    item.link,
+    item.link_url,
+    item.linkUrl,
+    item.target_path,
+    item.targetPath,
+  ].some((value) => isThemeActionTarget(value));
+};
+
+const clearProfileItemTargetFields = (item: any) => {
+  item.path = '';
+  delete item.url;
+  delete item.link;
+  delete item.link_url;
+  delete item.linkUrl;
+  delete item.target_path;
+  delete item.targetPath;
+};
+
 const profileTextAlignOptions = [
   { label: '左对齐', value: 'left' },
   { label: '居中', value: 'center' },
@@ -223,20 +260,6 @@ const profileTextStyleDefaults: Record<
     Record<ProfileTextStyleRole, Partial<Record<ProfileTextStyleField, any>>>
   >
 > = {
-  customMenu: {
-    itemLabel: {
-      color: '#191b23',
-      fontSize: 28,
-      fontWeight: '500',
-      textAlign: 'left',
-    },
-    title: {
-      color: '#191b23',
-      fontSize: 30,
-      fontWeight: '700',
-      textAlign: 'left',
-    },
-  },
   orderEntry: {
     itemLabel: {
       color: '#434654',
@@ -421,10 +444,6 @@ const profileTextStyleFieldsByType: Record<
   string,
   Array<{ label: string; role: ProfileTextStyleRole }>
 > = {
-  customMenu: [
-    { label: '组件标题', role: 'title' },
-    { label: '入口文字', role: 'itemLabel' },
-  ],
   orderEntry: [
     { label: '组件标题', role: 'title' },
     { label: '查看全部', role: 'more' },
@@ -1429,7 +1448,10 @@ const normalizeProfileEntryItem = (
   if (!target.id) target.id = target.key || createLocalId('profile_item');
   if (target.label !== label) target.label = label;
   if (target.title !== label) target.title = label;
-  if (target.action === 'theme' && !target.key) target.key = 'theme';
+  if (isThemeProfileEntryItem(target)) {
+    target.key = 'theme';
+    clearProfileItemTargetFields(target);
+  }
 
   const imageRemoved = isProfileItemImageRemoved(target);
   const imageSource = imageRemoved
@@ -1457,7 +1479,14 @@ const normalizeProfileEntryItem = (
   }
 
   const path =
-    target.path || target.url || target.link || target.target_path || '';
+    target.path ||
+    target.url ||
+    target.link ||
+    target.link_url ||
+    target.linkUrl ||
+    target.target_path ||
+    target.targetPath ||
+    '';
   if (target.path !== path) target.path = path;
   if ('icon' in target) delete target.icon;
   if ('action' in target) delete target.action;
@@ -1475,14 +1504,22 @@ const getProfileEntryItems = (module: ModuleItem) => {
   } else if (Array.isArray(config.list)) {
     source = config.list;
   }
-  const items = source;
-  items.forEach((item: any, index: number) => {
+
+  let changed = false;
+  const items: any[] = [];
+  source.forEach((item: any, index: number) => {
     const normalizedItem = normalizeProfileEntryItem(item, index, moduleType);
-    if (items[index] !== normalizedItem) items[index] = normalizedItem;
+    if (isThemeProfileEntryItem(normalizedItem)) {
+      changed = true;
+      return;
+    }
+    if (source[index] !== normalizedItem) changed = true;
+    items.push(normalizedItem);
   });
-  if (config.items !== items) config.items = items;
-  if (config.list !== items) config.list = items;
-  return items;
+  const normalizedItems = changed ? items : source;
+  if (config.items !== normalizedItems) config.items = normalizedItems;
+  if (config.list !== normalizedItems) config.list = normalizedItems;
+  return normalizedItems;
 };
 
 const selectedProfileEntryItems = computed<any[]>(() =>
@@ -1559,6 +1596,12 @@ const updateProfileItemLabel = (item: any, value: string) => {
 };
 
 const updateProfileItemPath = (item: any, value: string) => {
+  if (isThemeActionTarget(value)) {
+    clearProfileItemTargetFields(item);
+    return;
+  }
+  if (item.action === 'theme') delete item.action;
+  if (item.key === 'theme') delete item.key;
   item.path = value;
 };
 
@@ -1755,7 +1798,7 @@ const profileTextStyleTargetText = (
     };
     return targets[role] || '当前未显示';
   }
-  if (['customMenu', 'serviceMenu'].includes(type)) {
+  if (type === 'serviceMenu') {
     const targets: Partial<Record<ProfileTextStyleRole, string>> = {
       action: '当前未显示',
       amount: '当前未显示',
@@ -1767,9 +1810,7 @@ const profileTextStyleTargetText = (
       more: '当前未显示',
       primaryAction: '当前未显示',
       subtitle: '当前未显示',
-      title: String(
-        config.title || (type === 'customMenu' ? '自定义菜单' : '我的服务'),
-      ),
+      title: String(config.title || '我的服务'),
     };
     return targets[role] || '当前未显示';
   }
@@ -1785,7 +1826,7 @@ const getProfileTextStyleDefault = (
     ...profileTextStyleDefaults[type]?.[role],
   } as Partial<Record<ProfileTextStyleField, any>>;
   if (
-    ['customMenu', 'serviceMenu'].includes(type) &&
+    type === 'serviceMenu' &&
     role === 'itemLabel' &&
     module?.config?.display === 'grid'
   ) {
@@ -3456,7 +3497,6 @@ const updateProfileItemVisible = updateConfigItemVisible;
                 <div class="property-section__desc">
                   {{
                     {
-                      customMenu: '自定义服务入口，可配置图片、名称和跳转。',
                       orderEntry:
                         '默认展示四个订单状态入口，可配置图片、名称和跳转。',
                       serviceMenu:
@@ -3590,7 +3630,7 @@ const updateProfileItemVisible = updateConfigItemVisible;
                       @update:value="updateProfileItemLabel(item, $event)"
                     />
                     <TargetPicker
-                      :value="item.path"
+                      :value="item.path || ''"
                       :disabled="isReadonlyScheme"
                       placeholder="跳转目标"
                       @update:value="updateProfileItemPath(item, $event)"
