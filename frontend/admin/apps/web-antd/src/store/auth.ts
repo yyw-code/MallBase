@@ -23,6 +23,29 @@ export const useAuthStore = defineStore('auth', () => {
 
   const loginLoading = ref(false);
 
+  function loginRedirectPath() {
+    const redirect = router.currentRoute.value.query?.redirect;
+    const redirectValue = Array.isArray(redirect) ? redirect[0] : redirect;
+    if (!redirectValue || typeof redirectValue !== 'string') return '';
+
+    let decodedRedirect = redirectValue;
+    try {
+      decodedRedirect = decodeURIComponent(redirectValue);
+    } catch {
+      decodedRedirect = redirectValue;
+    }
+
+    if (!decodedRedirect.startsWith('/') || decodedRedirect.startsWith('//')) {
+      return '';
+    }
+
+    if (decodedRedirect.split('?')[0] === LOGIN_PATH) {
+      return '';
+    }
+
+    return decodedRedirect;
+  }
+
   /**
    * 异步处理登录操作
    * Asynchronously handle login process
@@ -60,11 +83,11 @@ export const useAuthStore = defineStore('auth', () => {
         if (accessStore.loginExpired) {
           accessStore.setLoginExpired(false);
         } else {
-          await (onSuccess
-            ? onSuccess?.()
-            : router.push(
-                userStore.userInfo?.homePath || preferences.app.defaultHomePath,
-              ));
+          const targetPath =
+            loginRedirectPath() ||
+            userStore.userInfo?.homePath ||
+            preferences.app.defaultHomePath;
+          await (onSuccess ? onSuccess?.() : router.push(targetPath));
         }
 
         if (adminInfo?.nickname) {
