@@ -18,6 +18,7 @@ import {
 
 import { message } from 'ant-design-vue';
 import { IconifyIcon } from '@vben/icons';
+import { DomEditor, SlateTransforms } from '@wangeditor/editor';
 import { Editor, Toolbar } from '@wangeditor/editor-for-vue';
 
 import Upload from '#/components/upload/index.vue';
@@ -48,7 +49,8 @@ const emit = defineEmits<{
 }>();
 
 const editorRef = shallowRef<IDomEditor>();
-const html = ref(props.modelValue);
+const html = ref(props.modelValue ?? '');
+const lastEmittedValue = ref(normalizeHtml(props.modelValue ?? ''));
 const uploadModalType = ref<'image' | 'video'>('image');
 const uploadValue = ref<FileInfo | FileInfo[] | string | undefined>();
 const uploadRef = ref<{ open: () => Promise<void> | void }>();
@@ -57,7 +59,8 @@ watch(
   () => props.modelValue,
   (value) => {
     const nextValue = value ?? '';
-    if (nextValue !== html.value) {
+    lastEmittedValue.value = normalizeHtml(nextValue);
+    if (normalizeHtml(nextValue) !== normalizeHtml(html.value)) {
       html.value = nextValue;
     }
   },
@@ -79,13 +82,23 @@ watch(
   },
 );
 
-const normalizeHtml = (value: string) => {
+function normalizeHtml(value: string) {
   const trimmed = value.trim();
   if (trimmed === '' || trimmed === '<p><br></p>' || trimmed === '<p></p>') {
     return '';
   }
 
   return value;
+}
+
+const emitModelValue = (value: string) => {
+  const nextValue = normalizeHtml(value);
+  if (nextValue === lastEmittedValue.value) {
+    return;
+  }
+
+  lastEmittedValue.value = nextValue;
+  emit('update:modelValue', nextValue);
 };
 
 const escapeHtmlAttr = (value: string) =>
@@ -165,15 +178,14 @@ const buildMediaHtml = (file: FileInfo, type: 'image' | 'video') => {
   return `<p><img src="${src}" alt="${name}"${assetAttr}></p>`;
 };
 
-const syncEditorValue = () => {
-  const editor = editorRef.value;
-  if (!editor) {
-    return;
-  }
-
-  const nextValue = normalizeHtml(editor.getHtml());
-  html.value = nextValue;
-  emit('update:modelValue', nextValue);
+const focusEditorEnd = (editor: IDomEditor) => {
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      if (!editor.isDestroyed) {
+        editor.focus(true);
+      }
+    });
+  });
 };
 
 const insertMediaFiles = (files: FileInfo[], type: 'image' | 'video') => {
@@ -195,7 +207,9 @@ const insertMediaFiles = (files: FileInfo[], type: 'image' | 'video') => {
 
   editor.focus();
   (editor as any).dangerouslyInsertHtml(mediaHtml);
-  syncEditorValue();
+  if (type === 'video') {
+    focusEditorEnd(editor);
+  }
   return true;
 };
 
@@ -209,6 +223,32 @@ const openUploadPicker = async (type: 'image' | 'video') => {
   uploadValue.value = type === 'image' ? [] : undefined;
   await nextTick();
   await uploadRef.value?.open();
+};
+
+const removeSelectedMedia = () => {
+  if (props.disabled) {
+    return;
+  }
+
+  const editor = editorRef.value;
+  if (!editor) {
+    message.error('编辑器尚未初始化');
+    return;
+  }
+
+  const selectedNode =
+    DomEditor.getSelectedNodeByType(editor, 'image') ||
+    DomEditor.getSelectedNodeByType(editor, 'video');
+  if (!selectedNode) {
+    message.warning('请先选中要删除的图片或视频');
+    return;
+  }
+
+  SlateTransforms.removeNodes(editor, {
+    at: DomEditor.findPath(editor, selectedNode),
+    voids: true,
+  });
+  editor.focus();
 };
 
 const handleUploadValueChange = (
@@ -247,10 +287,9 @@ const handleCreated = (editor: IDomEditor) => {
   }
 };
 
-const handleChange = (editor: IDomEditor) => {
-  const nextValue = normalizeHtml(editor.getHtml());
-  html.value = nextValue;
-  emit('update:modelValue', nextValue);
+const handleEditorValueUpdate = (value: string) => {
+  html.value = value;
+  emitModelValue(value);
 };
 
 onBeforeUnmount(() => {
@@ -290,15 +329,25 @@ onBeforeUnmount(() => {
           <IconifyIcon icon="lucide:video" />
         </button>
       </a-tooltip>
+      <a-tooltip title="删除选中图片或视频">
+        <button
+          type="button"
+          class="rich-text-editor__tool-button"
+          :disabled="disabled"
+          @click="removeSelectedMedia"
+        >
+          <IconifyIcon icon="lucide:trash-2" />
+        </button>
+      </a-tooltip>
     </div>
     <Editor
-      v-model="html"
+      :model-value="html"
       :default-config="editorConfig"
       class="rich-text-editor__body"
       mode="default"
       :style="{ height: editorHeight }"
+      @update:model-value="handleEditorValueUpdate"
       @onBlur="emit('blur')"
-      @onChange="handleChange"
       @onCreated="handleCreated"
     />
 
@@ -350,7 +399,7 @@ onBeforeUnmount(() => {
 
 .rich-text-editor__toolbar {
   min-width: 0;
-  padding-right: 88px;
+  padding-right: 128px;
   border-bottom: 1px solid var(--editor-border);
   background: var(--editor-bg-sub);
 }
@@ -394,14 +443,60 @@ onBeforeUnmount(() => {
 }
 
 .rich-text-editor__body {
-  overflow-y: auto;
+  min-height: 0;
+  overflow: hidden;
   color: var(--editor-text);
   background: var(--editor-bg);
+}
+
+.rich-text-editor.w-e-full-screen-container {
+  position: fixed !important;
+  inset: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  width: 100% !important;
+  height: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  z-index: 2100;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.rich-text-editor.w-e-full-screen-container .rich-text-editor__body {
+  flex: 1;
+  min-height: 0;
+}
+
+.rich-text-editor :deep(.w-e-text-container),
+.rich-text-editor :deep(.w-e-scroll) {
+  height: 100%;
+  min-height: 0;
+}
+
+.rich-text-editor :deep(.w-e-text-container) {
+  overflow: hidden;
+}
+
+.rich-text-editor :deep(.w-e-scroll) {
+  overflow-y: auto;
+}
+
+.rich-text-editor :deep([data-slate-editor]) {
+  box-sizing: border-box;
+  height: 100%;
+  min-height: 100%;
+  overflow-y: auto;
 }
 
 .rich-text-editor :deep(.w-e-text-container [data-slate-editor]) {
   padding: 12px 14px;
   background: var(--editor-bg);
+}
+
+.rich-text-editor :deep(.w-e-text-container [data-slate-editor] > p) {
+  min-height: 24px;
 }
 
 .rich-text-editor :deep(.w-e-textarea-video-container) {
