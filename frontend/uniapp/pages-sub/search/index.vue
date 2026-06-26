@@ -1,40 +1,50 @@
 <script setup>
+import { computed, onMounted, ref } from 'vue'
 import { useDecorateStore } from '@/store/decorate'
-import { ref, computed, onMounted, nextTick } from 'vue'
 import { useAppStore } from '@/store/app'
-import { getGoodsRecommend } from '@/api/goods/goods'
+import { getCategoryList } from '@/api/goods/category'
 import { getHotSearch, recordSearch } from '@/api/search/search'
 import { getPlatform } from '@/utils/platform'
+
 const decorateStore = useDecorateStore()
+const appStore = useAppStore()
 
 const STORAGE_KEY = 'search_history'
 const MAX_HISTORY = 20
+const HOT_LIMIT = 10
+const CATEGORY_LIMIT = 10
 
-const appStore = useAppStore()
-const brandName = computed(() => appStore.siteConfig?.site_name || 'MallBase')
-
-const DEFAULT_HOT_TOPICS = [
-  { title: '高级成衣系列', subtitle: '探索极简主义与舒适的完美平衡' },
-  { title: '基础松软面料', subtitle: '柔软触感，四季百搭' },
-  { title: '手工匠心配饰', subtitle: '精工细作，彰显品位' },
-]
-
-const quickCategories = [
-  { label: '新品上架', icon: 'new' },
-  { label: '国货精选', icon: 'star' },
-  { label: '全部分类', icon: 'grid' },
+const quickFilters = [
+  { label: '新品上架', value: 'is_new', icon: 'new' },
+  { label: '热卖商品', value: 'is_hot', icon: 'hot' },
+  { label: '推荐商品', value: 'is_recommend', icon: 'recommend' },
 ]
 
 const keyword = ref('')
 const historyList = ref([])
-const featuredList = ref([])
-const hotTopics = ref([...DEFAULT_HOT_TOPICS])
+const hotList = ref([])
+const categoryList = ref([])
+const hotLoading = ref(false)
+const categoryLoading = ref(false)
+
+const brandName = computed(() => appStore.siteConfig?.site_name || 'MallBase')
+
+const visibleCategories = computed(() => {
+  const list = categoryList.value
+  const parentIds = new Set(
+    list
+      .map((item) => Number(item.pid || 0))
+      .filter((id) => id > 0),
+  )
+  const leafCategories = list.filter((item) => !parentIds.has(Number(item.id)))
+  const source = leafCategories.length > 0 ? leafCategories : list
+  return source.slice(0, CATEGORY_LIMIT)
+})
 
 onMounted(() => {
   loadHistory()
   fetchHotSearch()
-  fetchFeatured()
-  nextTick(() => {})
+  fetchCategories()
 })
 
 function loadHistory() {
@@ -49,6 +59,7 @@ function loadHistory() {
 function saveHistory(word) {
   const trimmed = word.trim()
   if (!trimmed) return
+
   const filtered = historyList.value.filter((item) => item !== trimmed)
   const updated = [trimmed, ...filtered].slice(0, MAX_HISTORY)
   historyList.value = updated
@@ -67,16 +78,21 @@ function clearHistory() {
   })
 }
 
+function clearKeyword() {
+  keyword.value = ''
+}
+
 function doSearch(word) {
   const trimmed = (word || keyword.value).trim()
   if (!trimmed) {
     uni.showToast({ title: '请输入搜索内容', icon: 'none' })
     return
   }
+
   saveHistory(trimmed)
   recordSearch(trimmed, getPlatform()).catch(() => {})
   uni.navigateTo({
-    url: `/pages-sub/goods/list?keyword=${encodeURIComponent(trimmed)}`,
+    url: `/pages-sub/goods/list?keyword=${trimmed}`,
   })
 }
 
@@ -90,58 +106,68 @@ function onTagTap(tag) {
 }
 
 function goBack() {
-  uni.navigateBack({ fail: () => {} })
+  uni.navigateBack({
+    fail() {
+      uni.switchTab({ url: '/pages/index/index' })
+    },
+  })
 }
 
-async function fetchFeatured() {
-  try {
-    const data = await getGoodsRecommend(6)
-    featuredList.value = Array.isArray(data) ? data : []
-  } catch {
-    featuredList.value = []
-  }
+function goFilter(filter) {
+  uni.navigateTo({
+    url: `/pages-sub/goods/list?${filter.value}=1`,
+  })
+}
+
+function goAllCategories() {
+  uni.switchTab({ url: '/pages/category/index' })
+}
+
+function goCategory(category) {
+  if (!category?.id) return
+  uni.navigateTo({
+    url: `/pages-sub/goods/list?category_id=${category.id}`,
+  })
 }
 
 async function fetchHotSearch() {
+  hotLoading.value = true
   try {
-    const data = await getHotSearch(6)
+    const data = await getHotSearch(HOT_LIMIT)
     const list = Array.isArray(data?.list) ? data.list : []
-    if (list.length === 0) {
-      hotTopics.value = [...DEFAULT_HOT_TOPICS]
-      return
-    }
-    hotTopics.value = list.map((item, index) => ({
-      title: item.keyword,
-      subtitle: `近 7 天热度 ${item.search_count || index + 1}`,
-    }))
+    hotList.value = list
+      .filter((item) => String(item.keyword || '').trim() !== '')
+      .map((item) => ({
+        keyword: String(item.keyword || '').trim(),
+        search_count: Number(item.search_count || 0),
+      }))
   } catch {
-    hotTopics.value = [...DEFAULT_HOT_TOPICS]
+    hotList.value = []
+  } finally {
+    hotLoading.value = false
   }
 }
 
-function getFirstImage(item) {
-  if (item.cover) return item.cover
-  if (Array.isArray(item.images) && item.images.length > 0) {
-    const first = item.images[0]
-    if (typeof first === 'string') return first
-    return first.full_url || first.url || ''
+async function fetchCategories() {
+  categoryLoading.value = true
+  try {
+    const data = await getCategoryList()
+    const list = Array.isArray(data?.list)
+      ? data.list
+      : (Array.isArray(data) ? data : [])
+    categoryList.value = list.filter((item) => item?.id && item?.name)
+  } catch {
+    categoryList.value = []
+  } finally {
+    categoryLoading.value = false
   }
-  return ''
 }
 
-function goGoodsDetail(id) {
-  uni.navigateTo({ url: `/pages-sub/goods/detail?id=${id}` })
+function formatHotCount(count) {
+  if (count >= 10000) return `${(count / 10000).toFixed(1)}万次`
+  if (count > 0) return `${count}次`
+  return '近 7 天'
 }
-
-function goGoodsList(query = '') {
-  uni.navigateTo({ url: `/pages-sub/goods/list${query}` })
-}
-
-/** Primary hero item (first featured) */
-const heroItem = computed(() => featuredList.value[0] || null)
-
-/** Grid items (remaining featured items, up to 4) */
-const gridItems = computed(() => featuredList.value.slice(1, 5))
 </script>
 
 <template>
@@ -152,11 +178,10 @@ const gridItems = computed(() => featuredList.value.slice(1, 5))
   >
     <mb-navbar title="搜索" />
 
-    <!-- ========== Search Header ========== -->
     <view class="search-head">
-      <view class="search-head__brand">
-        <view class="search-head__brand-mark" />
-        <text class="search-head__brand-text">{{ brandName }}</text>
+      <view class="search-head__caption">
+        <text class="search-head__brand">{{ brandName }}</text>
+        <text class="search-head__sub">商品搜索</text>
       </view>
       <view class="search-head__row">
         <view class="search-head__input-wrap">
@@ -165,11 +190,21 @@ const gridItems = computed(() => featuredList.value.slice(1, 5))
             v-model="keyword"
             class="search-head__input"
             type="text"
-            placeholder="搜索商品、品牌"
+            placeholder="搜索商品名称"
             :focus="true"
             confirm-type="search"
             @confirm="onConfirm"
           />
+          <view
+            v-if="keyword"
+            class="search-head__clear"
+            @tap="clearKeyword"
+          >
+            <text class="search-head__clear-text">×</text>
+          </view>
+        </view>
+        <view class="search-head__submit" @tap="onConfirm">
+          <text class="search-head__submit-text">搜索</text>
         </view>
         <view class="search-head__cancel" @tap="goBack">
           <text class="search-head__cancel-text">取消</text>
@@ -177,10 +212,7 @@ const gridItems = computed(() => featuredList.value.slice(1, 5))
       </view>
     </view>
 
-    <!-- ========== Scrollable Content ========== -->
     <view class="content">
-
-      <!-- Search History -->
       <view v-if="historyList.length > 0" class="section">
         <view class="section__header">
           <text class="section__title">搜索历史</text>
@@ -191,7 +223,7 @@ const gridItems = computed(() => featuredList.value.slice(1, 5))
         <view class="tag-flow">
           <view
             v-for="(item, idx) in historyList"
-            :key="idx"
+            :key="`${item}-${idx}`"
             class="tag"
             @tap="onTagTap(item)"
           >
@@ -200,97 +232,75 @@ const gridItems = computed(() => featuredList.value.slice(1, 5))
         </view>
       </view>
 
-      <!-- Hot Discovery — Bento Layout -->
       <view class="section">
         <view class="section__header">
-          <text class="section__title">热门发现</text>
+          <text class="section__title">快捷筛选</text>
         </view>
-
-        <!-- Hero Card -->
-        <view class="hero-card" @tap="heroItem ? goGoodsDetail(heroItem.id) : goGoodsList('?tag=recommend')">
-          <image
-            v-if="heroItem"
-            class="hero-card__img"
-            :src="getFirstImage(heroItem)"
-            mode="aspectFill"
-            lazy-load
-          />
-          <view v-else class="hero-card__placeholder" />
-          <view class="hero-card__overlay">
-            <text class="hero-card__label">{{ heroItem ? heroItem.name : hotTopics[0].title }}</text>
-          </view>
-        </view>
-
-        <!-- Topic List -->
-        <view class="topic-list">
+        <view class="quick-grid">
           <view
-            v-for="(topic, ti) in hotTopics.slice(0, 2)"
-            :key="ti"
-            class="topic-item"
-            @tap="onTagTap(topic.title)"
+            v-for="filter in quickFilters"
+            :key="filter.value"
+            class="quick-item"
+            @tap="goFilter(filter)"
           >
-            <text class="topic-item__num">{{ String(ti + 1).padStart(2, '0') }}</text>
-            <view class="topic-item__body">
-              <text class="topic-item__title">{{ topic.title }}</text>
-              <text class="topic-item__sub">{{ topic.subtitle }}</text>
-            </view>
+            <view class="quick-item__icon" :class="`quick-item__icon--${filter.icon}`" />
+            <text class="quick-item__text">{{ filter.label }}</text>
           </view>
-        </view>
-
-        <!-- Image Grid (2x2 bento) -->
-        <view v-if="gridItems.length > 0" class="bento-grid">
-          <view
-            v-for="(item, gi) in gridItems"
-            :key="gi"
-            class="bento-cell"
-            :class="{ 'bento-cell--tall': gi === 0 }"
-            @tap="goGoodsDetail(item.id)"
-          >
-            <image
-              class="bento-cell__img"
-              :src="getFirstImage(item)"
-              mode="aspectFill"
-              lazy-load
-            />
+          <view class="quick-item" @tap="goAllCategories">
+            <view class="quick-item__icon quick-item__icon--category" />
+            <text class="quick-item__text">全部分类</text>
           </view>
         </view>
       </view>
 
-      <!-- Curated Section -->
-      <view v-if="featuredList.length > 3" class="section">
+      <view class="section">
         <view class="section__header">
-          <text class="section__title">精选专题</text>
+          <text class="section__title">热门搜索</text>
         </view>
-        <view class="curated-row">
+
+        <view v-if="hotLoading" class="list-skeleton">
+          <view v-for="i in 3" :key="i" class="list-skeleton__row" />
+        </view>
+        <view v-else-if="hotList.length > 0" class="hot-list">
           <view
-            v-for="(item, ci) in featuredList.slice(3, 6)"
-            :key="ci"
-            class="curated-card"
-            @tap="goGoodsDetail(item.id)"
+            v-for="(item, index) in hotList"
+            :key="`${item.keyword}-${index}`"
+            class="hot-item"
+            @tap="onTagTap(item.keyword)"
           >
-            <image
-              class="curated-card__img"
-              :src="getFirstImage(item)"
-              mode="aspectFill"
-              lazy-load
-            />
-            <text class="curated-card__name">{{ item.name }}</text>
+            <text class="hot-item__rank">{{ index + 1 }}</text>
+            <text class="hot-item__keyword">{{ item.keyword }}</text>
+            <text class="hot-item__count">{{ formatHotCount(item.search_count) }}</text>
           </view>
+        </view>
+        <view v-else class="empty-line">
+          <text class="empty-line__text">暂无热搜</text>
         </view>
       </view>
 
-      <!-- Quick Category Shortcuts -->
-      <view class="quick-cats">
-        <view
-          v-for="cat in quickCategories"
-          :key="cat.label"
-          class="quick-cat"
-          @tap="goGoodsList('?keyword=' + cat.label)"
-        >
-          <view class="quick-cat__circle">
-            <view class="quick-cat__icon" :class="'quick-cat__icon--' + cat.icon" />
+      <view class="section">
+        <view class="section__header">
+          <text class="section__title">常用分类</text>
+          <view class="section__link" @tap="goAllCategories">
+            <text class="section__link-text">全部</text>
           </view>
-          <text class="quick-cat__label">{{ cat.label }}</text>
+        </view>
+
+        <view v-if="categoryLoading" class="category-skeleton">
+          <view v-for="i in 8" :key="i" class="category-skeleton__item" />
+        </view>
+        <view v-else-if="visibleCategories.length > 0" class="category-grid">
+          <view
+            v-for="category in visibleCategories"
+            :key="category.id"
+            class="category-item"
+            @tap="goCategory(category)"
+          >
+            <text class="category-item__text">{{ category.name }}</text>
+          </view>
+        </view>
+        <view v-else class="empty-line">
+          <text class="empty-line__text">暂无分类</text>
         </view>
       </view>
 
@@ -300,53 +310,37 @@ const gridItems = computed(() => featuredList.value.slice(1, 5))
 </template>
 
 <style lang="scss" scoped>
-/* ===========================
-   Page
-   =========================== */
 .page {
   min-height: 100vh;
   background: var(--color-bg-secondary, #faf8ff);
 }
 
-/* ===========================
-   Top Bar (Search)
-   =========================== */
 .search-head {
   padding: $mb-spacing-sm $mb-spacing-page $mb-spacing-lg;
-  background: var(--color-bg-secondary, #faf8ff);
+  background: var(--color-bg, #ffffff);
+  border-bottom: 1rpx solid var(--color-divider, #f0f2f5);
 }
 
-.search-head__brand {
+.search-head__caption {
   display: flex;
-  align-items: center;
-  gap: $mb-spacing-xs;
+  align-items: baseline;
+  gap: $mb-spacing-sm;
   margin-bottom: $mb-spacing-sm;
 }
 
-.search-head__brand-mark {
-  width: 24rpx;
-  height: 24rpx;
-  border-radius: 6rpx;
-  border: 4rpx solid var(--color-primary, #0d50d5);
-  position: relative;
-
-  &::after {
-    content: '';
-    position: absolute;
-    left: 6rpx;
-    top: 6rpx;
-    width: 4rpx;
-    height: 4rpx;
-    border-radius: $mb-radius-full;
-    background: var(--color-primary, #0d50d5);
-    box-shadow: 9rpx 0 0 var(--color-primary, #0d50d5), 0 9rpx 0 var(--color-primary, #0d50d5), 9rpx 9rpx 0 var(--color-primary, #0d50d5);
-  }
-}
-
-.search-head__brand-text {
+.search-head__brand {
+  max-width: 360rpx;
   font-size: $mb-font-md;
   font-weight: 700;
   color: var(--color-text-title, #191b23);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search-head__sub {
+  font-size: $mb-font-xs;
+  color: var(--color-text-tertiary, #737686);
 }
 
 .search-head__row {
@@ -357,93 +351,140 @@ const gridItems = computed(() => featuredList.value.slice(1, 5))
 
 .search-head__input-wrap {
   flex: 1;
+  min-width: 0;
   display: flex;
   align-items: center;
   height: 72rpx;
   padding: 0 $mb-spacing-md;
-  background: var(--color-bg, #ffffff);
+  background: var(--color-bg-surface, #f3f3fe);
   border: 1rpx solid var(--color-divider, #f0f2f5);
-  border-radius: $mb-radius-sm;
-  min-width: 0;
+  border-radius: $mb-radius-full;
 }
 
 .search-head__search-icon {
+  position: relative;
+  flex-shrink: 0;
   width: 24rpx;
   height: 24rpx;
+  margin-right: $mb-spacing-sm;
   border: 3rpx solid var(--color-text-tertiary, #737686);
   border-radius: 50%;
-  position: relative;
-  margin-right: $mb-spacing-sm;
-  flex-shrink: 0;
 
   &::after {
     content: '';
     position: absolute;
+    right: -7rpx;
+    bottom: -3rpx;
     width: 10rpx;
     height: 3rpx;
     border-radius: $mb-radius-full;
     background: var(--color-text-tertiary, #737686);
-    right: -7rpx;
-    bottom: -3rpx;
     transform: rotate(45deg);
   }
 }
 
 .search-head__input {
   flex: 1;
+  min-width: 0;
+  height: 72rpx;
   font-size: $mb-font-md;
   color: var(--color-text, #191b23);
+}
+
+.search-head__clear {
+  flex-shrink: 0;
+  width: 36rpx;
+  height: 36rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--color-divider, #f0f2f5);
+}
+
+.search-head__clear-text {
+  font-size: 30rpx;
+  line-height: 1;
+  color: var(--color-text-tertiary, #737686);
+}
+
+.search-head__submit,
+.search-head__cancel {
+  flex-shrink: 0;
   height: 72rpx;
+  width: 88rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: $mb-radius-full;
+}
+
+.search-head__submit {
+  background: var(--color-primary, #0d50d5);
+}
+
+.search-head__submit-text,
+.search-head__cancel-text {
+  font-size: $mb-font-sm;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.search-head__submit-text {
+  color: var(--color-text-on-primary, #ffffff);
 }
 
 .search-head__cancel {
-  flex-shrink: 0;
-  padding: $mb-spacing-xs 0 $mb-spacing-xs $mb-spacing-xs;
+  background: var(--color-primary-softer, rgba(13, 80, 213, 0.05));
 }
 
 .search-head__cancel-text {
-  font-size: $mb-font-md;
   color: var(--color-primary, #0d50d5);
-  font-weight: 600;
 }
 
-/* ===========================
-   Content
-   =========================== */
 .content {
   padding: 0 $mb-spacing-page;
 }
 
-/* ===========================
-   Section
-   =========================== */
 .section {
-  margin-top: $mb-spacing-xl;
+  margin-top: $mb-spacing-lg;
 }
 
 .section__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  min-height: 48rpx;
   margin-bottom: $mb-spacing-md;
 }
 
 .section__title {
-  font-size: 34rpx;
+  font-size: $mb-font-lg;
   font-weight: 700;
-  color: var(--color-text, #191b23);
-  letter-spacing: 1rpx;
+  color: var(--color-text-title, #191b23);
 }
 
-.section__action {
+.section__action,
+.section__link {
+  flex-shrink: 0;
   padding: $mb-spacing-xs;
+}
+
+.section__link-text {
+  display: block;
+  padding: 8rpx 18rpx;
+  border-radius: $mb-radius-full;
+  background: var(--color-primary-softer, rgba(13, 80, 213, 0.05));
+  font-size: $mb-font-sm;
+  color: var(--color-primary, #0d50d5);
 }
 
 .section__trash-icon {
   position: relative;
   width: 32rpx;
   height: 34rpx;
-  opacity: 0.45;
+  opacity: 0.5;
 }
 
 .section__trash-icon::before {
@@ -470,9 +511,6 @@ const gridItems = computed(() => featuredList.value.slice(1, 5))
   box-shadow: 8rpx -5rpx 0 -1rpx var(--color-text-tertiary, #737686);
 }
 
-/* ===========================
-   Tag Flow (History)
-   =========================== */
 .tag-flow {
   display: flex;
   flex-wrap: wrap;
@@ -480,289 +518,272 @@ const gridItems = computed(() => featuredList.value.slice(1, 5))
 }
 
 .tag {
+  max-width: 100%;
   padding: 14rpx 28rpx;
   background: var(--color-bg, #ffffff);
   border: 1rpx solid var(--color-divider, #f0f2f5);
-  border-radius: $mb-radius-sm;
-  transition: opacity 0.15s;
+  border-radius: $mb-radius-full;
 
   &:active {
-    opacity: 0.6;
+    opacity: 0.65;
   }
 }
 
 .tag__text {
+  display: block;
+  max-width: 560rpx;
   font-size: 26rpx;
-  color: var(--color-text-secondary, #434654);
   line-height: 1.4;
-  white-space: nowrap;
-}
-
-/* ===========================
-   Hero Card
-   =========================== */
-.hero-card {
-  position: relative;
-  width: 100%;
-  height: 0;
-  padding-bottom: 65%;
-  border-radius: $mb-radius-lg;
-  overflow: hidden;
-  margin-bottom: $mb-spacing-md;
-  border: 1rpx solid var(--color-divider, #f0f2f5);
-}
-
-.hero-card__img {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-}
-
-.hero-card__placeholder {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(135deg, #d5cdc0 0%, #b8ad9e 100%);
-}
-
-.hero-card__overlay {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  padding: 48rpx 32rpx 28rpx;
-  background: linear-gradient(to top, rgba(0, 0, 0, 0.45), transparent);
-}
-
-.hero-card__label {
-  font-size: 36rpx;
-  font-weight: 700;
-  color: var(--color-text-inverse, #ffffff);
-  line-height: 1.3;
-  letter-spacing: 2rpx;
-}
-
-/* ===========================
-   Topic List
-   =========================== */
-.topic-list {
-  display: flex;
-  flex-direction: column;
-  gap: $mb-spacing-md;
-  margin-bottom: $mb-spacing-lg;
-}
-
-.topic-item {
-  display: flex;
-  align-items: flex-start;
-  gap: $mb-spacing-md;
-  padding: $mb-spacing-sm 0;
-
-  &:active {
-    opacity: 0.6;
-  }
-}
-
-.topic-item__num {
-  font-size: 26rpx;
-  font-weight: 700;
-  color: var(--color-text-tertiary, #737686);
-  flex-shrink: 0;
-  line-height: 1.6;
-  letter-spacing: 1rpx;
-}
-
-.topic-item__body {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 4rpx;
-}
-
-.topic-item__title {
-  font-size: 28rpx;
-  font-weight: 600;
-  color: var(--color-text, #191b23);
-  line-height: 1.5;
-}
-
-.topic-item__sub {
-  font-size: $mb-font-sm;
-  color: var(--color-text-tertiary, #737686);
-  line-height: 1.5;
-}
-
-/* ===========================
-   Bento Grid (2x2 Mixed)
-   =========================== */
-.bento-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  grid-template-rows: auto auto;
-  gap: $mb-spacing-sm;
-}
-
-.bento-cell {
-  border-radius: $mb-radius-lg;
-  overflow: hidden;
-  height: 240rpx;
-  background: var(--color-bg-secondary, #faf8ff);
-  border: 1rpx solid var(--color-divider, #f0f2f5);
-}
-
-.bento-cell--tall {
-  grid-row: span 2;
-  height: auto;
-  min-height: 496rpx;
-}
-
-.bento-cell__img {
-  width: 100%;
-  height: 100%;
-}
-
-/* ===========================
-   Curated Row
-   =========================== */
-.curated-row {
-  display: flex;
-  gap: $mb-spacing-sm;
-}
-
-.curated-card {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-
-  &:active {
-    opacity: 0.7;
-  }
-}
-
-.curated-card__img {
-  width: 100%;
-  height: 280rpx;
-  border-radius: $mb-radius-lg;
-  background: var(--color-bg-secondary, #faf8ff);
-}
-
-.curated-card__name {
-  font-size: $mb-font-sm;
   color: var(--color-text-secondary, #434654);
-  margin-top: $mb-spacing-xs;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  text-align: center;
 }
 
-/* ===========================
-   Quick Category Shortcuts
-   =========================== */
-.quick-cats {
+.quick-grid {
   display: flex;
-  justify-content: center;
-  gap: $mb-spacing-xl;
-  margin-top: $mb-spacing-xl;
-  padding: $mb-spacing-lg 0;
+  flex-wrap: wrap;
+  gap: $mb-spacing-sm;
 }
 
-.quick-cat {
+.quick-item {
+  height: 76rpx;
+  padding: 0 $mb-spacing-md;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
+  justify-content: center;
   gap: $mb-spacing-xs;
+  background: var(--color-bg, #ffffff);
+  border: 1rpx solid var(--color-divider, #f0f2f5);
+  border-radius: $mb-radius-full;
 
   &:active {
-    opacity: 0.6;
+    opacity: 0.68;
   }
 }
 
-.quick-cat__circle {
-  width: 96rpx;
-  height: 96rpx;
-  border-radius: $mb-radius-lg;
-  background: var(--color-bg, #ffffff);
-  border: 1rpx solid var(--color-divider, #f0f2f5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.quick-cat__icon {
+.quick-item__icon {
   position: relative;
-  width: 34rpx;
-  height: 34rpx;
+  flex-shrink: 0;
+  width: 30rpx;
+  height: 30rpx;
   color: var(--color-primary, #0d50d5);
 }
 
-.quick-cat__icon::before,
-.quick-cat__icon::after {
+.quick-item__icon::before,
+.quick-item__icon::after {
   content: '';
   position: absolute;
   box-sizing: border-box;
 }
 
-.quick-cat__icon--new::before {
+.quick-item__icon--new::before {
   inset: 3rpx;
-  border: 4rpx solid currentColor;
-  border-radius: 8rpx;
+  border: 3rpx solid currentColor;
+  border-radius: 7rpx;
 }
 
-.quick-cat__icon--new::after {
-  left: 10rpx;
-  top: 15rpx;
-  width: 14rpx;
-  height: 4rpx;
+.quick-item__icon--new::after {
+  left: 9rpx;
+  top: 13rpx;
+  width: 12rpx;
+  height: 3rpx;
   border-radius: $mb-radius-full;
   background: currentColor;
-  box-shadow: 0 -8rpx 0 currentColor, 0 8rpx 0 currentColor;
+  box-shadow: 0 -7rpx 0 currentColor, 0 7rpx 0 currentColor;
 }
 
-.quick-cat__icon--star::before {
-  left: 5rpx;
+.quick-item__icon--hot::before {
+  left: 7rpx;
   top: 2rpx;
-  width: 24rpx;
-  height: 24rpx;
-  border: 4rpx solid currentColor;
-  transform: rotate(45deg);
-  border-radius: 4rpx;
+  width: 17rpx;
+  height: 26rpx;
+  border-radius: 18rpx 18rpx 18rpx 4rpx;
+  border: 3rpx solid currentColor;
+  transform: rotate(28deg);
 }
 
-.quick-cat__icon--star::after {
-  left: 14rpx;
-  top: 14rpx;
-  width: 6rpx;
-  height: 6rpx;
+.quick-item__icon--hot::after {
+  left: 13rpx;
+  top: 13rpx;
+  width: 7rpx;
+  height: 10rpx;
   border-radius: $mb-radius-full;
   background: currentColor;
 }
 
-.quick-cat__icon--grid::before {
+.quick-item__icon--recommend::before {
+  left: 4rpx;
+  top: 4rpx;
+  width: 22rpx;
+  height: 22rpx;
+  border: 3rpx solid currentColor;
+  border-radius: 50%;
+}
+
+.quick-item__icon--recommend::after {
+  left: 13rpx;
+  top: 10rpx;
+  width: 6rpx;
+  height: 12rpx;
+  border-right: 3rpx solid currentColor;
+  border-bottom: 3rpx solid currentColor;
+  transform: rotate(45deg);
+}
+
+.quick-item__icon--category::before {
   left: 3rpx;
   top: 3rpx;
-  width: 10rpx;
-  height: 10rpx;
-  background: currentColor;
+  width: 8rpx;
+  height: 8rpx;
   border-radius: 3rpx;
-  box-shadow: 18rpx 0 0 currentColor, 0 18rpx 0 currentColor, 18rpx 18rpx 0 currentColor;
+  background: currentColor;
+  box-shadow: 16rpx 0 0 currentColor, 0 16rpx 0 currentColor, 16rpx 16rpx 0 currentColor;
 }
 
-.quick-cat__label {
-  font-size: $mb-font-xs;
+.quick-item__text {
+  font-size: $mb-font-sm;
+  line-height: 1.3;
   color: var(--color-text-secondary, #434654);
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-/* ===========================
-   Bottom Spacer
-   =========================== */
+.hot-list {
+  overflow: hidden;
+  background: var(--color-bg, #ffffff);
+  border: 1rpx solid var(--color-divider, #f0f2f5);
+  border-radius: $mb-radius-lg;
+}
+
+.hot-item {
+  display: flex;
+  align-items: center;
+  min-height: 88rpx;
+  padding: 0 $mb-spacing-md;
+  border-bottom: 1rpx solid var(--color-divider, #f0f2f5);
+
+  &:last-child {
+    border-bottom: 0;
+  }
+
+  &:active {
+    background: var(--color-bg-surface, #f3f3fe);
+  }
+}
+
+.hot-item__rank {
+  flex-shrink: 0;
+  width: 44rpx;
+  font-size: $mb-font-sm;
+  font-weight: 700;
+  color: var(--color-primary, #0d50d5);
+}
+
+.hot-item__keyword {
+  flex: 1;
+  min-width: 0;
+  font-size: $mb-font-md;
+  font-weight: 600;
+  color: var(--color-text, #191b23);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hot-item__count {
+  flex-shrink: 0;
+  margin-left: $mb-spacing-sm;
+  font-size: $mb-font-xs;
+  color: var(--color-text-tertiary, #737686);
+}
+
+.category-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $mb-spacing-sm;
+}
+
+.category-item {
+  max-width: 100%;
+  padding: 16rpx 28rpx;
+  background: var(--color-bg, #ffffff);
+  border: 1rpx solid var(--color-divider, #f0f2f5);
+  border-radius: $mb-radius-full;
+
+  &:active {
+    opacity: 0.68;
+  }
+}
+
+.category-item__text {
+  display: block;
+  max-width: 280rpx;
+  font-size: 26rpx;
+  color: var(--color-text-secondary, #434654);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.empty-line {
+  min-height: 96rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg, #ffffff);
+  border: 1rpx solid var(--color-divider, #f0f2f5);
+  border-radius: $mb-radius-sm;
+}
+
+.empty-line__text {
+  font-size: $mb-font-sm;
+  color: var(--color-text-tertiary, #737686);
+}
+
+.list-skeleton,
+.category-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: $mb-spacing-sm;
+}
+
+.list-skeleton__row,
+.category-skeleton__item {
+  height: 72rpx;
+  border-radius: $mb-radius-sm;
+  background: linear-gradient(
+    90deg,
+    var(--color-bg, #ffffff) 25%,
+    var(--color-bg-surface, #f3f3fe) 50%,
+    var(--color-bg, #ffffff) 75%
+  );
+  background-size: 200% 100%;
+  animation: search-shimmer 1.5s infinite ease-in-out;
+}
+
+.category-skeleton {
+  flex-direction: row;
+  flex-wrap: wrap;
+}
+
+.category-skeleton__item {
+  width: 160rpx;
+}
+
 .bottom-spacer {
-  height: 120rpx;
+  height: 96rpx;
+}
+
+@keyframes search-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+
+  100% {
+    background-position: -200% 0;
+  }
 }
 </style>
