@@ -292,8 +292,8 @@ const assetToFileInfo = (asset: UploadAssetApi.AssetItem): FileInfo => ({
 const assetDisplayName = (asset: UploadAssetApi.AssetItem) =>
   asset.original_name || asset.name || `asset-${asset.id}`;
 
-const isAssetSelected = (assetId: number) =>
-  selectedAssetIds.value.includes(assetId);
+const isAssetSelected = (assetId: number | string) =>
+  selectedAssetIds.value.includes(Number(assetId));
 
 const currentValueCount = () => {
   const val = props.value;
@@ -321,7 +321,7 @@ const toggleAssetSelection = (asset: UploadAssetApi.AssetItem) => {
       (id) => id !== assetId,
     );
     selectedAssets.value = selectedAssets.value.filter(
-      (item) => item.id !== assetId,
+      (item) => Number(item.id) !== assetId,
     );
     return;
   }
@@ -1276,174 +1276,180 @@ const handlePreview = (file: UploadFile) => {
     ></video>
   </a-modal>
 
-  <a-modal
-    v-model:open="assetPickerOpen"
-    title="选择素材"
-    width="960px"
-    @ok="confirmAssetSelection"
-  >
-    <div class="asset-picker">
-      <aside class="asset-picker__sidebar">
-        <div class="asset-picker__sidebar-title">{{ pickerCategoryTitle }}</div>
-        <button
-          v-for="category in assetCategoryOptions"
-          :key="category.id || 'all'"
-          type="button"
-          class="asset-picker__category"
-          :class="{
-            'asset-picker__category--active':
-              assetSearch.category_id === category.id,
-          }"
-          :style="{ paddingLeft: `${12 + category.level * 14}px` }"
-          @click="setAssetCategory(category.id)"
-        >
-          {{ category.name }}
-        </button>
-      </aside>
-
-      <section class="asset-picker__content">
-        <div class="asset-picker__header">
-          <div class="asset-picker__current">
-            当前：{{ currentCategoryName }} /
-            {{ formatAssetType(pickerAssetType) }}
-            <span v-if="currentUploadDriver">
-              / 当前驱动：{{ currentUploadDriver.label }}
-            </span>
+  <a-form-item-rest>
+    <a-modal
+      v-model:open="assetPickerOpen"
+      title="选择素材"
+      width="960px"
+      @ok="confirmAssetSelection"
+    >
+      <div class="asset-picker">
+        <aside class="asset-picker__sidebar">
+          <div class="asset-picker__sidebar-title">
+            {{ pickerCategoryTitle }}
           </div>
-          <div
-            v-if="props.mode !== 'library'"
-            class="asset-picker__upload-area"
+          <button
+            v-for="category in assetCategoryOptions"
+            :key="category.id || 'all'"
+            type="button"
+            class="asset-picker__category"
+            :class="{
+              'asset-picker__category--active':
+                assetSearch.category_id === category.id,
+            }"
+            :style="{ paddingLeft: `${12 + category.level * 14}px` }"
+            @click="setAssetCategory(category.id)"
           >
-            <a-upload
-              :accept="pickerAccept"
-              :before-upload="handlePickerBeforeUpload"
-              :custom-request="handlePickerUploadRequest"
-              :multiple="isMultiUploadType"
-              :show-upload-list="false"
-            >
-              <a-button type="primary">上传新素材</a-button>
-            </a-upload>
-          </div>
-        </div>
+            {{ category.name }}
+          </button>
+        </aside>
 
-        <div
-          v-if="assetPickerUploadNoticeLines.length > 0"
-          class="asset-picker__warning"
-        >
-          <span class="asset-picker__warning-title">上传提示</span>
-          <span class="asset-picker__warning-content">
-            <span
-              v-for="line in assetPickerUploadNoticeLines"
-              :key="line"
-              class="asset-picker__warning-line"
+        <section class="asset-picker__content">
+          <div class="asset-picker__header">
+            <div class="asset-picker__current">
+              当前：{{ currentCategoryName }} /
+              {{ formatAssetType(pickerAssetType) }}
+              <span v-if="currentUploadDriver">
+                / 当前驱动：{{ currentUploadDriver.label }}
+              </span>
+            </div>
+            <div
+              v-if="props.mode !== 'library'"
+              class="asset-picker__upload-area"
             >
-              {{ line }}
-            </span>
-          </span>
-        </div>
-
-        <div class="asset-picker__filters">
-          <div class="asset-picker__filter-row">
-            <span class="asset-picker__filter-label">关键字</span>
-            <a-input-search
-              v-model:value="assetSearch.keyword"
-              allow-clear
-              class="asset-picker__search"
-              placeholder="搜索文件名、原始名、Hash"
-              @change="handleAssetKeywordChange"
-              @search="handleAssetKeywordSearch"
-            />
-          </div>
-          <div class="asset-picker__filter-row">
-            <span class="asset-picker__filter-label">上传驱动</span>
-            <a-radio-group
-              v-model:value="assetSearch.driver"
-              button-style="solid"
-              @change="handlePickerDriverChange"
-            >
-              <a-radio-button
-                v-for="item in assetDriverOptions"
-                :key="item.value || 'all'"
-                :value="item.value"
+              <a-upload
+                :accept="pickerAccept"
+                :before-upload="handlePickerBeforeUpload"
+                :custom-request="handlePickerUploadRequest"
+                :multiple="isMultiUploadType"
+                :show-upload-list="false"
               >
-                {{ item.label }}
-              </a-radio-button>
-            </a-radio-group>
+                <a-button type="primary">上传新素材</a-button>
+              </a-upload>
+            </div>
           </div>
-        </div>
 
-        <a-spin :spinning="assetLoading">
-          <div v-if="assetList.length > 0" class="asset-picker__grid">
-            <button
-              v-for="asset in assetList"
-              :key="asset.id"
-              type="button"
-              class="asset-picker__card"
-              :class="{
-                'asset-picker__card--active': isAssetSelected(asset.id),
-              }"
-              @click="toggleAssetSelection(asset)"
-            >
-              <span class="asset-picker__check">✓</span>
-              <span class="asset-picker__preview">
+          <div
+            v-if="assetPickerUploadNoticeLines.length > 0"
+            class="asset-picker__warning"
+          >
+            <span class="asset-picker__warning-title">上传提示</span>
+            <span class="asset-picker__warning-content">
+              <span
+                v-for="line in assetPickerUploadNoticeLines"
+                :key="line"
+                class="asset-picker__warning-line"
+              >
+                {{ line }}
+              </span>
+            </span>
+          </div>
+
+          <div class="asset-picker__filters">
+            <div class="asset-picker__filter-row">
+              <span class="asset-picker__filter-label">关键字</span>
+              <a-input-search
+                v-model:value="assetSearch.keyword"
+                allow-clear
+                class="asset-picker__search"
+                placeholder="搜索文件名、原始名、Hash"
+                @change="handleAssetKeywordChange"
+                @search="handleAssetKeywordSearch"
+              />
+            </div>
+            <div class="asset-picker__filter-row">
+              <span class="asset-picker__filter-label">上传驱动</span>
+              <a-radio-group
+                v-model:value="assetSearch.driver"
+                button-style="solid"
+                @change="handlePickerDriverChange"
+              >
+                <a-radio-button
+                  v-for="item in assetDriverOptions"
+                  :key="item.value || 'all'"
+                  :value="item.value"
+                >
+                  {{ item.label }}
+                </a-radio-button>
+              </a-radio-group>
+            </div>
+          </div>
+
+          <a-spin :spinning="assetLoading">
+            <div v-if="assetList.length > 0" class="asset-picker__grid">
+              <button
+                v-for="asset in assetList"
+                :key="asset.id"
+                type="button"
+                class="asset-picker__card"
+                :class="{
+                  'asset-picker__card--active': isAssetSelected(asset.id),
+                }"
+                @click="toggleAssetSelection(asset)"
+              >
+                <span class="asset-picker__check">✓</span>
+                <span class="asset-picker__preview">
+                  <img
+                    v-if="asset.type === 'image' && asset.full_url"
+                    :src="asset.full_url"
+                    :alt="assetDisplayName(asset)"
+                  />
+                  <span v-else class="asset-picker__placeholder">
+                    {{ formatAssetType(asset.type) }}
+                  </span>
+                </span>
+                <span class="asset-picker__meta">
+                  <span
+                    class="asset-picker__name"
+                    :title="assetDisplayName(asset)"
+                  >
+                    {{ assetDisplayName(asset) }}
+                  </span>
+                  <span class="asset-picker__size">
+                    {{ formatAssetSize(asset.size) }}
+                  </span>
+                </span>
+              </button>
+            </div>
+            <a-empty v-else />
+          </a-spin>
+
+          <div class="asset-picker__bottom">
+            <div class="asset-picker__selected">
+              <span class="asset-picker__selected-count">
+                已选 {{ selectedAssets.length }} 个
+              </span>
+              <span
+                v-for="asset in selectedAssets"
+                :key="asset.id"
+                class="asset-picker__selected-item"
+                :title="assetDisplayName(asset)"
+              >
                 <img
                   v-if="asset.type === 'image' && asset.full_url"
                   :src="asset.full_url"
                   :alt="assetDisplayName(asset)"
                 />
-                <span v-else class="asset-picker__placeholder">
-                  {{ formatAssetType(asset.type) }}
+                <span v-else>
+                  {{ formatAssetType(asset.type).slice(0, 1) }}
                 </span>
               </span>
-              <span class="asset-picker__meta">
-                <span
-                  class="asset-picker__name"
-                  :title="assetDisplayName(asset)"
-                >
-                  {{ assetDisplayName(asset) }}
-                </span>
-                <span class="asset-picker__size">
-                  {{ formatAssetSize(asset.size) }}
-                </span>
-              </span>
-            </button>
-          </div>
-          <a-empty v-else />
-        </a-spin>
+            </div>
 
-        <div class="asset-picker__bottom">
-          <div class="asset-picker__selected">
-            <span class="asset-picker__selected-count">
-              已选 {{ selectedAssets.length }} 个
-            </span>
-            <span
-              v-for="asset in selectedAssets"
-              :key="asset.id"
-              class="asset-picker__selected-item"
-              :title="assetDisplayName(asset)"
-            >
-              <img
-                v-if="asset.type === 'image' && asset.full_url"
-                :src="asset.full_url"
-                :alt="assetDisplayName(asset)"
-              />
-              <span v-else>{{ formatAssetType(asset.type).slice(0, 1) }}</span>
-            </span>
+            <a-pagination
+              size="small"
+              :current="assetPagination.current"
+              :page-size="assetPagination.pageSize"
+              :total="assetPagination.total"
+              show-size-changer
+              @change="handleAssetPageChange"
+              @show-size-change="handleAssetPageChange"
+            />
           </div>
-
-          <a-pagination
-            size="small"
-            :current="assetPagination.current"
-            :page-size="assetPagination.pageSize"
-            :total="assetPagination.total"
-            show-size-changer
-            @change="handleAssetPageChange"
-            @show-size-change="handleAssetPageChange"
-          />
-        </div>
-      </section>
-    </div>
-  </a-modal>
+        </section>
+      </div>
+    </a-modal>
+  </a-form-item-rest>
 </template>
 
 <style scoped>
@@ -1815,17 +1821,25 @@ const handlePreview = (file: UploadFile) => {
     background-color 0.2s;
 }
 
-.asset-picker__card:hover,
-.asset-picker__card--active {
+.asset-picker__card:hover {
   border-color: hsl(var(--primary));
   box-shadow: 0 0 0 2px hsl(var(--primary) / 0.12);
+}
+
+.asset-picker__card--active,
+.asset-picker__card--active:hover {
+  background: hsl(var(--primary) / 0.06);
+  border-color: hsl(var(--primary));
+  box-shadow:
+    inset 0 0 0 2px hsl(var(--primary)),
+    0 0 0 2px hsl(var(--primary) / 0.14);
 }
 
 .asset-picker__check {
   position: absolute;
   top: 8px;
   right: 8px;
-  z-index: 1;
+  z-index: 2;
   display: none;
   align-items: center;
   justify-content: center;
@@ -1842,13 +1856,20 @@ const handlePreview = (file: UploadFile) => {
 }
 
 .asset-picker__preview {
+  position: relative;
   display: flex;
   flex: 0 0 84px;
   align-items: center;
   justify-content: center;
   overflow: hidden;
   background: hsl(var(--muted) / 0.35);
+  border: 1px solid transparent;
   border-radius: 6px;
+}
+
+.asset-picker__card--active .asset-picker__preview {
+  border-color: hsl(var(--primary));
+  box-shadow: inset 0 0 0 1px hsl(var(--primary));
 }
 
 .asset-picker__preview img {
