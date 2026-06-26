@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace app\service\client\goods;
 
 use app\model\goods\GoodsCategory;
+use app\service\upload\AssetHydrator;
 use mall_base\base\BaseService;
 
 /**
@@ -33,6 +34,10 @@ class ClientGoodsCategoryService extends BaseService
             ->select()
             ->toArray();
 
+        $rows = app()->make(AssetHydrator::class)->hydrateFields($rows, [
+            'image' => 'image_full_url',
+        ]);
+
         return $this->buildTree($rows, 0);
     }
 
@@ -43,13 +48,17 @@ class ClientGoodsCategoryService extends BaseService
      */
     public function flatList(): array
     {
-        return $this->model()
+        $list = $this->model()
             ->where('status', 1)
             ->whereNull('delete_time')
             ->order('sort', 'asc')
             ->order('id', 'asc')
             ->select()
             ->toArray();
+
+        return app()->make(AssetHydrator::class)->hydrateFields($list, [
+            'image' => 'image_full_url',
+        ]);
     }
 
     /**

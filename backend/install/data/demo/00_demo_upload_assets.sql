@@ -66,7 +66,17 @@ VALUES
   (58, 5, 'image', 'decorate-cube-picks.png', 'decorate-cube-picks.png', 'image/png', 'png', 0, '', 0, 0, 'client_decorate', 'system', 0, 'public', 1, '{"source":"demo"}'),
   (59, 5, 'image', 'decorate-cube-member.png', 'decorate-cube-member.png', 'image/png', 'png', 0, '', 0, 0, 'client_decorate', 'system', 0, 'public', 1, '{"source":"demo"}'),
   (60, 5, 'image', 'decorate-cube-sale.png', 'decorate-cube-sale.png', 'image/png', 'png', 0, '', 0, 0, 'client_decorate', 'system', 0, 'public', 1, '{"source":"demo"}'),
-  (61, 5, 'image', 'decorate-entry-category.png', 'decorate-entry-category.png', 'image/png', 'png', 0, '', 0, 0, 'client_decorate', 'system', 0, 'public', 1, '{"source":"demo"}');
+  (61, 5, 'image', 'decorate-entry-category.png', 'decorate-entry-category.png', 'image/png', 'png', 0, '', 0, 0, 'client_decorate', 'system', 0, 'public', 1, '{"source":"demo"}'),
+  (62, 1, 'image', 'category-digital-premium.png', 'category-digital-premium.png', 'image/png', 'png', 1797988, '70bd35d8308ad4aeceddb3b594b0a7d8f582987823c1d6e89d2c7c7e25b2f0fb', 1905, 825, 'goods', 'system', 0, 'public', 1, '{"source":"demo"}'),
+  (63, 1, 'image', 'category-fashion-premium.png', 'category-fashion-premium.png', 'image/png', 'png', 614703, '0377d4d76632b14b9c268fea4d1e61fd15afb49237c3d0968f946eb6565f86a0', 1905, 825, 'goods', 'system', 0, 'public', 1, '{"source":"demo"}'),
+  (64, 1, 'image', 'category-food-premium.png', 'category-food-premium.png', 'image/png', 'png', 387873, '4bfbdf58c3783db28b7df3470997ad8a3018225fc6da3814dc20c0ef7d9ddc23', 1905, 825, 'goods', 'system', 0, 'public', 1, '{"source":"demo"}'),
+  (65, 1, 'image', 'category-home-premium.png', 'category-home-premium.png', 'image/png', 'png', 519415, 'e32396d22a0fd50f6f15b7a80424778b64f98bf8db63e2721a7c01dee7ff4612', 1905, 825, 'goods', 'system', 0, 'public', 1, '{"source":"demo"}'),
+  (66, 1, 'image', 'category-laptop-premium.png', 'category-laptop-premium.png', 'image/png', 'png', 1800472, '71a0cb4f8f2ab08ae6bf003d01b8de5e292be1d7508b370a11c25bcfd8d82805', 1254, 1254, 'goods', 'system', 0, 'public', 1, '{"source":"demo"}'),
+  (67, 1, 'image', 'category-camera-premium.png', 'category-camera-premium.png', 'image/png', 'png', 2158707, '73295807d4ff439b13bec0642c5edd2ededfae9b3811abe33c130dd261dca02b', 1254, 1254, 'goods', 'system', 0, 'public', 1, '{"source":"demo"}'),
+  (68, 1, 'image', 'category-watch-premium.png', 'category-watch-premium.png', 'image/png', 'png', 2042913, 'd716b75b2839da385051a5ee66131051bdfd17505c53babfc05d3ae7cbb56c44', 1254, 1254, 'goods', 'system', 0, 'public', 1, '{"source":"demo"}'),
+  (69, 1, 'image', 'category-womenswear-premium.png', 'category-womenswear-premium.png', 'image/png', 'png', 448988, '75ee7c05ddc22db078f139eb3c82616bdcd380e105a892396f208b5d1f63e69c', 1254, 1254, 'goods', 'system', 0, 'public', 1, '{"source":"demo"}'),
+  (70, 1, 'image', 'category-menswear-premium.png', 'category-menswear-premium.png', 'image/png', 'png', 448829, '9aada95125d47abc8df7b96cb607a8eaf9f6d97bd6560f9eae5f72eb10845c87', 1254, 1254, 'goods', 'system', 0, 'public', 1, '{"source":"demo"}'),
+  (71, 1, 'image', 'category-furniture-premium.png', 'category-furniture-premium.png', 'image/png', 'png', 421869, '73afd34753882446911bdd2dc7469bce4b1fa892dc69096ccfd834a8a4039fa8', 1254, 1254, 'goods', 'system', 0, 'public', 1, '{"source":"demo"}');
 
 INSERT INTO `mb_upload_asset_location`
   (`asset_id`, `driver`, `path`, `url_prefix`, `bucket`, `region`, `endpoint`, `is_primary`, `status`, `etag`, `size`, `meta`)
@@ -131,4 +141,14 @@ VALUES
   (58, 'static', 'static/demo/decorate-cube-picks.png', '', '', '', '', 1, 1, '', 0, '{"source":"demo"}'),
   (59, 'static', 'static/demo/decorate-cube-member.png', '', '', '', '', 1, 1, '', 0, '{"source":"demo"}'),
   (60, 'static', 'static/demo/decorate-cube-sale.png', '', '', '', '', 1, 1, '', 0, '{"source":"demo"}'),
-  (61, 'static', 'static/demo/decorate-entry-category.png', '', '', '', '', 1, 1, '', 0, '{"source":"demo"}');
+  (61, 'static', 'static/demo/decorate-entry-category.png', '', '', '', '', 1, 1, '', 0, '{"source":"demo"}'),
+  (62, 'static', 'static/demo/category-digital-premium.png', '', '', '', '', 1, 1, '', 1797988, '{"source":"demo"}'),
+  (63, 'static', 'static/demo/category-fashion-premium.png', '', '', '', '', 1, 1, '', 614703, '{"source":"demo"}'),
+  (64, 'static', 'static/demo/category-food-premium.png', '', '', '', '', 1, 1, '', 387873, '{"source":"demo"}'),
+  (65, 'static', 'static/demo/category-home-premium.png', '', '', '', '', 1, 1, '', 519415, '{"source":"demo"}'),
+  (66, 'static', 'static/demo/category-laptop-premium.png', '', '', '', '', 1, 1, '', 1800472, '{"source":"demo"}'),
+  (67, 'static', 'static/demo/category-camera-premium.png', '', '', '', '', 1, 1, '', 2158707, '{"source":"demo"}'),
+  (68, 'static', 'static/demo/category-watch-premium.png', '', '', '', '', 1, 1, '', 2042913, '{"source":"demo"}'),
+  (69, 'static', 'static/demo/category-womenswear-premium.png', '', '', '', '', 1, 1, '', 448988, '{"source":"demo"}'),
+  (70, 'static', 'static/demo/category-menswear-premium.png', '', '', '', '', 1, 1, '', 448829, '{"source":"demo"}'),
+  (71, 'static', 'static/demo/category-furniture-premium.png', '', '', '', '', 1, 1, '', 421869, '{"source":"demo"}');

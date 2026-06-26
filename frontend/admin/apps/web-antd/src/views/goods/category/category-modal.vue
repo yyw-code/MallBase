@@ -1,24 +1,20 @@
 <script lang="ts" setup>
 import type { GoodsCategoryApi } from '#/api/goods';
-
 import type { FileInfo } from '#/components/upload';
 
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 
 import { message } from 'ant-design-vue';
 
-import { IconPicker } from '@vben/common-ui';
-
-import Upload from '#/components/upload/index.vue';
-
 import {
-  getAllGoodsCategoriesApi,
   createGoodsCategoryApi,
+  getAllGoodsCategoriesApi,
   updateGoodsCategoryApi,
 } from '#/api/goods';
+import Upload from '#/components/upload/index.vue';
 
 interface Props {
-  visible: boolean;
+  visible?: boolean;
   editData?: GoodsCategoryApi.CategoryItem | null;
 }
 
@@ -39,12 +35,19 @@ const isEdit = computed(() => !!props.editData);
 const formData = reactive({
   pid: 0,
   name: '',
-  icon: '',
   image: undefined as FileInfo | string | undefined,
   description: '',
   sort: 0,
   status: 1,
 });
+
+const isRootCategory = computed(() => Number(formData.pid || 0) === 0);
+
+const imageSizeTip = computed(() =>
+  isRootCategory.value
+    ? '一级分类建议 1905×825 横幅图，约 2.3:1，用于移动端顶部分类 banner'
+    : '二级分类建议 1254×1254 方图，1:1，用于移动端分类宫格入口',
+);
 
 const rules = {
   name: [{ required: true, message: '请输入分类名称', trigger: 'blur' }],
@@ -53,13 +56,20 @@ const rules = {
 const formRef = ref();
 
 const loading = ref(false);
-const iconPrefix = ref('ant-design');
-const fileNameFromValue = (value: unknown) => String(value || '').split('/').pop() || '';
+const fileNameFromValue = (value: unknown) =>
+  String(value || '')
+    .split('/')
+    .pop() || '';
 
 /* ---------------- 树形分类数据 ---------------- */
-const categoryTreeData = ref<{ title: string; value: number; key: number; children?: any[] }[]>([]);
+const categoryTreeData = ref<
+  { children?: any[]; key: number; title: string; value: number }[]
+>([]);
 
-const buildTree = (list: GoodsCategoryApi.CategoryItem[], pid: number = 0): any[] => {
+const buildTree = (
+  list: GoodsCategoryApi.CategoryItem[],
+  pid: number = 0,
+): any[] => {
   return list
     .filter((item) => item.pid === pid)
     .map((item) => ({
@@ -94,9 +104,8 @@ watch(
         Object.assign(formData, {
           pid: props.editData.pid || 0,
           name: props.editData.name || '',
-          icon: props.editData.icon || '',
           image: imageUrl
-              ? {
+            ? {
                 url: String(imageUrl),
                 full_url: imageFullUrl || String(imageUrl),
                 name: fileNameFromValue(imageUrl),
@@ -117,7 +126,6 @@ const resetForm = () => {
   Object.assign(formData, {
     pid: 0,
     name: '',
-    icon: '',
     image: undefined,
     description: '',
     sort: 0,
@@ -133,7 +141,12 @@ const handleSubmit = async () => {
 
     const submitData = {
       ...formData,
-      image: typeof formData.image === 'object' ? formData.image?.url || '' : formData.image || '',
+      icon: '',
+      description: isRootCategory.value ? formData.description : '',
+      image:
+        typeof formData.image === 'object'
+          ? formData.image?.url || ''
+          : formData.image || '',
     };
 
     if (isEdit.value) {
@@ -148,7 +161,7 @@ const handleSubmit = async () => {
     emit('update:visible', false);
   } catch (error: any) {
     if (error.errorFields) {
-      console.log('表单验证失败:', error);
+      console.warn('表单验证失败:', error);
     } else {
       console.error('提交失败:', error);
       message.error(error.message || '操作失败');
@@ -201,47 +214,17 @@ onMounted(() => {
         />
       </a-form-item>
 
-      <a-form-item label="图标" name="icon">
-        <div class="flex flex-col" style="width: 100%">
-          <div class="mb-2">
-            <a-select
-              v-model:value="iconPrefix"
-              style="width: 200px"
-              placeholder="选择图标集"
-            >
-              <a-select-option value="ant-design">
-                Ant Design
-              </a-select-option>
-              <a-select-option value="lucide">Lucide</a-select-option>
-              <a-select-option value="mdi">Material Design</a-select-option>
-              <a-select-option value="carbon">Carbon</a-select-option>
-              <a-select-option value="mdi-light">MDI Light</a-select-option>
-            </a-select>
-            <span class="sm ml-2 text-gray-400">
-              也可直接输入，如：lucide:shield
-            </span>
-          </div>
-          <IconPicker
-            v-model="formData.icon"
-            :prefix="iconPrefix"
-            placeholder="请选择图标"
-            style="width: 100%"
-          />
-        </div>
-      </a-form-item>
-
       <a-form-item label="分类图片" name="image">
-        <Upload
-          v-model:value="formData.image"
-          type="image"
-          module="goods"
-        />
+        <div class="form-tip">
+          {{ imageSizeTip }}
+        </div>
+        <Upload v-model:value="formData.image" type="image" module="goods" />
       </a-form-item>
 
-      <a-form-item label="描述" name="description">
+      <a-form-item v-if="isRootCategory" label="描述" name="description">
         <a-textarea
           v-model:value="formData.description"
-          placeholder="请输入分类描述"
+          placeholder="请输入一级分类描述"
           :rows="3"
           allow-clear
         />
@@ -266,3 +249,11 @@ onMounted(() => {
     </a-form>
   </a-modal>
 </template>
+
+<style scoped>
+.form-tip {
+  color: hsl(var(--muted-foreground));
+  font-size: 12px;
+  line-height: 1.4;
+}
+</style>

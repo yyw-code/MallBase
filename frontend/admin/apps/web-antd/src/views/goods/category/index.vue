@@ -4,9 +4,8 @@ import type { GoodsCategoryApi } from '#/api/goods';
 import { h, onMounted, ref } from 'vue';
 
 import { useAccess } from '@vben/access';
-import { IconifyIcon } from '@vben/icons';
 
-import { Avatar, message, Modal, Switch } from 'ant-design-vue';
+import { message, Modal, Switch } from 'ant-design-vue';
 
 import {
   deleteGoodsCategoryApi,
@@ -103,30 +102,10 @@ const handleStatusChange = async (
   }
 };
 
-const isImageLike = (value?: string) => {
-  if (!value) return false;
-  return /^(?:https?:\/\/|\/\/|\/|\.\/|\.\.\/|data:image\/)/.test(value);
-};
-
 /* ---------------- 表格列 ---------------- */
 const columns = [
   { title: 'ID', dataIndex: 'id', width: 80 },
   { title: '分类名称', dataIndex: 'name', width: 150 },
-  {
-    title: '图标',
-    dataIndex: 'icon',
-    width: 100,
-    customRender: ({ record }: { record: GoodsCategoryApi.CategoryItem }) => {
-      if (!record.icon) return '-';
-      if (isImageLike(record.icon)) {
-        return h(Avatar, { src: record.icon, size: 32, shape: 'square' });
-      }
-      return h(IconifyIcon, {
-        icon: record.icon,
-        class: 'category-icon text-lg',
-      });
-    },
-  },
   {
     title: '分类图片',
     dataIndex: 'image',
@@ -156,7 +135,7 @@ const columns = [
         checked: record.status === 1,
         checkedChildren: '启用',
         unCheckedChildren: '禁用',
-        onChange: (checked: boolean) => handleStatusChange(record, checked),
+        onChange: (checked) => handleStatusChange(record, checked === true),
       });
     },
   },
@@ -234,7 +213,7 @@ onMounted(() => {
         :data-source="tableData"
         :loading="loading"
         :pagination="false"
-        :scroll="{ x: 1020 }"
+        :scroll="{ x: 920 }"
         row-key="id"
       >
         <template #bodyCell="{ column, record }">

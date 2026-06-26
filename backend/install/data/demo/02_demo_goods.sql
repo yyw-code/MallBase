@@ -5,19 +5,19 @@
 -- ============================================
 
 -- 一级分类补充图片
-UPDATE `mb_goods_category` SET `image` = 19 WHERE `id` = 1;
-UPDATE `mb_goods_category` SET `image` = 14 WHERE `id` = 2;
-UPDATE `mb_goods_category` SET `image` = 15 WHERE `id` = 3;
-UPDATE `mb_goods_category` SET `image` = 17 WHERE `id` = 4;
+UPDATE `mb_goods_category` SET `image` = 62 WHERE `id` = 1;
+UPDATE `mb_goods_category` SET `image` = 63 WHERE `id` = 2;
+UPDATE `mb_goods_category` SET `image` = 64 WHERE `id` = 3;
+UPDATE `mb_goods_category` SET `image` = 65 WHERE `id` = 4;
 
 -- 二级分类
 INSERT INTO `mb_goods_category` (`id`, `pid`, `name`, `image`, `sort`, `status`) VALUES
-(5,  1, '电脑数码', 20, 1, 1),
-(6,  1, '摄影摄像', 22, 2, 1),
-(7,  1, '时尚配饰', 18, 3, 1),
-(8,  2, '女装',     23, 1, 1),
-(9,  2, '男装',     18, 2, 1),
-(10, 4, '家具软装', 16, 1, 1);
+(5,  1, '电脑数码', 66, 1, 1),
+(6,  1, '摄影摄像', 67, 2, 1),
+(7,  1, '时尚配饰', 68, 3, 1),
+(8,  2, '女装',     69, 1, 1),
+(9,  2, '男装',     70, 2, 1),
+(10, 4, '家具软装', 71, 1, 1);
 
 -- 规格模板
 INSERT INTO `mb_goods_spec_template` (`id`, `name`, `detail`, `sort`, `status`) VALUES
