@@ -4,7 +4,7 @@ import type { TabOption } from '@vben/types';
 
 import type { AnalyticsApi } from '#/api/analytics';
 
-import { computed, onMounted, ref } from 'vue';
+import { computed, markRaw, onMounted, ref } from 'vue';
 
 import { useAccess } from '@vben/access';
 import {
@@ -41,6 +41,14 @@ const health = ref<AnalyticsApi.Health>();
 const orderChannels = ref<AnalyticsApi.PieItem[]>();
 const salesStructure = ref<AnalyticsApi.PieItem[]>();
 const { hasAccessByCodes } = useAccess();
+
+const defaultOverviewIcon = markRaw(SvgCardIcon);
+const overviewIconMap: Record<string, AnalysisOverviewItem['icon']> = {
+  gmv: defaultOverviewIcon,
+  orders: markRaw(SvgCakeIcon),
+  users: markRaw(SvgDownloadIcon),
+  refunds: markRaw(SvgBellIcon),
+};
 
 const hasCards = computed(() => overviewItems.value.length > 0);
 const hasTrend = computed(() => Boolean(trend.value));
@@ -89,16 +97,8 @@ function isPermissionDenied(error: unknown): boolean {
 function buildOverviewItems(
   cards: AnalyticsApi.Card[],
 ): AnalysisOverviewItem[] {
-  const iconMap: Record<string, any> = {
-    gmv: SvgCardIcon,
-    orders: SvgCakeIcon,
-    users: SvgDownloadIcon,
-    refunds: SvgBellIcon,
-    default: SvgCardIcon,
-  };
-
   return cards.map((item) => ({
-    icon: iconMap[item.key] ?? iconMap.default,
+    icon: overviewIconMap[item.key] ?? defaultOverviewIcon,
     title: item.title,
     totalTitle: item.total_title,
     totalValue: item.total_value,

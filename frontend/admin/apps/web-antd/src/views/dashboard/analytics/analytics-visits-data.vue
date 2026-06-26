@@ -31,7 +31,7 @@ function render() {
     radar: {
       indicator: indicators.map((name) => ({ max: 100, name })),
       radius: '60%',
-      splitNumber: 8,
+      splitNumber: 5,
     },
     series: [
       {
