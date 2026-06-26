@@ -54,6 +54,7 @@ const batchTableData = computed(() => [
     is_show: 1,
   } as SkuRow,
 ]);
+const detailEditorHeight = 'clamp(420px, calc(100vh - 430px), 720px)';
 
 watch(editId, async (id) => {
   resetForm();
@@ -359,7 +360,7 @@ onMounted(() => {});
               <div class="tab-body">
                 <a-form-item label="商品描述" name="description" :wrapper-col="{ span: 22 }">
                   <RichTextEditor
-                    :height="460"
+                    :height="detailEditorHeight"
                     module="goods"
                     :model-value="formData.description"
                     placeholder="请输入商品描述..."
