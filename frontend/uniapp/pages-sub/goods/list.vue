@@ -92,21 +92,41 @@
             <view v-else class="goods-card__image-placeholder">
               <view class="goods-card__placeholder-icon" />
             </view>
-            <view v-if="getGoodsBadge(item)" class="goods-card__badge">
-              <text class="goods-card__badge-text">{{ getGoodsBadge(item) }}</text>
+            <view
+              v-if="showGoodsBadge && getGoodsBadge(item)"
+              class="goods-card__badge"
+              :style="goodsBadgeStyle"
+            >
+              <text class="goods-card__badge-text" :style="goodsBadgeTextStyle">
+                {{ getGoodsBadge(item) }}
+              </text>
             </view>
           </view>
           <view class="goods-card__body">
             <text class="goods-card__name">{{ item.name }}</text>
-            <text class="goods-card__sub">{{ getGoodsSubtitle(item) }}</text>
+            <text v-if="showGoodsSubtitle" class="goods-card__sub">
+              {{ getGoodsSubtitle(item) }}
+            </text>
             <view class="goods-card__bottom">
               <view class="goods-card__price-main">
-                <mb-price :value="item.price" size="md" color="var(--color-primary, #0d50d5)" />
-                <text v-if="item.market_price && Number(item.market_price) > Number(item.price)" class="goods-card__origin">
+                <mb-price
+                  :value="item.price"
+                  size="md"
+                  color="var(--color-primary, #0d50d5)"
+                />
+                <text
+                  v-if="
+                    showMarketPrice &&
+                    item.market_price &&
+                    Number(item.market_price) > Number(item.price)
+                  "
+                  class="goods-card__origin"
+                >
                   ¥{{ Number(item.market_price).toFixed(0) }}
                 </text>
               </view>
               <view
+                v-if="showCartButton"
                 class="goods-card__add"
                 :class="{ 'goods-card__add--loading': addingGoodsId === item.id }"
                 @tap.stop="quickAddCart(item)"
@@ -114,7 +134,9 @@
                 <text class="goods-card__add-symbol">+</text>
               </view>
             </view>
-            <text class="goods-card__sales">{{ formatSales(item) }}</text>
+            <text v-if="showGoodsSales" class="goods-card__sales">
+              {{ formatSales(item) }}
+            </text>
           </view>
         </view>
       </view>
@@ -142,18 +164,36 @@
             <view v-else class="goods-row__image-placeholder">
               <view class="goods-card__placeholder-icon" />
             </view>
+            <view
+              v-if="showGoodsBadge && getGoodsBadge(item)"
+              class="goods-card__badge"
+              :style="goodsBadgeStyle"
+            >
+              <text class="goods-card__badge-text" :style="goodsBadgeTextStyle">
+                {{ getGoodsBadge(item) }}
+              </text>
+            </view>
           </view>
           <view class="goods-row__body">
             <view class="goods-row__top">
               <text class="goods-row__name">{{ item.name }}</text>
-              <text class="goods-row__sub">{{ getGoodsSubtitle(item) }}</text>
+              <text v-if="showGoodsSubtitle" class="goods-row__sub">
+                {{ getGoodsSubtitle(item) }}
+              </text>
             </view>
             <view class="goods-row__bottom">
               <view class="goods-row__price-main">
-                <mb-price :value="item.price" size="md" color="var(--color-primary, #0d50d5)" />
-                <text class="goods-row__sales">{{ formatSales(item) }}</text>
+                <mb-price
+                  :value="item.price"
+                  size="md"
+                  color="var(--color-primary, #0d50d5)"
+                />
+                <text v-if="showGoodsSales" class="goods-row__sales">
+                  {{ formatSales(item) }}
+                </text>
               </view>
               <view
+                v-if="showCartButton"
                 class="goods-card__add"
                 :class="{ 'goods-card__add--loading': addingGoodsId === item.id }"
                 @tap.stop="quickAddCart(item)"
@@ -179,14 +219,22 @@
 
 <script setup>
 import { useDecorateStore } from '@/store/decorate'
-import { ref, reactive } from 'vue'
+import { computed, ref, reactive } from 'vue'
 import { onLoad, onPullDownRefresh, onReachBottom } from '@dcloudio/uni-app'
 import { getGoodsDetail, getGoodsList } from '@/api/goods/goods'
 import { useCartStore } from '@/store/cart'
 import { requireLogin } from '@/utils/auth'
+import { useAppStore } from '@/store/app'
+import {
+  getGoodsBadgeBoxStyle,
+  getGoodsBadgeText,
+  getGoodsBadgeTextStyle,
+  normalizeGoodsBadgeConfig,
+} from '@/utils/goods-badge'
 const decorateStore = useDecorateStore()
 
 const cartStore = useCartStore()
+const appStore = useAppStore()
 
 // ---------- query params ----------
 const query = reactive({
@@ -235,6 +283,31 @@ const loading = ref(false)
 const initialLoading = ref(true)
 const noMore = ref(false)
 const addingGoodsId = ref(null)
+
+const showCartButton = computed(() =>
+  configFlag('client_goods_card_show_cart_button', true),
+)
+const showGoodsSales = computed(() =>
+  configFlag('client_goods_card_show_sales', true),
+)
+const showMarketPrice = computed(() =>
+  configFlag('client_goods_card_show_market_price', true),
+)
+const showGoodsSubtitle = computed(() =>
+  configFlag('client_goods_card_show_subtitle', true),
+)
+const showGoodsBadge = computed(() =>
+  configFlag('client_goods_card_show_badge', true),
+)
+const goodsBadgeConfig = computed(() =>
+  normalizeGoodsBadgeConfig(appStore.siteConfig?.client_goods_badge_config),
+)
+const goodsBadgeStyle = computed(() => {
+  return getGoodsBadgeBoxStyle(goodsBadgeConfig.value)
+})
+const goodsBadgeTextStyle = computed(() => {
+  return getGoodsBadgeTextStyle(goodsBadgeConfig.value)
+})
 
 // ---------- lifecycle ----------
 onLoad((params) => {
@@ -380,6 +453,12 @@ function isEnabledFlag(value) {
   return value === true || value === 1 || value === '1' || value === 'true'
 }
 
+function configFlag(code, fallback = true) {
+  const value = appStore.siteConfig?.[code]
+  if (value === undefined || value === null || value === '') return fallback
+  return isEnabledFlag(value)
+}
+
 function clearQueryFlags() {
   queryFlagKeys.forEach((key) => {
     query[key] = ''
@@ -435,10 +514,7 @@ function getGoodsSubtitle(item) {
 }
 
 function getGoodsBadge(item) {
-  if (item.is_new || item.is_new_arrival) return '新品'
-  if (item.is_hot || Number(item.sales || item.sales_count || 0) > 500) return '热卖'
-  if (item.is_recommend || item.is_recommended) return '推荐'
-  return ''
+  return getGoodsBadgeText(item, goodsBadgeConfig.value)
 }
 
 function formatSales(item) {
@@ -774,17 +850,15 @@ function buildCurrentQuery() {
   position: absolute;
   left: 8rpx;
   top: 8rpx;
-  height: 28rpx;
-  padding: 0 10rpx;
-  border-radius: 4rpx;
-  background: rgba(13, 80, 213, 0.1);
   display: flex;
   align-items: center;
+  justify-content: center;
+  background: var(--color-primary, #0d50d5);
 }
 
 .goods-card__badge-text {
   font-size: 18rpx;
-  color: var(--color-primary, #0d50d5);
+  color: var(--color-text-inverse, #ffffff);
   font-weight: 700;
   line-height: 1;
 }
@@ -898,6 +972,7 @@ function buildCurrentQuery() {
 }
 
 .goods-row__image-wrap {
+  position: relative;
   overflow: hidden;
   background: #f3f3fe;
 }

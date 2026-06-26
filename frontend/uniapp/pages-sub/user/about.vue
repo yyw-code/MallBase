@@ -16,7 +16,8 @@
       <view class="section">
         <text class="section__title">项目定位</text>
         <view class="intro">
-          <text class="intro__text">
+          <rich-text v-if="aboutContent" :nodes="aboutContent" />
+          <text v-else class="intro__text">
             MallBase 是面向中小型商城业务的开源项目基础底座，覆盖客户端、后台管理、接口服务和部署路径，适合二次开发与长期维护。
           </text>
         </view>
@@ -33,6 +34,18 @@
           </view>
           <view class="cell" @tap="openAgreement('privacy')">
             <text class="cell__label">隐私政策</text>
+            <view class="cell__right">
+              <view class="arrow-icon" />
+            </view>
+          </view>
+          <view class="cell" @tap="openAgreement('rules')">
+            <text class="cell__label">平台规则</text>
+            <view class="cell__right">
+              <view class="arrow-icon" />
+            </view>
+          </view>
+          <view class="cell" @tap="openAgreement('after_sale')">
+            <text class="cell__label">售后政策</text>
             <view class="cell__right">
               <view class="arrow-icon" />
             </view>
@@ -78,6 +91,7 @@ const slogan = computed(() => (
   '商城业务基础底座'
 ))
 const logo = computed(() => siteConfig.value.client_logo || '/static/logo.png')
+const aboutContent = computed(() => siteConfig.value.client_about_content || '')
 const companyName = computed(() => siteConfig.value.copyright_company || 'MallBase Team')
 const companyUrl = computed(() => siteConfig.value.copyright_company_url || '')
 const copyrightDate = computed(() => siteConfig.value.copyright_date || new Date().getFullYear())

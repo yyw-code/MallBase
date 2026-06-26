@@ -214,6 +214,21 @@ return [
             'remark' => null,
             'children' => [
                 [
+                    'name' => '客户端配置',
+                    'code' => 'SystemClientConfig',
+                    'type' => 1,
+                    'path' => '/client/config',
+                    'icon' => 'lucide:sliders-horizontal',
+                    'component' => '/client/config/index',
+                    'redirect' => null,
+                    'sort' => 5,
+                    'status' => 1,
+                    'is_show' => 1,
+                    'affix_tab' => 0,
+                    'no_basic_layout' => 0,
+                    'remark' => '客户端基础、商品、搜索与内容配置',
+                ],
+                [
                     'name' => '装修',
                     'code' => 'SystemClientDecorationManagement',
                     'type' => 1,

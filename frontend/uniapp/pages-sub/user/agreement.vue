@@ -25,19 +25,41 @@ const decorateStore = useDecorateStore()
 const appStore = useAppStore()
 const type = ref('service')
 
+const contentMap = {
+  about: {
+    title: '关于我们',
+    field: 'client_about_content',
+  },
+  after_sale: {
+    title: '售后政策',
+    field: 'client_after_sale_policy',
+  },
+  privacy: {
+    title: '隐私政策',
+    field: 'client_privacy',
+  },
+  rules: {
+    title: '平台规则',
+    field: 'client_platform_rules',
+  },
+  service: {
+    title: '用户协议',
+    field: 'client_agreement',
+  },
+}
+
 onLoad((query) => {
-  type.value = query?.type === 'privacy' ? 'privacy' : 'service'
+  type.value = contentMap[query?.type] ? query.type : 'service'
   if (!appStore.siteConfig) {
     appStore.fetchBasicConfig()
   }
 })
 
-const title = computed(() => (type.value === 'privacy' ? '隐私权政策' : '服务协议'))
+const title = computed(() => contentMap[type.value]?.title || '用户协议')
 const htmlContent = computed(() => {
   const config = appStore.siteConfig || {}
-  return type.value === 'privacy'
-    ? (config.client_privacy || '')
-    : (config.client_agreement || '')
+  const field = contentMap[type.value]?.field || 'client_agreement'
+  return config[field] || ''
 })
 </script>
 

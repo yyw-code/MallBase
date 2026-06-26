@@ -12,7 +12,8 @@ use Tests\Feature\Support\ApiClientTrait;
  *
  * 契约：
  * - 登录后通过 /auth/permission/menu 应能看到 "系统设置" 根菜单（code=SettingGroup:SystemSetting）
- * - "系统配置"/"上传配置"/"微信配置"/"支付配置"/"客户端配置" 这 5 个菜单存在
+ * - "系统配置"/"上传配置"/"微信配置"/"支付配置" 这 4 个菜单存在
+ * - ClientConfig 保留为设置数据源，但后台入口迁移到 "客户端装修 -> 客户端配置"，不再出现在系统设置菜单
  * - tab 子 page（如 SystemBasic / UploadBasic）不独立建菜单（共享父级路由）
  *
  * 幂等性：修复命令重复跑不会重复插入（通过 DB 中 SettingGroup:* 的 permission 条目总数验证，
@@ -58,7 +59,6 @@ final class SettingServiceRebuildPermissionsTest extends TestCase
             'SettingGroup:UploadConfig',
             'SettingGroup:WechatConfig',
             'SettingGroup:PaymentConfig',
-            'SettingGroup:ClientConfig',    // page（作为 category 直接子）
         ];
         foreach ($expectedMenuCodes as $code) {
             $this->assertContains(
@@ -67,6 +67,12 @@ final class SettingServiceRebuildPermissionsTest extends TestCase
                 "菜单权限缺失：{$code}（rebuildAllPermissions 未生效）"
             );
         }
+
+        $this->assertNotContains(
+            'SettingGroup:ClientConfig',
+            $allCodes,
+            'ClientConfig 已迁移到客户端配置专属页面，不应继续出现在系统设置菜单'
+        );
 
         // tab 下的子 page（SystemBasic / UploadBasic 等）**不应**出现独立菜单
         // （它们在 tab 页内部作为选项卡，共享父级路由）

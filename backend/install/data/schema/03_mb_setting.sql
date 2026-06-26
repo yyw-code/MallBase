@@ -92,9 +92,9 @@ INSERT INTO `mb_setting_group` (`id`, `parent_id`, `permission_id`, `name`, `cod
 (1042, 104, 0, '微信支付V3', 'PaymentWechat', NULL, '微信支付 V3 商户号、APIv3 密钥与证书参数', 20, 'page', 1),
 (1043, 104, 0, '支付宝', 'PaymentAlipay', NULL, '支付宝 RSA2 证书模式接入参数', 30, 'page', 1);
 
--- 二级分组：客户端配置（单页面）
-INSERT INTO `mb_setting_group` (`id`, `parent_id`, `permission_id`, `name`, `code`, `icon`, `description`, `sort`, `display_type`, `status`) VALUES
-(105, 100, 0, '客户端配置', 'ClientConfig', 'lucide:smartphone', 'App/H5 客户端品牌、启动屏、分享与协议等配置', 50, 'page', 1);
+-- 二级分组：客户端配置（数据源保留，后台入口使用「客户端装修 -> 客户端配置」专属页面）
+INSERT INTO `mb_setting_group` (`id`, `parent_id`, `permission_id`, `name`, `code`, `icon`, `description`, `sort`, `display_type`, `status`, `permission_status`) VALUES
+(105, 100, 0, '客户端配置', 'ClientConfig', 'lucide:smartphone', 'App/H5 客户端品牌、启动屏、分享与协议等配置', 50, 'page', 1, 0);
 
 -- SystemConfig 子页面：订单与售后配置（作为系统配置页签）
 INSERT INTO `mb_setting_group` (`id`, `parent_id`, `permission_id`, `name`, `code`, `icon`, `description`, `sort`, `display_type`, `status`) VALUES
@@ -234,18 +234,33 @@ INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`
 (105, '客户端站点名称', 'client_site_name', 'Mall Base', 'input', NULL, NULL, NULL, NULL, 10),
 (105, '客户端图标', 'client_logo', '/static/client/logo.png', 'image', NULL, NULL, NULL, '推荐 1:1，建议 512×512 PNG 透明，<200KB', 20),
 (105, '启动屏图', 'client_launch_image', '/static/client/launch.png', 'image', NULL, NULL, NULL, 'App 启动全屏图，推荐 9:16，建议 1080×2340 JPG，<500KB', 30),
-(105, '启用启动页', 'client_splash_enabled', '1', 'switch', NULL, NULL, NULL, '关闭后客户端不再展示启动页', 110),
-(105, '启动页时长(ms)', 'client_splash_duration', '3000', 'input', NULL, NULL, NULL, '启动页自动关闭倒计时，单位毫秒，建议 2000-5000', 120),
+(105, '启用启动页', 'client_splash_enabled', '1', 'switch', NULL, NULL, NULL, '关闭后客户端不再展示启动页', 35),
+(105, '启动页时长(ms)', 'client_splash_duration', '3000', 'number', NULL, NULL, NULL, '启动页自动关闭倒计时，单位毫秒，建议 2000-5000', 40),
 (105, '分享默认标题', 'client_share_title', '', 'input', NULL, NULL, NULL, NULL, 50),
 (105, '分享默认简介', 'client_share_desc', '', 'input', NULL, NULL, NULL, NULL, 60),
 (105, '分享默认封面', 'client_share_cover', '/static/client/share-cover.png', 'image', NULL, NULL, NULL, '推荐 5:4，建议 500×400 PNG/JPG，<200KB', 70),
 (105, '客服手机号', 'client_customer_service_phone', '', 'input', NULL, '[{"type":"phone","message":"请输入正确的客服手机号"}]', '请输入客服手机号', '客户端“联系客服”入口拨打的手机号，留空时前端提示未配置', 75),
-(105, '商品保障', 'client_goods_guarantees', '[{"title":"正品保障","desc":"平台严选商品来源","icon":"shield"},{"title":"极速发货","desc":"现货商品优先出库","icon":"truck"},{"title":"七天无理由","desc":"符合条件可无理由退货","icon":"refresh"},{"title":"售后无忧","desc":"订单售后进度可追踪","icon":"service"}]', 'json', NULL, NULL, NULL, '客户端商品详情页保障说明，JSON 数组', 80),
-(105, '用户协议', 'client_agreement', '', 'editor', NULL, NULL, NULL, NULL, 90),
-(105, '隐私政策', 'client_privacy', '', 'editor', NULL, NULL, NULL, NULL, 100),
-(105, '允许用户自选主题', 'client_theme_user_select_enabled', '1', 'switch', NULL, NULL, NULL, '开启后用户选择优先；关闭后管理员指定主题强制生效', 130),
-(105, '管理员指定主题模式', 'client_theme_admin_mode', 'system', 'select', '[{"label":"跟随系统","value":"system"},{"label":"浅色","value":"light"},{"label":"深色","value":"dark"},{"label":"自定义","value":"custom"}]', NULL, NULL, '管理员统一指定的客户端主题模式', 140),
-(105, '管理员指定自定义主题ID', 'client_theme_admin_theme_id', '', 'input', NULL, NULL, NULL, '仅管理员指定主题模式为自定义时有效', 150);
+(105, '显示快捷加购按钮', 'client_goods_card_show_cart_button', '1', 'switch', NULL, NULL, NULL, '控制客户端首页商品组和商品列表页快捷加购按钮', 80),
+(105, '显示销量', 'client_goods_card_show_sales', '1', 'switch', NULL, NULL, NULL, '控制客户端商品卡片和商品列表销量展示', 90),
+(105, '显示市场价', 'client_goods_card_show_market_price', '1', 'switch', NULL, NULL, NULL, '控制客户端商品卡片划线市场价展示', 100),
+(105, '显示商品副标题', 'client_goods_card_show_subtitle', '1', 'switch', NULL, NULL, NULL, '控制客户端商品卡片副标题展示', 110),
+(105, '显示商品角标', 'client_goods_card_show_badge', '1', 'switch', NULL, NULL, NULL, '控制客户端商品列表推荐/新品/热卖角标展示', 120),
+(105, '商品角标样式', 'client_goods_badge_config', '{"new":{"text":"新品"},"hot":{"text":"热卖"},"recommend":{"text":"推荐"},"style":{"backgroundColor":"","textColor":"","fontSize":20,"height":36,"paddingX":14,"borderRadius":999}}', 'json', NULL, NULL, NULL, '客户端商品卡片角标文案、颜色与尺寸配置；颜色留空时跟随主题', 125),
+(105, '商品保障', 'client_goods_guarantees', '[{"title":"正品保障","desc":"平台严选商品来源","icon":"shield"},{"title":"极速发货","desc":"现货商品优先出库","icon":"truck"},{"title":"七天无理由","desc":"符合条件可无理由退货","icon":"refresh"},{"title":"售后无忧","desc":"订单售后进度可追踪","icon":"service"}]', 'json', NULL, NULL, NULL, '客户端商品详情页保障说明，JSON 数组', 130),
+(105, '显示搜索历史', 'client_search_history_enabled', '1', 'switch', NULL, NULL, NULL, '控制客户端搜索页是否展示本机搜索历史', 150),
+(105, '显示快捷筛选', 'client_search_quick_filter_enabled', '1', 'switch', NULL, NULL, NULL, '控制客户端搜索页是否展示快捷筛选入口', 160),
+(105, '快捷筛选入口', 'client_search_quick_filters', '["is_new","is_hot","is_recommend","category"]', 'json', NULL, NULL, NULL, '客户端搜索页快捷筛选固定入口选择结果', 170),
+(105, '显示热门搜索', 'client_search_hot_enabled', '1', 'switch', NULL, NULL, NULL, '控制客户端搜索页是否展示热门搜索', 180),
+(105, '显示常用分类', 'client_search_category_enabled', '1', 'switch', NULL, NULL, NULL, '控制客户端搜索页是否展示常用分类', 190),
+(105, '常用分类数据', 'client_search_category_ids', '[]', 'json', NULL, NULL, NULL, '客户端搜索页手动选择的常用分类 ID 数组', 200),
+(105, '关于我们', 'client_about_content', '', 'editor', NULL, NULL, NULL, NULL, 210),
+(105, '用户协议', 'client_agreement', '', 'editor', NULL, NULL, NULL, NULL, 220),
+(105, '隐私政策', 'client_privacy', '', 'editor', NULL, NULL, NULL, NULL, 230),
+(105, '平台规则', 'client_platform_rules', '', 'editor', NULL, NULL, NULL, NULL, 240),
+(105, '售后政策', 'client_after_sale_policy', '', 'editor', NULL, NULL, NULL, '仅作为客户端展示文案，不影响真实售后规则', 250),
+(105, '允许用户自选主题', 'client_theme_user_select_enabled', '1', 'switch', NULL, NULL, NULL, '开启后用户选择优先；关闭后管理员指定主题强制生效', 300),
+(105, '管理员指定主题模式', 'client_theme_admin_mode', 'system', 'select', '[{"label":"跟随系统","value":"system"},{"label":"浅色","value":"light"},{"label":"深色","value":"dark"},{"label":"自定义","value":"custom"}]', NULL, NULL, '管理员统一指定的客户端主题模式', 310),
+(105, '管理员指定自定义主题ID', 'client_theme_admin_theme_id', '', 'input', NULL, NULL, NULL, '仅管理员指定主题模式为自定义时有效', 320);
 
 -- 设置项：106 OrderConfig 订单配置
 INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`, `rules`, `placeholder`, `remark`, `sort`) VALUES

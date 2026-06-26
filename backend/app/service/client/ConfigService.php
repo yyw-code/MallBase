@@ -28,7 +28,7 @@ class ConfigService extends BaseService
      * 完整组直接输出的 group code 白名单
      */
     private const PUBLIC_GROUPS = [
-        'ClientConfig',     // client_site_name / client_logo / client_launch_image / client_share_* / client_agreement / client_privacy
+        'ClientConfig',     // client_site_name / client_logo / client_launch_image / client_share_* / client_goods_* / client_search_* / client_*_content
         'SystemCopyright',  // copyright_* （后台与 Client 共用版权）
     ];
 

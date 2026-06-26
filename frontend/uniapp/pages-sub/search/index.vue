@@ -14,10 +14,11 @@ const MAX_HISTORY = 20
 const HOT_LIMIT = 10
 const CATEGORY_LIMIT = 10
 
-const quickFilters = [
+const quickFilterCandidates = [
   { label: '新品上架', value: 'is_new', icon: 'new' },
   { label: '热卖商品', value: 'is_hot', icon: 'hot' },
   { label: '推荐商品', value: 'is_recommend', icon: 'recommend' },
+  { label: '全部分类', value: 'category', icon: 'category' },
 ]
 
 const keyword = ref('')
@@ -27,10 +28,48 @@ const categoryList = ref([])
 const hotLoading = ref(false)
 const categoryLoading = ref(false)
 
-const brandName = computed(() => appStore.siteConfig?.site_name || 'MallBase')
+const siteConfig = computed(() => appStore.siteConfig || {})
+const brandName = computed(() =>
+  siteConfig.value.client_site_name || siteConfig.value.site_name || 'MallBase',
+)
+const selectedQuickFilterValues = computed(() =>
+  parseConfigArray(
+    siteConfig.value.client_search_quick_filters,
+    ['is_new', 'is_hot', 'is_recommend', 'category'],
+  ),
+)
+const selectedCategoryIds = computed(() =>
+  parseConfigArray(
+    siteConfig.value.client_search_category_ids,
+    [],
+  ).map((id) => Number(id)).filter((id) => Number.isFinite(id)),
+)
+const visibleQuickFilters = computed(() => {
+  const selected = new Set(selectedQuickFilterValues.value)
+  return quickFilterCandidates.filter((item) => selected.has(item.value))
+})
+const showSearchHistory = computed(() =>
+  configFlag('client_search_history_enabled', true),
+)
+const showQuickFilters = computed(() =>
+  configFlag('client_search_quick_filter_enabled', true) &&
+  visibleQuickFilters.value.length > 0,
+)
+const showHotSearch = computed(() =>
+  configFlag('client_search_hot_enabled', true),
+)
+const showCommonCategories = computed(() =>
+  configFlag('client_search_category_enabled', true),
+)
 
 const visibleCategories = computed(() => {
   const list = categoryList.value
+  if (selectedCategoryIds.value.length > 0) {
+    const map = new Map(list.map((item) => [Number(item.id), item]))
+    return selectedCategoryIds.value
+      .map((id) => map.get(id))
+      .filter((item) => item?.id && item?.name)
+  }
   const parentIds = new Set(
     list
       .map((item) => Number(item.pid || 0))
@@ -114,6 +153,10 @@ function goBack() {
 }
 
 function goFilter(filter) {
+  if (filter.value === 'category') {
+    goAllCategories()
+    return
+  }
   uni.navigateTo({
     url: `/pages-sub/goods/list?${filter.value}=1`,
   })
@@ -168,6 +211,23 @@ function formatHotCount(count) {
   if (count > 0) return `${count}次`
   return '近 7 天'
 }
+
+function configFlag(code, fallback = true) {
+  const value = siteConfig.value?.[code]
+  if (value === undefined || value === null || value === '') return fallback
+  return value === true || value === 1 || value === '1' || value === 'true'
+}
+
+function parseConfigArray(value, fallback) {
+  if (Array.isArray(value)) return value
+  if (typeof value !== 'string' || value.trim() === '') return fallback
+  try {
+    const parsed = JSON.parse(value)
+    return Array.isArray(parsed) ? parsed : fallback
+  } catch {
+    return fallback
+  }
+}
 </script>
 
 <template>
@@ -213,7 +273,7 @@ function formatHotCount(count) {
     </view>
 
     <view class="content">
-      <view v-if="historyList.length > 0" class="section">
+      <view v-if="showSearchHistory && historyList.length > 0" class="section">
         <view class="section__header">
           <text class="section__title">搜索历史</text>
           <view class="section__action" @tap="clearHistory">
@@ -232,28 +292,27 @@ function formatHotCount(count) {
         </view>
       </view>
 
-      <view class="section">
+      <view v-if="showQuickFilters" class="section">
         <view class="section__header">
           <text class="section__title">快捷筛选</text>
         </view>
         <view class="quick-grid">
           <view
-            v-for="filter in quickFilters"
+            v-for="filter in visibleQuickFilters"
             :key="filter.value"
             class="quick-item"
             @tap="goFilter(filter)"
           >
-            <view class="quick-item__icon" :class="`quick-item__icon--${filter.icon}`" />
+            <view
+              class="quick-item__icon"
+              :class="`quick-item__icon--${filter.icon}`"
+            />
             <text class="quick-item__text">{{ filter.label }}</text>
-          </view>
-          <view class="quick-item" @tap="goAllCategories">
-            <view class="quick-item__icon quick-item__icon--category" />
-            <text class="quick-item__text">全部分类</text>
           </view>
         </view>
       </view>
 
-      <view class="section">
+      <view v-if="showHotSearch" class="section">
         <view class="section__header">
           <text class="section__title">热门搜索</text>
         </view>
@@ -270,7 +329,9 @@ function formatHotCount(count) {
           >
             <text class="hot-item__rank">{{ index + 1 }}</text>
             <text class="hot-item__keyword">{{ item.keyword }}</text>
-            <text class="hot-item__count">{{ formatHotCount(item.search_count) }}</text>
+            <text class="hot-item__count">
+              {{ formatHotCount(item.search_count) }}
+            </text>
           </view>
         </view>
         <view v-else class="empty-line">
@@ -278,7 +339,7 @@ function formatHotCount(count) {
         </view>
       </view>
 
-      <view class="section">
+      <view v-if="showCommonCategories" class="section">
         <view class="section__header">
           <text class="section__title">常用分类</text>
           <view class="section__link" @tap="goAllCategories">
