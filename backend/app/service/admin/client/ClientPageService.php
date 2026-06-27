@@ -162,6 +162,7 @@ class ClientPageService extends BaseService
         return [
             ClientPage::CATEGORY_BASIC => '基础页面',
             ClientPage::CATEGORY_GOODS => '商品页面',
+            ClientPage::CATEGORY_CONTENT => '内容页面',
             ClientPage::CATEGORY_ORDER => '订单页面',
             ClientPage::CATEGORY_AFTERSALE => '售后页面',
             ClientPage::CATEGORY_USER => '会员页面',
@@ -400,6 +401,8 @@ class ClientPageService extends BaseService
             '/pages-sub/goods/list' => '商品列表',
             '/pages-sub/goods/detail' => '商品详情',
             '/pages-sub/goods/comments' => '商品评价',
+            '/pages-sub/article/list' => '文章列表',
+            '/pages-sub/article/detail' => '文章详情',
             '/pages-sub/order/confirm' => '确认订单',
             '/pages-sub/order/list' => '订单列表',
             '/pages-sub/order/detail' => '订单详情',
@@ -435,6 +438,7 @@ class ClientPageService extends BaseService
     {
         foreach ([
             ClientPage::CATEGORY_GOODS => ['/pages-sub/goods/', '/pages-sub/search/'],
+            ClientPage::CATEGORY_CONTENT => ['/pages-sub/article/'],
             ClientPage::CATEGORY_ORDER => ['/pages-sub/order/', '/pages-sub/logistics/', '/pages-sub/review/'],
             ClientPage::CATEGORY_AFTERSALE => ['/pages-sub/refund/'],
             ClientPage::CATEGORY_USER => ['/pages-sub/user/', '/pages-sub/wallet/', '/pages-sub/address/'],
@@ -453,6 +457,7 @@ class ClientPageService extends BaseService
         $segments = explode('/', trim($path, '/'));
         foreach ([
             ClientPage::CATEGORY_GOODS => ['goods', 'search'],
+            ClientPage::CATEGORY_CONTENT => ['article', 'content'],
             ClientPage::CATEGORY_ORDER => ['order', 'logistics', 'review'],
             ClientPage::CATEGORY_AFTERSALE => ['refund'],
             ClientPage::CATEGORY_USER => ['user', 'wallet', 'address'],

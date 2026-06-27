@@ -5,6 +5,8 @@ namespace app\service\admin\client;
 
 use app\model\client\ClientDecorationScheme;
 use app\model\client\ClientDecorationSnapshot;
+use app\service\admin\content\ArticleCategoryService;
+use app\service\admin\content\ArticleService;
 use app\model\goods\Goods;
 use app\model\goods\GoodsBrand;
 use app\model\goods\GoodsCategory;
@@ -104,8 +106,78 @@ class ClientDecorationSchemeService extends BaseService
 
         return [
             'pages' => $pages,
-            'sections' => [],
+            'sections' => [$this->getArticleTargetSection($where)],
             ...$productSources,
+        ];
+    }
+
+    /**
+     * @return array{key:string,label:string,count:int,groups:array<int, array<string, mixed>>}
+     */
+    protected function getArticleTargetSection(array $where): array
+    {
+        $articleListPath = '/pages-sub/article/list';
+        $articleDetailPath = '/pages-sub/article/detail';
+        $keyword = trim((string) ($where['keyword'] ?? ''));
+        $articles = app()->make(ArticleService::class)->getPickerArticles($where);
+        $categories = app()->make(ArticleCategoryService::class)->getAllCategories();
+        if ($keyword !== '') {
+            $keywordLower = mb_strtolower($keyword);
+            $categories = array_values(array_filter(
+                $categories,
+                static fn (array $item): bool => str_contains(mb_strtolower((string) ($item['name'] ?? '')), $keywordLower)
+                    || str_contains(mb_strtolower((string) ($item['description'] ?? '')), $keywordLower)
+            ));
+        }
+
+        $groups = [
+            [
+                'key' => 'article:system',
+                'label' => '系统列表',
+                'count' => 1,
+                'items' => [
+                    [
+                        'key' => 'article-all',
+                        'title' => '全部文章',
+                        'desc' => '默认排序',
+                        'path' => $articleListPath,
+                    ],
+                ],
+            ],
+            [
+                'key' => 'article:category',
+                'label' => '分类列表',
+                'count' => count($categories),
+                'items' => array_map(static fn (array $item): array => [
+                    'key' => 'article-category-' . (int) ($item['id'] ?? 0),
+                    'title' => (string) ($item['name'] ?? ''),
+                    'desc' => 'ID ' . (int) ($item['id'] ?? 0),
+                    'path' => $articleListPath . '?category_id=' . (int) ($item['id'] ?? 0),
+                ], $categories),
+            ],
+            [
+                'key' => 'article:detail',
+                'label' => '文章详情',
+                'count' => count($articles),
+                'items' => array_map(static fn (array $item): array => [
+                    'key' => 'article-' . (int) ($item['id'] ?? 0),
+                    'title' => (string) ($item['title'] ?? ''),
+                    'desc' => implode(' · ', array_values(array_filter([
+                        (string) ($item['category_name'] ?? ''),
+                        '阅读 ' . (int) ($item['read_count'] ?? 0),
+                    ]))),
+                    'image' => (string) ($item['cover_full_url'] ?? ''),
+                    'path' => $articleDetailPath . '?id=' . (int) ($item['id'] ?? 0),
+                    'tags' => array_values(array_filter([(string) ($item['category_name'] ?? '')])),
+                ], $articles),
+            ],
+        ];
+
+        return [
+            'key' => 'article',
+            'label' => '文章',
+            'count' => array_sum(array_map(static fn (array $group): int => (int) ($group['count'] ?? 0), $groups)),
+            'groups' => $groups,
         ];
     }
 

@@ -157,4 +157,5 @@ INSERT INTO `mb_upload_asset_category` (`id`, `pid`, `name`, `code`, `sort`, `is
 (3, 0, '评价图片', 'review', 30, 1, 1),
 (4, 0, '用户头像', 'avatar', 40, 1, 1),
 (5, 0, '系统设置', 'setting', 50, 1, 1),
-(6, 0, '其他', 'other', 100, 1, 1);
+(6, 0, '其他', 'other', 100, 1, 1),
+(7, 0, '文章素材', 'article', 60, 1, 1);

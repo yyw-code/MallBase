@@ -160,6 +160,7 @@ export namespace ClientDecorateApi {
 
   export interface TargetPickerItem {
     desc?: string;
+    image?: number | string;
     key?: number | string;
     label?: string;
     path: string;

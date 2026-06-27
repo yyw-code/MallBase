@@ -221,6 +221,24 @@
       ]
     },
     {
+      "root": "pages-sub/article",
+      "pages": [
+        {
+          "path": "list",
+          "style": {
+            "navigationStyle": "custom",
+            "enablePullDownRefresh": true
+          }
+        },
+        {
+          "path": "detail",
+          "style": {
+            "navigationStyle": "custom"
+          }
+        }
+      ]
+    },
+    {
       "root": "pages-sub/review",
       "pages": [
         {

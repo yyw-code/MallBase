@@ -11,6 +11,7 @@ use mall_base\base\BaseModel;
 class UploadAssetCategory extends BaseModel
 {
     public const CODE_GOODS = 'goods';
+    public const CODE_ARTICLE = 'article';
     public const CODE_RICH_TEXT = 'rich_text';
     public const CODE_REVIEW = 'review';
     public const CODE_AVATAR = 'avatar';

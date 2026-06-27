@@ -53,6 +53,8 @@ type PickerTargetSection = {
 
 const GOODS_DETAIL_PATH = '/pages-sub/goods/detail';
 const GOODS_LIST_PATH = '/pages-sub/goods/list';
+const ARTICLE_DETAIL_PATH = '/pages-sub/article/detail';
+const ARTICLE_LIST_PATH = '/pages-sub/article/list';
 
 const modalOpen = ref(false);
 const loading = ref(false);
@@ -252,6 +254,7 @@ const normalizedExtensionSections = computed<PickerTargetSection[]>(() =>
       count: group.count ?? group.items.length,
       items: group.items.map((item) => ({
         desc: item.desc,
+        image: normalizeTargetImageUrl(item.image),
         key: item.key || item.path,
         path: item.path,
         tags: item.tags,
@@ -335,6 +338,8 @@ const currentTargetLabel = computed(() => {
   }
 
   const value = inputValue.value || '';
+  if (value.startsWith(ARTICLE_DETAIL_PATH)) return '文章 / 文章详情';
+  if (value.startsWith(ARTICLE_LIST_PATH)) return '文章 / 文章列表';
   if (value.startsWith(GOODS_DETAIL_PATH)) return '商品 / 商品详情';
   if (value.startsWith(GOODS_LIST_PATH)) return '商品 / 商品列表';
   if (value.startsWith('/pages')) return '页面';
@@ -443,6 +448,21 @@ const activateByPath = (path: string) => {
     } else {
       activeGroupKey.value = 'goods:system';
     }
+    return;
+  }
+
+  if (cleanPath === ARTICLE_DETAIL_PATH) {
+    activeSectionKey.value = 'ext:article';
+    activeGroupKey.value = 'ext:article:article:detail';
+    return;
+  }
+
+  if (cleanPath === ARTICLE_LIST_PATH) {
+    const params = queryParams(path);
+    activeSectionKey.value = 'ext:article';
+    activeGroupKey.value = params.has('category_id')
+      ? 'ext:article:article:category'
+      : 'ext:article:article:system';
     return;
   }
 

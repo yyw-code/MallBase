@@ -12,7 +12,7 @@ CREATE TABLE `mb_client_page` (
   `name` varchar(80) NOT NULL COMMENT '页面名称',
   `path` varchar(255) NOT NULL COMMENT 'UniApp 页面路径',
   `page_type` varchar(30) NOT NULL DEFAULT 'page' COMMENT '页面类型：tab/page/subpackage',
-  `category` varchar(30) NOT NULL DEFAULT 'other' COMMENT '页面分类：basic/goods/order/aftersale/user/marketing/other',
+  `category` varchar(30) NOT NULL DEFAULT 'other' COMMENT '页面分类：basic/goods/content/order/aftersale/user/marketing/other',
   `package_root` varchar(120) DEFAULT NULL COMMENT '分包 root，主包为空',
   `need_login` tinyint(1) NOT NULL DEFAULT 0 COMMENT '是否需要登录',
   `source` varchar(20) NOT NULL DEFAULT 'manual' COMMENT '来源：auto/manual/system',
@@ -128,7 +128,9 @@ VALUES
 (26, '编辑地址', '/pages-sub/address/edit', 'subpackage', 'user', 'pages-sub/address', 1, 'system', '系统内置会员页面', 1620, 1),
 (27, '搜索', '/pages-sub/search/index', 'subpackage', 'goods', 'pages-sub/search', 0, 'system', '系统内置商品页面', 1710, 1),
 (28, '发布评价', '/pages-sub/review/post', 'subpackage', 'order', 'pages-sub/review', 1, 'system', '系统内置订单页面', 1810, 1),
-(29, '物流详情', '/pages-sub/logistics/detail', 'subpackage', 'order', 'pages-sub/logistics', 1, 'system', '系统内置订单页面', 1910, 1);
+(29, '物流详情', '/pages-sub/logistics/detail', 'subpackage', 'order', 'pages-sub/logistics', 1, 'system', '系统内置订单页面', 1910, 1),
+(30, '文章列表', '/pages-sub/article/list', 'subpackage', 'content', 'pages-sub/article', 0, 'system', '系统内置文章页面', 2010, 1),
+(31, '文章详情', '/pages-sub/article/detail', 'subpackage', 'content', 'pages-sub/article', 0, 'system', '系统内置文章页面', 2020, 1);
 
 INSERT INTO `mb_client_decoration_scheme`
 (`id`, `type`, `name`, `description`, `schema`, `tabbar_mode`, `is_system`, `is_active`, `sort`, `status`)

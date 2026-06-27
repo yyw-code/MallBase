@@ -137,6 +137,37 @@ class AssetHydrator
      * @param array<int, array<string, mixed>> $list
      * @return array<int, array<string, mixed>>
      */
+    public function hydrateArticleList(array $list): array
+    {
+        return $this->hydrateFields($list, [
+            'cover' => 'cover_full_url',
+        ]);
+    }
+
+    /**
+     * @param array<string, mixed> $article
+     * @return array<string, mixed>
+     */
+    public function hydrateArticleDetail(array $article): array
+    {
+        $ids = [$this->normalizer->normalizeSingle($article['cover'] ?? '')];
+        foreach ($this->extractAssetIdsFromHtml((string) ($article['content'] ?? '')) as $id) {
+            $ids[] = $id;
+        }
+
+        $assetMap = $this->resolver->resolve($this->normalizer->collectAssetIds($ids));
+        $article['cover_full_url'] = $this->fullUrl($article['cover'] ?? '', $assetMap);
+        if (isset($article['content']) && is_string($article['content'])) {
+            $article['content'] = $this->hydrateRichText($article['content'], $assetMap);
+        }
+
+        return $article;
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $list
+     * @return array<int, array<string, mixed>>
+     */
     public function hydrateComments(array $list): array
     {
         $ids = [];

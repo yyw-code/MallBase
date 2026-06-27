@@ -16,6 +16,7 @@ class ClientPage extends BaseModel
 
     public const CATEGORY_BASIC = 'basic';
     public const CATEGORY_GOODS = 'goods';
+    public const CATEGORY_CONTENT = 'content';
     public const CATEGORY_ORDER = 'order';
     public const CATEGORY_AFTERSALE = 'aftersale';
     public const CATEGORY_USER = 'user';
@@ -44,6 +45,7 @@ class ClientPage extends BaseModel
         return [
             self::CATEGORY_BASIC,
             self::CATEGORY_GOODS,
+            self::CATEGORY_CONTENT,
             self::CATEGORY_ORDER,
             self::CATEGORY_AFTERSALE,
             self::CATEGORY_USER,
