@@ -739,10 +739,13 @@ class InstallService extends BaseService
                 'CRON_ENABLE'            => $cronEnable ? 'true' : 'false',
                 'SWOOLE_QUEUE_ENABLE'    => $swooleQueueEnable ? 'true' : 'false',
                 'JWT_SECRET'             => $jwtSecret,
+                'JWT_EXPIRE'             => (string) env('JWT_EXPIRE', 7200),
+                'JWT_REFRESH_EXPIRE'     => (string) env('JWT_REFRESH_EXPIRE', 2592000),
                 'INSTALL_RUNTIME_MARKER' => $runtimeMarker,
                 'SITE_URL'               => $siteUrl,
             ];
             $this->writeEnvFile($envData);
+            $this->writeProjectRootEnvFile($envData);
             $this->applyRuntimeConfig($envData);
         } catch (\Throwable $e) {
             $emit('write_env', 'error', '写入配置文件失败：' . $e->getMessage());
@@ -1119,6 +1122,66 @@ class InstallService extends BaseService
     }
 
     /**
+     * 本地安装时同步根目录 .env；容器内不可写或无项目根模板时静默跳过。
+     *
+     * @param array<string, string> $envData
+     */
+    private function writeProjectRootEnvFile(array $envData): void
+    {
+        $backendRoot = rtrim(app()->getRootPath(), DIRECTORY_SEPARATOR);
+        $projectRoot = dirname($backendRoot);
+        $envPath = $projectRoot . DIRECTORY_SEPARATOR . '.env';
+        $templatePath = $projectRoot . DIRECTORY_SEPARATOR . 'deploy' . DIRECTORY_SEPARATOR . 'docker' . DIRECTORY_SEPARATOR . '.example.env';
+
+        if (!is_file($templatePath)) {
+            return;
+        }
+        if (is_file($envPath) && !is_writable($envPath)) {
+            return;
+        }
+        if (!is_file($envPath) && !is_writable($projectRoot)) {
+            return;
+        }
+
+        $baseContent = is_file($envPath)
+            ? (string) file_get_contents($envPath)
+            : (string) file_get_contents($templatePath);
+
+        $rootKeys = [
+            'DB_HOST',
+            'DB_PORT',
+            'DB_NAME',
+            'DB_USER',
+            'DB_PASS',
+            'REDIS_HOST',
+            'REDIS_PORT',
+            'REDIS_CACHE_DB',
+            'REDIS_PASSWORD',
+            'CACHE_DRIVER',
+            'JWT_SECRET',
+            'JWT_EXPIRE',
+            'JWT_REFRESH_EXPIRE',
+            'SITE_URL',
+        ];
+
+        foreach ($rootKeys as $key) {
+            if (!array_key_exists($key, $envData)) {
+                continue;
+            }
+
+            $quoted = $this->formatEnvValue($envData[$key]);
+            $pattern = '/^' . preg_quote($key, '/') . '\s*=.*$/m';
+            if (preg_match($pattern, $baseContent) === 1) {
+                $baseContent = (string) preg_replace($pattern, $key . '=' . $quoted, $baseContent, 1);
+            } else {
+                $baseContent = rtrim($baseContent, "\n") . PHP_EOL . $key . '=' . $quoted . PHP_EOL;
+            }
+        }
+
+        file_put_contents($envPath, $baseContent);
+    }
+
+    /**
      * @param array<string, string> $envData
      */
     private function applyRuntimeConfig(array $envData): void
@@ -1169,6 +1232,8 @@ class InstallService extends BaseService
 
         $jwt = Config::get('jwt', []);
         $jwt['secret'] = $envData['JWT_SECRET'] ?? '';
+        $jwt['expire'] = (int) ($envData['JWT_EXPIRE'] ?? 7200);
+        $jwt['refresh_expire'] = (int) ($envData['JWT_REFRESH_EXPIRE'] ?? 2592000);
         Config::set($jwt, 'jwt');
 
         $cron = Config::get('cron', []);
