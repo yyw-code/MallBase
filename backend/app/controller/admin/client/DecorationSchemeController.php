@@ -138,6 +138,7 @@ class DecorationSchemeController extends BaseController
         }
 
         return match ($type) {
+            ClientDecorationScheme::TYPE_FLOATING => ['items' => []],
             ClientDecorationScheme::TYPE_PROFILE => ['modules' => []],
             ClientDecorationScheme::TYPE_TABBAR => ['items' => []],
             default => ['components' => []],

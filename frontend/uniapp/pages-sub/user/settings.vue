@@ -134,7 +134,8 @@
 
       <view class="bottom-spacer" />
     </scroll-view>
-  </view>
+      <mb-floating-action />
+</view>
 </template>
 
 <script setup>

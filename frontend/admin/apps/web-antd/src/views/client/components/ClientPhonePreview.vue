@@ -13,7 +13,13 @@ import { IconifyIcon } from '@vben/icons';
 type ModuleItem = Record<string, any>;
 type PreviewRecord = Record<string, any>;
 
-type PreviewKind = 'category' | 'goodsDetail' | 'home' | 'profile' | 'tabbar';
+type PreviewKind =
+  | 'category'
+  | 'floating'
+  | 'goodsDetail'
+  | 'home'
+  | 'profile'
+  | 'tabbar';
 
 const props = withDefaults(
   defineProps<{
@@ -21,6 +27,7 @@ const props = withDefaults(
     currentPath?: string;
     dragging?: boolean;
     dropIndex?: null | number;
+    floatingConfig?: Record<string, any>;
     goods?: null | PreviewRecord;
     goodsList?: PreviewRecord[];
     interactive?: boolean;
@@ -38,6 +45,7 @@ const props = withDefaults(
     currentPath: '/pages/index/index',
     dragging: false,
     dropIndex: null,
+    floatingConfig: () => ({}),
     goods: null,
     goodsList: () => [],
     interactive: false,
@@ -455,6 +463,7 @@ const pageTitle = computed(() => {
   if (props.title) return props.title;
   const map: Record<PreviewKind, string> = {
     category: '分类',
+    floating: '悬浮按钮',
     goodsDetail: '商品详情',
     home: '首页',
     profile: 'MallBase',
@@ -465,7 +474,11 @@ const pageTitle = computed(() => {
 
 const normalizedModules = computed(() => {
   const fallback =
-    props.kind === 'profile' ? DEFAULT_PROFILE_MODULES : DEFAULT_HOME_MODULES;
+    props.kind === 'floating'
+      ? []
+      : props.kind === 'profile'
+        ? DEFAULT_PROFILE_MODULES
+        : DEFAULT_HOME_MODULES;
   const source = (
     props.modules.length > 0 ? props.modules : fallback
   ) as ModuleItem[];
@@ -1764,6 +1777,94 @@ function tabbarIconClass(item: ModuleItem) {
   ];
 }
 
+const floatingPreviewConfig = computed(() => {
+  const source = props.floatingConfig || {};
+  const style =
+    source.style && typeof source.style === 'object' ? source.style : {};
+  return {
+    enabled: source.enabled !== false,
+    mode: ['expand', 'single', 'vertical'].includes(source.mode)
+      ? source.mode
+      : 'expand',
+    offsetBottom: clampNumber(source.offsetBottom, 160, 0, 360),
+    offsetX: clampNumber(source.offsetX, 24, 0, 160),
+    position:
+      source.position === 'left-bottom' ? 'left-bottom' : 'right-bottom',
+    style: {
+      backgroundColor:
+        styleColor(style.backgroundColor) || 'var(--mb-preview-primary)',
+      color: styleColor(style.color) || '#ffffff',
+      radius: clampNumber(style.radius, 44, 0, 120),
+      shadowBlur: clampNumber(style.shadowBlur ?? style.shadow_blur, 30, 0, 160),
+      shadowColor: styleColor(style.shadowColor ?? style.shadow_color) || '#0f172a',
+      shadowEnabled: style.shadowEnabled !== false,
+      shadowOffsetX: clampNumber(
+        style.shadowOffsetX ?? style.shadow_offset_x,
+        0,
+        -80,
+        80,
+      ),
+      shadowOffsetY: clampNumber(
+        style.shadowOffsetY ?? style.shadow_offset_y,
+        12,
+        -80,
+        80,
+      ),
+      shadowOpacity: clampNumber(
+        style.shadowOpacity ?? style.shadow_opacity,
+        14,
+        0,
+        100,
+      ),
+      shadowSpread: clampNumber(
+        style.shadowSpread ?? style.shadow_spread,
+        0,
+        -80,
+        80,
+      ),
+      size: clampNumber(style.size, 88, 56, 128),
+    },
+  };
+});
+
+const floatingPreviewItems = computed(() =>
+  normalizedModules.value
+    .filter((item) => item.enabled !== false && item.visible !== false)
+    .slice(0, 6),
+);
+
+const floatingRootStyle = computed(() => {
+  const config = floatingPreviewConfig.value;
+  return {
+    bottom: `${toPreviewPx(config.offsetBottom)}px`,
+    left:
+      config.position === 'left-bottom'
+        ? `${toPreviewPx(config.offsetX)}px`
+        : 'auto',
+    right:
+      config.position === 'right-bottom'
+        ? `${toPreviewPx(config.offsetX)}px`
+        : 'auto',
+  };
+});
+
+function floatingButtonStyle(item?: ModuleItem) {
+  const config = floatingPreviewConfig.value;
+  return {
+    background: config.style.backgroundColor,
+    borderRadius: `${toPreviewPx(config.style.radius)}px`,
+    boxShadow: moduleShadowStyle(config.style),
+    color: config.style.color,
+    height: `${toPreviewPx(config.style.size)}px`,
+    opacity: item?.enabled === false ? 0.45 : 1,
+    width: `${toPreviewPx(config.style.size)}px`,
+  };
+}
+
+function floatingIcon(item: ModuleItem) {
+  return resolvePreviewImageValue(item.icon);
+}
+
 function isDropBefore(index: unknown) {
   return (
     props.interactive &&
@@ -2214,7 +2315,7 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
           </div>
         </template>
 
-        <template v-else-if="kind === 'goodsDetail'">
+        <template v-else-if="kind === 'goodsDetail' || kind === 'floating'">
           <div class="goods-detail-page">
             <div class="goods-hero">
               <img
@@ -2514,7 +2615,58 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
         </template>
       </div>
 
-      <div v-if="kind !== 'goodsDetail'" class="client-phone-preview__tabbar">
+      <div
+        v-if="kind === 'floating' && floatingPreviewConfig.enabled"
+        class="client-phone-preview__floating"
+        :class="[
+          `client-phone-preview__floating--${floatingPreviewConfig.mode}`,
+          `client-phone-preview__floating--${floatingPreviewConfig.position}`,
+        ]"
+        :style="floatingRootStyle"
+      >
+        <template
+          v-for="(item, index) in floatingPreviewConfig.mode === 'single'
+            ? floatingPreviewItems.slice(0, 1)
+            : floatingPreviewItems"
+          :key="item.id"
+        >
+          <div
+            v-if="isDropBefore(item.__previewIndex)"
+            class="preview-drop-placeholder preview-drop-placeholder--floating"
+          ></div>
+          <button
+            class="floating-preview-button"
+            :class="{
+              'floating-preview-button--selected': selectedModuleId === item.id,
+              'floating-preview-button--text':
+                floatingPreviewConfig.mode === 'vertical',
+            }"
+            :data-module-index="interactive ? item.__previewIndex : null"
+            :data-module-selected="selectedModuleId === item.id ? 'true' : null"
+            type="button"
+            :style="floatingButtonStyle(item)"
+            @click="handleSelect(item)"
+            @mousedown="
+              handlePreviewMouseDown(Number(item.__previewIndex), $event)
+            "
+          >
+            <img v-if="floatingIcon(item)" :src="floatingIcon(item)" alt="" />
+            <span v-else>{{ (item.text || '入').slice(0, 1) }}</span>
+            <small v-if="floatingPreviewConfig.mode === 'vertical'">
+              {{ item.text || `入口${index + 1}` }}
+            </small>
+          </button>
+        </template>
+        <div
+          v-if="isDropAppend()"
+          class="preview-drop-placeholder preview-drop-placeholder--floating"
+        ></div>
+      </div>
+
+      <div
+        v-if="kind !== 'goodsDetail' && kind !== 'floating'"
+        class="client-phone-preview__tabbar"
+      >
         <template v-for="item in normalizedTabbarItems" :key="item.id">
           <div
             v-if="kind === 'tabbar' && isDropBefore(item.__previewIndex)"
@@ -4381,5 +4533,90 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
 
 .goods-action-bar button:last-child {
   background: var(--mb-preview-price);
+}
+
+.client-phone-preview__floating {
+  position: absolute;
+  z-index: 18;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 8px;
+  align-items: center;
+  pointer-events: none;
+}
+
+.client-phone-preview__floating--vertical {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.client-phone-preview__floating--left-bottom {
+  align-items: flex-start;
+}
+
+.client-phone-preview__floating--right-bottom {
+  align-items: flex-end;
+}
+
+.floating-preview-button {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  pointer-events: auto;
+}
+
+.floating-preview-button img {
+  width: 58%;
+  height: 58%;
+  object-fit: contain;
+}
+
+.floating-preview-button--text {
+  justify-content: flex-start;
+  gap: 6px;
+  width: auto !important;
+  min-width: 92px;
+  padding: 0 12px;
+  border-radius: 999px !important;
+}
+
+.floating-preview-button--text img,
+.floating-preview-button--text > span {
+  width: 20px;
+  height: 20px;
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+}
+
+.floating-preview-button small {
+  max-width: 56px;
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.floating-preview-button--selected {
+  outline: 2px solid rgb(13 80 213 / 50%);
+  outline-offset: 2px;
+}
+
+.preview-drop-placeholder--floating {
+  width: 42px;
+  height: 8px;
+  min-height: 8px;
+  margin: 0;
+  border-radius: 999px;
 }
 </style>

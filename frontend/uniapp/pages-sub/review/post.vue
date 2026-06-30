@@ -370,7 +370,8 @@ function normalizeUploadedPath(uploaded) {
         <text class="submit-bar__btn-text">{{ submitText }}</text>
       </view>
     </view>
-  </view>
+      <mb-floating-action />
+</view>
 </template>
 
 <style lang="scss" scoped>

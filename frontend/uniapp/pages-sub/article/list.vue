@@ -81,7 +81,8 @@
         <text v-else-if="noMore">没有更多了</text>
       </view>
     </view>
-  </view>
+      <mb-floating-action />
+</view>
 </template>
 
 <script setup>

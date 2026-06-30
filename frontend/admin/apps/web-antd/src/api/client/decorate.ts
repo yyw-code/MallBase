@@ -15,7 +15,7 @@ export namespace ClientDecorateApi {
     | 'search'
     | 'spacing'
     | 'title';
-  export type SchemeType = 'home' | 'profile' | 'tabbar';
+  export type SchemeType = 'floating' | 'home' | 'profile' | 'tabbar';
   export type TabbarMode = 'custom' | 'native';
 
   export interface DecorationModule {
@@ -59,6 +59,27 @@ export namespace ClientDecorateApi {
     items: TabbarItem[];
   }
 
+  export interface FloatingItem {
+    enabled?: boolean;
+    icon?: any;
+    id?: string;
+    path?: string;
+    text: string;
+    type: 'customerService' | 'page';
+  }
+
+  export interface FloatingSchemeSchema {
+    enabled: boolean;
+    hiddenPages?: string[];
+    items: FloatingItem[];
+    mode: 'expand' | 'single' | 'vertical';
+    offsetBottom: number;
+    offsetX: number;
+    position: 'left-bottom' | 'right-bottom';
+    singleItemId?: string;
+    style: Record<string, any>;
+  }
+
   export interface HomeSchemeSchema {
     components?: DecorationModule[];
     modules?: DecorationModule[];
@@ -67,6 +88,7 @@ export namespace ClientDecorateApi {
 
   export type SchemeSchema =
     | DecorationModule[]
+    | FloatingSchemeSchema
     | HomeSchemeSchema
     | ProfileModule[]
     | TabbarItem[]

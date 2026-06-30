@@ -1,16 +1,23 @@
 <script lang="ts" setup>
-import type { ClientDecorateApi } from '#/api/client';
+import type { ClientDecorateApi, ClientPageApi } from '#/api/client';
 import type { GoodsApi, GoodsCategoryApi } from '#/api/goods';
 
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 
 import { IconifyIcon } from '@vben/icons';
 
+import { getClientPagePickerApi } from '#/api/client';
 import RichTextEditor from '#/components/rich-text-editor/index.vue';
 import Upload from '#/components/upload/index.vue';
 
 import ClientPhonePreview from '../../components/ClientPhonePreview.vue';
 import { paddingSideFields } from '../utils/useModuleSpacing';
+import {
+  isFloatingPresetIcon,
+  resolveFloatingMainIconUrl,
+  resolveFloatingPresetIconUrl,
+  resolvePreviewImageUrl,
+} from '../utils/previewImage';
 import ModuleStylePanel from './ModuleStylePanel.vue';
 import PageLinkPicker from './PageLinkPicker.vue';
 import ProductSourcePicker from './ProductSourcePicker.vue';
@@ -37,6 +44,28 @@ const props = defineProps<{
   currentThemeTokens: Record<string, string>;
   dragActive: boolean;
   dragDropIndex: null | number;
+  floatingConfig: {
+    enabled: boolean;
+    hiddenPages: string[];
+    mode: 'expand' | 'single' | 'vertical';
+    offsetBottom: number;
+    offsetX: number;
+    position: 'left-bottom' | 'right-bottom';
+    singleItemId: string;
+    style: {
+      backgroundColor: string;
+      color: string;
+      radius: number;
+      shadowBlur: number;
+      shadowColor: string;
+      shadowEnabled: boolean;
+      shadowOffsetX: number;
+      shadowOffsetY: number;
+      shadowOpacity: number;
+      shadowSpread: number;
+      size: number;
+    };
+  };
   iconPrefix: string;
   isReadonlyScheme: boolean;
   normalizeProfileModuleType: (type: string) => string;
@@ -73,19 +102,24 @@ const emit = defineEmits<{
   resetModuleConfig: [module: ModuleItem];
   resetModuleContent: [module: ModuleItem];
   resetModuleStyle: [module: ModuleItem];
+  resetFloatingStyle: [];
   resetPageStyle: [];
   selectModule: [module: ModuleItem];
   updatePageStyle: [field: string, value: unknown];
 }>();
 
 const previewCurrentPath = computed(() =>
-  props.activeType === 'profile'
-    ? '/pages/profile/index'
-    : '/pages/index/index',
+  props.activeType === 'floating'
+    ? '/pages-sub/goods/detail'
+    : props.activeType === 'profile'
+      ? '/pages/profile/index'
+      : '/pages/index/index',
 );
 
 const previewKind = computed(() =>
-  props.activeType === 'tabbar' ? 'tabbar' : props.activeType,
+  props.activeType === 'tabbar' || props.activeType === 'floating'
+    ? props.activeType
+    : props.activeType,
 );
 
 const editableModule = computed(() => props.selectedModule);
@@ -97,6 +131,224 @@ const editableProfileType = computed(() =>
 const isProfileEntryModule = computed(() =>
   ['orderEntry', 'serviceMenu'].includes(editableProfileType.value),
 );
+
+const floatingModeOptions = [
+  { label: '折叠展开', value: 'expand' },
+  { label: '单按钮（单入口）', value: 'single' },
+];
+
+const floatingPositionOptions = [
+  { label: '右下角', value: 'right-bottom' },
+  { label: '左下角', value: 'left-bottom' },
+];
+
+const floatingItemTypeOptions = [
+  { label: '页面跳转', value: 'page' },
+  { label: '联系客服', value: 'customerService' },
+];
+
+const pendingHiddenPagePath = ref('');
+
+const normalizeHiddenPagePath = (value: string) => {
+  const path = String(value || '').trim();
+  if (!path || path.includes('://')) return '';
+  const cleanPath = path.split('#')[0]?.split('?')[0] || '';
+  if (!cleanPath) return '';
+  const normalized = `/${cleanPath.replace(/^\/+/, '')}`.replace(/\/+/g, '/');
+  return normalized === '/' ? '' : normalized.replace(/\/$/, '');
+};
+
+const normalizedPendingHiddenPagePath = computed(() =>
+  normalizeHiddenPagePath(pendingHiddenPagePath.value),
+);
+
+const canAddHiddenPage = computed(() => {
+  const path = normalizedPendingHiddenPagePath.value;
+  if (!path) return false;
+  return !props.floatingConfig.hiddenPages
+    .map((item) => normalizeHiddenPagePath(item))
+    .includes(path);
+});
+
+const hiddenPageLabelMap = ref<Record<string, string>>({
+  '/pages-sub/user/agreement': '用户协议页',
+  '/pages-sub/user/login': '登录页',
+});
+
+const updateHiddenPageLabelMap = (
+  groups: ClientPageApi.PagePickerGroup[] = [],
+) => {
+  const nextMap = { ...hiddenPageLabelMap.value };
+  groups.forEach((group) => {
+    group.items.forEach((item) => {
+      const path = normalizeHiddenPagePath(item.path);
+      if (path) {
+        nextMap[path] = item.name || nextMap[path] || '页面链接';
+      }
+    });
+  });
+  hiddenPageLabelMap.value = nextMap;
+};
+
+const loadHiddenPageLabelMap = async () => {
+  try {
+    const result = await getClientPagePickerApi();
+    updateHiddenPageLabelMap(result.groups || []);
+  } catch (error) {
+    console.warn('加载页面名称失败:', error);
+  }
+};
+
+const getHiddenPageLabel = (path: string) =>
+  hiddenPageLabelMap.value[normalizeHiddenPagePath(path)] || '页面链接';
+
+watch(
+  () => props.activeType,
+  (activeType) => {
+    if (activeType === 'floating') {
+      void loadHiddenPageLabelMap();
+    }
+  },
+  { immediate: true },
+);
+
+const addHiddenPage = () => {
+  if (!canAddHiddenPage.value) return;
+  props.floatingConfig.hiddenPages.push(normalizedPendingHiddenPagePath.value);
+  pendingHiddenPagePath.value = '';
+};
+
+const removeHiddenPage = (index: number) => {
+  props.floatingConfig.hiddenPages.splice(index, 1);
+};
+
+const getFloatingColorInputValue = (value: string, fallback = '#0d50d5') =>
+  /^#[0-9a-f]{6}$/i.test(value || '') ? value : fallback;
+
+const updateFloatingStyleColor = (
+  field: 'backgroundColor' | 'color' | 'shadowColor',
+  event: Event,
+) => {
+  const target = event.target as HTMLInputElement | null;
+  if (!target) return;
+  props.floatingConfig.style[field] = target.value;
+};
+
+const floatingShadowColor = (value: unknown, opacity: unknown) => {
+  const color =
+    typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value)
+      ? value
+      : '#0f172a';
+  const alpha = Math.max(
+    0,
+    Math.min(100, Number.isFinite(Number(opacity)) ? Number(opacity) : 14),
+  );
+  const red = Number.parseInt(color.slice(1, 3), 16);
+  const green = Number.parseInt(color.slice(3, 5), 16);
+  const blue = Number.parseInt(color.slice(5, 7), 16);
+  return `rgba(${red}, ${green}, ${blue}, ${alpha / 100})`;
+};
+
+const floatingPreviewShadow = (style: Record<string, any>) => {
+  if (style.shadowEnabled === false) return 'none';
+  const offsetX = toPreviewPx(style.shadowOffsetX, 0, -80, 80);
+  const offsetY = toPreviewPx(style.shadowOffsetY, 12, -80, 80);
+  const blur = toPreviewPx(style.shadowBlur, 30, 0, 160);
+  const spread = toPreviewPx(style.shadowSpread, 0, -80, 80);
+  return `${offsetX}px ${offsetY}px ${blur}px ${spread}px ${floatingShadowColor(
+    style.shadowColor,
+    style.shadowOpacity,
+  )}`;
+};
+
+const floatingPreviewItems = computed(() =>
+  props.schemeForm.schema.filter((item) => item && item.enabled !== false),
+);
+
+const floatingSingleItemOptions = computed(() =>
+  floatingPreviewItems.value.map((item) => ({
+    label: item.text || '入口',
+    value: item.id,
+  })),
+);
+
+const floatingSelectedSingleItem = computed(
+  () =>
+    floatingPreviewItems.value.find(
+      (item) => item.id === props.floatingConfig.singleItemId,
+    ) ||
+    floatingPreviewItems.value[0] ||
+    null,
+);
+
+const floatingPreviewMainItem = computed(
+  () =>
+    floatingPreviewSingleMode.value
+      ? floatingSelectedSingleItem.value
+      : floatingPreviewItems.value[0] || null,
+);
+
+const floatingPreviewOpened = ref(true);
+const floatingPreviewSingleMode = computed(
+  () => props.floatingConfig.mode === 'single',
+);
+const floatingPreviewSide = computed(() =>
+  props.floatingConfig.position === 'left-bottom' ? 'left' : 'right',
+);
+
+const floatingPreviewPositionStyle = computed(() => {
+  const position = floatingPreviewSide.value === 'left' ? 'left' : 'right';
+  const offsetX = toPreviewPx(props.floatingConfig.offsetX, 24, 0, 80);
+  const offsetBottom = toPreviewPx(
+    props.floatingConfig.offsetBottom,
+    160,
+    0,
+    120,
+  );
+  const style = props.floatingConfig.style || {};
+  const size = toPreviewPx(style.size, 88, 28, 64);
+  const radius = toPreviewPx(style.radius, Math.round(size * 2), 0, 60);
+  return {
+    '--floating-preview-bg': style.backgroundColor || 'hsl(var(--primary))',
+    '--floating-preview-color':
+      style.color || 'hsl(var(--primary-foreground))',
+    '--floating-preview-radius': `${radius}px`,
+    '--floating-preview-shadow': floatingPreviewShadow(style),
+    '--floating-preview-size': `${size}px`,
+    [position]: `${offsetX}px`,
+    bottom: `${offsetBottom}px`,
+  };
+});
+
+const getFloatingPreviewIcon = (item: ModuleItem | null) =>
+  item
+    ? resolvePreviewImageUrl(item.icon) || resolveFloatingPresetIconUrl(item)
+    : '';
+
+const floatingPreviewMainIcon = computed(() =>
+  resolveFloatingMainIconUrl(floatingPreviewSide.value),
+);
+
+const handleFloatingPreviewMainClick = () => {
+  if (floatingPreviewSingleMode.value) {
+    if (floatingPreviewMainItem.value) {
+      emit('selectModule', floatingPreviewMainItem.value);
+    }
+    return;
+  }
+  floatingPreviewOpened.value = !floatingPreviewOpened.value;
+};
+
+const toPreviewPx = (
+  value: unknown,
+  fallback: number,
+  min: number,
+  max: number,
+) => {
+  const numberValue = Number(value ?? fallback);
+  const normalized = Number.isFinite(numberValue) ? numberValue : fallback;
+  return Math.max(min, Math.min(max, Math.round(normalized / 2)));
+};
 
 const bannerDragIndex = ref<null | number>(null);
 const bannerDropIndex = ref<null | number>(null);
@@ -757,6 +1009,8 @@ const extractUploadName = (value: string) => {
 
 const buildUploadFullUrl = (value: unknown) => {
   if (typeof value !== 'string' || value.length === 0) return '';
+  const previewUrl = resolvePreviewImageUrl(value);
+  if (previewUrl) return previewUrl;
   if (/^\d+$/.test(value.trim())) return '';
   if (/^(?:https?:|data:image|blob:)/.test(value)) return value;
   const apiBase = import.meta.env.VITE_GLOB_API_URL || '';
@@ -2111,11 +2365,15 @@ const updateProfileItemVisible = updateConfigItemVisible;
   <div
     class="decorate-editor"
     :class="{
+      'decorate-editor--floating': activeType === 'floating',
       'decorate-editor--profile': activeType === 'profile',
       'decorate-editor--tabbar': activeType === 'tabbar',
     }"
   >
-    <aside v-if="activeType !== 'tabbar'" class="component-library">
+    <aside
+      v-if="activeType !== 'tabbar' && activeType !== 'floating'"
+      class="component-library"
+    >
       <a-card size="small" title="组件库">
         <template #extra>
           <a-tag>
@@ -2154,12 +2412,112 @@ const updateProfileItemVisible = updateConfigItemVisible;
       </a-card>
     </aside>
 
+    <aside v-if="activeType === 'floating'" class="floating-entry-panel">
+      <a-card size="small" title="入口列表">
+        <template #extra>
+          <a-tag>{{ schemeForm.schema.length }} 个入口</a-tag>
+        </template>
+
+        <div class="floating-entry-panel__head">
+          <span>选择入口后在右侧配置内容</span>
+          <a-button
+            :disabled="isReadonlyScheme || schemeForm.schema.length >= 6"
+            size="small"
+            type="primary"
+            @click="$emit('paletteClick', 'floatingItem')"
+          >
+            添加入口
+          </a-button>
+        </div>
+
+        <div
+          class="floating-entry-list"
+          :class="{
+            'floating-entry-list--drop-end':
+              dragActive && dragDropIndex === schemeForm.schema.length,
+          }"
+          data-module-list="true"
+        >
+          <div
+            v-for="(item, index) in schemeForm.schema"
+            :key="item.id || index"
+            class="floating-entry-card"
+            :class="{
+              'floating-entry-card--active': selectedModuleId === item.id,
+              'floating-entry-card--drop-before':
+                dragActive && dragDropIndex === index,
+            }"
+            :data-module-index="index"
+            role="button"
+            tabindex="0"
+            @click="$emit('selectModule', item)"
+            @keydown.enter.prevent="$emit('selectModule', item)"
+            @keydown.space.prevent="$emit('selectModule', item)"
+          >
+            <button
+              class="floating-entry-card__drag"
+              :disabled="isReadonlyScheme || schemeForm.schema.length <= 1"
+              title="拖拽排序"
+              type="button"
+              @click.stop
+              @mousedown.stop="$emit('moduleMouseDown', index, $event)"
+            >
+              <IconifyIcon icon="lucide:grip-vertical" />
+            </button>
+            <span class="floating-entry-card__icon">
+              <img
+                v-if="getFloatingPreviewIcon(item)"
+                alt=""
+                :class="{
+                  'floating-entry-card__icon-image--preset':
+                    isFloatingPresetIcon(item),
+                }"
+                :src="getFloatingPreviewIcon(item)"
+              />
+              <span v-else class="floating-entry-card__icon-empty">未传</span>
+            </span>
+            <span class="floating-entry-card__main">
+              <strong>{{ item.text || '入口' }}</strong>
+              <small>
+                {{
+                  item.type === 'customerService'
+                    ? '联系客服'
+                    : item.path || '未配置跳转页面'
+                }}
+              </small>
+            </span>
+            <span class="floating-entry-card__status">
+              {{ item.enabled === false ? '隐藏' : '显示' }}
+            </span>
+            <button
+              class="floating-entry-card__delete"
+              :disabled="isReadonlyScheme || schemeForm.schema.length <= 1"
+              title="删除入口"
+              type="button"
+              @click.stop="$emit('moduleDelete', index)"
+            >
+              <IconifyIcon icon="lucide:trash-2" />
+            </button>
+          </div>
+        </div>
+
+        <a-empty
+          v-if="schemeForm.schema.length === 0"
+          description="暂无入口"
+        />
+      </a-card>
+    </aside>
+
     <main class="preview-canvas-panel">
       <div class="panel-title">
         <div>
           <strong>{{ activeTypeLabel }}画布</strong>
           <span class="panel-title__desc">
-            手机预览就是编辑画布，组件可直接拖入和选中配置。
+            {{
+              activeType === 'floating'
+                ? '组件预览只展示悬浮入口本体，方便检查位置、展开和样式。'
+                : '手机预览就是编辑画布，组件可直接拖入和选中配置。'
+            }}
           </span>
         </div>
         <a-space class="panel-title__actions">
@@ -2173,21 +2531,130 @@ const updateProfileItemVisible = updateConfigItemVisible;
           >
             添加导航项
           </a-button>
-          <a-tag>{{ schemeForm.schema.length }} 个模块</a-tag>
+          <a-tag v-if="activeType !== 'floating'">
+            {{ schemeForm.schema.length }}
+            个模块
+          </a-tag>
           <a-tag v-if="isReadonlyScheme">只读</a-tag>
         </a-space>
       </div>
 
       <div
         class="phone-canvas"
-        :class="{ 'phone-canvas--tabbar': activeType === 'tabbar' }"
+        :class="{
+          'phone-canvas--floating': activeType === 'floating',
+          'phone-canvas--tabbar': activeType === 'tabbar',
+        }"
         data-module-list="true"
       >
+        <div v-if="activeType === 'floating'" class="floating-component-preview">
+          <div class="floating-component-preview__surface">
+            <div
+              v-if="
+                floatingConfig.enabled !== false &&
+                floatingPreviewItems.length > 0
+              "
+              class="floating-component-preview__cluster"
+              :class="[
+                `floating-component-preview__cluster--${floatingPreviewSide}`,
+                {
+                  'floating-component-preview__cluster--open':
+                    floatingPreviewOpened && !floatingPreviewSingleMode,
+                  'floating-component-preview__cluster--single':
+                    floatingPreviewSingleMode,
+                },
+              ]"
+              :style="floatingPreviewPositionStyle"
+            >
+              <div
+                v-if="!floatingPreviewSingleMode"
+                class="floating-component-preview__menu"
+              >
+                <button
+                  v-for="item in floatingPreviewItems"
+                  :key="item.id || item.path || item.text"
+                  class="floating-component-preview__item"
+                  :class="{
+                    'floating-component-preview__item--selected':
+                      selectedModuleId === item.id,
+                  }"
+                  type="button"
+                  @click="$emit('selectModule', item)"
+                >
+                  <img
+                    v-if="getFloatingPreviewIcon(item)"
+                    alt=""
+                    :class="{
+                      'floating-component-preview__icon--preset':
+                        isFloatingPresetIcon(item),
+                    }"
+                    :src="getFloatingPreviewIcon(item)"
+                  />
+                  <span
+                    v-else
+                    class="floating-component-preview__icon-empty"
+                  >
+                    未传
+                  </span>
+                </button>
+              </div>
+
+              <button
+                class="floating-component-preview__trigger"
+                :class="{
+                  'floating-component-preview__trigger--selected':
+                    floatingPreviewSingleMode &&
+                    selectedModuleId === floatingPreviewMainItem?.id,
+                }"
+                type="button"
+                @click="handleFloatingPreviewMainClick"
+              >
+                <template
+                  v-if="floatingPreviewSingleMode && floatingPreviewMainItem"
+                >
+                  <img
+                    v-if="getFloatingPreviewIcon(floatingPreviewMainItem)"
+                    alt=""
+                    :class="{
+                      'floating-component-preview__icon--preset':
+                        isFloatingPresetIcon(floatingPreviewMainItem),
+                    }"
+                    :src="getFloatingPreviewIcon(floatingPreviewMainItem)"
+                  />
+                  <span
+                    v-else
+                    class="floating-component-preview__icon-empty"
+                  >
+                    未传
+                  </span>
+                </template>
+                <img
+                  v-else
+                  alt=""
+                  :src="floatingPreviewMainIcon"
+                />
+              </button>
+            </div>
+
+            <a-empty
+              v-else
+              class="floating-component-preview__empty"
+              :description="
+                floatingConfig.enabled === false
+                  ? '悬浮按钮已停用'
+                  : '暂无可展示入口'
+              "
+            />
+          </div>
+        </div>
+
         <ClientPhonePreview
+          v-else
           :category-tree="previewCategoryTree"
           :current-path="previewCurrentPath"
           :dragging="dragActive"
           :drop-index="dragDropIndex"
+          :floating-config="floatingConfig"
           :goods="previewGoods"
           :goods-list="previewGoodsList"
           interactive
@@ -2215,7 +2682,9 @@ const updateProfileItemVisible = updateConfigItemVisible;
         :description="
           activeType === 'tabbar'
             ? '点击添加导航项配置底部导航'
-            : '从左侧组件库拖入第一个组件'
+            : activeType === 'floating'
+              ? '点击添加入口配置全局悬浮按钮'
+              : '从左侧组件库拖入第一个组件'
         "
       />
     </main>
@@ -2346,13 +2815,331 @@ const updateProfileItemVisible = updateConfigItemVisible;
           </div>
         </a-form>
 
+        <a-form
+          v-if="activeType === 'floating'"
+          :disabled="isReadonlyScheme"
+          :label-col="{ style: { width: '92px' } }"
+          class="property-form"
+        >
+          <div class="property-section">
+            <div class="property-section__head">
+              <div>
+                <div class="property-section__title">展示设置</div>
+                <div class="property-section__desc">
+                  控制前台是否显示悬浮入口，以及在哪些页面主动隐藏。
+                </div>
+              </div>
+            </div>
+            <a-form-item label="启用状态">
+              <a-switch v-model:checked="floatingConfig.enabled" />
+            </a-form-item>
+            <a-form-item label="展开方式">
+              <a-radio-group
+                v-model:value="floatingConfig.mode"
+                :options="floatingModeOptions"
+              />
+              <div class="form-help-text">
+                折叠展开会显示胶囊菜单；单按钮只展示下方选择的一个入口。
+              </div>
+            </a-form-item>
+            <a-form-item
+              v-if="floatingConfig.mode === 'single'"
+              label="展示入口"
+            >
+              <a-select
+                v-model:value="floatingConfig.singleItemId"
+                :options="floatingSingleItemOptions"
+                placeholder="选择单按钮展示入口"
+              />
+              <div class="form-help-text">
+                如果所选入口被隐藏或删除，会自动使用第一个可展示入口。
+              </div>
+            </a-form-item>
+            <a-form-item label="不展示页面">
+              <div class="hidden-page-editor">
+                <div class="hidden-page-editor__add">
+                  <PageLinkPicker
+                    v-model:value="pendingHiddenPagePath"
+                    :disabled="isReadonlyScheme"
+                    placeholder="选择或输入不展示页面"
+                  />
+                  <a-button
+                    :disabled="isReadonlyScheme || !canAddHiddenPage"
+                    type="primary"
+                    @click="addHiddenPage"
+                  >
+                    添加
+                  </a-button>
+                </div>
+
+                <div
+                  v-if="floatingConfig.hiddenPages.length > 0"
+                  class="hidden-page-list"
+                >
+                  <div
+                    v-for="(path, index) in floatingConfig.hiddenPages"
+                    :key="`${path}-${index}`"
+                    class="hidden-page-item"
+                  >
+                    <span class="hidden-page-item__main">
+                      <strong>{{ getHiddenPageLabel(path) }}</strong>
+                      <small>{{ path }}</small>
+                    </span>
+                    <button
+                      class="hidden-page-item__delete"
+                      :disabled="isReadonlyScheme"
+                      title="删除不展示页面"
+                      type="button"
+                      @click="removeHiddenPage(index)"
+                    >
+                      <IconifyIcon icon="lucide:x" />
+                    </button>
+                  </div>
+                </div>
+                <a-empty
+                  v-else
+                  description="未选择不展示页面"
+                  :image-style="{ height: '42px' }"
+                />
+              </div>
+              <div class="form-help-text">
+                命中所选页面路径时，前台不会渲染悬浮按钮，常用于登录页、协议页、下单页等沉浸式页面。
+              </div>
+            </a-form-item>
+          </div>
+
+          <div class="property-section">
+            <div class="property-section__head">
+              <div class="property-section__title">基础样式</div>
+              <a-button
+                :disabled="isReadonlyScheme"
+                size="small"
+                type="link"
+                @click="$emit('resetFloatingStyle')"
+              >
+                重置
+              </a-button>
+            </div>
+            <a-form-item label="初始位置">
+              <a-radio-group
+                v-model:value="floatingConfig.position"
+                :options="floatingPositionOptions"
+              />
+            </a-form-item>
+            <a-form-item label="初始距边">
+              <a-input-number
+                v-model:value="floatingConfig.offsetX"
+                :max="160"
+                :min="0"
+                addon-after="rpx"
+                class="w-full"
+              />
+            </a-form-item>
+            <a-form-item label="初始距底">
+              <a-input-number
+                v-model:value="floatingConfig.offsetBottom"
+                :max="360"
+                :min="0"
+                addon-after="rpx"
+                class="w-full"
+              />
+            </a-form-item>
+            <a-form-item label="按钮大小">
+              <a-input-number
+                v-model:value="floatingConfig.style.size"
+                :max="128"
+                :min="56"
+                addon-after="rpx"
+                class="w-full"
+              />
+            </a-form-item>
+            <a-form-item label="圆角">
+              <a-input-number
+                v-model:value="floatingConfig.style.radius"
+                :max="120"
+                :min="0"
+                addon-after="rpx"
+                class="w-full"
+              />
+            </a-form-item>
+            <a-form-item label="背景色">
+              <div class="style-color-field style-color-field--no-action">
+                <input
+                  class="style-color-field__picker"
+                  type="color"
+                  :value="
+                    getFloatingColorInputValue(
+                      floatingConfig.style.backgroundColor,
+                    )
+                  "
+                  @input="
+                    (event: Event) =>
+                      updateFloatingStyleColor('backgroundColor', event)
+                  "
+                />
+                <a-input
+                  v-model:value="floatingConfig.style.backgroundColor"
+                  allow-clear
+                  class="style-color-field__input"
+                  placeholder="跟随主题主色"
+                />
+              </div>
+            </a-form-item>
+            <a-form-item label="文字颜色">
+              <div class="style-color-field style-color-field--no-action">
+                <input
+                  class="style-color-field__picker"
+                  type="color"
+                  :value="
+                    getFloatingColorInputValue(floatingConfig.style.color)
+                  "
+                  @input="
+                    (event: Event) => updateFloatingStyleColor('color', event)
+                  "
+                />
+                <a-input
+                  v-model:value="floatingConfig.style.color"
+                  allow-clear
+                  class="style-color-field__input"
+                  placeholder="跟随主题反色"
+                />
+              </div>
+            </a-form-item>
+            <a-form-item label="阴影设置">
+              <a-radio-group
+                v-model:value="floatingConfig.style.shadowEnabled"
+                :options="visibilityOptions"
+              />
+            </a-form-item>
+            <div
+              v-if="floatingConfig.style.shadowEnabled"
+              class="floating-shadow-control"
+            >
+              <div class="shadow-control-grid">
+                <a-form-item label="X 偏移">
+                  <a-input-number
+                    v-model:value="floatingConfig.style.shadowOffsetX"
+                    :max="80"
+                    :min="-80"
+                    addon-after="rpx"
+                    class="w-full"
+                  />
+                </a-form-item>
+                <a-form-item label="Y 偏移">
+                  <a-input-number
+                    v-model:value="floatingConfig.style.shadowOffsetY"
+                    :max="80"
+                    :min="-80"
+                    addon-after="rpx"
+                    class="w-full"
+                  />
+                </a-form-item>
+                <a-form-item label="模糊">
+                  <a-input-number
+                    v-model:value="floatingConfig.style.shadowBlur"
+                    :max="160"
+                    :min="0"
+                    addon-after="rpx"
+                    class="w-full"
+                  />
+                </a-form-item>
+                <a-form-item label="扩散">
+                  <a-input-number
+                    v-model:value="floatingConfig.style.shadowSpread"
+                    :max="80"
+                    :min="-80"
+                    addon-after="rpx"
+                    class="w-full"
+                  />
+                </a-form-item>
+                <a-form-item label="颜色">
+                  <div class="style-color-field style-color-field--no-action">
+                    <input
+                      aria-label="选择阴影颜色"
+                      class="style-color-field__picker"
+                      type="color"
+                      :value="
+                        getFloatingColorInputValue(
+                          floatingConfig.style.shadowColor,
+                          '#0f172a',
+                        )
+                      "
+                      @input="
+                        (event: Event) =>
+                          updateFloatingStyleColor('shadowColor', event)
+                      "
+                    />
+                    <a-input
+                      v-model:value="floatingConfig.style.shadowColor"
+                      class="style-color-field__input"
+                    />
+                  </div>
+                </a-form-item>
+                <a-form-item label="透明度">
+                  <a-input-number
+                    v-model:value="floatingConfig.style.shadowOpacity"
+                    :max="100"
+                    :min="0"
+                    addon-after="%"
+                    class="w-full"
+                  />
+                </a-form-item>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="editableModule" class="property-section">
+            <div class="property-section__head">
+              <div class="property-section__title">入口内容</div>
+              <a-button
+                :disabled="isReadonlyScheme"
+                size="small"
+                type="link"
+                @click="$emit('resetModuleContent', editableModule)"
+              >
+                重置
+              </a-button>
+            </div>
+            <a-form-item label="入口名称">
+              <a-input
+                v-model:value="editableModule.text"
+                placeholder="如：客服"
+              />
+            </a-form-item>
+            <a-form-item label="入口类型">
+              <a-radio-group
+                v-model:value="editableModule.type"
+                :options="floatingItemTypeOptions"
+              />
+            </a-form-item>
+            <a-form-item v-if="editableModule.type === 'page'" label="跳转页面">
+              <PageLinkPicker
+                v-model:value="editableModule.path"
+                :disabled="isReadonlyScheme"
+                placeholder="从页面库选择"
+              />
+            </a-form-item>
+            <a-form-item label="入口图标">
+              <Upload
+                v-model:value="editableModule.icon"
+                :disabled="isReadonlyScheme"
+                module="client"
+                type="image"
+              />
+            </a-form-item>
+            <a-form-item label="显示状态">
+              <a-switch v-model:checked="editableModule.enabled" />
+            </a-form-item>
+          </div>
+        </a-form>
+
         <a-empty
-          v-if="!editableModule"
+          v-if="!editableModule && activeType !== 'floating'"
           description="选择画布中的模块后配置组件"
         />
 
         <a-form
-          v-else
+          v-else-if="editableModule && activeType !== 'floating'"
           :disabled="isReadonlyScheme"
           :label-col="{ style: { width: '92px' } }"
           class="property-form"

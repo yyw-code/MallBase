@@ -127,6 +127,7 @@
       @select="onPayMethodSelect"
       @close="onPayMethodClose"
     />
+    <mb-floating-action />
   </view>
 </template>
 

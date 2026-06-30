@@ -148,7 +148,8 @@
     />
 
     <mb-custom-tabbar current="/pages/order/index" />
-  </view>
+      <mb-floating-action />
+</view>
 </template>
 
 <script setup>

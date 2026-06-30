@@ -34,7 +34,7 @@ CREATE TABLE `mb_client_page` (
 DROP TABLE IF EXISTS `mb_client_decoration_scheme`;
 CREATE TABLE `mb_client_decoration_scheme` (
   `id` int(11) unsigned NOT NULL AUTO_INCREMENT COMMENT '方案ID',
-  `type` varchar(20) NOT NULL COMMENT '方案类型：home/profile/tabbar',
+  `type` varchar(20) NOT NULL COMMENT '方案类型：home/floating/profile/tabbar',
   `name` varchar(80) NOT NULL COMMENT '方案名称',
   `description` varchar(255) DEFAULT NULL COMMENT '方案说明',
   `schema` json NOT NULL COMMENT '装修配置 JSON',
@@ -157,7 +157,23 @@ VALUES
    JSON_OBJECT('text', '购物车', 'path', '/pages/cart/index', 'icon', 'static/images/tabbar/cart.png', 'activeIcon', 'static/images/tabbar/cart-active.png'),
    JSON_OBJECT('text', '订单', 'path', '/pages/order/index', 'icon', 'static/images/tabbar/order.png', 'activeIcon', 'static/images/tabbar/order-active.png'),
    JSON_OBJECT('text', '我的', 'path', '/pages/profile/index', 'icon', 'static/images/tabbar/profile.png', 'activeIcon', 'static/images/tabbar/profile-active.png')
- )), 'native', 1, 1, 30, 1);
+ )), 'native', 1, 1, 30, 1),
+(4, 'floating', '系统默认悬浮按钮', '系统内置全局悬浮入口方案，不能修改或删除',
+ JSON_OBJECT(
+   'enabled', true,
+   'mode', 'expand',
+   'position', 'right-bottom',
+   'offsetX', 24,
+   'offsetBottom', 160,
+   'singleItemId', '',
+   'style', JSON_OBJECT('size', 88, 'radius', 44, 'backgroundColor', '', 'color', '', 'shadowEnabled', true, 'shadowOffsetX', 0, 'shadowOffsetY', 12, 'shadowBlur', 30, 'shadowSpread', 0, 'shadowColor', '#0f172a', 'shadowOpacity', 14),
+   'hiddenPages', JSON_ARRAY('/pages-sub/user/login', '/pages-sub/user/agreement'),
+   'items', JSON_ARRAY(
+     JSON_OBJECT('id', 'floating-service', 'text', '客服', 'type', 'customerService', 'icon', 'static/client/floating/service.png', 'enabled', true),
+     JSON_OBJECT('id', 'floating-cart', 'text', '购物车', 'type', 'page', 'path', '/pages/cart/index', 'icon', 'static/client/floating/cart.png', 'enabled', true),
+     JSON_OBJECT('id', 'floating-home', 'text', '首页', 'type', 'page', 'path', '/pages/index/index', 'icon', 'static/client/floating/home.png', 'enabled', true)
+   )
+ ), 'native', 1, 1, 40, 1);
 
 INSERT INTO `mb_client_theme`
 (`id`, `name`, `type`, `tokens`, `is_system`, `status`, `sort`)

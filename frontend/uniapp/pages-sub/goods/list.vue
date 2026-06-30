@@ -214,7 +214,8 @@
       </view>
       <text v-else-if="noMore" class="goods-list__no-more">没有更多了</text>
     </view>
-  </view>
+      <mb-floating-action />
+</view>
 </template>
 
 <script setup>

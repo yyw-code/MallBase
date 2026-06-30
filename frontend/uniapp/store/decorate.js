@@ -95,6 +95,7 @@ export const useDecorateStore = defineStore('decorate', {
   }),
 
   getters: {
+    floatingConfig: (state) => state.config.floating || DEFAULT_DECORATE_CONFIG.floating,
     homeModules: (state) => state.config.home.modules || [],
     homePageStyle: (state) =>
       state.config.home.pageStyle || { paddingX: 28, paddingY: 0 },

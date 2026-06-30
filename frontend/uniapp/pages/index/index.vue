@@ -128,7 +128,8 @@ onShareTimeline(() => {
       <view v-if="decorateStore.tabbarMode === 'custom'" class="bottom-spacer" />
     </view>
     <mb-custom-tabbar current="/pages/index/index" />
-  </view>
+      <mb-floating-action />
+</view>
 </template>
 
 <style lang="scss" scoped>

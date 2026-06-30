@@ -66,7 +66,8 @@
         </view>
       </view>
     </view>
-  </view>
+      <mb-floating-action />
+</view>
 </template>
 
 <script setup>

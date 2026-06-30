@@ -367,7 +367,8 @@ function parseConfigArray(value, fallback) {
 
       <view class="bottom-spacer" />
     </view>
-  </view>
+      <mb-floating-action />
+</view>
 </template>
 
 <style lang="scss" scoped>

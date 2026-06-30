@@ -159,7 +159,8 @@ function copyTrackingNo() {
       action-text="重新加载"
       @action="fetchLogistics"
     />
-  </view>
+      <mb-floating-action />
+</view>
 </template>
 
 <style lang="scss" scoped>

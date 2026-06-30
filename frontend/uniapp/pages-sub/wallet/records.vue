@@ -232,7 +232,8 @@ function formatAmount(value) {
         </view>
       </view>
     </view>
-  </view>
+      <mb-floating-action />
+</view>
 </template>
 
 <style lang="scss" scoped>

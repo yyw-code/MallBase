@@ -30,6 +30,7 @@ import { getGoodsCategoryTreeApi, getGoodsListApi } from '#/api/goods';
 
 import DecorateEditor from './components/DecorateEditor.vue';
 import DecorateSchemeList from './components/DecorateSchemeList.vue';
+import { resolvePreviewImageUrl } from './utils/previewImage';
 
 defineOptions({ name: 'ClientDecorateManagement' });
 
@@ -47,6 +48,28 @@ type PageStyle = {
   paddingTop?: number;
   paddingX: number;
   paddingY?: number;
+};
+type FloatingConfig = {
+  enabled: boolean;
+  hiddenPages: string[];
+  mode: 'expand' | 'single' | 'vertical';
+  offsetBottom: number;
+  offsetX: number;
+  position: 'left-bottom' | 'right-bottom';
+  singleItemId: string;
+  style: {
+    backgroundColor: string;
+    color: string;
+    radius: number;
+    shadowBlur: number;
+    shadowColor: string;
+    shadowEnabled: boolean;
+    shadowOffsetX: number;
+    shadowOffsetY: number;
+    shadowOpacity: number;
+    shadowSpread: number;
+    size: number;
+  };
 };
 type UploadFileInfo = {
   full_url?: string;
@@ -89,6 +112,29 @@ const DEFAULT_HOME_PAGE_STYLE: PageStyle = {
   paddingTop: 0,
   paddingX: 28,
   paddingY: 0,
+};
+
+const DEFAULT_FLOATING_CONFIG: FloatingConfig = {
+  enabled: true,
+  hiddenPages: ['/pages-sub/user/login', '/pages-sub/user/agreement'],
+  mode: 'expand',
+  offsetBottom: 160,
+  offsetX: 24,
+  position: 'right-bottom',
+  singleItemId: '',
+  style: {
+    backgroundColor: '',
+    color: '',
+    radius: 44,
+    shadowBlur: 30,
+    shadowColor: '#0f172a',
+    shadowEnabled: true,
+    shadowOffsetX: 0,
+    shadowOffsetY: 12,
+    shadowOpacity: 14,
+    shadowSpread: 0,
+    size: 88,
+  },
 };
 
 const DEFAULT_PROFILE_PAGE_STYLE: PageStyle = {
@@ -176,6 +222,11 @@ const SCHEME_TABS: Array<{
   { help: '配置首页组件、排序和内容', label: '首页装修', value: 'home' },
   { help: '配置底部导航项、图标和模式', label: '底部导航', value: 'tabbar' },
   { help: '配置个人中心模块和入口', label: '个人中心', value: 'profile' },
+  {
+    help: '配置全局悬浮入口、位置和样式',
+    label: '悬浮按钮',
+    value: 'floating',
+  },
 ];
 
 const HOME_MODULES: Array<{
@@ -307,9 +358,10 @@ const normalizeEditorUploadImage = (value: any) => {
     return normalizeEditorUploadImage(String(value));
   }
   if (typeof value === 'string') {
+    const fullUrl = resolvePreviewImageUrl(value);
     return {
-      full_url: '',
-      name: extractUploadName(value),
+      full_url: fullUrl,
+      name: extractUploadName(fullUrl || value),
       url: value,
     };
   }
@@ -330,11 +382,15 @@ const normalizeEditorUploadImage = (value: any) => {
       value.response?.fullUrl ||
       value.preview_url ||
       value.previewUrl ||
+      resolvePreviewImageUrl(url) ||
       '';
     return {
       ...value,
       full_url: fullUrl,
-      name: value.name || value.original_name || extractUploadName(String(url)),
+      name:
+        value.name ||
+        value.original_name ||
+        extractUploadName(String(fullUrl || url)),
       url: String(url),
     };
   }
@@ -576,6 +632,7 @@ const DEFAULT_TABBAR_PREVIEW_ITEMS = [
 ];
 
 const resolveRouteSchemeType = (path: string): ClientDecorateApi.SchemeType => {
+  if (path.includes('/client/decorate/floating')) return 'floating';
   if (path.includes('/client/decorate/tabbar')) return 'tabbar';
   if (path.includes('/client/decorate/profile')) return 'profile';
   return 'home';
@@ -587,9 +644,15 @@ const SCHEME_TYPE_META: Record<
     cardDesc: string;
     currentPath: string;
     path: string;
-    previewKind: 'home' | 'profile' | 'tabbar';
+    previewKind: 'floating' | 'home' | 'profile' | 'tabbar';
   }
 > = {
+  floating: {
+    cardDesc: '全局悬浮入口、客服和快捷跳转',
+    currentPath: '/pages-sub/goods/detail',
+    path: '客户端全局悬浮入口',
+    previewKind: 'floating',
+  },
   home: {
     cardDesc: '首页模块、轮播、导航和商品分组',
     currentPath: '/pages/index/index',
@@ -633,6 +696,7 @@ const themeSetting = ref<ClientThemeApi.ThemeSetting>({
 const overviewSchemes = reactive<
   Record<ClientDecorateApi.SchemeType, ClientDecorateApi.SchemeItem[]>
 >({
+  floating: [],
   home: [],
   profile: [],
   tabbar: [],
@@ -661,6 +725,7 @@ let pendingDragEvent: MouseEvent | null = null;
 
 const schemeForm = reactive<{
   description: string;
+  floatingConfig: FloatingConfig;
   name: string;
   pageStyle: PageStyle;
   schema: ModuleItem[];
@@ -669,6 +734,11 @@ const schemeForm = reactive<{
   tabbar_mode: ClientDecorateApi.TabbarMode;
 }>({
   description: '',
+  floatingConfig: {
+    ...DEFAULT_FLOATING_CONFIG,
+    hiddenPages: [...DEFAULT_FLOATING_CONFIG.hiddenPages],
+    style: { ...DEFAULT_FLOATING_CONFIG.style },
+  },
   name: '',
   pageStyle: { ...DEFAULT_HOME_PAGE_STYLE },
   schema: [],
@@ -684,6 +754,7 @@ const getSchemeSchemaList = (
   const schema = scheme?.schema as any;
   if (Array.isArray(schema)) return schema;
   if (type === 'tabbar') return schema?.items || [];
+  if (type === 'floating') return schema?.items || [];
   if (type === 'profile') return schema?.modules || schema?.components || [];
   return schema?.components || schema?.modules || [];
 };
@@ -790,9 +861,11 @@ const getActiveSchemeByType = (type: ClientDecorateApi.SchemeType) =>
 const getOverviewModules = (type: ClientDecorateApi.SchemeType) =>
   getSchemeSchemaList(getActiveSchemeByType(type), type).map(
     (item: ModuleItem, index: number) =>
-      type === 'tabbar'
-        ? normalizeTabbarEditorItem(item, index)
-        : normalizeEditorModule(item, index, type),
+      type === 'floating'
+        ? normalizeFloatingEditorItem(item, index)
+        : type === 'tabbar'
+          ? normalizeTabbarEditorItem(item, index)
+          : normalizeEditorModule(item, index, type),
   );
 
 const getThemeByType = (type: ClientThemeApi.ThemeType) =>
@@ -833,6 +906,16 @@ const selectedModule = computed<ModuleItem | null>(
 );
 
 const componentPalette = computed(() => {
+  if (activeType.value === 'floating') {
+    return [
+      {
+        desc: '全局悬浮快捷入口',
+        icon: 'lucide:message-circle',
+        label: '悬浮入口',
+        type: 'floatingItem',
+      },
+    ];
+  }
   if (activeType.value === 'profile') return PROFILE_MODULES;
   if (activeType.value === 'tabbar') {
     return [
@@ -850,6 +933,9 @@ const componentPalette = computed(() => {
 const paletteGroups = computed(() => {
   const pick = (types: string[]) =>
     componentPalette.value.filter((item) => types.includes(item.type));
+  if (activeType.value === 'floating') {
+    return [{ items: componentPalette.value, title: '悬浮入口' }];
+  }
   if (activeType.value === 'tabbar') {
     return [{ items: componentPalette.value, title: '底部导航' }];
   }
@@ -948,6 +1034,12 @@ const getSchemePreviewMeta = (scheme: ClientDecorateApi.SchemeItem) =>
 
 const getOverviewSchemeModules = (scheme: ClientDecorateApi.SchemeItem) => {
   if (scheme.type === 'tabbar') return [];
+  if (scheme.type === 'floating') {
+    return getSchemeSchemaList(scheme, scheme.type).map(
+      (item: ModuleItem, index: number) =>
+        normalizeFloatingEditorItem(item, index),
+    );
+  }
   return getSchemeSchemaList(scheme, scheme.type).map(
     (item: ModuleItem, index: number) =>
       normalizeEditorModule(item, index, scheme.type),
@@ -962,11 +1054,16 @@ const getOverviewSchemeTabbarItems = (scheme: ClientDecorateApi.SchemeItem) =>
 const getOverviewSchemeModuleNames = (scheme: ClientDecorateApi.SchemeItem) => {
   const modules = getSchemeSchemaList(scheme, scheme.type);
   return modules.map((item: ModuleItem) =>
-    scheme.type === 'tabbar'
-      ? item.text || item.label || item.title || '导航项'
-      : item.title ||
-        item.label ||
-        getModuleLabel(String(item.type || item.component || ''), scheme.type),
+    scheme.type === 'floating'
+      ? item.text || item.title || '悬浮入口'
+      : scheme.type === 'tabbar'
+        ? item.text || item.label || item.title || '导航项'
+        : item.title ||
+          item.label ||
+          getModuleLabel(
+            String(item.type || item.component || ''),
+            scheme.type,
+          ),
   );
 };
 
@@ -1016,6 +1113,15 @@ const TABBAR_DEFAULT_IMAGE_KEYS = [
 
 const getTabbarStaticImagePath = (key: string, active = false) =>
   `static/images/tabbar/${key}${active ? '-active' : ''}.png`;
+
+const getFloatingStaticIconPath = (key: string) =>
+  `static/client/floating/${key}.png`;
+
+const SYSTEM_FLOATING_ITEM_IDS = new Set([
+  'floating-cart',
+  'floating-home',
+  'floating-service',
+]);
 
 const getDefaultTabbarImageKey = (item: ModuleItem = {}, index = 0) => {
   const text = String(item.text || item.label || item.title || '');
@@ -1223,14 +1329,18 @@ const normalizeModuleTypeByScheme = (
   type: string,
   schemeType = activeType.value,
 ) =>
-  schemeType === 'profile'
-    ? normalizeProfileModuleType(type)
-    : normalizeHomeModuleType(type);
+  schemeType === 'floating'
+    ? type
+    : schemeType === 'profile'
+      ? normalizeProfileModuleType(type)
+      : normalizeHomeModuleType(type);
 
 const getModuleLabel = (type: string, schemeType = activeType.value) =>
-  [...HOME_MODULES, ...PROFILE_MODULES].find(
-    (item) => item.type === normalizeModuleTypeByScheme(type, schemeType),
-  )?.label || (type === 'tabbarItem' ? '导航项' : type);
+  schemeType === 'floating'
+    ? '悬浮入口'
+    : [...HOME_MODULES, ...PROFILE_MODULES].find(
+        (item) => item.type === normalizeModuleTypeByScheme(type, schemeType),
+      )?.label || (type === 'tabbarItem' ? '导航项' : type);
 
 const clampNumber = (
   value: unknown,
@@ -2510,18 +2620,227 @@ const defaultTabbarItems = (): ModuleItem[] => [
   },
 ];
 
+const defaultFloatingItems = (): ModuleItem[] => [
+  {
+    enabled: true,
+    icon: normalizeEditorUploadImage(getFloatingStaticIconPath('service')),
+    id: 'floating-service',
+    text: '客服',
+    type: 'customerService',
+  },
+  {
+    enabled: true,
+    icon: normalizeEditorUploadImage(getFloatingStaticIconPath('cart')),
+    id: 'floating-cart',
+    path: '/pages/cart/index',
+    text: '购物车',
+    type: 'page',
+  },
+  {
+    enabled: true,
+    icon: normalizeEditorUploadImage(getFloatingStaticIconPath('home')),
+    id: 'floating-home',
+    path: '/pages/index/index',
+    text: '首页',
+    type: 'page',
+  },
+];
+
+const defaultFloatingItem = (): ModuleItem => ({
+  enabled: true,
+  icon: '',
+  id: createId('floating'),
+  path: '/pages/index/index',
+  text: '入口',
+  type: 'page',
+});
+
+const getSystemFloatingItemType = (item: ModuleItem) => {
+  const id = String(item.id || item.key || '');
+  if (SYSTEM_FLOATING_ITEM_IDS.has(id)) return id.replace('floating-', '');
+
+  const text = String(item.text || '').trim();
+  const path = String(item.path || '').split(/[?#]/)[0]?.replace(/\/+$/, '');
+  if (item.type === 'customerService' && text === '客服') return 'service';
+  if (item.type === 'page' && text === '购物车' && path === '/pages/cart/index')
+    return 'cart';
+  if (item.type === 'page' && text === '首页' && path === '/pages/index/index')
+    return 'home';
+  return '';
+};
+
+const isSystemFloatingItem = (item: ModuleItem) =>
+  Boolean(getSystemFloatingItemType(item));
+
+const hasFloatingIcon = (item: ModuleItem) =>
+  Boolean(normalizeUploadValue(item.icon || ''));
+
+const normalizeFloatingConfig = (schema: any): FloatingConfig => {
+  const source = schema && typeof schema === 'object' ? schema : {};
+  const style =
+    source.style && typeof source.style === 'object' ? source.style : {};
+  const mode = ['expand', 'single', 'vertical'].includes(source.mode)
+    ? source.mode
+    : DEFAULT_FLOATING_CONFIG.mode;
+  const position = ['left-bottom', 'right-bottom'].includes(source.position)
+    ? source.position
+    : DEFAULT_FLOATING_CONFIG.position;
+  const hiddenPages = Array.isArray(source.hiddenPages)
+    ? source.hiddenPages
+    : Array.isArray(source.hidden_pages)
+      ? source.hidden_pages
+      : DEFAULT_FLOATING_CONFIG.hiddenPages;
+  return {
+    enabled: source.enabled !== false,
+    hiddenPages: hiddenPages
+      .map((item: unknown) => String(item || '').trim())
+      .filter(Boolean),
+    mode,
+    offsetBottom: clampNumber(
+      source.offsetBottom ?? source.offset_bottom,
+      DEFAULT_FLOATING_CONFIG.offsetBottom,
+      0,
+      360,
+    ),
+    offsetX: clampNumber(
+      source.offsetX ?? source.offset_x,
+      DEFAULT_FLOATING_CONFIG.offsetX,
+      0,
+      160,
+    ),
+    position,
+    singleItemId: String(source.singleItemId ?? source.single_item_id ?? ''),
+    style: {
+      backgroundColor: String(
+        style.backgroundColor ??
+          style.background_color ??
+          DEFAULT_FLOATING_CONFIG.style.backgroundColor,
+      ),
+      color: String(style.color ?? DEFAULT_FLOATING_CONFIG.style.color),
+      radius: clampNumber(
+        style.radius,
+        DEFAULT_FLOATING_CONFIG.style.radius,
+        0,
+        120,
+      ),
+      shadowBlur: clampNumber(
+        style.shadowBlur ?? style.shadow_blur,
+        DEFAULT_FLOATING_CONFIG.style.shadowBlur,
+        0,
+        160,
+      ),
+      shadowColor: String(
+        style.shadowColor ??
+          style.shadow_color ??
+          DEFAULT_FLOATING_CONFIG.style.shadowColor,
+      ),
+      shadowEnabled:
+        (style.shadowEnabled ?? style.shadow_enabled ?? true) ? true : false,
+      shadowOffsetX: clampNumber(
+        style.shadowOffsetX ?? style.shadow_offset_x,
+        DEFAULT_FLOATING_CONFIG.style.shadowOffsetX,
+        -80,
+        80,
+      ),
+      shadowOffsetY: clampNumber(
+        style.shadowOffsetY ?? style.shadow_offset_y,
+        DEFAULT_FLOATING_CONFIG.style.shadowOffsetY,
+        -80,
+        80,
+      ),
+      shadowOpacity: clampNumber(
+        style.shadowOpacity ?? style.shadow_opacity,
+        DEFAULT_FLOATING_CONFIG.style.shadowOpacity,
+        0,
+        100,
+      ),
+      shadowSpread: clampNumber(
+        style.shadowSpread ?? style.shadow_spread,
+        DEFAULT_FLOATING_CONFIG.style.shadowSpread,
+        -80,
+        80,
+      ),
+      size: clampNumber(
+        style.size,
+        DEFAULT_FLOATING_CONFIG.style.size,
+        56,
+        128,
+      ),
+    },
+  };
+};
+
+const normalizeFloatingEditorItem = (
+  item: ModuleItem = {},
+  index = 0,
+): ModuleItem => {
+  const type = item.type === 'customerService' ? 'customerService' : 'page';
+  return {
+    enabled: item.enabled !== false && item.visible !== false,
+    icon: normalizeEditorUploadImage(item.icon || ''),
+    id: item.id || item.key || createId('floating'),
+    path: type === 'page' ? item.path || '/pages/index/index' : '',
+    sort: item.sort ?? index,
+    text:
+      item.text || item.title || (type === 'customerService' ? '客服' : '入口'),
+    type,
+  };
+};
+
+const normalizeFloatingSaveItem = (item: ModuleItem, index: number) => {
+  const type = item.type === 'customerService' ? 'customerService' : 'page';
+  return {
+    enabled: item.enabled !== false,
+    icon: normalizeUploadValue(item.icon || ''),
+    id: item.id || createId('floating'),
+    path: type === 'page' ? item.path || '/pages/index/index' : '',
+    sort: item.sort ?? index,
+    text: item.text || '入口',
+    type,
+  };
+};
+
+const getEnabledFloatingItems = () =>
+  schemeForm.schema.filter((item) => item && item.enabled !== false);
+
+const normalizeFloatingSingleItemId = (value?: string) => {
+  const enabledItems = getEnabledFloatingItems();
+  if (enabledItems.length === 0) return '';
+  const id = String(value || '').trim();
+  if (id && enabledItems.some((item) => item.id === id)) return id;
+  return String(enabledItems[0]?.id || '');
+};
+
+const ensureFloatingSingleItemId = () => {
+  if (activeType.value !== 'floating') return;
+  schemeForm.floatingConfig.singleItemId = normalizeFloatingSingleItemId(
+    schemeForm.floatingConfig.singleItemId,
+  );
+};
+
 const resetSchemeForm = (type = activeType.value) => {
   selectedSchemeId.value = null;
   selectedIndex.value = 0;
   Object.assign(schemeForm, {
     description: '',
+    floatingConfig: {
+      ...DEFAULT_FLOATING_CONFIG,
+      hiddenPages: [...DEFAULT_FLOATING_CONFIG.hiddenPages],
+      style: { ...DEFAULT_FLOATING_CONFIG.style },
+    },
     name: `${activeTypeLabel.value}方案`,
     pageStyle: { ...getDefaultPageStyle(type) },
-    schema: type === 'tabbar' ? defaultTabbarItems() : [],
+    schema:
+      type === 'tabbar'
+        ? defaultTabbarItems()
+        : type === 'floating'
+          ? defaultFloatingItems()
+          : [],
     sort: 0,
     status: 1,
     tabbar_mode: type === 'tabbar' ? 'custom' : 'native',
   });
+  ensureFloatingSingleItemId();
 };
 
 const ensureSelectedIndex = () => {
@@ -2593,22 +2912,35 @@ const loadSchemeDetail = async (id: number) => {
 
   Object.assign(schemeForm, {
     description: detail.description || '',
+    floatingConfig:
+      activeType.value === 'floating'
+        ? normalizeFloatingConfig(detail.schema)
+        : {
+            ...DEFAULT_FLOATING_CONFIG,
+            hiddenPages: [...DEFAULT_FLOATING_CONFIG.hiddenPages],
+            style: { ...DEFAULT_FLOATING_CONFIG.style },
+          },
     name: detail.name,
     pageStyle:
-      activeType.value === 'tabbar'
+      activeType.value === 'tabbar' || activeType.value === 'floating'
         ? clone(DEFAULT_HOME_PAGE_STYLE)
         : getSchemePageStyle(detail, activeType.value),
     schema:
-      activeType.value === 'tabbar'
-        ? normalizeTabbarEditorItems(clone(schema))
-        : clone(schema).map((item: ModuleItem, index: number) =>
-            normalizeEditorModule(item, index, activeType.value),
-          ),
+      activeType.value === 'floating'
+        ? clone(schema).map((item: ModuleItem, index: number) =>
+            normalizeFloatingEditorItem(item, index),
+          )
+        : activeType.value === 'tabbar'
+          ? normalizeTabbarEditorItems(clone(schema))
+          : clone(schema).map((item: ModuleItem, index: number) =>
+              normalizeEditorModule(item, index, activeType.value),
+            ),
     sort: detail.sort || 0,
     status: detail.status ?? 1,
     tabbar_mode:
       activeType.value === 'tabbar' ? 'custom' : detail.tabbar_mode || 'native',
   });
+  ensureFloatingSingleItemId();
   selectedIndex.value = 0;
 };
 
@@ -2672,7 +3004,7 @@ const handleOverviewEdit = async (scheme: ClientDecorateApi.SchemeItem) => {
 
 const handleOverviewCopy = async (scheme: ClientDecorateApi.SchemeItem) => {
   await copyClientDecorateSchemeApi(scheme.id);
-  message.success('复制成功');
+  message.success('复制成功，可在列表中编辑副本');
   await loadOverviewSchemes();
 };
 
@@ -2722,6 +3054,26 @@ const openSchemeSettings = () => {
 const normalizeSchemaForClient = (
   schema: ModuleItem[],
 ): ClientDecorateApi.SchemeSchema => {
+  if (activeType.value === 'floating') {
+    return stripRuntimePreviewFields(
+      normalizeUploadValue({
+        ...schemeForm.floatingConfig,
+        hiddenPages: schemeForm.floatingConfig.hiddenPages
+          .map((item) => String(item || '').trim())
+          .filter(Boolean),
+        singleItemId: normalizeFloatingSingleItemId(
+          schemeForm.floatingConfig.singleItemId,
+        ),
+        items: clone(schema).map((item, index) =>
+          normalizeFloatingSaveItem(item, index),
+        ),
+        style: {
+          ...schemeForm.floatingConfig.style,
+        },
+      }),
+    ) as ClientDecorateApi.FloatingSchemeSchema;
+  }
+
   if (activeType.value === 'tabbar') {
     const items = normalizeTabbarEditorItems(clone(schema)).map((item, index) =>
       normalizeTabbarSaveItem(item, index),
@@ -2902,6 +3254,27 @@ const validateBeforeSave = () => {
       return false;
     }
   }
+  if (activeType.value === 'floating') {
+    if (schemeForm.schema.length === 0) {
+      message.warning('请至少配置 1 个悬浮入口');
+      return false;
+    }
+    const invalid = schemeForm.schema.some((item) => {
+      if (!item.text) return true;
+      return item.type === 'page' && !item.path;
+    });
+    if (invalid) {
+      message.warning('请完善悬浮入口名称和页面路径');
+      return false;
+    }
+    const missingCustomIcon = schemeForm.schema.some(
+      (item) => !isSystemFloatingItem(item) && !hasFloatingIcon(item),
+    );
+    if (missingCustomIcon) {
+      message.warning('自定义悬浮入口请上传入口图标');
+      return false;
+    }
+  }
   return true;
 };
 
@@ -2964,7 +3337,13 @@ const addModuleByType = (type: string, insertIndex?: number) => {
   if (warnReadonlyScheme()) return;
   const moduleType = normalizeModuleTypeByScheme(type);
   let item: ModuleItem;
-  if (activeType.value === 'tabbar') {
+  if (activeType.value === 'floating') {
+    if (schemeForm.schema.length >= 6) {
+      message.warning('悬浮入口最多 6 项');
+      return;
+    }
+    item = defaultFloatingItem();
+  } else if (activeType.value === 'tabbar') {
     if (schemeForm.schema.length >= 5) {
       message.warning('底部导航最多 5 项');
       return;
@@ -2994,16 +3373,26 @@ const addModuleByType = (type: string, insertIndex?: number) => {
     insertIndex === undefined ? schemeForm.schema.length : insertIndex;
   schemeForm.schema.splice(targetIndex, 0, item);
   selectedIndex.value = targetIndex;
+  if (activeType.value === 'floating') {
+    ensureFloatingSingleItemId();
+  }
 };
 
 const removeModule = (index: number) => {
   if (warnReadonlyScheme()) return;
+  if (activeType.value === 'floating' && schemeForm.schema.length <= 1) {
+    message.warning('悬浮按钮至少 1 项');
+    return;
+  }
   if (activeType.value === 'tabbar' && schemeForm.schema.length <= 2) {
     message.warning('底部导航至少 2 项');
     return;
   }
   schemeForm.schema.splice(index, 1);
   ensureSelectedIndex();
+  if (activeType.value === 'floating') {
+    ensureFloatingSingleItemId();
+  }
 };
 
 const moveModule = (from: number, to: number) => {
@@ -3269,6 +3658,15 @@ const resetHomePageStyle = () => {
   message.success('已重置页面样式');
 };
 
+const resetFloatingStyle = () => {
+  if (warnReadonlyScheme()) return;
+  schemeForm.floatingConfig.position = DEFAULT_FLOATING_CONFIG.position;
+  schemeForm.floatingConfig.offsetX = DEFAULT_FLOATING_CONFIG.offsetX;
+  schemeForm.floatingConfig.offsetBottom = DEFAULT_FLOATING_CONFIG.offsetBottom;
+  schemeForm.floatingConfig.style = { ...DEFAULT_FLOATING_CONFIG.style };
+  message.success('已重置基础样式');
+};
+
 const resetModuleConfig = (module: ModuleItem) => {
   if (warnReadonlyScheme()) return;
   if (!module) return;
@@ -3308,6 +3706,27 @@ const resetModuleStyle = (module: ModuleItem) => {
 const resetModuleContent = (module: ModuleItem) => {
   if (warnReadonlyScheme()) return;
   if (!module || activeType.value === 'tabbar') return;
+  if (activeType.value === 'floating') {
+    const id = module.id || createId('floating');
+    const sort = module.sort;
+    const defaults =
+      module.type === 'customerService'
+        ? {
+            enabled: true,
+            icon: '',
+            text: '客服',
+            type: 'customerService',
+          }
+        : defaultFloatingItem();
+    Object.keys(module).forEach((key) => delete module[key]);
+    Object.assign(module, defaults, { id });
+    if (sort !== undefined) {
+      module.sort = sort;
+    }
+    ensureFloatingSingleItemId();
+    message.success('已重置入口内容');
+    return;
+  }
   const rawType = String(module.type || '');
   const type =
     activeType.value === 'profile'
@@ -3513,6 +3932,7 @@ onBeforeUnmount(resetMouseDrag);
       :current-theme-tokens="currentThemeTokens"
       :drag-active="Boolean(mouseDrag?.active)"
       :drag-drop-index="dragDropIndex"
+      :floating-config="schemeForm.floatingConfig"
       :icon-prefix="iconPrefix"
       :is-readonly-scheme="isReadonlyScheme"
       :normalize-profile-module-type="normalizeProfileModuleType"
@@ -3535,6 +3955,7 @@ onBeforeUnmount(resetMouseDrag);
       @palette-click="handlePaletteClick"
       @palette-mouse-down="handlePaletteMouseDown"
       @remove-config-item="removeConfigItem"
+      @reset-floating-style="resetFloatingStyle"
       @reset-module-content="resetModuleContent"
       @reset-module-config="resetModuleConfig"
       @reset-module-style="resetModuleStyle"

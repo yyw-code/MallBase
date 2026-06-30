@@ -255,7 +255,8 @@ function goDetail(id) {
       icon=""
       text="暂无售后订单"
     />
-  </view>
+      <mb-floating-action />
+</view>
 </template>
 
 <style lang="scss" scoped>

@@ -19,7 +19,8 @@ onLoad((query) => {
     :style="decorateStore.themeStyle"
   >
     <mb-navbar title="我的订单" />
-  </view>
+      <mb-floating-action />
+</view>
 </template>
 
 <style scoped>

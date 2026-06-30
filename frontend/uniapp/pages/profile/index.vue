@@ -1234,6 +1234,7 @@ function handleLogout() {
 
     <view v-if="decorateStore.tabbarMode === 'custom'" class="bottom-spacer" />
     <mb-custom-tabbar current="/pages/profile/index" />
+    <mb-floating-action />
   </view>
 </template>
 

@@ -453,7 +453,8 @@ async function onSubmitReturn() {
         </view>
       </view>
     </template>
-  </view>
+      <mb-floating-action />
+</view>
 </template>
 
 <style lang="scss" scoped>

@@ -308,7 +308,8 @@ onLoad(() => {
     </view>
 
     <mb-custom-tabbar current="/pages/category/index" />
-  </view>
+      <mb-floating-action />
+</view>
 </template>
 
 <style lang="scss" scoped>

@@ -11,7 +11,7 @@ use think\Validate;
 class ClientDecorationSchemeValidate extends Validate
 {
     protected $rule = [
-        'type' => 'require|in:home,profile,tabbar',
+        'type' => 'require|in:home,floating,profile,tabbar',
         'name' => 'require|max:80',
         'description' => 'max:255',
         'schema' => 'require|array',

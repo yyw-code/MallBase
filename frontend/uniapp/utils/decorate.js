@@ -1,5 +1,6 @@
 import {
   DEFAULT_DECORATE_CONFIG,
+  DEFAULT_FLOATING_CONFIG,
   DEFAULT_TABBAR_ITEMS,
 } from '@/config/decorate';
 
@@ -55,6 +56,7 @@ export function mergeDecorateConfig(config) {
       ? sourceTheme.themes
       : DEFAULT_DECORATE_CONFIG.theme.themes;
   return {
+    floating: normalizeFloating(source.floating),
     home: normalizeSchema(source.home, DEFAULT_DECORATE_CONFIG.home),
     profile: normalizeSchema(source.profile, DEFAULT_DECORATE_CONFIG.profile),
     tabbar: normalizeTabbar(source.tabbar),
@@ -76,6 +78,139 @@ export function mergeDecorateConfig(config) {
       themes: sourceThemes,
     },
   };
+}
+
+export function normalizeFloating(floating) {
+  const source = isPlainObject(floating) ? floating : {};
+  const style = isPlainObject(source.style) ? source.style : {};
+  const hiddenPages = Array.isArray(source.hiddenPages)
+    ? source.hiddenPages
+    : Array.isArray(source.hidden_pages)
+      ? source.hidden_pages
+      : DEFAULT_FLOATING_CONFIG.hiddenPages;
+  const mode = ['expand', 'single', 'vertical'].includes(source.mode)
+    ? source.mode
+    : DEFAULT_FLOATING_CONFIG.mode;
+  const position = ['left-bottom', 'right-bottom'].includes(source.position)
+    ? source.position
+    : DEFAULT_FLOATING_CONFIG.position;
+  const items = normalizeFloatingItems(source.items);
+  return {
+    enabled: source.enabled !== false,
+    hiddenPages: hiddenPages
+      .map((item) => normalizeRoutePathForMatch(item))
+      .filter(Boolean),
+    items,
+    mode,
+    offsetBottom: clampNumber(
+      source.offsetBottom ?? source.offset_bottom,
+      DEFAULT_FLOATING_CONFIG.offsetBottom,
+      0,
+      360,
+    ),
+    offsetX: clampNumber(
+      source.offsetX ?? source.offset_x,
+      DEFAULT_FLOATING_CONFIG.offsetX,
+      0,
+      160,
+    ),
+    position,
+    singleItemId: normalizeFloatingSingleItemId(
+      source.singleItemId ?? source.single_item_id,
+      items,
+    ),
+    style: {
+      backgroundColor:
+        style.backgroundColor ??
+        style.background_color ??
+        DEFAULT_FLOATING_CONFIG.style.backgroundColor,
+      color: style.color ?? DEFAULT_FLOATING_CONFIG.style.color,
+      radius: clampNumber(
+        style.radius,
+        DEFAULT_FLOATING_CONFIG.style.radius,
+        0,
+        120,
+      ),
+      shadowBlur: clampNumber(
+        style.shadowBlur ?? style.shadow_blur,
+        DEFAULT_FLOATING_CONFIG.style.shadowBlur,
+        0,
+        160,
+      ),
+      shadowColor:
+        style.shadowColor ??
+        style.shadow_color ??
+        DEFAULT_FLOATING_CONFIG.style.shadowColor,
+      shadowEnabled:
+        style.shadowEnabled ??
+        style.shadow_enabled ??
+        DEFAULT_FLOATING_CONFIG.style.shadowEnabled,
+      shadowOffsetX: clampNumber(
+        style.shadowOffsetX ?? style.shadow_offset_x,
+        DEFAULT_FLOATING_CONFIG.style.shadowOffsetX,
+        -80,
+        80,
+      ),
+      shadowOffsetY: clampNumber(
+        style.shadowOffsetY ?? style.shadow_offset_y,
+        DEFAULT_FLOATING_CONFIG.style.shadowOffsetY,
+        -80,
+        80,
+      ),
+      shadowOpacity: clampNumber(
+        style.shadowOpacity ?? style.shadow_opacity,
+        DEFAULT_FLOATING_CONFIG.style.shadowOpacity,
+        0,
+        100,
+      ),
+      shadowSpread: clampNumber(
+        style.shadowSpread ?? style.shadow_spread,
+        DEFAULT_FLOATING_CONFIG.style.shadowSpread,
+        -80,
+        80,
+      ),
+      size: clampNumber(
+        style.size,
+        DEFAULT_FLOATING_CONFIG.style.size,
+        56,
+        128,
+      ),
+    },
+  };
+}
+
+export function normalizeFloatingItems(items) {
+  const list = Array.isArray(items) ? items : DEFAULT_FLOATING_CONFIG.items;
+  const normalized = list
+    .filter((item) => item && item.enabled !== false && item.visible !== false)
+    .map((item, index) => {
+      const type = item.type === 'customerService' ? 'customerService' : 'page';
+      return {
+        enabled: true,
+        icon: item.icon || '',
+        id: item.id || item.key || `floating-${index}`,
+        path: type === 'page' ? normalizePath(item.path || '') : '',
+        text: item.text || item.title || '入口',
+        type,
+      };
+    })
+    .filter((item) => item.type === 'customerService' || item.path);
+
+  return normalized.length > 0
+    ? normalized
+    : normalizeFloatingItems(DEFAULT_FLOATING_CONFIG.items);
+}
+
+function normalizeFloatingSingleItemId(value, items) {
+  const id = String(value || '').trim();
+  if (!id) return '';
+  return items.some((item) => item.id === id) ? id : '';
+}
+
+function clampNumber(value, fallback, min, max) {
+  const numberValue = Number(value ?? fallback);
+  if (!Number.isFinite(numberValue)) return fallback;
+  return Math.max(min, Math.min(max, Math.round(numberValue)));
 }
 
 export function normalizeSchema(schema, fallback) {
@@ -307,7 +442,18 @@ export function normalizePath(path) {
   return path.startsWith('/') ? path : `/${path}`;
 }
 
-function normalizeTabbarAsset(values, fallback = "") {
+export function normalizeRoutePathForMatch(path) {
+  if (!path) return '';
+  const raw = String(path).trim();
+  if (!raw || raw.includes('://')) return '';
+  const clean = raw.split('#')[0].split('?')[0].trim();
+  if (!clean) return '';
+  const normalized = `/${clean.replace(/^\/+/, '')}`.replace(/\/+/g, '/');
+  if (normalized === '/') return '';
+  return normalized.replace(/\/+$/, '');
+}
+
+function normalizeTabbarAsset(values, fallback = '') {
   for (const value of values) {
     const normalized = normalizeAssetPath(value);
     if (normalized) return normalized;

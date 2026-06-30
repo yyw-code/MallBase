@@ -12,7 +12,8 @@
         <text class="empty-desc">相关内容暂未配置，请在后台客户端配置中完善。</text>
       </view>
     </scroll-view>
-  </view>
+      <mb-floating-action />
+</view>
 </template>
 
 <script setup>

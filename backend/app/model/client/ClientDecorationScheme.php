@@ -11,6 +11,7 @@ use mall_base\base\BaseModel;
 class ClientDecorationScheme extends BaseModel
 {
     public const TYPE_HOME = 'home';
+    public const TYPE_FLOATING = 'floating';
     public const TYPE_PROFILE = 'profile';
     public const TYPE_TABBAR = 'tabbar';
 
@@ -27,7 +28,7 @@ class ClientDecorationScheme extends BaseModel
 
     public static function validTypes(): array
     {
-        return [self::TYPE_HOME, self::TYPE_PROFILE, self::TYPE_TABBAR];
+        return [self::TYPE_HOME, self::TYPE_FLOATING, self::TYPE_PROFILE, self::TYPE_TABBAR];
     }
 
     public static function validTabbarModes(): array

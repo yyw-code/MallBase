@@ -358,7 +358,8 @@ function goGoodsDetail(item) {
       <view class="bottom-bar__safe-area" />
     </view>
     <mb-custom-tabbar current="/pages/cart/index" />
-  </view>
+      <mb-floating-action />
+</view>
 </template>
 
 <style lang="scss" scoped>

@@ -509,7 +509,8 @@ function redirectAfterSubmit(result) {
         </text>
       </view>
     </view>
-  </view>
+      <mb-floating-action />
+</view>
 </template>
 
 <style lang="scss" scoped>

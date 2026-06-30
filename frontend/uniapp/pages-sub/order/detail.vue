@@ -251,7 +251,8 @@
       @confirm="onRefundItemsConfirm"
       @close="closeRefundSheet"
     />
-  </view>
+      <mb-floating-action />
+</view>
 </template>
 
 <script setup>

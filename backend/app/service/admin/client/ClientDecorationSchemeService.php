@@ -481,6 +481,7 @@ class ClientDecorationSchemeService extends BaseService
     protected function blankSchema(string $type): array
     {
         return match ($type) {
+            ClientDecorationScheme::TYPE_FLOATING => $this->defaultFloatingSchema(),
             ClientDecorationScheme::TYPE_PROFILE => [
                 'modules' => [],
                 'pageStyle' => $this->defaultProfilePageStyle(),
@@ -526,7 +527,214 @@ class ClientDecorationSchemeService extends BaseService
             $schema = ['items' => $schema];
         }
 
+        if ($type === ClientDecorationScheme::TYPE_FLOATING) {
+            $schema = $this->normalizeFloatingSchema($schema);
+        }
+
         return $schema;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function defaultFloatingSchema(): array
+    {
+        return [
+            'enabled' => true,
+            'hiddenPages' => ['/pages-sub/user/login', '/pages-sub/user/agreement'],
+            'items' => [
+                ['enabled' => true, 'icon' => 'static/client/floating/service.png', 'id' => 'floating-service', 'text' => '客服', 'type' => 'customerService'],
+                ['enabled' => true, 'icon' => 'static/client/floating/cart.png', 'id' => 'floating-cart', 'path' => '/pages/cart/index', 'text' => '购物车', 'type' => 'page'],
+                ['enabled' => true, 'icon' => 'static/client/floating/home.png', 'id' => 'floating-home', 'path' => '/pages/index/index', 'text' => '首页', 'type' => 'page'],
+            ],
+            'mode' => 'expand',
+            'offsetBottom' => 160,
+            'offsetX' => 24,
+            'position' => 'right-bottom',
+            'style' => [
+                'backgroundColor' => '',
+                'color' => '',
+                'radius' => 44,
+                'shadowBlur' => 30,
+                'shadowColor' => '#0f172a',
+                'shadowEnabled' => true,
+                'shadowOffsetX' => 0,
+                'shadowOffsetY' => 12,
+                'shadowOpacity' => 14,
+                'shadowSpread' => 0,
+                'size' => 88,
+            ],
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $schema
+     * @return array<string, mixed>
+     */
+    protected function normalizeFloatingSchema(array $schema): array
+    {
+        $defaults = $this->defaultFloatingSchema();
+        $mode = (string) ($schema['mode'] ?? $defaults['mode']);
+        if (!in_array($mode, ['expand', 'single', 'vertical'], true)) {
+            $mode = $defaults['mode'];
+        }
+        $position = (string) ($schema['position'] ?? $defaults['position']);
+        if (!in_array($position, ['left-bottom', 'right-bottom'], true)) {
+            $position = $defaults['position'];
+        }
+
+        $style = is_array($schema['style'] ?? null) ? $schema['style'] : [];
+        $items = is_array($schema['items'] ?? null) ? $schema['items'] : $defaults['items'];
+        $normalizedItems = $this->normalizeFloatingItems($items);
+        $hiddenPages = is_array($schema['hiddenPages'] ?? null)
+            ? $schema['hiddenPages']
+            : (is_array($schema['hidden_pages'] ?? null) ? $schema['hidden_pages'] : $defaults['hiddenPages']);
+
+        return [
+            'enabled' => (bool) ($schema['enabled'] ?? $defaults['enabled']),
+            'hiddenPages' => $this->normalizeFloatingHiddenPages($hiddenPages),
+            'items' => $normalizedItems,
+            'mode' => $mode,
+            'offsetBottom' => $this->normalizeInteger($schema['offsetBottom'] ?? $schema['offset_bottom'] ?? $defaults['offsetBottom'], 0, 360, $defaults['offsetBottom']),
+            'offsetX' => $this->normalizeInteger($schema['offsetX'] ?? $schema['offset_x'] ?? $defaults['offsetX'], 0, 160, $defaults['offsetX']),
+            'position' => $position,
+            'singleItemId' => $this->normalizeFloatingSingleItemId($schema['singleItemId'] ?? $schema['single_item_id'] ?? '', $normalizedItems),
+            'style' => [
+                'backgroundColor' => (string) ($style['backgroundColor'] ?? $style['background_color'] ?? $defaults['style']['backgroundColor']),
+                'color' => (string) ($style['color'] ?? $defaults['style']['color']),
+                'radius' => $this->normalizeInteger($style['radius'] ?? $defaults['style']['radius'], 0, 120, $defaults['style']['radius']),
+                'shadowBlur' => $this->normalizeInteger($style['shadowBlur'] ?? $style['shadow_blur'] ?? $defaults['style']['shadowBlur'], 0, 160, $defaults['style']['shadowBlur']),
+                'shadowColor' => (string) ($style['shadowColor'] ?? $style['shadow_color'] ?? $defaults['style']['shadowColor']),
+                'shadowEnabled' => (bool) ($style['shadowEnabled'] ?? $style['shadow_enabled'] ?? $defaults['style']['shadowEnabled']),
+                'shadowOffsetX' => $this->normalizeInteger($style['shadowOffsetX'] ?? $style['shadow_offset_x'] ?? $defaults['style']['shadowOffsetX'], -80, 80, $defaults['style']['shadowOffsetX']),
+                'shadowOffsetY' => $this->normalizeInteger($style['shadowOffsetY'] ?? $style['shadow_offset_y'] ?? $defaults['style']['shadowOffsetY'], -80, 80, $defaults['style']['shadowOffsetY']),
+                'shadowOpacity' => $this->normalizeInteger($style['shadowOpacity'] ?? $style['shadow_opacity'] ?? $defaults['style']['shadowOpacity'], 0, 100, $defaults['style']['shadowOpacity']),
+                'shadowSpread' => $this->normalizeInteger($style['shadowSpread'] ?? $style['shadow_spread'] ?? $defaults['style']['shadowSpread'], -80, 80, $defaults['style']['shadowSpread']),
+                'size' => $this->normalizeInteger($style['size'] ?? $defaults['style']['size'], 56, 128, $defaults['style']['size']),
+            ],
+        ];
+    }
+
+    /**
+     * @param array<int, mixed> $hiddenPages
+     * @return array<int, string>
+     */
+    protected function normalizeFloatingHiddenPages(array $hiddenPages): array
+    {
+        $list = [];
+        foreach ($hiddenPages as $path) {
+            $normalized = $this->normalizeFloatingRoutePath($path);
+            if ($normalized !== '') {
+                $list[$normalized] = $normalized;
+            }
+        }
+
+        return array_values($list);
+    }
+
+    protected function normalizeFloatingRoutePath(mixed $path): string
+    {
+        if (!is_scalar($path)) {
+            return '';
+        }
+
+        $value = trim((string) $path);
+        if ($value === '' || str_contains($value, '://')) {
+            return '';
+        }
+
+        $value = trim(explode('?', explode('#', $value, 2)[0], 2)[0]);
+        if ($value === '') {
+            return '';
+        }
+
+        $value = '/' . ltrim($value, '/');
+        $value = (string) preg_replace('#/+#', '/', $value);
+        if ($value !== '/') {
+            $value = rtrim($value, '/');
+        }
+
+        return $value === '/' ? '' : $value;
+    }
+
+    /**
+     * @param array<int, mixed> $items
+     * @return array<int, array<string, mixed>>
+     */
+    protected function normalizeFloatingItems(array $items): array
+    {
+        $list = [];
+        foreach ($items as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $type = (string) ($item['type'] ?? 'page');
+            if (!in_array($type, ['customerService', 'page'], true)) {
+                $type = 'page';
+            }
+            $text = trim((string) ($item['text'] ?? $item['title'] ?? '入口'));
+            $path = trim((string) ($item['path'] ?? ''));
+            $id = trim((string) ($item['id'] ?? $item['key'] ?? ''));
+            $normalized = [
+                'enabled' => (bool) ($item['enabled'] ?? true),
+                'icon' => $item['icon'] ?? '',
+                'path' => $type === 'page' ? $path : '',
+                'text' => $text === '' ? '入口' : $text,
+                'type' => $type,
+            ];
+            if ($id !== '') {
+                $normalized['id'] = $id;
+            }
+            $preset = $this->getDefaultFloatingPresetType($normalized);
+            if ($preset !== '') {
+                $default = $this->defaultFloatingPresetItem($preset);
+                if ($default === []) {
+                    $list[] = $normalized;
+                    continue;
+                }
+                if (!isset($normalized['id'])) {
+                    $normalized['id'] = $default['id'];
+                }
+                if (
+                    !$this->hasFloatingItemIcon($normalized['icon'] ?? '')
+                    || $this->isLegacyFloatingItemIcon($normalized['icon'] ?? '')
+                ) {
+                    $normalized['icon'] = $default['icon'];
+                }
+            }
+            $list[] = $normalized;
+        }
+
+        return $list === [] ? $this->defaultFloatingSchema()['items'] : $list;
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $items
+     */
+    protected function normalizeFloatingSingleItemId(mixed $value, array $items): string
+    {
+        if (!is_scalar($value)) {
+            return '';
+        }
+
+        $id = trim((string) $value);
+        if ($id === '') {
+            return '';
+        }
+
+        foreach ($items as $item) {
+            if (($item['enabled'] ?? true) !== false && (string) ($item['id'] ?? '') === $id) {
+                return $id;
+            }
+        }
+
+        return '';
+    }
+
+    protected function normalizeInteger(mixed $value, int $min, int $max, int $fallback): int
+    {
+        $number = is_numeric($value) ? (int) round((float) $value) : $fallback;
+        return max($min, min($max, $number));
     }
 
     /**
@@ -1040,6 +1248,30 @@ class ClientDecorationSchemeService extends BaseService
             return;
         }
 
+        if ($type === ClientDecorationScheme::TYPE_FLOATING) {
+            if (!isset($schema['items']) || !is_array($schema['items'])) {
+                throw new BusinessException('悬浮按钮方案必须包含 items 数组');
+            }
+            foreach ($schema['items'] as $item) {
+                if (!is_array($item)) {
+                    throw new BusinessException('悬浮按钮入口格式不正确');
+                }
+                $text = trim((string) ($item['text'] ?? ''));
+                $itemType = trim((string) ($item['type'] ?? ''));
+                $path = trim((string) ($item['path'] ?? ''));
+                if ($text === '' || !in_array($itemType, ['customerService', 'page'], true)) {
+                    throw new BusinessException('悬浮按钮入口必须包含名称和类型');
+                }
+                if ($itemType === 'page' && ($path === '' || !str_starts_with($path, '/'))) {
+                    throw new BusinessException('悬浮按钮页面入口路径必须以 / 开头');
+                }
+                if (!$this->isDefaultFloatingItem($item) && !$this->hasFloatingItemIcon($item['icon'] ?? '')) {
+                    throw new BusinessException('自定义悬浮按钮入口请上传图标');
+                }
+            }
+            return;
+        }
+
         if ($type !== ClientDecorationScheme::TYPE_TABBAR) {
             throw new BusinessException('方案类型不正确');
         }
@@ -1073,6 +1305,76 @@ class ClientDecorationSchemeService extends BaseService
                 break;
             }
         }
+    }
+
+    protected function isDefaultFloatingItem(array $item): bool
+    {
+        return $this->getDefaultFloatingPresetType($item) !== '';
+    }
+
+    protected function getDefaultFloatingPresetType(array $item): string
+    {
+        $id = (string) ($item['id'] ?? $item['key'] ?? '');
+        $idMap = [
+            'floating-cart' => 'cart',
+            'floating-home' => 'home',
+            'floating-service' => 'service',
+        ];
+        if (isset($idMap[$id])) {
+            return $idMap[$id];
+        }
+
+        $text = trim((string) ($item['text'] ?? ''));
+        $type = (string) ($item['type'] ?? '');
+        $path = preg_replace('/[?#].*$/', '', trim((string) ($item['path'] ?? '')));
+        $path = rtrim((string) $path, '/');
+        if ($type === 'customerService' && $text === '客服') {
+            return 'service';
+        }
+        if ($type === 'page' && $text === '购物车' && $path === '/pages/cart/index') {
+            return 'cart';
+        }
+        if ($type === 'page' && $text === '首页' && $path === '/pages/index/index') {
+            return 'home';
+        }
+
+        return '';
+    }
+
+    protected function defaultFloatingPresetItem(string $preset): array
+    {
+        foreach ($this->defaultFloatingSchema()['items'] as $item) {
+            if ($this->getDefaultFloatingPresetType($item) === $preset) {
+                return $item;
+            }
+        }
+
+        return [];
+    }
+
+    protected function hasFloatingItemIcon(mixed $icon): bool
+    {
+        if (is_array($icon)) {
+            foreach (['full_url', 'fullUrl', 'url', 'path', 'src'] as $field) {
+                if (isset($icon[$field]) && trim((string) $icon[$field]) !== '') {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        return is_scalar($icon) && trim((string) $icon) !== '';
+    }
+
+    protected function isLegacyFloatingItemIcon(mixed $icon): bool
+    {
+        if (!is_scalar($icon)) {
+            return false;
+        }
+
+        $value = ltrim(trim((string) $icon), '/');
+        return str_starts_with($value, 'static/images/floating/')
+            && str_ends_with(strtolower($value), '.svg');
     }
 
     protected function fallbackScheme(string $type): array

@@ -286,7 +286,8 @@
       @add-to-cart="onAddToCart"
       @buy-now="onBuyNow"
     />
-  </view>
+      <mb-floating-action />
+</view>
 </template>
 
 <script setup>

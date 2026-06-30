@@ -167,6 +167,77 @@ final class ClientDecorationServiceContractTest extends TestCase
         ])));
         $this->assertNotNull($tabbarError);
         $this->assertStringContainsString('底部导航必须配置2到5个入口', $tabbarError->getMessage());
+
+        $floatingError = $this->captureBusinessException(fn() => $service->create([
+            'type' => 'floating',
+            'name' => 'CodexTest 悬浮入口路径错误',
+            'schema' => [
+                'items' => [
+                    ['text' => '购物车', 'type' => 'page', 'path' => 'pages/cart/index'],
+                ],
+            ],
+            'tabbar_mode' => 'native',
+        ]));
+        $this->assertNotNull($floatingError);
+        $this->assertStringContainsString('悬浮按钮页面入口路径必须以 / 开头', $floatingError->getMessage());
+
+        $floatingId = $service->create([
+            'type' => 'floating',
+            'name' => 'CodexTest 悬浮入口兜底规范化',
+            'schema' => [
+                'hiddenPages' => [
+                    'pages-sub/user/login?redirect=/pages/cart/index',
+                    '/pages-sub/user/login/',
+                    '/pages-sub/user/agreement#privacy',
+                    'https://example.com/user/login',
+                    '',
+                    null,
+                ],
+                'items' => [
+                    ['text' => '客服', 'type' => 'customerService'],
+                    ['text' => '购物车', 'type' => 'page', 'path' => '/pages/cart/index?from=floating'],
+                ],
+                'mode' => 'unknown',
+                'offsetBottom' => 'invalid',
+                'offsetX' => 999,
+                'position' => 'center',
+                'style' => [
+                    'background_color' => '#ffffff',
+                    'color' => '#111111',
+                    'radius' => 999,
+                    'shadow_blur' => 999,
+                    'shadow_color' => '#123456',
+                    'shadow_enabled' => 0,
+                    'shadow_offset_x' => -999,
+                    'shadow_offset_y' => 999,
+                    'shadow_opacity' => 999,
+                    'shadow_spread' => -999,
+                    'size' => 'invalid',
+                ],
+            ],
+            'tabbar_mode' => 'native',
+        ]);
+        $floatingInfo = $service->getInfo($floatingId);
+        $floatingSchema = $floatingInfo['schema'];
+        $this->assertSame(
+            ['/pages-sub/user/login', '/pages-sub/user/agreement'],
+            $floatingSchema['hiddenPages']
+        );
+        $this->assertSame('expand', $floatingSchema['mode']);
+        $this->assertSame('right-bottom', $floatingSchema['position']);
+        $this->assertSame(160, $floatingSchema['offsetBottom']);
+        $this->assertSame(160, $floatingSchema['offsetX']);
+        $this->assertSame('#ffffff', $floatingSchema['style']['backgroundColor']);
+        $this->assertSame('#111111', $floatingSchema['style']['color']);
+        $this->assertSame(120, $floatingSchema['style']['radius']);
+        $this->assertSame(160, $floatingSchema['style']['shadowBlur']);
+        $this->assertSame('#123456', $floatingSchema['style']['shadowColor']);
+        $this->assertFalse($floatingSchema['style']['shadowEnabled']);
+        $this->assertSame(-80, $floatingSchema['style']['shadowOffsetX']);
+        $this->assertSame(80, $floatingSchema['style']['shadowOffsetY']);
+        $this->assertSame(100, $floatingSchema['style']['shadowOpacity']);
+        $this->assertSame(-80, $floatingSchema['style']['shadowSpread']);
+        $this->assertSame(88, $floatingSchema['style']['size']);
     }
 
     public function testDecorationTargetPickerDoesNotExposeThemeEntry(): void
@@ -620,7 +691,7 @@ final class ClientDecorationServiceContractTest extends TestCase
         $config = $service->config();
         $this->assertIsArray($config);
 
-        foreach (['home', 'profile', 'tabbar', 'theme'] as $key) {
+        foreach (['home', 'floating', 'profile', 'tabbar', 'theme'] as $key) {
             $this->assertArrayHasKey($key, $config);
             $this->assertIsArray($config[$key]);
         }
@@ -633,10 +704,67 @@ final class ClientDecorationServiceContractTest extends TestCase
         $this->assertGreaterThanOrEqual(2, count($tabbarItems));
         $this->assertLessThanOrEqual(5, count($tabbarItems));
 
+        $this->assertTrue((bool) ($config['floating']['enabled'] ?? false));
+        $this->assertIsArray($config['floating']['items'] ?? null);
+        $this->assertGreaterThanOrEqual(1, count($config['floating']['items']));
+
         $this->assertArrayHasKey('policy', $config['theme']);
         $this->assertArrayHasKey('setting', $config['theme']);
         $this->assertArrayHasKey('themes', $config['theme']);
         $this->assertIsArray($config['theme']['themes']);
+    }
+
+    public function testDecorationFloatingDefaultsNormalizeHiddenPageVariants(): void
+    {
+        $service = $this->makeDecorationServiceForSchemaNormalization();
+        $method = $this->schemaNormalizerMethod($service);
+        $schema = $method->invoke($service, 'floating', [
+            'hidden_pages' => [
+                'pages-sub/user/login?redirect=/pages/cart/index',
+                '/pages-sub/user/login/',
+                '/pages-sub/user/agreement#privacy',
+                'https://example.com/user/login',
+                '',
+                null,
+            ],
+            'items' => [
+                ['text' => '客服', 'type' => 'customerService'],
+                ['text' => '购物车', 'type' => 'page', 'path' => '/pages/cart/index'],
+            ],
+            'mode' => 'unknown',
+            'offsetBottom' => 'invalid',
+            'offsetX' => 999,
+            'position' => 'center',
+            'style' => [
+                'radius' => 999,
+                'shadow_blur' => 999,
+                'shadow_color' => '#123456',
+                'shadow_enabled' => 0,
+                'shadow_offset_x' => -999,
+                'shadow_offset_y' => 999,
+                'shadow_opacity' => 999,
+                'shadow_spread' => -999,
+                'size' => 'invalid',
+            ],
+        ]);
+
+        $this->assertSame(
+            ['/pages-sub/user/login', '/pages-sub/user/agreement'],
+            $schema['hiddenPages']
+        );
+        $this->assertSame('expand', $schema['mode']);
+        $this->assertSame('right-bottom', $schema['position']);
+        $this->assertSame(160, $schema['offsetBottom']);
+        $this->assertSame(160, $schema['offsetX']);
+        $this->assertSame(120, $schema['style']['radius']);
+        $this->assertSame(160, $schema['style']['shadowBlur']);
+        $this->assertSame('#123456', $schema['style']['shadowColor']);
+        $this->assertFalse($schema['style']['shadowEnabled']);
+        $this->assertSame(-80, $schema['style']['shadowOffsetX']);
+        $this->assertSame(80, $schema['style']['shadowOffsetY']);
+        $this->assertSame(100, $schema['style']['shadowOpacity']);
+        $this->assertSame(-80, $schema['style']['shadowSpread']);
+        $this->assertSame(88, $schema['style']['size']);
     }
 
     public function testDecorationProfileDefaultsFillOrderAndServiceItems(): void

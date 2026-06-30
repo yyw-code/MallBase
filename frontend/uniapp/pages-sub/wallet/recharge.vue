@@ -202,7 +202,8 @@ async function submitRecharge() {
         <text class="footer__button-text">{{ submitLoading ? '处理中' : '立即充值' }}</text>
       </view>
     </view>
-  </view>
+      <mb-floating-action />
+</view>
 </template>
 
 <style lang="scss" scoped>

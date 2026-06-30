@@ -307,7 +307,56 @@ export const DEFAULT_PROFILE_MODULES = [
   { id: "profile-logout", type: "logout", sort: 50, props: {} },
 ];
 
+export const DEFAULT_FLOATING_CONFIG = {
+  enabled: true,
+  hiddenPages: ["/pages-sub/user/login", "/pages-sub/user/agreement"],
+  items: [
+    {
+      enabled: true,
+      icon: "static/client/floating/service.png",
+      id: "floating-service",
+      text: "客服",
+      type: "customerService",
+    },
+    {
+      enabled: true,
+      icon: "static/client/floating/cart.png",
+      id: "floating-cart",
+      path: "/pages/cart/index",
+      text: "购物车",
+      type: "page",
+    },
+    {
+      enabled: true,
+      icon: "static/client/floating/home.png",
+      id: "floating-home",
+      path: "/pages/index/index",
+      text: "首页",
+      type: "page",
+    },
+  ],
+  mode: "expand",
+  offsetBottom: 160,
+  offsetX: 24,
+  position: "right-bottom",
+  singleItemId: "",
+  style: {
+    backgroundColor: "",
+    color: "",
+    radius: 44,
+    shadowBlur: 30,
+    shadowColor: "#0f172a",
+    shadowEnabled: true,
+    shadowOffsetX: 0,
+    shadowOffsetY: 12,
+    shadowOpacity: 14,
+    shadowSpread: 0,
+    size: 88,
+  },
+};
+
 export const DEFAULT_DECORATE_CONFIG = {
+  floating: DEFAULT_FLOATING_CONFIG,
   home: {
     modules: DEFAULT_HOME_MODULES,
     pageStyle: {
