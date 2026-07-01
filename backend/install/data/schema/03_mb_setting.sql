@@ -133,11 +133,6 @@ INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`
 -- 设置项：1021 UploadBasic 上传基础
 INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`, `rules`, `placeholder`, `remark`, `sort`) VALUES
 (1021, '默认上传驱动', 'upload_driver', 'local', 'select', '[{"label":"本地存储","value":"local"},{"label":"阿里云 OSS","value":"oss"},{"label":"腾讯云 COS","value":"cos"}]', '[{"type":"required","message":"不能为空"}]', NULL, NULL, 10),
-(1021, '图片 MIME 白名单', 'mime_image', 'image/jpeg,image/png,image/gif,image/webp', 'textarea', NULL, NULL, NULL, '以英文逗号分隔', 20),
-(1021, '文档压缩 MIME 白名单', 'mime_document', 'application/pdf,application/zip,application/x-rar-compressed,application/msword,application/vnd.ms-excel', 'textarea', NULL, NULL, NULL, NULL, 30),
-(1021, '视频 MIME 白名单', 'mime_video', 'video/mp4,video/webm,video/quicktime', 'textarea', NULL, NULL, NULL, NULL, 40),
-(1021, '证书/密钥 扩展名白名单', 'mime_cert', '.pem,.key,.crt,.cer', 'textarea', NULL, NULL, NULL, '以英文逗号分隔；以 . 开头按扩展名匹配。证书/密钥的 MIME 检测不稳定，统一用扩展名识别', 45),
-(1021, '单证书最大体积(MB)', 'upload_cert_max_size', '1', 'number', NULL, NULL, NULL, NULL, 145),
 (1021, '单图最大体积(MB)', 'upload_image_max_size', '2', 'number', NULL, NULL, NULL, NULL, 50),
 (1021, '多图单张最大体积(MB)', 'upload_images_max_size', '5', 'number', NULL, NULL, NULL, NULL, 60),
 (1021, '多图最大张数', 'upload_images_max_count', '9', 'number', NULL, NULL, NULL, NULL, 70),
@@ -146,7 +141,12 @@ INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`
 (1021, '多文件最大个数', 'upload_files_max_count', '5', 'number', NULL, NULL, NULL, NULL, 100),
 (1021, '单视频最大体积(MB)', 'upload_video_max_size', '200', 'number', NULL, NULL, NULL, NULL, 110),
 (1021, '多视频单个最大体积(MB)', 'upload_videos_max_size', '200', 'number', NULL, NULL, NULL, NULL, 120),
-(1021, '多视频最大个数', 'upload_videos_max_count', '5', 'number', NULL, NULL, NULL, NULL, 130);
+(1021, '多视频最大个数', 'upload_videos_max_count', '5', 'number', NULL, NULL, NULL, NULL, 130),
+(1021, '单证书最大体积(MB)', 'upload_cert_max_size', '1', 'number', NULL, NULL, NULL, NULL, 145),
+(1021, '图片 MIME 白名单', 'mime_image', 'image/jpeg,image/png,image/gif,image/webp', 'textarea', NULL, NULL, NULL, '以英文逗号分隔', 200),
+(1021, '文档压缩 MIME 白名单', 'mime_document', 'application/pdf,application/zip,application/x-rar-compressed,application/msword,application/vnd.ms-excel', 'textarea', NULL, NULL, NULL, NULL, 210),
+(1021, '视频 MIME 白名单', 'mime_video', 'video/mp4,video/webm,video/quicktime', 'textarea', NULL, NULL, NULL, NULL, 220),
+(1021, '证书/密钥 扩展名白名单', 'mime_cert', '.pem,.key,.crt,.cer', 'textarea', NULL, NULL, NULL, '以英文逗号分隔；以 . 开头按扩展名匹配。证书/密钥的 MIME 检测不稳定，统一用扩展名识别', 230);
 
 -- 设置项：1022 UploadLocal 本地存储
 INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`, `rules`, `placeholder`, `remark`, `sort`) VALUES
