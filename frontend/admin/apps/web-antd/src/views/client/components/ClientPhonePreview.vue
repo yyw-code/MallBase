@@ -3527,7 +3527,6 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
   position: relative;
   display: grid;
   min-height: 92px;
-  padding: 12px;
   overflow: hidden;
   place-items: end start;
   border-radius: 10px;
@@ -3562,7 +3561,6 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
 
 .client-phone-preview--compact .home-cube__item {
   min-height: 64px;
-  padding: 8px;
   font-size: 11px;
 }
 

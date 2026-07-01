@@ -1287,6 +1287,7 @@ defineExpose({ refresh, loadMore });
 
 .decorate-cube--1 {
   grid-template-columns: 1fr;
+  min-height: 486rpx;
 }
 
 .decorate-cube--2,
@@ -1300,6 +1301,17 @@ defineExpose({ refresh, loadMore });
   border-radius: 12rpx;
   overflow: hidden;
   background: var(--color-bg-surface, #f3f3fe);
+}
+
+.decorate-cube--1 .decorate-cube__item {
+  height: 486rpx;
+  min-height: 486rpx;
+}
+
+.decorate-cube--2 .decorate-cube__item,
+.decorate-cube--4 .decorate-cube__item {
+  height: 252rpx;
+  min-height: 252rpx;
 }
 
 .decorate-cube__image,
