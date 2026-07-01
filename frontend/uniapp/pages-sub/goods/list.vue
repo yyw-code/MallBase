@@ -214,8 +214,19 @@
       </view>
       <text v-else-if="noMore" class="goods-list__no-more">没有更多了</text>
     </view>
-      <mb-floating-action />
-</view>
+    <mb-floating-action />
+    <mb-spec-selector
+      :visible="specVisible"
+      :goods="specGoods || {}"
+      :sku-list="specSkuList"
+      mode="cart"
+      :selected-specs="specSelectedSpecs"
+      :selected-sku-id="specSelectedSkuId"
+      @change="onSpecChange"
+      @close="specVisible = false"
+      @add-to-cart="onSpecAddToCart"
+    />
+  </view>
 </template>
 
 <script setup>
@@ -284,6 +295,10 @@ const loading = ref(false)
 const initialLoading = ref(true)
 const noMore = ref(false)
 const addingGoodsId = ref(null)
+const specVisible = ref(false)
+const specGoods = ref(null)
+const specSelectedSpecs = ref({})
+const specSelectedSkuId = ref(null)
 
 const showCartButton = computed(() =>
   configFlag('client_goods_card_show_cart_button', true),
@@ -309,6 +324,9 @@ const goodsBadgeStyle = computed(() => {
 const goodsBadgeTextStyle = computed(() => {
   return getGoodsBadgeTextStyle(goodsBadgeConfig.value)
 })
+const specSkuList = computed(() => (
+  Array.isArray(specGoods.value?.skus) ? specGoods.value.skus : []
+))
 
 // ---------- lifecycle ----------
 onLoad((params) => {
@@ -525,37 +543,79 @@ function formatSales(item) {
   return '月销 200+'
 }
 
-function getDirectSkuId(item) {
-  if (item.sku_id) return item.sku_id
-  if (item.default_sku_id) return item.default_sku_id
-  if (Array.isArray(item.skus) && item.skus.length === 1) return item.skus[0].id
-  return ''
-}
-
 async function quickAddCart(item) {
-  if (!requireLogin(`/pages-sub/goods/list${buildCurrentQuery()}`)) return
   if (addingGoodsId.value) return
 
   addingGoodsId.value = item.id
   try {
-    let skuId = getDirectSkuId(item)
-
-    if (!skuId) {
-      const detail = await getGoodsDetail(item.id)
-      const goods = detail?.data ?? detail ?? {}
-      const skus = Array.isArray(goods.skus) ? goods.skus : []
-      if (skus.length === 1) {
-        skuId = skus[0].id
-      }
-    }
-
-    if (!skuId) {
-      uni.showToast({ title: '请选择规格', icon: 'none' })
-      setTimeout(() => goDetail(item.id), 500)
+    if (!item?.id) {
+      uni.showToast({ title: '商品信息异常', icon: 'none' })
       return
     }
 
-    await cartStore.add(skuId, 1)
+    const detail = await getGoodsDetail(item.id)
+    specGoods.value = {
+      ...item,
+      ...(detail?.data ?? detail ?? {}),
+    }
+    resetSpecSelection(specGoods.value)
+    specVisible.value = true
+  } catch {
+    uni.showToast({ title: '规格加载失败，请重试', icon: 'none' })
+  } finally {
+    addingGoodsId.value = null
+  }
+}
+
+function getSpecGroups(goods) {
+  const meta = goods?.spec_meta
+  if (!Array.isArray(meta) || meta.length === 0) return []
+  return meta.map((group) => ({
+    name: group.name,
+    values: Array.isArray(group.values) ? group.values.map((item) => item.value) : [],
+  }))
+}
+
+function resetSpecSelection(goods) {
+  specSelectedSpecs.value = {}
+  specSelectedSkuId.value = null
+
+  const skus = Array.isArray(goods?.skus) ? goods.skus : []
+  const groups = getSpecGroups(goods)
+  const defaultSku = skus.find((sku) => Number(sku.stock) > 0) || skus[0]
+  if (!defaultSku) return
+
+  if (groups.length === 0) {
+    specSelectedSkuId.value = defaultSku.id
+    return
+  }
+
+  const values = String(defaultSku.spec_values || '').split(',')
+  const nextSpecs = {}
+  groups.forEach((group, idx) => {
+    const value = values[idx]
+    if (value) nextSpecs[group.name] = value
+  })
+  specSelectedSpecs.value = nextSpecs
+  specSelectedSkuId.value = defaultSku.id
+}
+
+function onSpecChange(payload) {
+  specSelectedSpecs.value = { ...(payload?.selectedSpecs || {}) }
+  specSelectedSkuId.value = payload?.sku?.id || null
+}
+
+async function onSpecAddToCart({ sku, quantity }) {
+  if (!requireLogin(`/pages-sub/goods/list${buildCurrentQuery()}`)) {
+    specVisible.value = false
+    return
+  }
+  if (!sku?.id) return
+
+  addingGoodsId.value = specGoods.value?.id || null
+  try {
+    await cartStore.add(sku.id, quantity)
+    specVisible.value = false
     uni.showToast({ title: '已加入购物车', icon: 'success' })
   } catch {
     uni.showToast({ title: '加入失败，请重试', icon: 'none' })

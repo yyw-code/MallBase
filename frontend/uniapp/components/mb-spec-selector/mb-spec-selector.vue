@@ -1,5 +1,5 @@
 <template>
-  <view v-if="visible" class="mb-spec" @tap="close">
+  <view v-if="visible" class="mb-spec" @tap.stop="close">
     <view class="mb-spec__panel" :class="{ 'mb-spec__panel--show': show }" @tap.stop>
       <!-- header -->
       <view class="mb-spec__header">

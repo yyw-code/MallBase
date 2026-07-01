@@ -1,57 +1,70 @@
 <template>
-  <view
-    class="mb-card"
-    :class="[`mb-card--${mode}`]"
-    @tap="$emit('tap', goods)"
-  >
-    <view class="mb-card__img-wrap" :class="[`mb-card__img-wrap--${mode}`]">
-      <image
-        class="mb-card__img"
-        :src="cover"
-        :mode="mode === 'grid' ? 'aspectFill' : 'aspectFill'"
-        lazy-load
-        @error="onImageError"
-      />
-      <view
-        v-if="showBadge && badgeText"
-        class="mb-card__badge"
-        :style="badgeStyle"
-      >
-        <text class="mb-card__badge-text" :style="badgeTextStyle">
-          {{ badgeText }}
-        </text>
-      </view>
-    </view>
-    <view class="mb-card__info">
-      <text class="mb-card__name">{{ goods.name }}</text>
-      <text v-if="showSubtitle && subtitleText" class="mb-card__sub">
-        {{ subtitleText }}
-      </text>
-      <view class="mb-card__bottom">
-        <view class="mb-card__price-main">
-          <mb-price
-            :value="goods.price"
-            :size="mode === 'grid' ? 'md' : 'md'"
-            color="var(--color-price, #ff5a1f)"
-          />
-          <text
-            v-if="showMarketPrice && marketPrice > Number(goods.price)"
-            class="mb-card__original"
-          >
-            ¥{{ marketPrice.toFixed(0) }}
+  <view class="mb-product-card">
+    <view
+      class="mb-card"
+      :class="[`mb-card--${mode}`]"
+      @tap="$emit('tap', goods)"
+    >
+      <view class="mb-card__img-wrap" :class="[`mb-card__img-wrap--${mode}`]">
+        <image
+          class="mb-card__img"
+          :src="cover"
+          :mode="mode === 'grid' ? 'aspectFill' : 'aspectFill'"
+          lazy-load
+          @error="onImageError"
+        />
+        <view
+          v-if="showBadge && badgeText"
+          class="mb-card__badge"
+          :style="badgeStyle"
+        >
+          <text class="mb-card__badge-text" :style="badgeTextStyle">
+            {{ badgeText }}
           </text>
         </view>
-        <view
-          v-if="showCartButton"
-          class="mb-card__add"
-          :class="{ 'mb-card__add--loading': adding }"
-          @tap.stop="quickAddCart"
-        >
-          <text class="mb-card__add-symbol">+</text>
-        </view>
       </view>
-      <text v-if="showSales" class="mb-card__sales">{{ salesText }}</text>
+      <view class="mb-card__info">
+        <text class="mb-card__name">{{ goods.name }}</text>
+        <text v-if="showSubtitle && subtitleText" class="mb-card__sub">
+          {{ subtitleText }}
+        </text>
+        <view class="mb-card__bottom">
+          <view class="mb-card__price-main">
+            <mb-price
+              :value="goods.price"
+              :size="mode === 'grid' ? 'md' : 'md'"
+              color="var(--color-price, #ff5a1f)"
+            />
+            <text
+              v-if="showMarketPrice && marketPrice > Number(goods.price)"
+              class="mb-card__original"
+            >
+              ¥{{ marketPrice.toFixed(0) }}
+            </text>
+          </view>
+          <view
+            v-if="showCartButton"
+            class="mb-card__add"
+            :class="{ 'mb-card__add--loading': adding }"
+            @tap.stop="quickAddCart"
+          >
+            <text class="mb-card__add-symbol">+</text>
+          </view>
+        </view>
+        <text v-if="showSales" class="mb-card__sales">{{ salesText }}</text>
+      </view>
     </view>
+    <mb-spec-selector
+      :visible="specVisible"
+      :goods="specGoods || {}"
+      :sku-list="specSkuList"
+      mode="cart"
+      :selected-specs="specSelectedSpecs"
+      :selected-sku-id="specSelectedSkuId"
+      @change="onSpecChange"
+      @close="specVisible = false"
+      @add-to-cart="onSpecAddToCart"
+    />
   </view>
 </template>
 
@@ -84,6 +97,10 @@ defineEmits(['tap'])
 const appStore = useAppStore()
 const cartStore = useCartStore()
 const adding = ref(false)
+const specVisible = ref(false)
+const specGoods = ref(null)
+const specSelectedSpecs = ref({})
+const specSelectedSkuId = ref(null)
 
 function isTruthyFlag(value) {
   return value === true || value === 1 || value === '1' || value === 'true'
@@ -162,48 +179,88 @@ const salesText = computed(() => {
   return '月销 200+'
 })
 
+const specSkuList = computed(() => (
+  Array.isArray(specGoods.value?.skus) ? specGoods.value.skus : []
+))
+
 function resolveGoodsId() {
   return props.goods.id || props.goods.goods_id || ''
 }
 
-function getDirectSkuId(goods) {
-  if (goods.sku_id) return goods.sku_id
-  if (goods.default_sku_id) return goods.default_sku_id
-  if (Array.isArray(goods.skus) && goods.skus.length === 1) return goods.skus[0].id
-  return ''
-}
-
-function goDetail() {
-  const id = resolveGoodsId()
-  if (!id) return
-  uni.navigateTo({ url: `/pages-sub/goods/detail?id=${id}` })
-}
-
 async function quickAddCart() {
   if (!showCartButton.value || adding.value) return
-  if (!requireLogin(props.loginRedirect)) return
 
   const goodsId = resolveGoodsId()
+  if (!goodsId) {
+    uni.showToast({ title: '商品信息异常', icon: 'none' })
+    return
+  }
+
   adding.value = true
   try {
-    let skuId = getDirectSkuId(props.goods)
-
-    if (!skuId && goodsId) {
-      const detail = await getGoodsDetail(goodsId)
-      const goods = detail?.data ?? detail ?? {}
-      const skus = Array.isArray(goods.skus) ? goods.skus : []
-      if (skus.length === 1) {
-        skuId = skus[0].id
-      }
+    const detail = await getGoodsDetail(goodsId)
+    specGoods.value = {
+      ...props.goods,
+      ...(detail?.data ?? detail ?? {}),
     }
+    resetSpecSelection(specGoods.value)
+    specVisible.value = true
+  } catch {
+    uni.showToast({ title: '规格加载失败，请重试', icon: 'none' })
+  } finally {
+    adding.value = false
+  }
+}
 
-    if (!skuId) {
-      uni.showToast({ title: '请选择规格', icon: 'none' })
-      setTimeout(goDetail, 500)
-      return
-    }
+function getSpecGroups(goods) {
+  const meta = goods?.spec_meta
+  if (!Array.isArray(meta) || meta.length === 0) return []
+  return meta.map((group) => ({
+    name: group.name,
+    values: Array.isArray(group.values) ? group.values.map((item) => item.value) : [],
+  }))
+}
 
-    await cartStore.add(skuId, 1)
+function resetSpecSelection(goods) {
+  specSelectedSpecs.value = {}
+  specSelectedSkuId.value = null
+
+  const skus = Array.isArray(goods?.skus) ? goods.skus : []
+  const groups = getSpecGroups(goods)
+  const defaultSku = skus.find((sku) => Number(sku.stock) > 0) || skus[0]
+  if (!defaultSku) return
+
+  if (groups.length === 0) {
+    specSelectedSkuId.value = defaultSku.id
+    return
+  }
+
+  const values = String(defaultSku.spec_values || '').split(',')
+  const nextSpecs = {}
+  groups.forEach((group, idx) => {
+    const value = values[idx]
+    if (value) nextSpecs[group.name] = value
+  })
+  specSelectedSpecs.value = nextSpecs
+  specSelectedSkuId.value = defaultSku.id
+}
+
+function onSpecChange(payload) {
+  specSelectedSpecs.value = { ...(payload?.selectedSpecs || {}) }
+  specSelectedSkuId.value = payload?.sku?.id || null
+}
+
+async function onSpecAddToCart({ sku, quantity }) {
+  if (!requireLogin(props.loginRedirect)) {
+    specVisible.value = false
+    return
+  }
+  if (!sku?.id || adding.value) return
+
+  adding.value = true
+  try {
+    await cartStore.add(sku.id, quantity)
+    specVisible.value = false
     uni.showToast({ title: '已加入购物车', icon: 'success' })
   } catch {
     uni.showToast({ title: '加入失败，请重试', icon: 'none' })
@@ -223,6 +280,10 @@ function onImageError(error) {
 </script>
 
 <style scoped>
+.mb-product-card {
+  width: 100%;
+}
+
 .mb-card {
   width: 100%;
   box-sizing: border-box;
