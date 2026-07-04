@@ -9,8 +9,7 @@ import { getPlatform } from '@/utils/platform'
  * 行为：
  *  - startPay(orderId) 拉取 /client/api/setting/payMethods
  *      - 0 个：Toast 提示，不发起请求
- *      - 1 个：自动选择并直接 triggerPay
- *      - 2 个及以上：弹出 mb-pay-method-sheet，由用户选择
+ *      - 1 个及以上：弹出 mb-pay-method-sheet，由用户选择后再 triggerPay
  *  - invokePay(code) 关闭 sheet 并 triggerPay
  *
  * 返回的对象需要绑定到 sheet 组件：
@@ -47,9 +46,6 @@ export function usePayFlow() {
     if (list.length === 0) {
       uni.showToast({ title: '当前无可用支付方式', icon: 'none' })
       return { status: 'fail', message: '当前无可用支付方式' }
-    }
-    if (list.length === 1 && methods.value.length === 1) {
-      return await triggerPay(orderId, list[0].code)
     }
     sheetVisible.value = true
     return null
