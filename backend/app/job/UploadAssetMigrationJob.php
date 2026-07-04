@@ -376,6 +376,8 @@ class UploadAssetMigrationJob extends BaseJob
         $table = (string) $spec['table'];
         $ownerType = (string) $spec['owner_type'];
         $pk = (string) ($spec['pk'] ?? 'id');
+        $ownerIdField = (string) ($spec['owner_id_field'] ?? $pk);
+        $usageFieldMap = is_array($spec['usage_field_map'] ?? null) ? $spec['usage_field_map'] : [];
         $batchSize = $this->batchSize($options);
         $limit = max(0, (int) ($options['limit'] ?? 0));
         $lastId = 0;
@@ -459,7 +461,9 @@ class UploadAssetMigrationJob extends BaseJob
                         Db::name($table)->where($pk, $lastId)->update($updates);
                     }
                     foreach ($usageByField as $field => $ids) {
-                        $this->syncUsage($ownerType, $lastId, (string) $field, $ids);
+                        $ownerId = (int) ($row[$ownerIdField] ?? $lastId);
+                        $usageField = (string) ($usageFieldMap[$field] ?? $field);
+                        $this->syncUsage($ownerType, $ownerId, $usageField, $ids);
                     }
 
                     if ($changed) {
@@ -590,7 +594,9 @@ class UploadAssetMigrationJob extends BaseJob
     private function legacySpecs(): array
     {
         return [
-            ['table' => 'goods', 'owner_type' => 'goods', 'single' => ['main_image', 'main_video'], 'multi' => ['images'], 'spec_meta' => ['spec_meta'], 'rich_text' => ['description']],
+            ['table' => 'goods', 'owner_type' => 'goods', 'single' => ['main_image', 'main_video'], 'multi' => ['images'], 'spec_meta' => ['spec_meta']],
+            ['table' => 'goods_detail', 'owner_type' => 'goods', 'owner_id_field' => 'goods_id', 'rich_text' => ['description']],
+            ['table' => 'goods_sku_detail', 'owner_type' => 'goods', 'owner_id_field' => 'goods_id', 'rich_text' => ['description'], 'usage_field_map' => ['description' => 'skus.description']],
             ['table' => 'goods_sku', 'owner_type' => 'goods_sku', 'single' => ['image']],
             ['table' => 'goods_category', 'owner_type' => 'goods_category', 'single' => ['image']],
             ['table' => 'goods_brand', 'owner_type' => 'goods_brand', 'single' => ['logo']],

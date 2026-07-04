@@ -2,6 +2,23 @@ import { requestClient } from '#/api/request';
 
 export namespace GoodsApi {
   export type MediaValue = number | string;
+  export type GoodsPointsRewardMode =
+    | 'global'
+    | 'disabled'
+    | 'ratio'
+    | 'fixed'
+    | 'sku'
+    | 'inherit';
+  export type SkuPointsRewardMode =
+    | 'inherit'
+    | 'disabled'
+    | 'ratio'
+    | 'fixed';
+  export type MemberBenefitMode =
+    | 'global'
+    | 'disabled'
+    | 'level_discount'
+    | 'sku_price';
 
   export interface SpecMetaValueItem {
     value: string;
@@ -29,6 +46,7 @@ export namespace GoodsApi {
     main_video?: MediaValue;
     main_video_full_url?: string;
     description?: string;
+    sku_detail_enabled?: 0 | 1;
     price: number;
     market_price?: number;
     stock: number;
@@ -38,6 +56,10 @@ export namespace GoodsApi {
     is_recommend: number;
     is_new: number;
     is_hot: number;
+    points_reward_mode?: GoodsPointsRewardMode;
+    points_reward_ratio?: number;
+    points_reward_fixed?: number;
+    member_benefit_mode?: MemberBenefitMode;
     sort: number;
     status: number;
     create_time: string;
@@ -78,8 +100,13 @@ export namespace GoodsApi {
     sku_code?: string;
     image?: MediaValue;
     image_full_url?: string;
+    description?: string;
     weight?: number;
     volume?: number;
+    points_reward_mode?: SkuPointsRewardMode;
+    points_reward_ratio?: number;
+    points_reward_fixed?: number;
+    member_price?: number | string | null;
     status: number;
   }
 
@@ -126,6 +153,7 @@ export namespace GoodsApi {
     main_video?: MediaValue;
     spec_meta?: SpecMetaItem[];
     description?: string;
+    sku_detail_enabled?: 0 | 1;
     price?: number;
     market_price?: number;
     stock?: number;
@@ -134,6 +162,10 @@ export namespace GoodsApi {
     is_recommend?: number;
     is_new?: number;
     is_hot?: number;
+    points_reward_mode?: GoodsPointsRewardMode;
+    points_reward_ratio?: number;
+    points_reward_fixed?: number;
+    member_benefit_mode?: MemberBenefitMode;
     sort?: number;
     status?: number;
     images?: MediaValue[];
@@ -150,8 +182,13 @@ export namespace GoodsApi {
     stock: number;
     sku_code?: string;
     image?: MediaValue;
+    description?: string;
     weight?: number;
     volume?: number;
+    points_reward_mode?: SkuPointsRewardMode;
+    points_reward_ratio?: number;
+    points_reward_fixed?: number;
+    member_price?: number | string | null;
     status?: number;
   }
 
@@ -167,6 +204,7 @@ export namespace GoodsApi {
     main_video?: MediaValue;
     spec_meta?: SpecMetaItem[];
     description?: string;
+    sku_detail_enabled?: 0 | 1;
     price?: number;
     market_price?: number;
     stock?: number;
@@ -175,6 +213,10 @@ export namespace GoodsApi {
     is_recommend?: number;
     is_new?: number;
     is_hot?: number;
+    points_reward_mode?: GoodsPointsRewardMode;
+    points_reward_ratio?: number;
+    points_reward_fixed?: number;
+    member_benefit_mode?: MemberBenefitMode;
     sort?: number;
     status?: number;
     images?: MediaValue[];

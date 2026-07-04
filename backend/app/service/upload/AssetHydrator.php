@@ -92,6 +92,9 @@ class AssetHydrator
         }
         foreach ((array) ($goods['skus'] ?? []) as $sku) {
             $ids[] = $this->normalizer->normalizeSingle($sku['image'] ?? '');
+            foreach ($this->extractAssetIdsFromHtml((string) ($sku['description'] ?? '')) as $id) {
+                $ids[] = $id;
+            }
         }
         foreach ($this->extractAssetIdsFromHtml((string) ($goods['description'] ?? '')) as $id) {
             $ids[] = $id;
@@ -122,6 +125,9 @@ class AssetHydrator
         if (is_array($goods['skus'] ?? null)) {
             foreach ($goods['skus'] as &$sku) {
                 $sku['image_full_url'] = $this->fullUrl($sku['image'] ?? '', $assetMap);
+                if (isset($sku['description']) && is_string($sku['description'])) {
+                    $sku['description'] = $this->hydrateRichText($sku['description'], $assetMap);
+                }
             }
             unset($sku);
         }

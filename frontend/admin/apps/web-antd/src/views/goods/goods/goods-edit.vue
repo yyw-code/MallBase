@@ -1,9 +1,10 @@
 <script lang="ts" setup>
 
-import { computed, onMounted, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 
 import { useRoute, useRouter } from 'vue-router';
 
+import { getSettingConfigApi } from '#/api/setting';
 import RichTextEditor from '#/components/rich-text-editor/index.vue';
 import Upload from '#/components/upload/index.vue';
 
@@ -20,11 +21,11 @@ const editId = computed(() => {
 });
 
 const {
-  formData, rules, formRef, loading, activeTab, isFullscreen, isEdit,
+  formData, rules, loading, activeTab, isFullscreen, isEdit,
   toggleFullscreen, categoryTreeData, brandOptions, freightTemplateOptions, tagOptions,
   specType, attrs, canAddPic, getPicPreviewUrl, getSkuPreviewImage,
   handleAddSpec, handleRemoveSpec, addSpecValue, removeSpecValue, toggleAddPic, handleSpecValueImageChange,
-  specListRef, valueListRefs,
+  valueListRefs,
   skuRows, batchData, batchFilters, matchedSkuRows, tableData, skuColumns,
   generateSkuCombinations, applyBatch, resetBatchEditor,
   specLibVisible, specImportTab, specLibLoading, specLibList, selectedSpecIds,
@@ -36,11 +37,40 @@ const {
 
 const handleCancel = () => router.back();
 const onSubmit = () => handleSubmit(() => router.back());
+const pointsEnabled = ref(true);
+const memberEnabled = ref(false);
+const pointsColumnKeys = new Set([
+  'points_reward_mode',
+  'points_reward_ratio',
+  'points_reward_fixed',
+]);
+const memberColumnKeys = new Set(['member_price']);
+const skuDetailColumnKeys = new Set(['description']);
+const showSkuPointsColumns = computed(
+  () => pointsEnabled.value && formData.points_reward_mode === 'sku',
+);
+const showSkuMemberColumns = computed(
+  () => memberEnabled.value && formData.member_benefit_mode === 'sku_price',
+);
+const showSkuDetailColumns = computed(
+  () => specType.value === 'multi' && formData.sku_detail_enabled === 1,
+);
+const visibleSkuColumns = computed(() =>
+  (skuColumns.value as any[]).filter((column) => {
+    const key = String(column.dataIndex || '');
+    if (pointsColumnKeys.has(key)) return showSkuPointsColumns.value;
+    if (memberColumnKeys.has(key)) return showSkuMemberColumns.value;
+    if (skuDetailColumnKeys.has(key)) return showSkuDetailColumns.value;
+    return true;
+  }),
+);
 const batchColumns = computed(() =>
-  (skuColumns.value as any[]).map((column) => ({
-    ...column,
-    customCell: undefined,
-  })),
+  visibleSkuColumns.value
+    .filter((column) => String(column.dataIndex || '') !== 'description')
+    .map((column) => ({
+      ...column,
+      customCell: undefined,
+    })),
 );
 const batchTableData = computed(() => [
   {
@@ -51,18 +81,73 @@ const batchTableData = computed(() => [
     stock: undefined,
     sku_code: '',
     image: undefined,
+    points_reward_mode: undefined,
+    points_reward_ratio: undefined,
+    points_reward_fixed: undefined,
+    member_price: undefined,
     is_show: 1,
   } as SkuRow,
 ]);
 const detailEditorHeight = 'clamp(420px, calc(100vh - 430px), 720px)';
+const skuDetailEditorVisible = ref(false);
+const skuDetailEditingRow = ref<SkuRow | null>(null);
+const skuDetailDraft = ref('');
+
+const openSkuDetailEditor = (row?: SkuRow) => {
+  skuDetailEditingRow.value = row || null;
+  skuDetailDraft.value = row?.description || '';
+  skuDetailEditorVisible.value = true;
+};
+
+const saveSkuDetail = () => {
+  if (skuDetailEditingRow.value) {
+    skuDetailEditingRow.value.description = skuDetailDraft.value;
+  }
+  skuDetailEditorVisible.value = false;
+};
+
+const updateSkuDetailDraft = (value: string) => {
+  skuDetailDraft.value = value;
+};
+
+function settingSwitchEnabled(value: unknown, fallback = true) {
+  if (value === undefined || value === null || value === '') return fallback;
+  return ['1', 'true', 'on'].includes(String(value).toLowerCase());
+}
+
+async function loadMarketingConfig() {
+  const settingItems = (config: any) => [
+    ...(Array.isArray(config?.settings) ? config.settings : []),
+    ...((config?.tabs || []).flatMap((tab: any) => tab.settings || [])),
+  ];
+
+  const [pointsResult, memberResult] = await Promise.allSettled([
+    getSettingConfigApi('PointsConfig'),
+    getSettingConfigApi('MemberConfig'),
+  ]);
+
+  if (pointsResult.status === 'fulfilled') {
+    const items = settingItems(pointsResult.value);
+    const pointsSwitch = items.find((item) => item.code === 'points_enabled');
+    pointsEnabled.value = settingSwitchEnabled(pointsSwitch?.value, true);
+  } else {
+    pointsEnabled.value = true;
+  }
+
+  if (memberResult.status === 'fulfilled') {
+    const items = settingItems(memberResult.value);
+    const memberSwitch = items.find((item) => item.code === 'member_enabled');
+    memberEnabled.value = settingSwitchEnabled(memberSwitch?.value, false);
+  } else {
+    memberEnabled.value = false;
+  }
+}
 
 watch(editId, async (id) => {
   resetForm();
-  await loadOptions();
+  await Promise.all([loadOptions(), loadMarketingConfig()]);
   if (id) await loadEditData(id);
 }, { immediate: true });
-
-onMounted(() => {});
 </script>
 
 <template>
@@ -162,6 +247,62 @@ onMounted(() => {});
               </div>
             </a-tab-pane>
 
+            <!-- ===== 营销设置 ===== -->
+            <a-tab-pane key="marketing" tab="营销设置">
+              <div class="tab-body">
+                <div class="marketing-section">
+                  <div class="marketing-section-title">积分</div>
+                  <a-form-item v-if="pointsEnabled" label="赠送积分">
+                    <div class="points-reward-row">
+                      <a-select v-model:value="formData.points_reward_mode" style="width: 180px">
+                        <a-select-option value="disabled">关闭</a-select-option>
+                        <a-select-option value="global">默认全局配置</a-select-option>
+                        <a-select-option value="ratio">按金额比例</a-select-option>
+                        <a-select-option value="fixed">固定积分</a-select-option>
+                        <a-select-option value="sku">规格单独配置</a-select-option>
+                      </a-select>
+                      <a-input-number
+                        v-if="formData.points_reward_mode === 'ratio'"
+                        v-model:value="formData.points_reward_ratio"
+                        :min="0"
+                        :precision="0"
+                        :controls="false"
+                        style="width: 150px"
+                      >
+                        <template #suffix>积分/元</template>
+                      </a-input-number>
+                      <a-input-number
+                        v-if="formData.points_reward_mode === 'fixed'"
+                        v-model:value="formData.points_reward_fixed"
+                        :min="0"
+                        :precision="0"
+                        :controls="false"
+                        style="width: 150px"
+                      >
+                        <template #suffix>积分/件</template>
+                      </a-input-number>
+                    </div>
+                  </a-form-item>
+                  <a-empty v-else description="积分功能未开启" />
+                </div>
+
+                <div class="marketing-section">
+                  <div class="marketing-section-title">会员</div>
+                  <a-form-item v-if="memberEnabled" label="会员权益">
+                    <div class="points-reward-row">
+                      <a-select v-model:value="formData.member_benefit_mode" style="width: 180px">
+                        <a-select-option value="global">默认全局配置</a-select-option>
+                        <a-select-option value="disabled">关闭</a-select-option>
+                        <a-select-option value="level_discount">参与等级折扣</a-select-option>
+                        <a-select-option value="sku_price">规格会员价</a-select-option>
+                      </a-select>
+                    </div>
+                  </a-form-item>
+                  <a-empty v-else description="会员功能未开启" />
+                </div>
+              </div>
+            </a-tab-pane>
+
             <!-- ===== 规格库存 ===== -->
             <a-tab-pane key="spec" tab="规格库存">
               <div class="tab-body">
@@ -171,10 +312,68 @@ onMounted(() => {});
                     <a-radio-button value="multi">多规格</a-radio-button>
                   </a-radio-group>
                 </a-form-item>
+                <a-form-item v-if="specType === 'multi'" label="规格详情">
+                  <a-switch
+                    v-model:checked="formData.sku_detail_enabled"
+                    :checked-value="1"
+                    :un-checked-value="0"
+                    checked-children="开启"
+                    un-checked-children="关闭"
+                  />
+                  <span class="form-tip ml8">开启后，前台优先展示用户选中规格的详情；未设置时回退商品通用详情</span>
+                </a-form-item>
+                <a-alert
+                  v-if="formData.sku_detail_enabled === 1 && specType === 'multi'"
+                  class="mb12"
+                  message="多规格商品请在下方 SKU 表格的「规格详情」列逐个设置。"
+                  type="info"
+                  show-icon
+                />
                 <template v-if="specType === 'single'">
                   <a-form-item label="售价"><a-input-number v-model:value="formData.price" :min="0" :precision="2" :controls="false" style="width:160px"><template #prefix>¥</template></a-input-number></a-form-item>
                   <a-form-item label="市场价"><a-input-number v-model:value="formData.market_price" :min="0" :precision="2" :controls="false" style="width:160px"><template #prefix>¥</template></a-input-number></a-form-item>
                   <a-form-item label="库存"><a-input-number v-model:value="formData.stock" :min="0" :controls="false" style="width:160px"><template #suffix>件</template></a-input-number></a-form-item>
+                  <a-form-item v-if="pointsEnabled && formData.points_reward_mode === 'sku'" label="规格积分">
+                    <div class="points-reward-row">
+                      <a-select v-model:value="formData.sku_points_reward_mode" style="width: 180px">
+                        <a-select-option value="inherit">使用全局规则</a-select-option>
+                        <a-select-option value="disabled">不赠送积分</a-select-option>
+                        <a-select-option value="ratio">按金额比例</a-select-option>
+                        <a-select-option value="fixed">固定积分</a-select-option>
+                      </a-select>
+                      <a-input-number
+                        v-if="formData.sku_points_reward_mode === 'ratio'"
+                        v-model:value="formData.sku_points_reward_ratio"
+                        :min="0"
+                        :precision="0"
+                        :controls="false"
+                        style="width: 150px"
+                      >
+                        <template #suffix>积分/元</template>
+                      </a-input-number>
+                      <a-input-number
+                        v-if="formData.sku_points_reward_mode === 'fixed'"
+                        v-model:value="formData.sku_points_reward_fixed"
+                        :min="0"
+                        :precision="0"
+                        :controls="false"
+                        style="width: 150px"
+                      >
+                        <template #suffix>积分/件</template>
+                      </a-input-number>
+                    </div>
+                  </a-form-item>
+                  <a-form-item v-if="memberEnabled && formData.member_benefit_mode === 'sku_price'" label="规格会员价">
+                    <a-input-number
+                      v-model:value="formData.member_price"
+                      :min="0"
+                      :precision="2"
+                      :controls="false"
+                      style="width: 160px"
+                    >
+                      <template #prefix>¥</template>
+                    </a-input-number>
+                  </a-form-item>
                 </template>
                 <template v-else>
                   <a-form-item label="商品规格" :wrapper-col="{ span: 22 }">
@@ -273,7 +472,7 @@ onMounted(() => {});
                           :columns="(batchColumns as any[])"
                           :data-source="batchTableData"
                           :pagination="false"
-                          :scroll="{ x: 860 }"
+                          :scroll="{ x: 1280 }"
                           size="small"
                           bordered
                           row-key="spec_values"
@@ -316,6 +515,23 @@ onMounted(() => {});
                             <template v-else-if="column.dataIndex === 'sku_code'">
                               <a-input v-model:value="batchData['__sku_code__']" placeholder="批量SKU编码" size="small" class="batch-cell-control" />
                             </template>
+                            <template v-else-if="column.dataIndex === 'points_reward_mode'">
+                              <a-select v-model:value="batchData['__points_reward_mode__']" placeholder="积分模式" size="small" allow-clear class="batch-cell-control">
+                                <a-select-option value="inherit">使用全局规则</a-select-option>
+                                <a-select-option value="disabled">不赠送积分</a-select-option>
+                                <a-select-option value="ratio">按金额比例</a-select-option>
+                                <a-select-option value="fixed">固定积分</a-select-option>
+                              </a-select>
+                            </template>
+                            <template v-else-if="column.dataIndex === 'points_reward_ratio'">
+                              <a-input-number v-model:value="(batchData as any)['__points_reward_ratio__']" placeholder="每元积分" :min="0" :precision="0" size="small" :controls="false" class="batch-cell-control" />
+                            </template>
+                            <template v-else-if="column.dataIndex === 'points_reward_fixed'">
+                              <a-input-number v-model:value="(batchData as any)['__points_reward_fixed__']" placeholder="每件积分" :min="0" :precision="0" size="small" :controls="false" class="batch-cell-control" />
+                            </template>
+                            <template v-else-if="column.dataIndex === 'member_price'">
+                              <a-input-number v-model:value="(batchData as any)['__member_price__']" placeholder="会员价" :min="0" :precision="2" size="small" :controls="false" class="batch-cell-control" />
+                            </template>
                             <template v-else-if="column.dataIndex === '_action'">
                               <a-select v-model:value="(batchData as any)['__is_show__']" placeholder="显示状态" size="small" allow-clear class="batch-cell-control">
                                 <a-select-option :value="1">批量显示</a-select-option>
@@ -326,7 +542,7 @@ onMounted(() => {});
                         </a-table>
                       </div>
                     </div>
-                    <a-table :columns="(skuColumns as any[])" :data-source="tableData" :pagination="false" :scroll="{ x: 860, y: 400 }" size="small" bordered row-key="spec_values" class="sku-table compact-table">
+                    <a-table :columns="(visibleSkuColumns as any[])" :data-source="tableData" :pagination="false" :scroll="{ x: 1280, y: 400 }" size="small" bordered row-key="spec_values" class="sku-table compact-table">
                       <template #bodyCell="{ column, record }">
                         <template v-if="(column as any)._isSpecCol"><span class="sku-spec-val">{{ (record as SkuRow).detail[(column as any).title] }}</span></template>
                         <template v-else-if="column.dataIndex === 'image'">
@@ -345,6 +561,22 @@ onMounted(() => {});
                         <template v-else-if="column.dataIndex === 'market_price'"><a-input-number v-model:value="(record as SkuRow).market_price" :min="0" :precision="2" size="small" :controls="false" style="width:100%" /></template>
                         <template v-else-if="column.dataIndex === 'stock'"><a-input-number v-model:value="(record as SkuRow).stock" :min="0" size="small" :controls="false" style="width:100%" /></template>
                         <template v-else-if="column.dataIndex === 'sku_code'"><a-input v-model:value="(record as SkuRow).sku_code" size="small" placeholder="选填" allow-clear /></template>
+                        <template v-else-if="column.dataIndex === 'points_reward_mode'">
+                          <a-select v-model:value="(record as SkuRow).points_reward_mode" size="small" style="width:100%">
+                            <a-select-option value="inherit">使用全局规则</a-select-option>
+                            <a-select-option value="disabled">不赠送积分</a-select-option>
+                            <a-select-option value="ratio">按金额比例</a-select-option>
+                            <a-select-option value="fixed">固定积分</a-select-option>
+                          </a-select>
+                        </template>
+                        <template v-else-if="column.dataIndex === 'points_reward_ratio'"><a-input-number v-model:value="(record as SkuRow).points_reward_ratio" :min="0" :precision="0" size="small" :controls="false" style="width:100%" /></template>
+                        <template v-else-if="column.dataIndex === 'points_reward_fixed'"><a-input-number v-model:value="(record as SkuRow).points_reward_fixed" :min="0" :precision="0" size="small" :controls="false" style="width:100%" /></template>
+                        <template v-else-if="column.dataIndex === 'member_price'"><a-input-number v-model:value="(record as SkuRow).member_price" :min="0" :precision="2" size="small" :controls="false" style="width:100%"><template #prefix>¥</template></a-input-number></template>
+                        <template v-else-if="column.dataIndex === 'description'">
+                          <a-button size="small" type="link" @click="openSkuDetailEditor(record as SkuRow)">
+                            {{ (record as SkuRow).description ? '已设置' : '编辑' }}
+                          </a-button>
+                        </template>
                         <template v-else-if="column.dataIndex === '_action'">
                           <a-switch v-model:checked="(record as any).is_show" :checked-value="1" :un-checked-value="0" checked-children="显" un-checked-children="隐" size="small" />
                         </template>
@@ -421,6 +653,24 @@ onMounted(() => {});
         </div>
       </div>
     </a-modal>
+
+    <a-modal
+      v-model:open="skuDetailEditorVisible"
+      :title="skuDetailEditingRow ? `规格详情 - ${skuDetailEditingRow.spec_values}` : '规格详情'"
+      :width="900"
+      ok-text="保存"
+      cancel-text="取消"
+      destroy-on-close
+      @ok="saveSkuDetail"
+    >
+      <RichTextEditor
+        :height="detailEditorHeight"
+        module="goods"
+        :model-value="skuDetailDraft"
+        placeholder="请输入该规格的商品详情"
+        @update:model-value="updateSkuDetailDraft"
+      />
+    </a-modal>
   </div>
 </template>
 
@@ -469,6 +719,11 @@ onMounted(() => {});
 .flag-cell { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 14px 8px; border-right: 1px solid hsl(var(--border)); background: hsl(var(--popover)); }
 .flag-cell:last-child { border-right: none; }
 .flag-name { font-size: 13px; color: hsl(var(--muted-foreground)); }
+
+.marketing-section { max-width: 720px; padding: 0 0 14px; margin-bottom: 16px; border-bottom: 1px solid hsl(var(--border)); }
+.marketing-section:last-child { margin-bottom: 0; border-bottom: none; }
+.marketing-section-title { margin-bottom: 12px; font-size: 14px; font-weight: 600; color: hsl(var(--foreground)); }
+.points-reward-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 
 /* ===== 规格区域 ===== */
 .spec-wrapper { display: flex; flex-direction: column; gap: 0; }

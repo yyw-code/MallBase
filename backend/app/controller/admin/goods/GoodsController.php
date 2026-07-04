@@ -70,7 +70,8 @@ class GoodsController extends BaseController
         $data = $this->request->param([
             'name', 'subtitle', 'category_id', 'brand_id', 'freight_template_id',
             'price', 'market_price', 'stock', 'main_image', 'main_video', 'spec_type', 'spec_meta',
-            'unit', 'sort', 'description',
+            'unit', 'sort', 'description', 'sku_detail_enabled',
+            'points_reward_mode', 'points_reward_ratio', 'points_reward_fixed', 'member_benefit_mode',
             'status', 'is_on_sale', 'is_recommend', 'is_new', 'is_hot',
             'images', 'skus', 'tag_ids',
         ]);
@@ -95,7 +96,8 @@ class GoodsController extends BaseController
         $data = $this->request->param([
             'name', 'subtitle', 'category_id', 'brand_id', 'freight_template_id',
             'price', 'market_price', 'stock', 'main_image', 'main_video', 'spec_type', 'spec_meta',
-            'unit', 'sort', 'description',
+            'unit', 'sort', 'description', 'sku_detail_enabled',
+            'points_reward_mode', 'points_reward_ratio', 'points_reward_fixed', 'member_benefit_mode',
             'status', 'is_on_sale', 'is_recommend', 'is_new', 'is_hot',
             'images', 'skus', 'tag_ids',
         ]);

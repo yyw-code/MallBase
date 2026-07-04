@@ -26,17 +26,31 @@ INSERT INTO `mb_goods_spec_template` (`id`, `name`, `detail`, `sort`, `status`) 
 (3, '家具规格', '[{"name":"颜色","add_pic":1,"values":[{"value":"原木色","pic":""},{"value":"胡桃色","pic":""},{"value":"白色","pic":""}]}]', 3, 1);
 
 -- ---- 商品 1：华为轻薄办公笔记本（多规格） ----
-INSERT INTO `mb_goods` (`id`, `category_id`, `brand_id`, `name`, `subtitle`, `main_image`, `images`, `spec_type`, `spec_meta`, `description`, `price`, `market_price`, `stock`, `sales`, `unit`, `is_on_sale`, `is_recommend`, `is_new`, `is_hot`, `sort`) VALUES
-(1, 5, NULL,
+INSERT INTO `mb_goods` (`id`, `category_id`, `brand_id`, `name`, `subtitle`, `main_image`, `main_video`, `images`, `spec_type`, `spec_meta`, `sku_detail_enabled`, `price`, `market_price`, `stock`, `sales`, `unit`, `is_on_sale`, `is_recommend`, `is_new`, `is_hot`, `sort`) VALUES
+(1,
+ 5,
+ NULL,
  '华为笔记本电脑 14 英寸轻薄商务办公本 12 代酷睿 护眼大屏 学生办公 全新轻薄本',
  '【限时直降 1000】顺丰包邮 · 12 期免息 · 学生认证再减 200',
  33,
+ 72,
  '[33,29,30,31,32]',
  2,
  '[{"name":"版本","add_pic":0,"values":[{"value":"12代酷睿版","pic":""},{"value":"13代酷睿版","pic":""}]},{"name":"配置","add_pic":0,"values":[{"value":"i5 16G 512G 皓月银","pic":""},{"value":"i7 16G 512G 皓月银","pic":""},{"value":"i7 32G 1T 深空灰","pic":""}]}]',
- '<div class="goods-detail"><h3>产品参数</h3><table border="0" cellpadding="6"><tr><td>屏幕尺寸</td><td>14 英寸 / 1920×1200 / 100% sRGB</td></tr><tr><td>处理器</td><td>Intel 第 12 代 / 第 13 代 酷睿 i5 / i7</td></tr><tr><td>内存 / 硬盘</td><td>16GB / 32GB LPDDR4X · 512GB / 1TB PCIe SSD</td></tr><tr><td>显卡</td><td>Intel 锐炬 Xe 核显</td></tr><tr><td>电池续航</td><td>56Wh · 本地视频续航约 11 小时</td></tr><tr><td>重量</td><td>约 1.38kg · 厚度 15.9mm</td></tr><tr><td>接口</td><td>2×USB-C · 2×USB-A · HDMI · 3.5mm</td></tr><tr><td>操作系统</td><td>Windows 11 家庭中文版</td></tr></table><h3>核心卖点</h3><p>1. 第 12 代 / 13 代酷睿 P 系列处理器，办公多任务流畅不卡顿</p><p>2. 14 英寸全高清护眼大屏，TÜV 莱茵双重认证，长时间使用不伤眼</p><p>3. 1.38kg 超轻机身 + 56Wh 大电池，全天通勤无忧</p><p>4. 全功能 Type-C 接口，反向供电支持多设备协同</p><h3>售后服务</h3><p>· 顺丰包邮 · 24 小时内发货</p><p>· 官方 1 年质保 · 2 年延保可加购</p><p>· 7 天无理由退换 · 15 天有质量问题包换</p></div>',
- 3999.00, 5999.00, 487, 156, '台',
- 1, 1, 1, 1, 2);
+ 1,
+ 3999.00,
+ 5999.00,
+ 487,
+ 156,
+ '台',
+ 1,
+ 1,
+ 1,
+ 1,
+ 2);
+
+INSERT INTO `mb_goods_detail` (`goods_id`, `description`) VALUES
+(1, '<h3>商品说明</h3><p>这是一款面向日常办公和学习场景的 14 英寸轻薄本，机身重量约 1.38kg，适合通勤携带、会议记录、网课学习和轻量图片处理。</p><p>屏幕比例为 16:10，可视区域比传统 16:9 更高一些，浏览表格、文档和网页时能减少滚动次数。整机接口保留 USB-A、USB-C、HDMI 和耳机孔，常用外设不需要额外扩展坞。</p><h3>配置参数</h3><ul><li>屏幕：14 英寸 / 1920×1200 / 100% sRGB</li><li>处理器：第 12 代 / 第 13 代酷睿可选</li><li>内存：16GB / 32GB LPDDR4X</li><li>硬盘：512GB / 1TB PCIe SSD</li><li>显卡：Intel 锐炬 Xe 核显</li><li>电池：56Wh，续航会因亮度、网络和运行软件不同而变化</li><li>重量：约 1.38kg</li><li>系统：Windows 11 家庭中文版</li></ul><h3>选购建议</h3><p>日常办公、网课和轻量开发建议选择 i5 / 16G / 512G；需要同时打开虚拟机、大型表格或更多设计软件时，再考虑 i7 / 32G / 1T。</p><p>该机型不是独立显卡游戏本，不建议用于大型 3D 游戏或长时间高负载渲染。</p><h3>包装与服务</h3><p>包装内含笔记本主机、电源适配器、电源线和纸质资料。发货前会检查外包装完整性，签收时如发现外箱严重破损，建议先拍照并联系售后。</p><p>整机按官方政策提供质保服务，7 天无理由退换需保持主机、配件、包装和序列号完整。</p>');
 
 INSERT INTO `mb_goods_sku` (`goods_id`, `spec_values`, `price`, `market_price`, `cost_price`, `stock`, `sku_code`, `image`) VALUES
 (1, '12代酷睿版,i5 16G 512G 皓月银', 3999.00, 5999.00, 3200.00, 143, 'HW-LP-12-I5-512',   33),
@@ -46,18 +60,44 @@ INSERT INTO `mb_goods_sku` (`goods_id`, `spec_values`, `price`, `market_price`, 
 (1, '13代酷睿版,i7 16G 512G 皓月银', 4999.00, 6999.00, 4000.00, 156, 'HW-LP-13-I7-512',   32),
 (1, '13代酷睿版,i7 32G 1T 深空灰',   5799.00, 7999.00, 4600.00,  10, 'HW-LP-13-I7-1T',    30);
 
+INSERT INTO `mb_goods_sku_detail` (`goods_id`, `sku_id`, `description`)
+SELECT `goods_id`, `id`, CASE `sku_code`
+  WHEN 'HW-LP-12-I5-512' THEN '<h3>12 代 i5 / 16G / 512G</h3><p>适合日常办公、在线课程、轻量开发和文档处理。默认容量适合常用软件和资料归档，外接移动硬盘即可覆盖更多照片或视频素材。</p><ul><li>推荐人群：学生、行政办公、轻量开发</li><li>优势：价格更低，续航压力更小</li><li>注意：不适合长期大型渲染或重度虚拟机</li></ul>'
+  WHEN 'HW-LP-12-I7-512' THEN '<h3>12 代 i7 / 16G / 512G</h3><p>在同代平台中提升处理器性能，适合经常同时打开表格、浏览器、会议软件和轻量设计工具的用户。</p><ul><li>推荐人群：多任务办公、轻量图片处理</li><li>优势：处理器余量更足</li><li>注意：内存仍为 16G，重度虚拟机建议选 32G</li></ul>'
+  WHEN 'HW-LP-12-I7-1T' THEN '<h3>12 代 i7 / 32G / 1T</h3><p>更适合需要长期保留项目文件、素材和开发环境的用户。32G 内存在大型表格、IDE、浏览器多标签场景下更从容。</p><ul><li>推荐人群：开发、设计辅助、重度办公</li><li>优势：内存和硬盘一步到位</li><li>注意：高负载下风扇声音会更明显</li></ul>'
+  WHEN 'HW-LP-13-I5-512' THEN '<h3>13 代 i5 / 16G / 512G</h3><p>在功耗和性能之间更均衡，适合希望新平台、但预算不想拉太高的用户。日常办公和学习体验更稳。</p><ul><li>推荐人群：通勤办公、学生学习</li><li>优势：新平台，综合体验均衡</li><li>注意：大容量资料建议配合云盘或移动硬盘</li></ul>'
+  WHEN 'HW-LP-13-I7-512' THEN '<h3>13 代 i7 / 16G / 512G</h3><p>处理器性能更强，适合经常多任务切换、会议录屏、轻量剪辑和图片处理的用户。</p><ul><li>推荐人群：商务办公、内容轻创作</li><li>优势：响应速度更好</li><li>注意：如果项目文件很多，建议考虑 1T 版本</li></ul>'
+  ELSE '<h3>13 代 i7 / 32G / 1T</h3><p>这是性能和容量更充足的版本，适合长期作为主力办公本使用。大内存和大硬盘对多任务、开发环境和素材管理更友好。</p><ul><li>推荐人群：重度办公、开发、多软件并行</li><li>优势：内存和容量余量最大</li><li>注意：预算更高，轻办公用户不一定需要</li></ul>'
+END
+FROM `mb_goods_sku`
+WHERE `goods_id` = 1
+  AND `sku_code` IN ('HW-LP-12-I5-512', 'HW-LP-12-I7-512', 'HW-LP-12-I7-1T', 'HW-LP-13-I5-512', 'HW-LP-13-I7-512', 'HW-LP-13-I7-1T');
+
 -- ---- 商品 2：松典 5K 数码微单相机（多规格） ----
-INSERT INTO `mb_goods` (`id`, `category_id`, `brand_id`, `name`, `subtitle`, `main_image`, `images`, `spec_type`, `spec_meta`, `description`, `price`, `market_price`, `stock`, `sales`, `unit`, `is_on_sale`, `is_recommend`, `is_new`, `sort`) VALUES
-(2, 6, NULL,
+INSERT INTO `mb_goods` (`id`, `category_id`, `brand_id`, `name`, `subtitle`, `main_image`, `main_video`, `images`, `spec_type`, `spec_meta`, `sku_detail_enabled`, `price`, `market_price`, `stock`, `sales`, `unit`, `is_on_sale`, `is_recommend`, `is_new`, `sort`) VALUES
+(2,
+ 6,
+ NULL,
  '松典数码相机 5K 高清微单 复古入门级 学生女生旅游 Vlog 摄影 6 轴防抖',
  '【新品上市】顺丰包邮 · 标配 2 块电池 · WIFI 传输 · 1 年质保',
  13,
+ 73,
  '[13,9,10,11,12]',
  2,
  '[{"name":"存储","add_pic":0,"values":[{"value":"无卡","pic":""},{"value":"32G","pic":""},{"value":"64G","pic":""},{"value":"128G","pic":""}]},{"name":"套装","add_pic":1,"values":[{"value":"官方标配","pic":13},{"value":"加广角镜套装","pic":9}]}]',
- '<div class="goods-detail"><h3>产品参数</h3><table border="0" cellpadding="6"><tr><td>有效像素</td><td>5K 摄录 · 6400 万像素照片</td></tr><tr><td>传感器</td><td>1/2.5 英寸 CMOS</td></tr><tr><td>对焦</td><td>自动对焦 + 人脸识别</td></tr><tr><td>防抖</td><td>6 轴电子防抖</td></tr><tr><td>视频</td><td>5K @ 30fps · 4K @ 60fps · 慢动作支持</td></tr><tr><td>无线</td><td>内置 WIFI · 手机一键传输</td></tr><tr><td>屏幕</td><td>3.0 英寸高清触摸翻转屏</td></tr><tr><td>续航</td><td>标配 2 块电池 · 单块约 120 分钟拍摄</td></tr></table><h3>适用场景</h3><p>1. 学生党 Vlog · 校园记录 · 出游摄影</p><p>2. 网红博主 · 美食探店 · 街拍直出</p><p>3. 入门复古风 · 女生礼物 · 男友送礼</p><p>4. 旅行轻装备 · 比单反更便携，比手机更专业</p><h3>包装清单</h3><p>· 相机机身 × 1 · 电池 × 2 · 充电器 × 1 · 数据线 × 1 · 镜头盖 × 1 · 防尘袋 × 1 · 中文说明书 × 1</p><h3>售后服务</h3><p>· 顺丰快递 24 小时发货 · 7 天无理由 · 1 年官方质保</p></div>',
- 959.00, 1599.00, 1186, 219, '台',
- 1, 1, 1, 3);
+ 1,
+ 959.00,
+ 1599.00,
+ 1186,
+ 219,
+ '台',
+ 1,
+ 1,
+ 1,
+ 3);
+
+INSERT INTO `mb_goods_detail` (`goods_id`, `description`) VALUES
+(2, '<h3>商品说明</h3><p>这款复古外观数码相机适合旅行记录、日常随拍、短视频素材采集和入门摄影练习。机身操作以自动模式为主，开机后可以快速完成拍摄，不需要复杂的镜头和参数配置。</p><p>图片和视频效果会受光线、拍摄距离和稳定性影响。夜景、逆光和快速运动场景建议配合补光或三脚架使用。</p><h3>规格参数</h3><ul><li>照片：最高 6400 万像素输出</li><li>视频：最高支持 5K 录制，常用建议 4K / 1080P</li><li>屏幕：3.0 英寸翻转屏</li><li>对焦：自动对焦，支持人脸识别</li><li>防抖：电子防抖，适合手持轻量拍摄</li><li>传输：内置 Wi-Fi，可连接手机传图</li><li>电池：标配 2 块电池，实际续航与录像分辨率有关</li><li>存储：按所选规格配卡或不配卡</li></ul><h3>使用建议</h3><p>第一次使用前建议先充满电，并在相机内格式化存储卡。长时间录像会增加耗电和发热，建议准备备用电池。</p><p>如果主要用于旅行拍照，官方标配即可；如果经常自拍、拍建筑或室内空间，可以选择加广角镜套装。</p><h3>包装清单</h3><p>标配包含相机机身、电池、充电器、数据线、镜头盖、防尘袋和中文说明书。不同套装会随规格增加存储卡或广角镜配件。</p><p>商品支持按平台规则退换，镜头、屏幕保护膜和外观磨损会影响二次销售，请试用时保持配件完整。</p>');
 
 INSERT INTO `mb_goods_sku` (`goods_id`, `spec_values`, `price`, `market_price`, `cost_price`, `stock`, `sku_code`, `image`) VALUES
 (2, '无卡,官方标配',      959.00,  1599.00, 480.00, 287, 'SD-CAM-NC-STD',  13),
@@ -69,18 +109,43 @@ INSERT INTO `mb_goods_sku` (`goods_id`, `spec_values`, `price`, `market_price`, 
 (2, '128G,官方标配',     1099.00, 1799.00, 600.00, 169, 'SD-CAM-128-STD', 12),
 (2, '128G,加广角镜套装', 1339.00, 1999.00, 740.00, 167, 'SD-CAM-128-WIDE',12);
 
+INSERT INTO `mb_goods_sku_detail` (`goods_id`, `sku_id`, `description`)
+SELECT `goods_id`, `id`, CASE `sku_code`
+  WHEN 'SD-CAM-NC-STD' THEN '<h3>无卡 / 官方标配</h3><p>适合已有存储卡，或者只想先体验相机本体的用户。包装包含相机、两块电池和基础配件。</p><ul><li>推荐：已有高速 SD 卡</li><li>优势：入手成本最低</li><li>注意：收到后需自行准备存储卡</li></ul>'
+  WHEN 'SD-CAM-NC-WIDE' THEN '<h3>无卡 / 加广角镜套装</h3><p>适合已有存储卡，同时经常自拍、拍室内空间或旅行建筑的用户。广角镜能让画面容纳更多背景。</p><ul><li>推荐：Vlog、自拍、室内拍摄</li><li>优势：画面视角更宽</li><li>注意：广角镜需单独收纳，避免刮花</li></ul>'
+  WHEN 'SD-CAM-32-STD' THEN '<h3>32G / 官方标配</h3><p>适合以照片为主、偶尔拍 1080P 视频的入门用户。32G 容量便于即开即用，但长视频需要及时导出。</p><ul><li>推荐：日常随拍、学习摄影</li><li>优势：不用另配卡</li><li>注意：不建议长时间 4K 录制</li></ul>'
+  WHEN 'SD-CAM-32-WIDE' THEN '<h3>32G / 加广角镜套装</h3><p>适合短途旅行、探店自拍和轻量 Vlog。广角镜提升取景灵活度，32G 卡适合短片段拍摄。</p><ul><li>推荐：探店、自拍、短途旅行</li><li>优势：配件更完整</li><li>注意：视频素材建议当天备份</li></ul>'
+  WHEN 'SD-CAM-64-STD' THEN '<h3>64G / 官方标配</h3><p>适合大多数入门用户，照片和短视频都有一定容量余量。官方标配更轻便，适合随身携带。</p><ul><li>推荐：日常照片 + 短视频</li><li>优势：容量更均衡</li><li>注意：高规格视频仍建议定期导出</li></ul>'
+  WHEN 'SD-CAM-64-WIDE' THEN '<h3>64G / 加广角镜套装</h3><p>适合需要更宽取景，又不想频繁换卡的用户。旅行记录、合照和室内场景会更实用。</p><ul><li>推荐：旅行、合照、室内空间</li><li>优势：容量和配件都更均衡</li><li>注意：广角边缘可能有轻微畸变</li></ul>'
+  WHEN 'SD-CAM-128-STD' THEN '<h3>128G / 官方标配</h3><p>适合视频素材较多，但不需要广角镜的用户。128G 更适合连续几天旅行记录。</p><ul><li>推荐：旅行拍照、较多视频素材</li><li>优势：容量更放心</li><li>注意：长视频仍建议准备备用电池</li></ul>'
+  ELSE '<h3>128G / 加广角镜套装</h3><p>适合主要做 Vlog、旅行记录和自拍的用户。容量、广角镜和双电池组合更适合外出拍摄。</p><ul><li>推荐：Vlog、旅行、自拍</li><li>优势：配件和容量更完整</li><li>注意：长时间录制会增加耗电和发热</li></ul>'
+END
+FROM `mb_goods_sku`
+WHERE `goods_id` = 2
+  AND `sku_code` IN ('SD-CAM-NC-STD', 'SD-CAM-NC-WIDE', 'SD-CAM-32-STD', 'SD-CAM-32-WIDE', 'SD-CAM-64-STD', 'SD-CAM-64-WIDE', 'SD-CAM-128-STD', 'SD-CAM-128-WIDE');
+
 -- ---- 商品 3：卡西欧时尚女表（多规格） ----
-INSERT INTO `mb_goods` (`id`, `category_id`, `brand_id`, `name`, `subtitle`, `main_image`, `images`, `spec_type`, `spec_meta`, `description`, `price`, `market_price`, `stock`, `sales`, `unit`, `is_on_sale`, `is_recommend`, `sort`) VALUES
-(3, 7, NULL,
+INSERT INTO `mb_goods` (`id`, `category_id`, `brand_id`, `name`, `subtitle`, `main_image`, `images`, `spec_type`, `spec_meta`, `price`, `market_price`, `stock`, `sales`, `unit`, `is_on_sale`, `is_recommend`, `sort`) VALUES
+(3,
+ 7,
+ NULL,
  '卡西欧女表 时尚优雅简约指针防水复古石英手表 学生情侣节日礼物',
  '【七夕礼物】顺丰包邮 · 2 年质保 · 官方授权 · 礼盒包装',
  47,
  '[47]',
  2,
  '[{"name":"表带款式","add_pic":1,"values":[{"value":"经典银","pic":47},{"value":"玫瑰金","pic":47},{"value":"复古金","pic":47},{"value":"雪域白","pic":47}]}]',
- '<div class="goods-detail"><h3>产品参数</h3><table border="0" cellpadding="6"><tr><td>品牌</td><td>卡西欧 Casio</td></tr><tr><td>机芯</td><td>日本进口高精度石英机芯</td></tr><tr><td>表壳材质</td><td>不锈钢</td></tr><tr><td>表盘直径</td><td>23mm</td></tr><tr><td>表带宽度</td><td>13mm</td></tr><tr><td>防水深度</td><td>30m 生活防水</td></tr><tr><td>玻璃</td><td>高硬度矿物玻璃</td></tr><tr><td>包装</td><td>官方礼盒 · 含纸袋</td></tr></table><h3>送礼推荐</h3><p>· 送女友 · 送闺蜜 · 送妈妈 · 送老婆</p><p>· 适合节日：七夕 · 情人节 · 生日 · 圣诞 · 周年纪念</p><h3>售后服务</h3><p>· 全国联保 2 年 · 7 天无理由 · 假一赔十</p><p>· 顺丰包邮 · 标配品牌礼盒 · 可代写贺卡</p></div>',
- 269.00, 459.00, 3284, 612, '块',
- 1, 1, 4);
+ 269.00,
+ 459.00,
+ 3284,
+ 612,
+ '块',
+ 1,
+ 1,
+ 4);
+
+INSERT INTO `mb_goods_detail` (`goods_id`, `description`) VALUES
+(3, '<h3>商品说明</h3><p>这款女表采用小表盘和细表带设计，整体风格偏简洁通勤。表盘直径约 23mm，适合喜欢轻巧、低调配饰的用户。</p><p>金属表带可根据手腕围度拆卸表节，建议收到后先试戴确认松紧，再根据实际情况调整。</p><h3>规格参数</h3><ul><li>机芯：石英机芯</li><li>表壳：不锈钢材质</li><li>表盘：约 23mm</li><li>表带：金属表带，宽约 13mm</li><li>玻璃：矿物玻璃</li><li>防水：30m 生活防水</li><li>包装：礼盒包装，含说明资料</li></ul><h3>佩戴说明</h3><p>生活防水可应对洗手、少量雨水等日常场景，不建议佩戴洗澡、游泳或接触热水蒸汽。</p><p>金属表带长期接触汗液后建议用干布擦拭，避免香水、清洁剂等化学品直接接触表壳和表带。</p><h3>售后说明</h3><p>发货前会检查走时和外观。签收后请先核对表盘、表带、包装和配件是否完整。</p><p>非人为质量问题按平台售后规则处理；已拆膜、明显佩戴痕迹或配件缺失会影响退换。</p>');
 
 INSERT INTO `mb_goods_sku` (`goods_id`, `spec_values`, `price`, `market_price`, `cost_price`, `stock`, `sku_code`, `image`) VALUES
 (3, '经典银', 269.00, 459.00, 138.00, 1186, 'CAS-W-SLV', 47),
@@ -89,17 +154,29 @@ INSERT INTO `mb_goods_sku` (`goods_id`, `spec_values`, `price`, `market_price`, 
 (3, '雪域白', 269.00, 459.00, 138.00, 1016, 'CAS-W-WHT', 47);
 
 -- ---- 商品 4：美式复古阔腿牛仔裤（多规格） ----
-INSERT INTO `mb_goods` (`id`, `category_id`, `brand_id`, `name`, `subtitle`, `main_image`, `images`, `spec_type`, `spec_meta`, `description`, `price`, `market_price`, `stock`, `sales`, `unit`, `is_on_sale`, `is_recommend`, `is_new`, `is_hot`, `sort`) VALUES
-(4, 8, NULL,
+INSERT INTO `mb_goods` (`id`, `category_id`, `brand_id`, `name`, `subtitle`, `main_image`, `images`, `spec_type`, `spec_meta`, `price`, `market_price`, `stock`, `sales`, `unit`, `is_on_sale`, `is_recommend`, `is_new`, `is_hot`, `sort`) VALUES
+(4,
+ 8,
+ NULL,
  '美式复古阔腿牛仔裤女 2024 夏季新款 高腰宽松显瘦垂感喇叭拖地裙裤',
  '【限时直降】顺丰包邮 · 7 天无理由 · 24 小时发货 · 三色五款可选',
  28,
  '[28,24,25,26,27]',
  2,
  '[{"name":"尺寸","add_pic":0,"values":[{"value":"XS","pic":""},{"value":"S","pic":""},{"value":"M","pic":""},{"value":"L","pic":""}]},{"name":"颜色分类","add_pic":1,"values":[{"value":"复古蓝","pic":24},{"value":"复古蓝【高质量版】","pic":25},{"value":"浅色","pic":26},{"value":"浅色【高质量版】","pic":26},{"value":"复古蓝【大口袋】","pic":27}]}]',
- '<div class="goods-detail"><h3>产品参数</h3><table border="0" cellpadding="6"><tr><td>面料成分</td><td>棉 78% / 涤纶 20% / 氨纶 2%</td></tr><tr><td>裤型</td><td>阔腿喇叭裤</td></tr><tr><td>腰型</td><td>高腰</td></tr><tr><td>裤长</td><td>拖地长款（约 102cm）</td></tr><tr><td>洗水工艺</td><td>石磨水洗</td></tr><tr><td>风格</td><td>美式复古 / Y2K</td></tr><tr><td>适用季节</td><td>春夏秋</td></tr><tr><td>洗涤方式</td><td>30℃ 以下机洗 · 反面晾晒</td></tr></table><h3>设计亮点</h3><p>1. 高腰收腰版型，显瘦 5cm 不夸张</p><p>2. 垂感面料，告别厚重感，夏天也能穿</p><p>3. 美式做旧色系，洗水自然不掉色</p><p>4. 加大复古口袋款，工装感拉满</p><h3>售后说明</h3><p>· 顺丰快递 · 24h 内发货</p><p>· 7 天无理由退换</p><p>· 质量问题免费换新</p></div>',
- 49.98, 200.00, 29867, 869, '件',
- 1, 1, 1, 1, 5);
+ 49.98,
+ 200.00,
+ 29867,
+ 869,
+ '件',
+ 1,
+ 1,
+ 1,
+ 1,
+ 5);
+
+INSERT INTO `mb_goods_detail` (`goods_id`, `description`) VALUES
+(4, '<h3>商品说明</h3><p>这条牛仔裤为高腰阔腿版型，裤腿从大腿到裤脚留有余量，适合搭配短上衣、衬衫或宽松卫衣。洗水颜色做旧感较明显，每批面料的水洗纹理会有轻微差异。</p><p>拖地裤长对身高和鞋底厚度有要求，建议购买前对照尺码表测量腰围、臀围和裤长。介于两个尺码之间时，偏喜欢宽松可选大一码。</p><h3>面料与尺码</h3><ul><li>成分：棉 78% / 涤纶 20% / 氨纶 2%</li><li>版型：高腰阔腿，裤脚微喇</li><li>裤长：拖地长款，约 102cm 起</li><li>厚度：中等厚度，春夏秋可穿</li><li>弹力：微弹</li><li>工艺：石磨水洗，做旧纹理随机</li><li>洗涤：建议反面冷水洗涤，深浅色分开</li></ul><h3>试穿建议</h3><p>高腰位置建议贴合腰围，臀胯处保留 2-4cm 活动量会更舒适。拖地长度更适合搭配厚底鞋或休闲鞋。</p><p>浅色款视觉更清爽，深色复古蓝更耐搭；带大口袋款风格更偏工装。</p><h3>退换说明</h3><p>服装类商品试穿时请保持吊牌、包装和配件完整，避免香水、洗涤或明显穿着痕迹。</p><p>尺码不合适可按平台规则申请换码；水洗纹理、轻微线头不属于质量问题。</p>');
 
 INSERT INTO `mb_goods_sku` (`goods_id`, `spec_values`, `price`, `market_price`, `cost_price`, `stock`, `sku_code`, `image`) VALUES
 (4, 'XS,复古蓝',              59.98, 200.00, 24.00,  956, 'JEANS-XS-DB',     24),
@@ -124,17 +201,27 @@ INSERT INTO `mb_goods_sku` (`goods_id`, `spec_values`, `price`, `market_price`, 
 (4, 'L,复古蓝【大口袋】',      49.98, 200.00, 22.00, 1900, 'JEANS-L-DB-BIG',  27);
 
 -- ---- 商品 5：小木槿意式轻奢单人沙发椅（多规格） ----
-INSERT INTO `mb_goods` (`id`, `category_id`, `brand_id`, `name`, `subtitle`, `main_image`, `images`, `spec_type`, `spec_meta`, `description`, `price`, `market_price`, `stock`, `sales`, `unit`, `is_on_sale`, `is_recommend`, `sort`) VALUES
-(5, 10, NULL,
+INSERT INTO `mb_goods` (`id`, `category_id`, `brand_id`, `name`, `subtitle`, `main_image`, `images`, `spec_type`, `spec_meta`, `price`, `market_price`, `stock`, `sales`, `unit`, `is_on_sale`, `is_recommend`, `sort`) VALUES
+(5,
+ 10,
+ NULL,
  '小木槿意式轻奢设计师款单人沙发椅 极简客厅 网红老虎椅 休闲椅五色可选',
  '【设计师款】送货到家 · 一年质保 · 木箱包装 · 一年内有质量问题可退换',
  40,
  '[40,36,37,38,39]',
  2,
  '[{"name":"颜色","add_pic":1,"values":[{"value":"橙色","pic":40},{"value":"墨绿色","pic":36},{"value":"浅灰","pic":37},{"value":"米白色","pic":38},{"value":"卡其色","pic":39}]}]',
- '<div class="goods-detail"><h3>产品参数</h3><table border="0" cellpadding="6"><tr><td>主材</td><td>实木框架 · 高密度海绵</td></tr><tr><td>面料</td><td>科技布 · 易打理</td></tr><tr><td>颜色</td><td>五色可选 · 莫兰迪色系</td></tr><tr><td>尺寸</td><td>长 76 × 宽 75 × 高 84 cm</td></tr><tr><td>坐高</td><td>43cm</td></tr><tr><td>承重</td><td>≤ 200kg</td></tr><tr><td>风格</td><td>意式极简 · 现代轻奢</td></tr><tr><td>适用空间</td><td>客厅 / 卧室 / 书房 / 阳台</td></tr></table><h3>设计亮点</h3><p>1. M 字曲线扶手 · 设计师原创版型 · 区别于市面流水款</p><p>2. 高弹海绵 + 实木腿 · 久坐不塌陷 · 承重稳固</p><p>3. 科技布面料 · 防水防污 · 湿巾可擦</p><p>4. 五种莫兰迪配色 · 不挑装修风格 · 单椅即点睛</p><h3>送货说明</h3><p>· 全国包邮 · 偏远地区联系客服</p><p>· 木箱专业打包 · 物流送货上门</p><p>· 可预约送货时间 · 安装免费上门服务</p></div>',
- 899.00, 1399.00, 7445, 102, '把',
- 1, 1, 1);
+ 899.00,
+ 1399.00,
+ 7445,
+ 102,
+ '把',
+ 1,
+ 1,
+ 1);
+
+INSERT INTO `mb_goods_detail` (`goods_id`, `description`) VALUES
+(5, '<h3>商品说明</h3><p>这款单人沙发椅适合放在客厅边位、卧室阅读角、书房或阳台休闲区。整体坐感偏支撑，不是软塌型懒人沙发，适合短休、阅读和会客使用。</p><p>扶手线条较宽，视觉存在感强，建议预留至少 85cm × 85cm 的摆放空间，避免靠墙或靠柜时显得局促。</p><h3>规格与材质</h3><ul><li>框架：实木框架</li><li>填充：高密度海绵，坐感偏中等支撑</li><li>面料：科技布，日常可用湿布轻擦</li><li>尺寸：长 76 × 宽 75 × 高 84 cm</li><li>坐高：约 43cm</li><li>承重：建议 200kg 内使用</li><li>颜色：橙色、墨绿色、浅灰、米白、卡其</li></ul><h3>选色建议</h3><p>橙色适合作为空间点缀，墨绿色更适合复古或深色木质空间；浅灰和米白更百搭，但浅色面料需要更注意日常清洁。</p><p>不同屏幕和室内光线会影响颜色观感，实物颜色以自然光下为准。</p><h3>收货与维护</h3><p>沙发为大件商品，发货前会做外箱加固。签收前建议先检查外包装，如发现明显破损请拍照留证。</p><p>日常避免长时间暴晒，液体泼洒后请及时吸干并轻擦。大面积污渍建议联系专业清洁服务处理。</p>');
 
 INSERT INTO `mb_goods_sku` (`goods_id`, `spec_values`, `price`, `market_price`, `cost_price`, `stock`, `sku_code`, `image`) VALUES
 (5, '橙色',   899.00, 1399.00, 420.00, 1474, 'SOFA-OR', 40),
@@ -144,17 +231,28 @@ INSERT INTO `mb_goods_sku` (`goods_id`, `spec_values`, `price`, `market_price`, 
 (5, '卡其色', 899.00, 1399.00, 420.00, 1500, 'SOFA-KH', 39);
 
 -- ---- 商品 6：米维卡现代意式轻奢梳妆台（多规格） ----
-INSERT INTO `mb_goods` (`id`, `category_id`, `brand_id`, `name`, `subtitle`, `main_image`, `images`, `spec_type`, `spec_meta`, `description`, `price`, `market_price`, `stock`, `sales`, `unit`, `is_on_sale`, `is_recommend`, `is_new`, `sort`) VALUES
-(6, 10, NULL,
+INSERT INTO `mb_goods` (`id`, `category_id`, `brand_id`, `name`, `subtitle`, `main_image`, `images`, `spec_type`, `spec_meta`, `price`, `market_price`, `stock`, `sales`, `unit`, `is_on_sale`, `is_recommend`, `is_new`, `sort`) VALUES
+(6,
+ 10,
+ NULL,
  '米维卡现代意式轻奢梳妆台 卧室主卧化妆桌 收纳一体木面妆台 含妆凳套装',
  '【设计师联名】送货上门 · 12 期免息 · 5 年质保 · 含 LED 化妆镜',
  46,
  '[46,42,43,44,45]',
  2,
  '[{"name":"套装","add_pic":1,"values":[{"value":"单妆台","pic":46},{"value":"妆台+妆凳","pic":42}]},{"name":"配色","add_pic":0,"values":[{"value":"原木面","pic":""},{"value":"胡桃面","pic":""}]}]',
- '<div class="goods-detail"><h3>产品参数</h3><table border="0" cellpadding="6"><tr><td>主材</td><td>E1 级环保中纤板 · 真木皮饰面</td></tr><tr><td>五金</td><td>百隆静音滑轨 · 缓冲铰链</td></tr><tr><td>桌面尺寸</td><td>长 100 × 宽 45 × 高 76 cm</td></tr><tr><td>抽屉</td><td>3 层大容量 · 独立分区收纳</td></tr><tr><td>化妆镜</td><td>LED 三色温补光 · 可调角度</td></tr><tr><td>电源</td><td>USB-C · 适配各种充电头</td></tr><tr><td>风格</td><td>现代意式 · 轻奢极简</td></tr><tr><td>适用空间</td><td>主卧 · 次卧 · 衣帽间</td></tr></table><h3>设计亮点</h3><p>1. 真木皮饰面工艺 · 高级感肉眼可见 · 区别于贴纸款</p><p>2. 三层独立抽屉 · 内置分隔板 · 化妆品分类一目了然</p><p>3. 集成 LED 三色温化妆镜 · 早晚妆光线还原真实</p><p>4. 隐藏电源插座 · USB-C 接口 · 桌面整洁不杂乱</p><h3>包装清单</h3><p>· 妆台 × 1 · 化妆镜 × 1 · 妆凳 × 1（仅套装款）· 安装工具 × 1 · 安装说明 × 1</p><h3>送货安装</h3><p>· 全国包邮 · 物流送货到楼下 · 偏远地区咨询客服</p><p>· 木箱专业打包 · 安装服务可加购</p><p>· 5 年质保 · 终身维护</p></div>',
- 4998.00, 9999.00, 1976, 167, '套',
- 1, 1, 1, 6);
+ 4998.00,
+ 9999.00,
+ 1976,
+ 167,
+ '套',
+ 1,
+ 1,
+ 1,
+ 6);
+
+INSERT INTO `mb_goods_detail` (`goods_id`, `description`) VALUES
+(6, '<h3>商品说明</h3><p>这款梳妆台适合主卧、次卧或衣帽间使用，桌面宽度约 100cm，能放下常用护肤品、化妆镜和小型收纳盒。套装款含妆凳，单妆台款不含妆凳。</p><p>桌面和柜体为板材结构，搬运和安装时请避免拖拽边角。靠墙摆放时建议预留插座位置，方便镜灯和小电器使用。</p><h3>规格与材质</h3><ul><li>主材：E1 级环保中纤板，表面木纹饰面</li><li>桌面：约 100 × 45 cm</li><li>高度：约 76 cm</li><li>抽屉：三层收纳，可放护肤品和小件工具</li><li>化妆镜：LED 三色温，亮度按键调节</li><li>五金：静音滑轨和缓冲铰链</li><li>配色：原木面 / 胡桃面</li></ul><h3>安装与使用</h3><p>商品为大件家具，建议两人配合安装。安装前先核对板件、五金和说明书，避免一次性拆散全部包装后混淆配件。</p><p>镜灯接电后如不使用，建议关闭开关并保持桌面干燥。桌面沾水后请及时擦干，避免长时间积水。</p><h3>包装清单</h3><p>单妆台款包含妆台、化妆镜、五金包和安装说明；套装款额外包含妆凳。偏远地区或上楼安装服务以页面提示和客服确认为准。</p>');
 
 INSERT INTO `mb_goods_sku` (`goods_id`, `spec_values`, `price`, `market_price`, `cost_price`, `stock`, `sku_code`, `image`) VALUES
 (6, '单妆台,原木面',     4998.00,  9999.00, 2400.00, 487, 'VAN-S-OAK',  46),

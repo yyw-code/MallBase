@@ -76,7 +76,9 @@ VALUES
   (68, 1, 'image', 'category-watch-premium.png', 'category-watch-premium.png', 'image/png', 'png', 2042913, 'd716b75b2839da385051a5ee66131051bdfd17505c53babfc05d3ae7cbb56c44', 1254, 1254, 'goods', 'system', 0, 'public', 1, '{"source":"demo"}'),
   (69, 1, 'image', 'category-womenswear-premium.png', 'category-womenswear-premium.png', 'image/png', 'png', 448988, '75ee7c05ddc22db078f139eb3c82616bdcd380e105a892396f208b5d1f63e69c', 1254, 1254, 'goods', 'system', 0, 'public', 1, '{"source":"demo"}'),
   (70, 1, 'image', 'category-menswear-premium.png', 'category-menswear-premium.png', 'image/png', 'png', 448829, '9aada95125d47abc8df7b96cb607a8eaf9f6d97bd6560f9eae5f72eb10845c87', 1254, 1254, 'goods', 'system', 0, 'public', 1, '{"source":"demo"}'),
-  (71, 1, 'image', 'category-furniture-premium.png', 'category-furniture-premium.png', 'image/png', 'png', 421869, '73afd34753882446911bdd2dc7469bce4b1fa892dc69096ccfd834a8a4039fa8', 1254, 1254, 'goods', 'system', 0, 'public', 1, '{"source":"demo"}');
+  (71, 1, 'image', 'category-furniture-premium.png', 'category-furniture-premium.png', 'image/png', 'png', 421869, '73afd34753882446911bdd2dc7469bce4b1fa892dc69096ccfd834a8a4039fa8', 1254, 1254, 'goods', 'system', 0, 'public', 1, '{"source":"demo"}'),
+  (72, 1, 'video', 'laptop-01-demo.mp4', 'laptop-01-demo.mp4', 'video/mp4', 'mp4', 32827, '5d42a45a7c45084d7ce99c6ff0e82a7088221c6003bde17684e955a9da43fb4d', 720, 720, 'goods', 'system', 0, 'public', 1, '{"source":"demo","duration":4}'),
+  (73, 1, 'video', 'camera-01-demo.mp4', 'camera-01-demo.mp4', 'video/mp4', 'mp4', 56061, '4a365bf8b6c73cb0ec61e5b918a5d4d9bd2110479200dccc645a888b822388a9', 720, 720, 'goods', 'system', 0, 'public', 1, '{"source":"demo","duration":4}');
 
 INSERT INTO `mb_upload_asset_location`
   (`asset_id`, `driver`, `path`, `url_prefix`, `bucket`, `region`, `endpoint`, `is_primary`, `status`, `etag`, `size`, `meta`)
@@ -151,4 +153,6 @@ VALUES
   (68, 'static', 'static/demo/category-watch-premium.png', '', '', '', '', 1, 1, '', 2042913, '{"source":"demo"}'),
   (69, 'static', 'static/demo/category-womenswear-premium.png', '', '', '', '', 1, 1, '', 448988, '{"source":"demo"}'),
   (70, 'static', 'static/demo/category-menswear-premium.png', '', '', '', '', 1, 1, '', 448829, '{"source":"demo"}'),
-  (71, 'static', 'static/demo/category-furniture-premium.png', '', '', '', '', 1, 1, '', 421869, '{"source":"demo"}');
+  (71, 'static', 'static/demo/category-furniture-premium.png', '', '', '', '', 1, 1, '', 421869, '{"source":"demo"}'),
+  (72, 'static', 'static/demo/laptop-01-demo.mp4', '', '', '', '', 1, 1, '', 32827, '{"source":"demo","duration":4}'),
+  (73, 'static', 'static/demo/camera-01-demo.mp4', '', '', '', '', 1, 1, '', 56061, '{"source":"demo","duration":4}');

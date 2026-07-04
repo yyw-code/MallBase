@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace app\service\client\goods;
 
 use app\model\goods\Goods;
+use app\model\goods\GoodsDetail;
 use app\model\goods\GoodsSku;
+use app\model\goods\GoodsSkuDetail;
 use app\model\goods\GoodsTagRelation;
 use app\service\upload\AssetHydrator;
 use mall_base\base\BaseService;
@@ -79,13 +81,15 @@ class ClientGoodsService extends BaseService
         }
 
         $data = $goods->toArray();
+        $data['description'] = $this->getGoodsDescription($goodsId);
         // SKU 列表(只暴露上架的 SKU)
-        $data['skus'] = $this->model(GoodsSku::class)
+        $skus = $this->model(GoodsSku::class)
             ->where('goods_id', $goodsId)
             ->where('status', 1)
             ->order('id', 'asc')
             ->select()
             ->toArray();
+        $data['skus'] = $this->appendSkuDescriptions($skus);
         $data['guarantees'] = $this->goodsGuarantees();
 
         return app()->make(AssetHydrator::class)->hydrateGoodsDetail($data);
@@ -244,5 +248,40 @@ class ClientGoodsService extends BaseService
         }
 
         return $items !== [] ? $items : $default;
+    }
+
+    private function getGoodsDescription(int $goodsId): string
+    {
+        return (string) ($this->model(GoodsDetail::class)
+            ->where('goods_id', $goodsId)
+            ->value('description') ?? '');
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $skus
+     * @return array<int, array<string, mixed>>
+     */
+    private function appendSkuDescriptions(array $skus): array
+    {
+        if ($skus === []) {
+            return [];
+        }
+
+        $skuIds = array_values(array_filter(array_map(static fn(array $sku): int => (int) ($sku['id'] ?? 0), $skus)));
+        if ($skuIds === []) {
+            return $skus;
+        }
+
+        $detailMap = $this->model(GoodsSkuDetail::class)
+            ->whereIn('sku_id', $skuIds)
+            ->column('description', 'sku_id');
+
+        foreach ($skus as &$sku) {
+            $skuId = (int) ($sku['id'] ?? 0);
+            $sku['description'] = (string) ($detailMap[$skuId] ?? '');
+        }
+        unset($sku);
+
+        return $skus;
     }
 }

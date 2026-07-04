@@ -6,7 +6,9 @@ namespace app\service\admin\goods;
 use app\model\goods\Goods;
 use app\model\goods\GoodsBrand;
 use app\model\goods\GoodsCategory;
+use app\model\goods\GoodsDetail;
 use app\model\goods\GoodsSku;
+use app\model\goods\GoodsSkuDetail;
 use app\model\goods\GoodsTag;
 use app\model\goods\GoodsTagRelation;
 use app\model\setting\FreightTemplate;
@@ -26,6 +28,9 @@ class GoodsService extends BaseService
     private const DEFAULT_SINGLE_SKU_SPEC_VALUES = '';
     private const EXPORT_LIMIT = 5000;
     private const STOCK_WARNING_THRESHOLD = 10;
+    private const GOODS_POINTS_REWARD_MODES = ['global', 'disabled', 'ratio', 'fixed', 'sku'];
+    private const SKU_POINTS_REWARD_MODES = ['inherit', 'disabled', 'ratio', 'fixed'];
+    private const MEMBER_BENEFIT_MODES = ['global', 'disabled', 'level_discount', 'sku_price'];
 
     /**
      * 默认 Model 类名
@@ -217,7 +222,8 @@ class GoodsService extends BaseService
         $skus = $this->model(GoodsSku::class)
             ->where('goods_id', $id)
             ->select();
-        $result['skus'] = $skus->toArray();
+        $result['description'] = $this->getGoodsDescription($id);
+        $result['skus'] = $this->appendSkuDescriptions($skus->toArray());
 
         // 获取商品标签
         $tagIds = $this->model(GoodsTagRelation::class)
@@ -247,7 +253,10 @@ class GoodsService extends BaseService
     {
         $data = $this->normalizeImages($data);
         $data = $this->normalizeMainImage($data);
+        $data = $this->normalizePointsReward($data);
+        $data = $this->normalizeMemberBenefit($data);
         $data = $this->normalizeSpecType($data);
+        $data = $this->normalizeSkuDetailEnabled($data);
         $data = $this->normalizeSpecMeta($data);
         $data = $this->normalizeSkusBySpecType($data);
 
@@ -260,13 +269,15 @@ class GoodsService extends BaseService
         // 事务内只做写入
         $goodsId = $this->transaction(function () use ($data) {
             $goods = $this->model();
-            $goods->save($data);
+            $goods->save($this->buildGoodsSaveData($data));
 
             $goodsId = $goods->id;
 
+            $this->syncGoodsDetail((int) $goodsId, (string) ($data['description'] ?? ''));
+
             // 同步SKU
             if (!empty($data['skus']) && is_array($data['skus'])) {
-                $this->syncSkus($goodsId, $data['skus']);
+                $this->syncSkus($goodsId, $data['skus'], (int) ($data['sku_detail_enabled'] ?? 0) === 1);
             }
 
             // 同步标签
@@ -297,7 +308,10 @@ class GoodsService extends BaseService
     {
         $data = $this->normalizeImages($data);
         $data = $this->normalizeMainImage($data);
+        $data = $this->normalizePointsReward($data);
+        $data = $this->normalizeMemberBenefit($data);
         $data = $this->normalizeSpecType($data);
+        $data = $this->normalizeSkuDetailEnabled($data);
         $data = $this->normalizeSpecMeta($data);
         $data = $this->normalizeSkusBySpecType($data);
 
@@ -315,11 +329,13 @@ class GoodsService extends BaseService
 
         // 事务内只做写入
         $this->transaction(function () use ($goods, $data) {
-            $goods->save($data);
+            $goods->save($this->buildGoodsSaveData($data));
+
+            $this->syncGoodsDetail((int) $goods->id, (string) ($data['description'] ?? ''));
 
             // 同步SKU
             if (array_key_exists('skus', $data) && is_array($data['skus'])) {
-                $this->syncSkus((int) $goods->id, $data['skus']);
+                $this->syncSkus((int) $goods->id, $data['skus'], (int) ($data['sku_detail_enabled'] ?? 0) === 1);
             }
 
             // 同步标签
@@ -379,6 +395,8 @@ class GoodsService extends BaseService
         }
 
         return (bool) $this->transaction(function () use ($id, $goods) {
+            $this->model(GoodsDetail::class)->where('goods_id', $id)->delete();
+            $this->model(GoodsSkuDetail::class)->where('goods_id', $id)->delete();
             $this->model(GoodsSku::class)->where('goods_id', $id)->delete();
             $this->model(GoodsTagRelation::class)->where('goods_id', $id)->delete();
 
@@ -434,13 +452,13 @@ class GoodsService extends BaseService
      * @param int $goodsId 商品 ID
      * @param array $skus SKU数据
      */
-    protected function syncSkus(int $goodsId, array $skus): void
+    protected function syncSkus(int $goodsId, array $skus, bool $syncDescriptions = true): void
     {
         $this->model(GoodsSku::class)->where('goods_id', $goodsId)->delete();
+        $this->model(GoodsSkuDetail::class)->where('goods_id', $goodsId)->delete();
 
         if (!empty($skus)) {
-            $normalizer = app()->make(AssetIdNormalizer::class);
-            $data = array_map(function ($sku) use ($goodsId, $normalizer) {
+            $data = array_map(function ($sku) use ($goodsId) {
                 return [
                     'goods_id' => $goodsId,
                     'spec_values' => $sku['spec_values'] ?? '',
@@ -448,13 +466,107 @@ class GoodsService extends BaseService
                     'price' => $sku['price'] ?? 0,
                     'market_price' => $sku['market_price'] ?? 0,
                     'stock' => $sku['stock'] ?? 0,
-                    'image' => $normalizer->normalizeSingle($sku['image'] ?? ''),
+                    'image' => $this->normalizeNullableAssetId($sku['image'] ?? ''),
                     'status' => $sku['status'] ?? 1,
                     'weight' => isset($sku['weight']) && $sku['weight'] !== '' ? (float) $sku['weight'] : null,
+                    'points_reward_mode' => $this->normalizeSkuPointsRewardMode((string) ($sku['points_reward_mode'] ?? 'inherit')),
+                    'points_reward_ratio' => max(0, (int) ($sku['points_reward_ratio'] ?? 0)),
+                    'points_reward_fixed' => max(0, (int) ($sku['points_reward_fixed'] ?? 0)),
+                    'member_price' => $this->normalizeNullablePrice($sku['member_price'] ?? null),
                 ];
             }, $skus);
             $this->model(GoodsSku::class)->saveAll($data);
+            $savedSkus = $this->model(GoodsSku::class)
+                ->where('goods_id', $goodsId)
+                ->order('id', 'asc')
+                ->select()
+                ->toArray();
+            if ($syncDescriptions) {
+                $this->syncSkuDetails($goodsId, $savedSkus, $skus);
+            }
         }
+    }
+
+    protected function buildGoodsSaveData(array $data): array
+    {
+        unset($data['description'], $data['skus'], $data['tag_ids']);
+        return $data;
+    }
+
+    protected function syncGoodsDetail(int $goodsId, string $description): void
+    {
+        $description = mb_substr($description, 0, 16000);
+        $this->model(GoodsDetail::class)->where('goods_id', $goodsId)->delete();
+
+        if ($description === '') {
+            return;
+        }
+
+        $detail = $this->model(GoodsDetail::class);
+        $detail->save([
+            'goods_id' => $goodsId,
+            'description' => $description,
+        ]);
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $savedSkus
+     * @param array<int, array<string, mixed>> $inputSkus
+     */
+    protected function syncSkuDetails(int $goodsId, array $savedSkus, array $inputSkus): void
+    {
+        $rows = [];
+        foreach ($savedSkus as $index => $sku) {
+            $description = mb_substr((string) ($inputSkus[$index]['description'] ?? ''), 0, 16000);
+            if ($description === '') {
+                continue;
+            }
+
+            $rows[] = [
+                'goods_id' => $goodsId,
+                'sku_id' => (int) ($sku['id'] ?? 0),
+                'description' => $description,
+            ];
+        }
+
+        if ($rows !== []) {
+            $this->model(GoodsSkuDetail::class)->saveAll($rows);
+        }
+    }
+
+    protected function getGoodsDescription(int $goodsId): string
+    {
+        return (string) ($this->model(GoodsDetail::class)
+            ->where('goods_id', $goodsId)
+            ->value('description') ?? '');
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $skus
+     * @return array<int, array<string, mixed>>
+     */
+    protected function appendSkuDescriptions(array $skus): array
+    {
+        if ($skus === []) {
+            return [];
+        }
+
+        $skuIds = array_values(array_filter(array_map(static fn(array $sku): int => (int) ($sku['id'] ?? 0), $skus)));
+        if ($skuIds === []) {
+            return $skus;
+        }
+
+        $detailMap = $this->model(GoodsSkuDetail::class)
+            ->whereIn('sku_id', $skuIds)
+            ->column('description', 'sku_id');
+
+        foreach ($skus as &$sku) {
+            $skuId = (int) ($sku['id'] ?? 0);
+            $sku['description'] = (string) ($detailMap[$skuId] ?? '');
+        }
+        unset($sku);
+
+        return $skus;
     }
 
     /**
@@ -580,15 +692,101 @@ class GoodsService extends BaseService
 
     protected function buildSingleSpecSku(array $data): array
     {
+        $submittedSku = is_array($data['skus'][0] ?? null) ? $data['skus'][0] : [];
+
         return [
             'spec_values' => self::DEFAULT_SINGLE_SKU_SPEC_VALUES,
             'sku_code' => '',
             'price' => $data['price'] ?? 0,
             'market_price' => $data['market_price'] ?? 0,
             'stock' => $data['stock'] ?? 0,
-            'image' => app()->make(AssetIdNormalizer::class)->normalizeSingle($data['main_image'] ?? ''),
+            'image' => $this->normalizeNullableAssetId($data['main_image'] ?? null),
+            'description' => '',
             'status' => $data['status'] ?? 1,
+            'points_reward_mode' => $this->normalizeSkuPointsRewardMode((string) ($submittedSku['points_reward_mode'] ?? 'inherit')),
+            'points_reward_ratio' => max(0, (int) ($submittedSku['points_reward_ratio'] ?? 0)),
+            'points_reward_fixed' => max(0, (int) ($submittedSku['points_reward_fixed'] ?? 0)),
+            'member_price' => $this->normalizeNullablePrice($submittedSku['member_price'] ?? null),
         ];
+    }
+
+    protected function normalizePointsReward(array $data): array
+    {
+        $data['points_reward_mode'] = $this->normalizeGoodsPointsRewardMode((string) ($data['points_reward_mode'] ?? 'global'));
+        $data['points_reward_ratio'] = max(0, (int) ($data['points_reward_ratio'] ?? 0));
+        $data['points_reward_fixed'] = max(0, (int) ($data['points_reward_fixed'] ?? 0));
+
+        foreach (($data['skus'] ?? []) as &$sku) {
+            if (!is_array($sku)) {
+                continue;
+            }
+            $sku['points_reward_mode'] = $this->normalizeSkuPointsRewardMode((string) ($sku['points_reward_mode'] ?? 'inherit'));
+            $sku['points_reward_ratio'] = max(0, (int) ($sku['points_reward_ratio'] ?? 0));
+            $sku['points_reward_fixed'] = max(0, (int) ($sku['points_reward_fixed'] ?? 0));
+        }
+        unset($sku);
+
+        return $data;
+    }
+
+    protected function normalizeMemberBenefit(array $data): array
+    {
+        $data['member_benefit_mode'] = $this->normalizeMemberBenefitMode((string) ($data['member_benefit_mode'] ?? 'global'));
+
+        foreach (($data['skus'] ?? []) as &$sku) {
+            if (!is_array($sku)) {
+                continue;
+            }
+            $sku['member_price'] = $this->normalizeNullablePrice($sku['member_price'] ?? null);
+        }
+        unset($sku);
+
+        return $data;
+    }
+
+    protected function normalizeSkuDetailEnabled(array $data): array
+    {
+        $specType = (int) ($data['spec_type'] ?? Goods::SPEC_TYPE_SINGLE);
+        $data['sku_detail_enabled'] = $specType === Goods::SPEC_TYPE_MULTI && !empty($data['sku_detail_enabled']) ? 1 : 0;
+        return $data;
+    }
+
+    protected function normalizeNullableAssetId(mixed $value): int|string|null
+    {
+        $normalized = app()->make(AssetIdNormalizer::class)->normalizeSingle($value);
+        return $normalized === '' ? null : $normalized;
+    }
+
+    private function normalizeGoodsPointsRewardMode(string $mode): string
+    {
+        $mode = trim($mode);
+        if ($mode === 'inherit' || $mode === '') {
+            return 'global';
+        }
+
+        return in_array($mode, self::GOODS_POINTS_REWARD_MODES, true) ? $mode : 'global';
+    }
+
+    private function normalizeSkuPointsRewardMode(string $mode): string
+    {
+        return in_array($mode, self::SKU_POINTS_REWARD_MODES, true) ? $mode : 'inherit';
+    }
+
+    private function normalizeMemberBenefitMode(string $mode): string
+    {
+        return in_array($mode, self::MEMBER_BENEFIT_MODES, true) ? $mode : 'global';
+    }
+
+    private function normalizeNullablePrice(mixed $value): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+        if (!is_numeric($value)) {
+            return null;
+        }
+
+        return number_format(max(0, (float) $value), 2, '.', '');
     }
 
     /**
@@ -751,10 +949,10 @@ class GoodsService extends BaseService
     protected function normalizeMainImage(array $data): array
     {
         if (array_key_exists('main_image', $data)) {
-            $data['main_image'] = app()->make(AssetIdNormalizer::class)->normalizeSingle($data['main_image']);
+            $data['main_image'] = $this->normalizeNullableAssetId($data['main_image']);
         }
         if (array_key_exists('main_video', $data)) {
-            $data['main_video'] = app()->make(AssetIdNormalizer::class)->normalizeSingle($data['main_video']);
+            $data['main_video'] = $this->normalizeNullableAssetId($data['main_video']);
         }
 
         if (!empty($data['main_image'])) {
@@ -801,6 +999,14 @@ class GoodsService extends BaseService
         foreach ($this->extractAssetIdsFromHtml((string) ($data['description'] ?? '')) as $id) {
             $values[] = $id;
         }
+        foreach ((array) ($data['skus'] ?? []) as $sku) {
+            if (!is_array($sku)) {
+                continue;
+            }
+            foreach ($this->extractAssetIdsFromHtml((string) ($sku['description'] ?? '')) as $id) {
+                $values[] = $id;
+            }
+        }
 
         return $normalizer->collectAssetIds($values);
     }
@@ -830,6 +1036,16 @@ class GoodsService extends BaseService
         }
         $assetService->syncUsage('goods', $goodsId, 'skus.image', $skuImageIds);
         $assetService->syncUsage('goods', $goodsId, 'description', $this->extractAssetIdsFromHtml((string) ($data['description'] ?? '')));
+        $skuDescriptionAssetIds = [];
+        foreach ((array) ($data['skus'] ?? []) as $sku) {
+            if (is_array($sku)) {
+                $skuDescriptionAssetIds = array_merge(
+                    $skuDescriptionAssetIds,
+                    $this->extractAssetIdsFromHtml((string) ($sku['description'] ?? ''))
+                );
+            }
+        }
+        $assetService->syncUsage('goods', $goodsId, 'skus.description', $skuDescriptionAssetIds);
     }
 
     /**
