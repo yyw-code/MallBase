@@ -229,6 +229,10 @@ const SCHEME_TABS: Array<{
   },
 ];
 
+const OVERVIEW_SCHEME_PAGE_SIZE = 12;
+const OVERVIEW_SCHEME_PAGE_SIZE_OPTIONS = ['12', '24', '48'];
+const EDITOR_SCHEME_LIST_LIMIT = 100;
+
 const HOME_MODULES: Array<{
   desc: string;
   icon: string;
@@ -694,6 +698,7 @@ const selectedIndex = ref(0);
 const selectedSchemeId = ref<null | number>(null);
 const schemeSettingsOpen = ref(false);
 const schemeList = ref<ClientDecorateApi.SchemeItem[]>([]);
+const schemeListTotal = ref(0);
 const themeList = ref<ClientThemeApi.ThemeItem[]>([]);
 const previewCategoryTree = ref<GoodsCategoryApi.CategoryItem[]>([]);
 const previewGoods = ref<GoodsApi.GoodsItem | null>(null);
@@ -708,6 +713,12 @@ const overviewSchemes = reactive<
   home: [],
   profile: [],
   tabbar: [],
+});
+const overviewPager = reactive({
+  keyword: '',
+  limit: OVERVIEW_SCHEME_PAGE_SIZE,
+  page: 1,
+  total: 0,
 });
 const iconPrefix = ref('ant-design');
 const mouseDrag = ref<null | {
@@ -984,17 +995,11 @@ const isReadonlyScheme = computed(() => isSystemScheme.value);
 const schemeSummary = computed(() => ({
   activeName:
     schemeList.value.find((item) => item.is_active === 1)?.name || '未设置',
-  count: schemeList.value.length,
+  count: schemeListTotal.value || schemeList.value.length,
 }));
 
 const overviewActiveSchemes = computed(
   () => overviewSchemes[activeType.value] || [],
-);
-
-const overviewActiveName = computed(
-  () =>
-    overviewActiveSchemes.value.find((item) => item.is_active === 1)?.name ||
-    '未设置',
 );
 
 const schemeSelectOptions = computed(() =>
@@ -2920,21 +2925,69 @@ const loadPreviewBusinessData = async () => {
   }
 };
 
+const getOverviewListParams = () => {
+  const keyword = overviewPager.keyword.trim();
+  return {
+    keyword: keyword || undefined,
+    limit: overviewPager.limit,
+    page: overviewPager.page,
+    type: activeType.value,
+  };
+};
+
+const fetchOverviewSchemes = async (): Promise<void> => {
+  const result = await getClientDecorateSchemeListApi(getOverviewListParams());
+  const total = Number(result.total || 0);
+  const list = result.list || [];
+  if (list.length === 0 && total > 0 && overviewPager.page > 1) {
+    overviewPager.page = Math.max(1, Math.ceil(total / overviewPager.limit));
+    await fetchOverviewSchemes();
+    return;
+  }
+
+  overviewPager.total = total;
+  overviewSchemes[activeType.value] = list;
+};
+
 const loadOverviewSchemes = async () => {
   overviewLoading.value = true;
   try {
-    const result = await getClientDecorateSchemeListApi({
-      limit: 100,
-      page: 1,
-      type: activeType.value,
-    });
-    overviewSchemes[activeType.value] = result.list || [];
+    await fetchOverviewSchemes();
   } catch (error) {
     console.error('加载装修卡片失败:', error);
     message.error('加载装修卡片失败');
   } finally {
     overviewLoading.value = false;
   }
+};
+
+const resetOverviewPager = () => {
+  overviewPager.keyword = '';
+  overviewPager.limit = OVERVIEW_SCHEME_PAGE_SIZE;
+  overviewPager.page = 1;
+  overviewPager.total = 0;
+};
+
+const handleOverviewKeywordChange = (keyword: string) => {
+  overviewPager.keyword = keyword;
+};
+
+const handleOverviewSearch = async (keyword: string) => {
+  overviewPager.keyword = keyword.trim();
+  overviewPager.page = 1;
+  await loadOverviewSchemes();
+};
+
+const handleOverviewReset = async () => {
+  resetOverviewPager();
+  await loadOverviewSchemes();
+};
+
+const handleOverviewPageChange = async (page: number, pageSize: number) => {
+  const nextPageSize = Number(pageSize || overviewPager.limit);
+  overviewPager.page = nextPageSize === overviewPager.limit ? page : 1;
+  overviewPager.limit = nextPageSize;
+  await loadOverviewSchemes();
 };
 
 const loadSchemeDetail = async (id: number) => {
@@ -2974,20 +3027,35 @@ const loadSchemeDetail = async (id: number) => {
   });
   ensureFloatingSingleItemId();
   selectedIndex.value = 0;
+  return detail;
 };
 
 const loadSchemes = async () => {
   loading.value = true;
   try {
     const result = await getClientDecorateSchemeListApi({
-      limit: 100,
+      limit: EDITOR_SCHEME_LIST_LIMIT,
       page: 1,
       type: activeType.value,
     });
+    schemeListTotal.value = Number(result.total || 0);
     schemeList.value = result.list || [];
-    overviewSchemes[activeType.value] = schemeList.value;
+    if (selectedSchemeId.value) {
+      const selectedInList = schemeList.value.find(
+        (item) => item.id === selectedSchemeId.value,
+      );
+      const selected = selectedInList
+        ? await loadSchemeDetail(selectedInList.id)
+        : await loadSchemeDetail(selectedSchemeId.value);
+      if (!selectedInList) {
+        schemeList.value = [
+          selected,
+          ...schemeList.value.filter((item) => item.id !== selected.id),
+        ];
+      }
+      return;
+    }
     const next =
-      schemeList.value.find((item) => item.id === selectedSchemeId.value) ||
       schemeList.value.find((item) => item.is_active === 1) ||
       schemeList.value[0];
     if (next) {
@@ -3824,6 +3892,7 @@ watch(
     viewMode.value = 'overview';
     selectedSchemeId.value = null;
     selectedIndex.value = 0;
+    resetOverviewPager();
     await Promise.all([loadSchemes(), refreshOverview()]);
   },
 );
@@ -3902,12 +3971,6 @@ onBeforeUnmount(resetMouseDrag);
       </div>
 
       <a-space v-if="viewMode === 'overview'" wrap>
-        <a-button :loading="overviewLoading" @click="refreshOverview">
-          刷新预览
-        </a-button>
-        <a-button type="primary" @click="handleOverviewCreate">
-          新建方案
-        </a-button>
         <a-button @click="router.push('/client/theme')">主题设置</a-button>
       </a-space>
 
@@ -3954,7 +4017,6 @@ onBeforeUnmount(resetMouseDrag);
 
     <DecorateSchemeList
       v-if="viewMode === 'overview'"
-      :active-help="activeTabMeta.help"
       :active-type-label="activeTypeLabel"
       :current-theme-tokens="currentThemeTokens"
       :get-overview-scheme-module-summary="getOverviewSchemeModuleSummary"
@@ -3967,9 +4029,13 @@ onBeforeUnmount(resetMouseDrag);
       :get-scheme-status-label="getSchemeStatusLabel"
       :get-scheme-type-label="getSchemeTypeLabel"
       :is-readonly-overview-scheme="isReadonlyOverviewScheme"
-      :overview-active-name="overviewActiveName"
       :overview-active-schemes="overviewActiveSchemes"
+      :overview-keyword="overviewPager.keyword"
       :overview-loading="overviewLoading"
+      :overview-page="overviewPager.page"
+      :overview-page-size="overviewPager.limit"
+      :overview-page-size-options="OVERVIEW_SCHEME_PAGE_SIZE_OPTIONS"
+      :overview-total="overviewPager.total"
       :preview-category-tree="previewCategoryTree"
       :preview-goods="previewGoods"
       :preview-goods-list="previewGoodsList"
@@ -3978,6 +4044,11 @@ onBeforeUnmount(resetMouseDrag);
       @create="handleOverviewCreate"
       @delete="handleOverviewDelete"
       @edit="handleOverviewEdit"
+      @page-change="handleOverviewPageChange"
+      @refresh="refreshOverview"
+      @reset="handleOverviewReset"
+      @search="handleOverviewSearch"
+      @update:overview-keyword="handleOverviewKeywordChange"
     />
 
     <DecorateEditor

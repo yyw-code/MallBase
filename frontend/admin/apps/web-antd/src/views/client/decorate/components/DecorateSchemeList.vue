@@ -43,7 +43,6 @@ type SchemePreviewMeta = {
 };
 
 defineProps<{
-  activeHelp: string;
   activeTypeLabel: string;
   currentThemeTokens: Record<string, string>;
   getOverviewSchemeModules: (
@@ -68,21 +67,48 @@ defineProps<{
   getSchemeStatusLabel: (scheme: ClientDecorateApi.SchemeItem) => string;
   getSchemeTypeLabel: (type: ClientDecorateApi.SchemeType) => string;
   isReadonlyOverviewScheme: (scheme: ClientDecorateApi.SchemeItem) => boolean;
-  overviewActiveName: string;
   overviewActiveSchemes: ClientDecorateApi.SchemeItem[];
+  overviewKeyword: string;
   overviewLoading: boolean;
+  overviewPage: number;
+  overviewPageSize: number;
+  overviewPageSizeOptions: string[];
+  overviewTotal: number;
   previewCategoryTree: GoodsCategoryApi.CategoryItem[];
   previewGoods: GoodsApi.GoodsItem | null;
   previewGoodsList: GoodsApi.GoodsItem[];
 }>();
 
-defineEmits<{
+const emit = defineEmits<{
   activate: [scheme: ClientDecorateApi.SchemeItem];
   copy: [scheme: ClientDecorateApi.SchemeItem];
   create: [];
   delete: [scheme: ClientDecorateApi.SchemeItem];
   edit: [scheme: ClientDecorateApi.SchemeItem];
+  'page-change': [page: number, pageSize: number];
+  reset: [];
+  refresh: [];
+  search: [keyword: string];
+  'update:overviewKeyword': [keyword: string];
 }>();
+
+const handleKeywordUpdate = (keyword: string) => {
+  emit('update:overviewKeyword', keyword);
+};
+
+const handleSearch = (keyword: string) => {
+  emit('search', keyword);
+};
+
+const handleReset = () => {
+  emit('reset');
+};
+
+const handlePageChange = (page: number, pageSize: number) => {
+  emit('page-change', page, pageSize);
+};
+
+const renderPaginationTotal = (total: number) => `共 ${total} 个方案`;
 
 const getFloatingConfig = (scheme: ClientDecorateApi.SchemeItem) =>
   normalizeFloatingPreviewConfig(
@@ -237,264 +263,312 @@ const toPreviewPx = (
 </script>
 
 <template>
-  <a-spin :spinning="overviewLoading">
-    <div class="decorate-overview-head">
-      <div>
-        <strong>{{ activeTypeLabel }}方案列表</strong>
-        <span>{{ activeHelp }}</span>
+  <a-card>
+    <template #title>
+      <div class="decorate-card-title">
+        <span>{{ activeTypeLabel }}方案列表</span>
+        <a-space>
+          <a-button @click="$emit('refresh')">刷新</a-button>
+          <a-button type="primary" @click="$emit('create')">新建方案</a-button>
+        </a-space>
       </div>
-      <a-space>
-        <a-tag color="green">当前使用：{{ overviewActiveName }}</a-tag>
-        <a-tag>{{ overviewActiveSchemes.length }} 个方案</a-tag>
-      </a-space>
-    </div>
+    </template>
 
-    <section v-if="overviewActiveSchemes.length > 0" class="decorate-overview">
-      <article
-        v-for="scheme in overviewActiveSchemes"
-        :key="scheme.id"
-        class="decorate-overview-card"
-        :class="[
-          `decorate-overview-card--${scheme.type}`,
-          { 'decorate-overview-card--active': scheme.is_active === 1 },
-        ]"
+    <a-form layout="inline" class="mb-4 decorate-overview-form">
+      <a-form-item label="关键词">
+        <a-input
+          :value="overviewKeyword"
+          allow-clear
+          placeholder="搜索方案名称 / 描述"
+          style="width: 220px"
+          @press-enter="handleSearch(overviewKeyword)"
+          @update:value="handleKeywordUpdate"
+        />
+      </a-form-item>
+      <a-form-item>
+        <a-button
+          type="primary"
+          :loading="overviewLoading"
+          @click="handleSearch(overviewKeyword)"
+        >
+          搜索
+        </a-button>
+        <a-button class="ml-2" @click="handleReset">重置</a-button>
+      </a-form-item>
+    </a-form>
+
+    <a-spin :spinning="overviewLoading">
+      <section
+        v-if="overviewActiveSchemes.length > 0"
+        class="decorate-overview"
       >
-        <div class="decorate-overview-card__head">
-          <div>
-            <div class="decorate-overview-card__tags">
-              <a-tag
-                v-if="scheme.is_active === 1"
-                class="decorate-overview-card__active-tag"
-                color="blue"
-              >
-                当前使用
-              </a-tag>
-              <a-tag>{{ getSchemeTypeLabel(scheme.type) }}</a-tag>
-              <a-tag
-                v-if="scheme.is_active !== 1"
-                :color="getSchemeStatusColor(scheme)"
-              >
-                {{ getSchemeStatusLabel(scheme) }}
-              </a-tag>
+        <article
+          v-for="scheme in overviewActiveSchemes"
+          :key="scheme.id"
+          class="decorate-overview-card"
+          :class="[
+            `decorate-overview-card--${scheme.type}`,
+            { 'decorate-overview-card--active': scheme.is_active === 1 },
+          ]"
+        >
+          <div class="decorate-overview-card__head">
+            <div>
+              <div class="decorate-overview-card__tags">
+                <a-tag
+                  v-if="scheme.is_active === 1"
+                  class="decorate-overview-card__active-tag"
+                  color="blue"
+                >
+                  当前使用
+                </a-tag>
+                <a-tag>{{ getSchemeTypeLabel(scheme.type) }}</a-tag>
+                <a-tag
+                  v-if="scheme.is_active !== 1"
+                  :color="getSchemeStatusColor(scheme)"
+                >
+                  {{ getSchemeStatusLabel(scheme) }}
+                </a-tag>
+              </div>
+              <strong>{{ scheme.name }}</strong>
+              <span>{{ getOverviewSchemeUpdateLabel(scheme) }}</span>
             </div>
-            <strong>{{ scheme.name }}</strong>
-            <span>{{ getOverviewSchemeUpdateLabel(scheme) }}</span>
           </div>
-        </div>
 
-        <div class="decorate-overview-card__preview">
-          <div
-            class="decorate-overview-card__preview-phone"
-            :class="{
-              'decorate-overview-card__preview-phone--tabbar':
-                scheme.type === 'tabbar',
-              'decorate-overview-card__preview-phone--floating':
-                scheme.type === 'floating',
-            }"
-          >
+          <div class="decorate-overview-card__preview">
             <div
-              v-if="scheme.type === 'floating'"
-              class="floating-component-preview floating-component-preview--overview"
+              class="decorate-overview-card__preview-phone"
+              :class="{
+                'decorate-overview-card__preview-phone--tabbar':
+                  scheme.type === 'tabbar',
+                'decorate-overview-card__preview-phone--floating':
+                  scheme.type === 'floating',
+              }"
             >
-              <div class="floating-component-preview__surface">
-                <div
-                  v-if="
-                    getFloatingConfig(scheme).enabled !== false &&
-                    getFloatingPreviewItems(getOverviewSchemeModules(scheme))
-                      .length > 0
-                  "
-                  class="floating-component-preview__cluster"
-                  :class="[
-                    `floating-component-preview__cluster--${getFloatingPreviewSide(getFloatingConfig(scheme))}`,
-                    {
-                      'floating-component-preview__cluster--open':
+              <div
+                v-if="scheme.type === 'floating'"
+                class="floating-component-preview floating-component-preview--overview"
+              >
+                <div class="floating-component-preview__surface">
+                  <div
+                    v-if="
+                      getFloatingConfig(scheme).enabled !== false &&
+                      getFloatingPreviewItems(getOverviewSchemeModules(scheme))
+                        .length > 0
+                    "
+                    class="floating-component-preview__cluster"
+                    :class="[
+                      `floating-component-preview__cluster--${getFloatingPreviewSide(getFloatingConfig(scheme))}`,
+                      {
+                        'floating-component-preview__cluster--open':
+                          !isFloatingPreviewSingleMode(
+                            getFloatingConfig(scheme),
+                            getOverviewSchemeModules(scheme),
+                          ),
+                        'floating-component-preview__cluster--single':
+                          isFloatingPreviewSingleMode(
+                            getFloatingConfig(scheme),
+                            getOverviewSchemeModules(scheme),
+                          ),
+                      },
+                    ]"
+                    :style="
+                      getFloatingPreviewPositionStyle(getFloatingConfig(scheme))
+                    "
+                  >
+                    <div
+                      v-if="
                         !isFloatingPreviewSingleMode(
                           getFloatingConfig(scheme),
                           getOverviewSchemeModules(scheme),
-                        ),
-                      'floating-component-preview__cluster--single':
-                        isFloatingPreviewSingleMode(
-                          getFloatingConfig(scheme),
-                          getOverviewSchemeModules(scheme),
-                        ),
-                    },
-                  ]"
-                  :style="
-                    getFloatingPreviewPositionStyle(getFloatingConfig(scheme))
-                  "
-                >
-                  <div
-                    v-if="
-                      !isFloatingPreviewSingleMode(
-                        getFloatingConfig(scheme),
-                        getOverviewSchemeModules(scheme),
-                      )
-                    "
-                    class="floating-component-preview__menu"
-                  >
-                    <button
-                      v-for="item in getFloatingPreviewItems(
-                        getOverviewSchemeModules(scheme),
-                      )"
-                      :key="item.id || item.path || item.text"
-                      class="floating-component-preview__item"
-                      type="button"
-                    >
-                      <img
-                        v-if="getFloatingPreviewIcon(item)"
-                        alt=""
-                        :class="{
-                          'floating-component-preview__icon--preset':
-                            isFloatingPresetIcon(item),
-                        }"
-                        :src="getFloatingPreviewIcon(item)"
-                      />
-                      <span
-                        v-else
-                        class="floating-component-preview__icon-empty"
-                      >
-                        未传
-                      </span>
-                    </button>
-                  </div>
-
-                  <button
-                    class="floating-component-preview__trigger"
-                    type="button"
-                  >
-                    <template
-                      v-if="
-                        isFloatingPreviewSingleMode(
-                          getFloatingConfig(scheme),
-                          getOverviewSchemeModules(scheme),
-                        ) &&
-                        getFloatingPreviewMainItem(
-                          getOverviewSchemeModules(scheme),
-                          getFloatingConfig(scheme),
                         )
                       "
+                      class="floating-component-preview__menu"
                     >
-                      <img
+                      <button
+                        v-for="item in getFloatingPreviewItems(
+                          getOverviewSchemeModules(scheme),
+                        )"
+                        :key="item.id || item.path || item.text"
+                        class="floating-component-preview__item"
+                        type="button"
+                      >
+                        <img
+                          v-if="getFloatingPreviewIcon(item)"
+                          alt=""
+                          :class="{
+                            'floating-component-preview__icon--preset':
+                              isFloatingPresetIcon(item),
+                          }"
+                          :src="getFloatingPreviewIcon(item)"
+                        />
+                        <span
+                          v-else
+                          class="floating-component-preview__icon-empty"
+                        >
+                          未传
+                        </span>
+                      </button>
+                    </div>
+
+                    <button
+                      class="floating-component-preview__trigger"
+                      type="button"
+                    >
+                      <template
                         v-if="
-                          getFloatingPreviewIcon(
-                            getFloatingPreviewMainItem(
-                              getOverviewSchemeModules(scheme),
-                              getFloatingConfig(scheme),
-                            ),
+                          isFloatingPreviewSingleMode(
+                            getFloatingConfig(scheme),
+                            getOverviewSchemeModules(scheme),
+                          ) &&
+                          getFloatingPreviewMainItem(
+                            getOverviewSchemeModules(scheme),
+                            getFloatingConfig(scheme),
                           )
                         "
-                        alt=""
-                        :class="{
-                          'floating-component-preview__icon--preset':
-                            isFloatingPresetIcon(
+                      >
+                        <img
+                          v-if="
+                            getFloatingPreviewIcon(
                               getFloatingPreviewMainItem(
                                 getOverviewSchemeModules(scheme),
                                 getFloatingConfig(scheme),
                               ),
-                            ),
-                        }"
+                            )
+                          "
+                          alt=""
+                          :class="{
+                            'floating-component-preview__icon--preset':
+                              isFloatingPresetIcon(
+                                getFloatingPreviewMainItem(
+                                  getOverviewSchemeModules(scheme),
+                                  getFloatingConfig(scheme),
+                                ),
+                              ),
+                          }"
+                          :src="
+                            getFloatingPreviewIcon(
+                              getFloatingPreviewMainItem(
+                                getOverviewSchemeModules(scheme),
+                                getFloatingConfig(scheme),
+                              ),
+                            )
+                          "
+                        />
+                        <span
+                          v-else
+                          class="floating-component-preview__icon-empty"
+                        >
+                          未传
+                        </span>
+                      </template>
+                      <img
+                        v-else
+                        alt=""
                         :src="
-                          getFloatingPreviewIcon(
-                            getFloatingPreviewMainItem(
-                              getOverviewSchemeModules(scheme),
-                              getFloatingConfig(scheme),
-                            ),
-                          )
+                          getFloatingPreviewMainIcon(getFloatingConfig(scheme))
                         "
                       />
-                      <span
-                        v-else
-                        class="floating-component-preview__icon-empty"
-                      >
-                        未传
-                      </span>
-                    </template>
-                    <img
-                      v-else
-                      alt=""
-                      :src="getFloatingPreviewMainIcon(getFloatingConfig(scheme))"
-                    />
-                  </button>
+                    </button>
+                  </div>
+
+                  <a-empty
+                    v-else
+                    class="floating-component-preview__empty"
+                    :description="
+                      getFloatingConfig(scheme).enabled === false
+                        ? '悬浮按钮已停用'
+                        : '暂无可展示入口'
+                    "
+                  />
                 </div>
-
-                <a-empty
-                  v-else
-                  class="floating-component-preview__empty"
-                  :description="
-                    getFloatingConfig(scheme).enabled === false
-                      ? '悬浮按钮已停用'
-                      : '暂无可展示入口'
-                  "
-                />
               </div>
+
+              <ClientPhonePreview
+                v-else
+                :category-tree="previewCategoryTree"
+                :current-path="getSchemePreviewMeta(scheme).currentPath"
+                :goods="previewGoods"
+                :goods-list="previewGoodsList"
+                :kind="getSchemePreviewMeta(scheme).previewKind"
+                :modules="getOverviewSchemeModules(scheme)"
+                :tabbar-items="getOverviewSchemeTabbarItems(scheme)"
+                :theme-tokens="currentThemeTokens"
+                :title="getSchemeTypeLabel(scheme.type)"
+              />
             </div>
-
-            <ClientPhonePreview
-              v-else
-              :category-tree="previewCategoryTree"
-              :current-path="getSchemePreviewMeta(scheme).currentPath"
-              :goods="previewGoods"
-              :goods-list="previewGoodsList"
-              :kind="getSchemePreviewMeta(scheme).previewKind"
-              :modules="getOverviewSchemeModules(scheme)"
-              :tabbar-items="getOverviewSchemeTabbarItems(scheme)"
-              :theme-tokens="currentThemeTokens"
-              :title="getSchemeTypeLabel(scheme.type)"
-            />
           </div>
-        </div>
 
-        <div class="decorate-overview-card__foot">
-          <div class="decorate-overview-card__meta">
-            <p>{{ getSchemePreviewMeta(scheme).cardDesc }}</p>
-            <p :title="getOverviewSchemeModuleTitle(scheme)">
-              模块：{{ getOverviewSchemeModuleSummary(scheme) }}
-            </p>
+          <div class="decorate-overview-card__foot">
+            <div class="decorate-overview-card__meta">
+              <p>{{ getSchemePreviewMeta(scheme).cardDesc }}</p>
+              <p :title="getOverviewSchemeModuleTitle(scheme)">
+                模块：{{ getOverviewSchemeModuleSummary(scheme) }}
+              </p>
+            </div>
+            <div class="decorate-overview-card__actions">
+              <span
+                v-if="isReadonlyOverviewScheme(scheme)"
+                class="decorate-overview-card__readonly"
+              >
+                系统内置
+              </span>
+              <a-button
+                v-if="!isReadonlyOverviewScheme(scheme)"
+                type="link"
+                size="small"
+                @click="$emit('edit', scheme)"
+              >
+                编辑
+              </a-button>
+              <a-button type="link" size="small" @click="$emit('copy', scheme)">
+                复制
+              </a-button>
+              <a-button
+                type="link"
+                size="small"
+                :disabled="scheme.is_active === 1"
+                @click="$emit('activate', scheme)"
+              >
+                设为当前
+              </a-button>
+              <a-button
+                v-if="!isReadonlyOverviewScheme(scheme)"
+                danger
+                type="link"
+                size="small"
+                @click="$emit('delete', scheme)"
+              >
+                删除
+              </a-button>
+            </div>
           </div>
-          <div class="decorate-overview-card__actions">
-            <span
-              v-if="isReadonlyOverviewScheme(scheme)"
-              class="decorate-overview-card__readonly"
-            >
-              系统内置
-            </span>
-            <a-button
-              v-if="!isReadonlyOverviewScheme(scheme)"
-              type="link"
-              size="small"
-              @click="$emit('edit', scheme)"
-            >
-              编辑
-            </a-button>
-            <a-button type="link" size="small" @click="$emit('copy', scheme)">
-              复制
-            </a-button>
-            <a-button
-              type="link"
-              size="small"
-              :disabled="scheme.is_active === 1"
-              @click="$emit('activate', scheme)"
-            >
-              设为当前
-            </a-button>
-            <a-button
-              v-if="!isReadonlyOverviewScheme(scheme)"
-              danger
-              type="link"
-              size="small"
-              @click="$emit('delete', scheme)"
-            >
-              删除
-            </a-button>
-          </div>
-        </div>
-      </article>
-    </section>
+        </article>
+      </section>
 
-    <div v-else class="decorate-overview-empty">
-      <a-empty :description="`${activeTypeLabel}暂无方案`">
-        <a-button type="primary" @click="$emit('create')">新建方案</a-button>
-      </a-empty>
+      <div v-else class="decorate-overview-empty">
+        <a-empty
+          :description="
+            overviewKeyword.trim()
+              ? '没有找到匹配的方案'
+              : `${activeTypeLabel}暂无方案`
+          "
+        >
+          <a-button type="primary" @click="$emit('create')">新建方案</a-button>
+        </a-empty>
+      </div>
+    </a-spin>
+
+    <div v-if="overviewTotal > 0" class="decorate-overview-pagination">
+      <a-pagination
+        :current="overviewPage"
+        :page-size="overviewPageSize"
+        :page-size-options="overviewPageSizeOptions"
+        show-size-changer
+        :show-total="renderPaginationTotal"
+        :total="overviewTotal"
+        @change="handlePageChange"
+        @show-size-change="handlePageChange"
+      />
     </div>
-  </a-spin>
+  </a-card>
 </template>
