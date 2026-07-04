@@ -7,6 +7,7 @@ namespace app\service\order;
 use app\model\order\RefundOrder;
 use app\common\enum\OperatorType;
 use app\common\enum\RefundOrderStatus;
+use app\service\user\UserPointsAccountService;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
 
@@ -120,6 +121,10 @@ class RefundOrderStatusMachine extends BaseService
             }
 
             $refund->save();
+
+            if ($toStatus === RefundOrderStatus::COMPLETED) {
+                app()->make(UserPointsAccountService::class)->rollbackRefundCompleted($refund);
+            }
         });
     }
 }

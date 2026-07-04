@@ -10,6 +10,7 @@ use app\model\order\Cart;
 use app\model\order\Order;
 use app\model\order\OrderItem;
 use app\model\order\OrderLog;
+use app\model\order\OrderMemberDiscount;
 use app\model\order\PaymentLog;
 use app\model\order\RefundOrder;
 use app\model\setting\FreightTemplate;
@@ -20,6 +21,8 @@ use app\service\order\OrderSettingService;
 use app\service\order\OrderStatusMachine;
 use app\service\order\StockService;
 use app\service\order\WechatPrepayCloseService;
+use app\service\user\UserMemberService;
+use app\service\user\UserPointsAccountService;
 use app\service\upload\AssetHydrator;
 use app\model\user\UserAddress;
 use app\common\enum\OperatorType;
@@ -71,7 +74,9 @@ class OrderService extends BaseService
         array $cartIds,
         int $addressId,
         ?string $buyerRemark = null,
-        ?string $idempotencyKey = null
+        ?string $idempotencyKey = null,
+        bool $usePoints = false,
+        int $pointsUsed = 0
     ): array {
         $this->assertUserId($userId);
 
@@ -89,7 +94,7 @@ class OrderService extends BaseService
         try {
             $address = $this->assertOwnedAddress($userId, $addressId);
             $items   = $this->loadSelectedCartItems($userId, $cartIds);
-            $amounts = $this->calcAmounts($items, $this->regionPathOf($address));
+            $amounts = $this->calcAmounts($items, $this->regionPathOf($address), $userId, $usePoints, $pointsUsed);
 
             $result = $this->persistOrder(
                 userId: $userId,
@@ -120,7 +125,9 @@ class OrderService extends BaseService
         array $items,
         int $addressId,
         ?string $buyerRemark = null,
-        ?string $idempotencyKey = null
+        ?string $idempotencyKey = null,
+        bool $usePoints = false,
+        int $pointsUsed = 0
     ): array {
         $this->assertUserId($userId);
         if ($items === []) {
@@ -140,7 +147,7 @@ class OrderService extends BaseService
         try {
             $address = $this->assertOwnedAddress($userId, $addressId);
             $resolved = $this->loadDirectBuyItems($items);
-            $amounts  = $this->calcAmounts($resolved, $this->regionPathOf($address));
+            $amounts  = $this->calcAmounts($resolved, $this->regionPathOf($address), $userId, $usePoints, $pointsUsed);
 
             $result = $this->persistOrder(
                 userId: $userId,
@@ -173,7 +180,7 @@ class OrderService extends BaseService
      *   address: array<string, mixed>
      * }
      */
-    public function preview(int $userId, string $source, array $cartIds, array $items, int $addressId): array
+    public function preview(int $userId, string $source, array $cartIds, array $items, int $addressId, bool $usePoints = false, int $pointsUsed = 0): array
     {
         $this->assertUserId($userId);
 
@@ -189,7 +196,7 @@ class OrderService extends BaseService
             $resolved = $this->loadDirectBuyItems($items);
         }
 
-        $amounts = $this->calcAmounts($resolved, $regionPath);
+        $amounts = $this->calcAmounts($resolved, $regionPath, $userId, $usePoints, $pointsUsed);
 
         $previewItems = array_map(static fn(array $i): array => [
             'sku_id'               => $i['sku_id'],
@@ -219,6 +226,8 @@ class OrderService extends BaseService
             'freight_amount'  => $amounts['freight_amount'],
             'discount_amount' => $amounts['discount_amount'],
             'pay_amount'      => $amounts['pay_amount'],
+            'member_discount' => $amounts['member_discount'] ?? null,
+            'points_deduction' => $amounts['points_deduction'] ?? null,
             'address'         => [
                 'id'       => $addressId,
                 'name'     => $address['name'],
@@ -451,7 +460,7 @@ class OrderService extends BaseService
      * 事务内：原子化下单落库
      *
      * @param array<int, array{sku_id:int, goods_id:int, goods_name:string, goods_image:string, sku_spec:string, unit_price:string, quantity:int, cart_id?:int}> $items
-     * @param array{total_amount:string, freight_amount:string, discount_amount:string, pay_amount:string} $amounts
+     * @param array{total_amount:string, freight_amount:string, discount_amount:string, pay_amount:string, item_discounts?:array<int,string>, member_discount?:array<string,mixed>, points_deduction?:array<string,mixed>} $amounts
      * @param array<int, int> $cartIdsToClear
      * @return array{order_id:int, sn:string}
      */
@@ -504,10 +513,42 @@ class OrderService extends BaseService
                 ),
             ]);
 
+            $pointsDeduction = $amounts['points_deduction'] ?? [];
+            $usedPoints = (int) ($pointsDeduction['used_points'] ?? 0);
+            if ($usedPoints > 0) {
+                app()->make(UserPointsAccountService::class)->deductForOrder(
+                    userId: $userId,
+                    orderId: (int) $order->id,
+                    orderSn: (string) $order->sn,
+                    usedPoints: $usedPoints,
+                    discountAmount: (string) ($pointsDeduction['discount_amount'] ?? '0.00'),
+                );
+            }
+
+            $memberDiscount = $amounts['member_discount'] ?? [];
+            $memberDiscountAmount = (string) ($memberDiscount['discount_amount'] ?? '0.00');
+            if ($this->decimalToCents($memberDiscountAmount) > 0) {
+                $level = is_array($memberDiscount['level'] ?? null) ? $memberDiscount['level'] : [];
+                $this->model(OrderMemberDiscount::class)->save([
+                    'order_id' => (int) $order->id,
+                    'order_sn' => (string) $order->sn,
+                    'user_id' => $userId,
+                    'level_id' => (int) ($level['id'] ?? 0),
+                    'level_name' => (string) ($level['name'] ?? ''),
+                    'discount_amount' => $memberDiscountAmount,
+                ]);
+            }
+
             // 3. 落订单项快照
             $itemModel = app()->make(OrderItem::class);
-            foreach ($items as $item) {
+            $itemDiscounts = $amounts['item_discounts'] ?? $this->allocateItemDiscounts($items, $amounts['discount_amount']);
+            foreach ($items as $index => $item) {
                 $subtotal = bcmul($item['unit_price'], (string) $item['quantity'], 2);
+                $itemDiscount = $itemDiscounts[$index] ?? '0.00';
+                $itemPayAmount = $this->centsToDecimal(max(
+                    0,
+                    $this->decimalToCents($subtotal) - $this->decimalToCents($itemDiscount)
+                ));
                 $itemModel->newInstance()->save([
                     'order_id'        => (int) $order->id,
                     'goods_id'        => $item['goods_id'],
@@ -518,8 +559,8 @@ class OrderService extends BaseService
                     'unit_price'      => $item['unit_price'],
                     'quantity'        => $item['quantity'],
                     'subtotal'        => $subtotal,
-                    'discount_amount' => '0.00',
-                    'pay_amount'      => $subtotal,
+                    'discount_amount' => $itemDiscount,
+                    'pay_amount'      => $itemPayAmount,
                 ]);
             }
 
@@ -653,6 +694,8 @@ class OrderService extends BaseService
                 'quantity'            => $qty,
                 'freight_template_id' => (int) ($goods['freight_template_id'] ?? 0),
                 'weight'              => (float) ($sku['weight'] ?? 0),
+                'member_benefit_mode' => (string) ($goods['member_benefit_mode'] ?? 'global'),
+                'member_price'        => $sku['member_price'] ?? null,
             ];
         }
         return $items;
@@ -704,6 +747,8 @@ class OrderService extends BaseService
                 'quantity'            => (int) $it['quantity'],
                 'freight_template_id' => (int) ($goods['freight_template_id'] ?? 0),
                 'weight'              => (float) ($sku['weight'] ?? 0),
+                'member_benefit_mode' => (string) ($goods['member_benefit_mode'] ?? 'global'),
+                'member_price'        => $sku['member_price'] ?? null,
             ];
         }
         return $resolved;
@@ -713,12 +758,12 @@ class OrderService extends BaseService
      * 计算订单金额
      *
      * 运费按 freight_template_id 分组、各组接 FreightCalculatorService 计算后求和；
-     * 优惠暂未接入，保留字段以便后续迭代不改 Schema。
+     * 会员优惠先作用于商品金额，积分抵扣再基于会员优惠后的商品实付金额计算。
      *
-     * @param array<int, array{unit_price:string, quantity:int, freight_template_id?:int, weight?:float}> $items
-     * @return array{total_amount:string, freight_amount:string, discount_amount:string, pay_amount:string}
+     * @param array<int, array{unit_price:string, quantity:int, freight_template_id?:int, weight?:float, member_benefit_mode?:string, member_price?:mixed}> $items
+     * @return array{total_amount:string, freight_amount:string, discount_amount:string, pay_amount:string, item_discounts:array<int,string>, member_discount?:array<string,mixed>, points_deduction?:array<string,mixed>}
      */
-    private function calcAmounts(array $items, RegionPathDto $regionPath): array
+    private function calcAmounts(array $items, RegionPathDto $regionPath, int $userId = 0, bool $usePoints = false, int $pointsUsed = 0): array
     {
         $total = '0.00';
         foreach ($items as $item) {
@@ -726,15 +771,158 @@ class OrderService extends BaseService
             $total = bcadd($total, $sub, 2);
         }
         $freight  = $this->calcFreight($items, $regionPath);
-        $discount = '0.00';
-        $pay      = bcsub(bcadd($total, $freight, 2), $discount, 2);
+        $memberDiscount = null;
+        $memberItemDiscounts = array_fill(0, count($items), '0.00');
+        if ($userId > 0) {
+            /** @var UserMemberService $memberService */
+            $memberService = app()->make(UserMemberService::class);
+            $memberDiscount = $memberService->pricingQuote($userId, $items);
+            $memberItemDiscounts = $memberDiscount['item_discounts'] ?? $memberItemDiscounts;
+        }
+        $memberDiscountAmount = (string) ($memberDiscount['discount_amount'] ?? '0.00');
+        $memberDiscountCents = $this->decimalToCents($memberDiscountAmount);
+        $pointsEligibleAmount = $this->centsToDecimal(max(0, $this->decimalToCents($total) - $memberDiscountCents));
 
-        return [
+        $pointsDeduction = null;
+        if ($userId > 0) {
+            /** @var UserPointsAccountService $pointsService */
+            $pointsService = app()->make(UserPointsAccountService::class);
+            $pointsRequested = $usePoints || $pointsUsed > 0;
+            if (!$pointsService->isDeductionEnabled()) {
+                if ($pointsRequested) {
+                    throw new BusinessException('积分抵扣未开启');
+                }
+            } else {
+                $pointsDeduction = $pointsService->deductionQuote($userId, $pointsEligibleAmount, $usePoints, max(0, $pointsUsed));
+            }
+        }
+        $pointsDiscount = (string) ($pointsDeduction['discount_amount'] ?? '0.00');
+        $discount = $this->centsToDecimal($memberDiscountCents + $this->decimalToCents($pointsDiscount));
+        $pay      = bcsub(bcadd($total, $freight, 2), $discount, 2);
+        if ($this->decimalToCents($pay) < 0) {
+            $pay = '0.00';
+        }
+
+        $itemDiscounts = $this->mergeItemDiscounts(
+            $items,
+            $memberItemDiscounts,
+            $this->decimalToCents($pointsDiscount)
+        );
+
+        $result = [
             'total_amount'    => $total,
             'freight_amount'  => $freight,
             'discount_amount' => $discount,
             'pay_amount'      => $pay,
+            'item_discounts'   => $itemDiscounts,
         ];
+        if ($memberDiscount !== null) {
+            $result['member_discount'] = $memberDiscount;
+        }
+        if ($pointsDeduction !== null) {
+            $result['points_deduction'] = $pointsDeduction;
+        }
+
+        return $result;
+    }
+
+    /**
+     * @param array<int, array{unit_price:string, quantity:int}> $items
+     * @param array<int, string> $memberItemDiscounts
+     * @return array<int,string>
+     */
+    private function mergeItemDiscounts(array $items, array $memberItemDiscounts, int $pointsDiscountCents): array
+    {
+        $memberDiscountCents = [];
+        $pointBases = [];
+        foreach ($items as $index => $item) {
+            $subtotalCents = $this->decimalToCents(bcmul($item['unit_price'], (string) $item['quantity'], 2));
+            $memberCents = min($subtotalCents, $this->decimalToCents((string) ($memberItemDiscounts[$index] ?? '0.00')));
+            $memberDiscountCents[$index] = $memberCents;
+            $pointBases[$index] = max(0, $subtotalCents - $memberCents);
+        }
+
+        $pointDiscounts = $this->allocateCentsByBases($pointBases, $pointsDiscountCents);
+        $result = [];
+        foreach ($items as $index => $item) {
+            $subtotalCents = $this->decimalToCents(bcmul($item['unit_price'], (string) $item['quantity'], 2));
+            $discountCents = min(
+                $subtotalCents,
+                ($memberDiscountCents[$index] ?? 0) + ($pointDiscounts[$index] ?? 0)
+            );
+            $result[$index] = $this->centsToDecimal($discountCents);
+        }
+
+        return $result;
+    }
+
+    /**
+     * @param array<int,int> $bases
+     * @return array<int,int>
+     */
+    private function allocateCentsByBases(array $bases, int $discountCents): array
+    {
+        $discountCents = max(0, $discountCents);
+        $totalBase = array_sum(array_map(static fn(int $basis): int => max(0, $basis), $bases));
+        if ($discountCents <= 0 || $totalBase <= 0) {
+            return array_fill(0, count($bases), 0);
+        }
+
+        $discountCents = min($discountCents, $totalBase);
+        $allocated = 0;
+        $lastIndex = array_key_last($bases);
+        $result = [];
+        foreach ($bases as $index => $basis) {
+            $basis = max(0, $basis);
+            if ($index === $lastIndex) {
+                $itemDiscount = max(0, $discountCents - $allocated);
+            } else {
+                $itemDiscount = intdiv($discountCents * $basis, $totalBase);
+                $allocated += $itemDiscount;
+            }
+            $result[$index] = min($itemDiscount, $basis);
+        }
+
+        return $result;
+    }
+
+    /**
+     * @param array<int, array{unit_price:string, quantity:int}> $items
+     * @return array<int, string>
+     */
+    private function allocateItemDiscounts(array $items, string $discountAmount): array
+    {
+        $discountCents = $this->decimalToCents($discountAmount);
+        if ($discountCents <= 0 || $items === []) {
+            return array_fill(0, count($items), '0.00');
+        }
+
+        $subtotals = [];
+        $totalCents = 0;
+        foreach ($items as $item) {
+            $subtotalCents = $this->decimalToCents(bcmul($item['unit_price'], (string) $item['quantity'], 2));
+            $subtotals[] = $subtotalCents;
+            $totalCents += $subtotalCents;
+        }
+        if ($totalCents <= 0) {
+            return array_fill(0, count($items), '0.00');
+        }
+
+        $discountCents = min($discountCents, $totalCents);
+        $allocated = 0;
+        $lastIndex = array_key_last($subtotals);
+        $result = [];
+        foreach ($subtotals as $index => $subtotalCents) {
+            if ($index === $lastIndex) {
+                $itemDiscount = max(0, $discountCents - $allocated);
+            } else {
+                $itemDiscount = intdiv($discountCents * $subtotalCents, $totalCents);
+                $allocated += $itemDiscount;
+            }
+            $result[$index] = $this->centsToDecimal(min($itemDiscount, $subtotalCents));
+        }
+
+        return $result;
     }
 
     /**
@@ -1359,7 +1547,7 @@ class OrderService extends BaseService
         }
         $rows = $this->model(GoodsSku::class)
             ->whereIn('id', $skuIds)
-            ->column('id, goods_id, spec_values, price, stock, status, weight', 'id');
+            ->column('id, goods_id, spec_values, price, stock, status, weight, member_price', 'id');
         return is_array($rows) ? $rows : [];
     }
 
@@ -1375,7 +1563,7 @@ class OrderService extends BaseService
         $rows = $this->model(Goods::class)
             ->whereIn('id', $goodsIds)
             ->whereNull('delete_time')
-            ->column('id, name, main_image, status, is_on_sale, freight_template_id', 'id');
+            ->column('id, name, main_image, status, is_on_sale, freight_template_id, member_benefit_mode', 'id');
         return is_array($rows) ? $rows : [];
     }
 

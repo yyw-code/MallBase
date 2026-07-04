@@ -79,6 +79,24 @@
       />
     </view>
 
+    <view v-if="pointsDeduction" class="card points-card">
+      <view class="points-card__main">
+        <view class="points-card__title-row">
+          <text class="points-card__title">积分抵扣</text>
+          <text v-if="hasPointsDiscount" class="points-card__discount">-¥{{ pointsDiscountAmount }}</text>
+        </view>
+        <text class="points-card__meta">
+          可用 {{ pointsDeduction.available_points || 0 }}，本单最多可用 {{ pointsDeduction.usable_points || 0 }}
+        </text>
+      </view>
+      <switch
+        :checked="usePoints"
+        :disabled="!canUsePoints"
+        color="var(--color-primary, #0d50d5)"
+        @change="onUsePointsChange"
+      />
+    </view>
+
     <!-- 价格明细 -->
     <view class="card summary-card">
       <view class="summary-row">
@@ -90,6 +108,14 @@
         <text v-if="!previewResult" class="summary-row__free">待计算</text>
         <text v-else-if="isFreeFreight" class="summary-row__free">免运费</text>
         <mb-price v-else :value="displayFreight" size="sm" color="var(--color-text)" />
+      </view>
+      <view v-if="hasPointsDiscount" class="summary-row">
+        <text class="summary-row__label">积分抵扣</text>
+        <text class="summary-row__discount">-¥{{ pointsDiscountAmount }}</text>
+      </view>
+      <view v-if="hasMemberDiscount" class="summary-row">
+        <text class="summary-row__label">会员优惠</text>
+        <text class="summary-row__discount">-¥{{ memberDiscountAmount }}</text>
       </view>
       <view class="summary-divider" />
       <view class="summary-row summary-row--total">
@@ -138,6 +164,7 @@ import { onLoad, onShow } from '@dcloudio/uni-app'
 import { useCartStore } from '@/store/cart'
 import { getAddressList } from '@/api/user/address'
 import { createOrder, previewOrder } from '@/api/order/order'
+import { isPointsEnabled as fetchPointsFeatureEnabled } from '@/utils/points-feature'
 import { usePayFlow } from '@/utils/usePayFlow'
 import { isPositivePrice, isZeroPrice, multiplyPrice, normalizePrice, sumPrices } from '@/utils/price'
 const decorateStore = useDecorateStore()
@@ -200,6 +227,8 @@ const idempotencyKey = ref('')
 const orderItems = ref([])
 // 后端订单试算结果（含权威运费），为 null 时回退本地兜底
 const previewResult = ref(null)
+const usePoints = ref(false)
+const pointsFeatureEnabled = ref(false)
 
 /**
  * 生成幂等 key，防止重复提交
@@ -212,6 +241,7 @@ function generateKey() {
 onLoad((query) => {
   source.value = query.source || 'cart'
   idempotencyKey.value = generateKey()
+  refreshPointsFeatureState()
 
   if (source.value === 'sku') {
     skuId.value = query.sku_id || ''
@@ -242,6 +272,7 @@ onLoad((query) => {
 })
 
 onShow(() => {
+  refreshPointsFeatureState()
   // 返回时检查是否有选中的地址
   const selected = uni.getStorageSync('selected_address')
   if (selected) {
@@ -249,6 +280,14 @@ onShow(() => {
     uni.removeStorageSync('selected_address')
   }
 })
+
+async function refreshPointsFeatureState() {
+  const enabled = await fetchPointsFeatureEnabled()
+  pointsFeatureEnabled.value = enabled
+  if (!enabled) {
+    usePoints.value = false
+  }
+}
 
 // 监听地址选择事件（兼容事件模式）
 function onAddressSelected(addr) {
@@ -305,6 +344,28 @@ const displayPayTotal = computed(() =>
 )
 const hasFreight = computed(() => isPositivePrice(displayFreight.value))
 const isFreeFreight = computed(() => previewResult.value && isZeroPrice(displayFreight.value))
+const pointsDeduction = computed(() =>
+  pointsFeatureEnabled.value ? previewResult.value?.points_deduction || null : null,
+)
+const memberDiscount = computed(() => previewResult.value?.member_discount || null)
+const canUsePoints = computed(() => {
+  if (!pointsFeatureEnabled.value) return false
+  const deduction = pointsDeduction.value
+  return !!deduction && deduction.enabled !== false && Number(deduction.usable_points || 0) > 0
+})
+const shouldUsePoints = computed(() => pointsFeatureEnabled.value && usePoints.value && canUsePoints.value)
+const pointsDiscountAmount = computed(() => normalizePrice(pointsDeduction.value?.discount_amount || '0.00'))
+const hasPointsDiscount = computed(() => shouldUsePoints.value && isPositivePrice(pointsDiscountAmount.value))
+const memberDiscountAmount = computed(() => normalizePrice(memberDiscount.value?.discount_amount || '0.00'))
+const hasMemberDiscount = computed(() => isPositivePrice(memberDiscountAmount.value))
+
+function onUsePointsChange(event) {
+  if (!canUsePoints.value) {
+    usePoints.value = false
+    return
+  }
+  usePoints.value = !!event.detail.value
+}
 
 /**
  * 调用后端订单试算，获取含运费的权威金额
@@ -319,22 +380,32 @@ async function fetchPreview() {
       ? {
           source: 'sku',
           address_id: address.value.id,
+          use_points: shouldUsePoints.value ? 1 : 0,
           items: [{ sku_id: Number(skuId.value), quantity: Number(quantity.value) || 1 }],
         }
       : {
           source: 'cart',
           address_id: address.value.id,
+          use_points: shouldUsePoints.value ? 1 : 0,
           cart_ids: orderItems.value.map((item) => item.id),
         }
   try {
-    previewResult.value = await previewOrder(payload)
+    const result = await previewOrder(payload)
+    previewResult.value = result
+    const deduction = result?.points_deduction
+    if (usePoints.value && (!deduction || Number(deduction.used_points || 0) <= 0)) {
+      usePoints.value = false
+    }
   } catch {
     previewResult.value = null
+    usePoints.value = false
   }
 }
 
 // 收货地址变化（默认地址加载完成 / 用户重新选择）后重新试算
 watch(address, fetchPreview)
+watch(usePoints, fetchPreview)
+watch(pointsFeatureEnabled, fetchPreview)
 
 function maskPhone(phone) {
   if (!phone || phone.length < 7) return phone || ''
@@ -378,6 +449,8 @@ async function handleSubmit() {
           ],
           buyer_remark: remark.value,
           idempotency_key: idempotencyKey.value,
+          use_points: shouldUsePoints.value ? 1 : 0,
+          points_used: shouldUsePoints.value ? Number(pointsDeduction.value?.used_points || 0) : 0,
         }
       : {
           source: 'cart',
@@ -385,6 +458,8 @@ async function handleSubmit() {
           cart_ids: orderItems.value.map((item) => item.id),
           buyer_remark: remark.value,
           idempotency_key: idempotencyKey.value,
+          use_points: shouldUsePoints.value ? 1 : 0,
+          points_used: shouldUsePoints.value ? Number(pointsDeduction.value?.used_points || 0) : 0,
         }
 
   try {
@@ -671,6 +746,45 @@ async function handleSubmit() {
 }
 
 .remark-placeholder {
+  color: var(--color-text-tertiary, #737686);
+}
+
+// ---- Points card ----
+.points-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: $mb-spacing-md;
+  padding: $mb-spacing-md $mb-spacing-lg;
+}
+
+.points-card__main {
+  flex: 1;
+  min-width: 0;
+}
+
+.points-card__title-row {
+  display: flex;
+  align-items: center;
+  gap: $mb-spacing-sm;
+  margin-bottom: 6rpx;
+}
+
+.points-card__title {
+  font-size: $mb-font-md;
+  font-weight: 600;
+  color: var(--color-text-title, #191b23);
+}
+
+.points-card__discount,
+.summary-row__discount {
+  font-size: $mb-font-md;
+  font-weight: 600;
+  color: var(--color-primary, #0d50d5);
+}
+
+.points-card__meta {
+  font-size: $mb-font-sm;
   color: var(--color-text-tertiary, #737686);
 }
 

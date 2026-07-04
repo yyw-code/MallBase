@@ -49,6 +49,7 @@ final class OrderServiceTest extends TestCase
                 'freight_amount'  => '0.00',
                 'discount_amount' => '0.00',
                 'pay_amount'      => '0.00',
+                'item_discounts'   => [],
             ],
             $result,
         );
