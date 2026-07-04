@@ -7,6 +7,7 @@ namespace app\cron\tasks;
 use app\cron\CronTaskInterface;
 use app\job\AutoReceiveOrdersJob;
 use app\job\CloseExpiredOrdersJob;
+use app\job\ReleaseFrozenPointsJob;
 use mall_base\queue\JobQueue;
 use Swoole\Timer;
 use think\facade\Cache;
@@ -34,6 +35,7 @@ class OrderMaintenanceCron implements CronTaskInterface
 
         JobQueue::push(CloseExpiredOrdersJob::class, ['limit' => 500]);
         JobQueue::push(AutoReceiveOrdersJob::class, ['limit' => 500]);
+        JobQueue::push(ReleaseFrozenPointsJob::class, ['limit' => 500]);
     }
 
     private function acquireLock(): bool
