@@ -23,6 +23,47 @@ class ClientDecorationSchemeService extends BaseService
 {
     protected string $modelClass = ClientDecorationScheme::class;
 
+    private const LEGACY_DECORATION_ASSET_MAP = [
+        '48' => 'static/decorate/decorate-banner-market.png',
+        '49' => 'static/decorate/decorate-banner-member.png',
+        '50' => 'static/decorate/decorate-banner-home.png',
+        '51' => 'static/decorate/decorate-nav-digital.png',
+        '52' => 'static/decorate/decorate-nav-beauty.png',
+        '53' => 'static/decorate/decorate-nav-fashion.png',
+        '54' => 'static/decorate/decorate-nav-home.png',
+        '55' => 'static/decorate/decorate-nav-food.png',
+        '56' => 'static/decorate/decorate-nav-sport.png',
+        '57' => 'static/decorate/decorate-cube-new.png',
+        '58' => 'static/decorate/decorate-cube-picks.png',
+        '59' => 'static/decorate/decorate-cube-member.png',
+        '60' => 'static/decorate/decorate-cube-sale.png',
+        '61' => 'static/decorate/decorate-entry-category.png',
+    ];
+
+    private const LEGACY_DECORATION_DEMO_FILE_MAP = [
+        'decorate-banner-market.png' => 'static/decorate/decorate-banner-market.png',
+        'decorate-banner-member.png' => 'static/decorate/decorate-banner-member.png',
+        'decorate-banner-home.png' => 'static/decorate/decorate-banner-home.png',
+        'decorate-nav-digital.png' => 'static/decorate/decorate-nav-digital.png',
+        'decorate-nav-beauty.png' => 'static/decorate/decorate-nav-beauty.png',
+        'decorate-nav-fashion.png' => 'static/decorate/decorate-nav-fashion.png',
+        'decorate-nav-home.png' => 'static/decorate/decorate-nav-home.png',
+        'decorate-nav-food.png' => 'static/decorate/decorate-nav-food.png',
+        'decorate-nav-sport.png' => 'static/decorate/decorate-nav-sport.png',
+        'decorate-cube-new.png' => 'static/decorate/decorate-cube-new.png',
+        'decorate-cube-picks.png' => 'static/decorate/decorate-cube-picks.png',
+        'decorate-cube-member.png' => 'static/decorate/decorate-cube-member.png',
+        'decorate-cube-sale.png' => 'static/decorate/decorate-cube-sale.png',
+        'decorate-entry-category.png' => 'static/decorate/decorate-entry-category.png',
+        'profile-order-pay.svg' => 'static/decorate/profile-order-pay.svg',
+        'profile-order-ship.svg' => 'static/decorate/profile-order-ship.svg',
+        'profile-order-receive.svg' => 'static/decorate/profile-order-receive.svg',
+        'profile-order-refund.svg' => 'static/decorate/profile-order-refund.svg',
+        'profile-service-address.svg' => 'static/decorate/profile-service-address.svg',
+        'profile-service-settings.svg' => 'static/decorate/profile-service-settings.svg',
+        'profile-service-support.svg' => 'static/decorate/profile-service-support.svg',
+    ];
+
     protected function buildListQuery(array $where)
     {
         return $this->model()
@@ -61,7 +102,10 @@ class ClientDecorationSchemeService extends BaseService
     {
         $scheme = $this->findValidScheme($id);
         $data = $scheme->toArray();
-        $data['schema'] = $this->hydrateSchemeSchemaAssets($this->normalizeJsonValue($data['schema'] ?? []));
+        $data['schema'] = $this->hydrateSchemeSchemaAssets(
+            (string) ($data['type'] ?? ''),
+            $this->normalizeJsonValue($data['schema'] ?? [])
+        );
 
         return $data;
     }
@@ -543,9 +587,9 @@ class ClientDecorationSchemeService extends BaseService
             'enabled' => true,
             'hiddenPages' => ['/pages-sub/user/login', '/pages-sub/user/agreement'],
             'items' => [
-                ['enabled' => true, 'icon' => 'static/client/floating/service.png', 'id' => 'floating-service', 'text' => '客服', 'type' => 'customerService'],
-                ['enabled' => true, 'icon' => 'static/client/floating/cart.png', 'id' => 'floating-cart', 'path' => '/pages/cart/index', 'text' => '购物车', 'type' => 'page'],
-                ['enabled' => true, 'icon' => 'static/client/floating/home.png', 'id' => 'floating-home', 'path' => '/pages/index/index', 'text' => '首页', 'type' => 'page'],
+                ['enabled' => true, 'icon' => 'static/decorate/floating/service.png', 'id' => 'floating-service', 'text' => '客服', 'type' => 'customerService'],
+                ['enabled' => true, 'icon' => 'static/decorate/floating/cart.png', 'id' => 'floating-cart', 'path' => '/pages/cart/index', 'text' => '购物车', 'type' => 'page'],
+                ['enabled' => true, 'icon' => 'static/decorate/floating/home.png', 'id' => 'floating-home', 'path' => '/pages/index/index', 'text' => '首页', 'type' => 'page'],
             ],
             'mode' => 'expand',
             'offsetBottom' => 160,
@@ -768,6 +812,15 @@ class ClientDecorationSchemeService extends BaseService
             }
             if ($type === 'navGrid') {
                 $props = $this->normalizeNavGridProps($props);
+            }
+            if ($type === 'imageCube') {
+                $props = $this->normalizeImageCubeProps($props);
+            }
+            if ($type === 'entryCard') {
+                $props = $this->normalizeEntryCardProps($props);
+            }
+            if (in_array($type, ['orderEntry', 'orderShortcut', 'serviceMenu', 'customMenu'], true)) {
+                $props = $this->normalizeProfileEntryProps($props);
             }
 
             $list[] = [
@@ -1011,6 +1064,15 @@ class ClientDecorationSchemeService extends BaseService
         $normalized = [];
         foreach (array_values($items) as $index => $item) {
             if (is_string($item)) {
+                $image = $this->normalizeLegacyDecorationAssetValue($item);
+                if ($image !== $item) {
+                    $normalized[] = [
+                        'image' => $image,
+                        'path' => '',
+                        'title' => '轮播图' . ($index + 1),
+                    ];
+                    continue;
+                }
                 $normalized[] = $this->isLegacySvgImage($item) || $this->isLegacyDefaultBannerImage($item)
                     ? [
                         'image' => $this->defaultBannerImageByIndex($index),
@@ -1024,8 +1086,12 @@ class ClientDecorationSchemeService extends BaseService
                 continue;
             }
             $image = $item['image'] ?? $item['url'] ?? '';
+            $originalImage = $image;
+            $image = $this->normalizeLegacyDecorationAssetValue($image);
             if ($this->isLegacySvgImage($image) || $this->isLegacyDefaultBannerImage($image)) {
                 $item['image'] = $this->defaultBannerImageByIndex($index);
+            } elseif ($image !== $originalImage) {
+                $item['image'] = $image;
             }
             $normalized[] = $item;
         }
@@ -1039,7 +1105,13 @@ class ClientDecorationSchemeService extends BaseService
 
     protected function defaultBannerImageByIndex(int $index): string
     {
-        $ids = ['48', '49', '50'];
+        $ids = ['1001', '1002', '1003'];
+        return $ids[$index % count($ids)];
+    }
+
+    protected function defaultCubeImageByIndex(int $index): string
+    {
+        $ids = ['1010', '1011', '1012', '1013'];
         return $ids[$index % count($ids)];
     }
 
@@ -1064,13 +1136,113 @@ class ClientDecorationSchemeService extends BaseService
                 ?? $item['full_url']
                 ?? $item['fullUrl']
                 ?? '';
+            $image = $this->normalizeLegacyDecorationAssetValue($image);
             if ($image === '' || $image === null || $this->isLegacySvgImage($image) || $this->isLegacyDefaultNavImage($image)) {
                 $item['image'] = $this->defaultNavImageByItem($item, '');
+            } else {
+                $item['image'] = $image;
             }
         }
         unset($item);
 
         $props['items'] = $items;
+
+        return $props;
+    }
+
+    /**
+     * @param array<string, mixed> $props
+     * @return array<string, mixed>
+     */
+    protected function normalizeImageCubeProps(array $props): array
+    {
+        $items = $props['items'] ?? $props['images'] ?? $props['list'] ?? [];
+        if (!is_array($items)) {
+            return $props;
+        }
+
+        $normalized = [];
+        foreach (array_values($items) as $index => $item) {
+            if (is_string($item)) {
+                $image = $this->normalizeLegacyDecorationAssetValue($item);
+                if ($image !== $item) {
+                    $normalized[] = [
+                        'image' => $image,
+                        'path' => '',
+                        'title' => '图片' . ($index + 1),
+                    ];
+                    continue;
+                }
+                $normalized[] = $item;
+                continue;
+            }
+            if (!is_array($item)) {
+                continue;
+            }
+
+            $originalImage = $item['image']
+                ?? $item['url']
+                ?? $item['image_url']
+                ?? $item['imageUrl']
+                ?? $item['full_url']
+                ?? $item['fullUrl']
+                ?? '';
+            $image = $this->normalizeLegacyDecorationAssetValue($originalImage);
+            if ($this->isLegacySvgImage($image)) {
+                $item['image'] = $this->defaultCubeImageByIndex($index);
+            } elseif ($image !== $originalImage) {
+                $item['image'] = $image;
+            }
+
+            $normalized[] = $item;
+        }
+
+        $props['items'] = $normalized;
+        $props['images'] = $normalized;
+        $props['list'] = $normalized;
+
+        return $props;
+    }
+
+    /**
+     * @param array<string, mixed> $props
+     * @return array<string, mixed>
+     */
+    protected function normalizeEntryCardProps(array $props): array
+    {
+        foreach (['icon_image', 'iconImage', 'background_image', 'backgroundImage'] as $field) {
+            if (array_key_exists($field, $props)) {
+                $props[$field] = $this->normalizeLegacyDecorationAssetValue($props[$field]);
+            }
+        }
+
+        return $props;
+    }
+
+    /**
+     * @param array<string, mixed> $props
+     * @return array<string, mixed>
+     */
+    protected function normalizeProfileEntryProps(array $props): array
+    {
+        foreach (['items', 'list'] as $listField) {
+            if (!isset($props[$listField]) || !is_array($props[$listField])) {
+                continue;
+            }
+            $items = [];
+            foreach ($props[$listField] as $item) {
+                if (!is_array($item)) {
+                    continue;
+                }
+                foreach (['image', 'image_url', 'imageUrl', 'icon_image', 'iconImage', 'full_url', 'fullUrl'] as $field) {
+                    if (array_key_exists($field, $item)) {
+                        $item[$field] = $this->normalizeLegacyDecorationAssetValue($item[$field]);
+                    }
+                }
+                $items[] = $item;
+            }
+            $props[$listField] = $items;
+        }
 
         return $props;
     }
@@ -1130,25 +1302,83 @@ class ClientDecorationSchemeService extends BaseService
         $title = (string) ($item['title'] ?? $item['label'] ?? $item['text'] ?? '');
 
         if (str_contains($key, 'sparkles') || str_contains($key, 'beauty') || $title === '美妆') {
-            return '52';
+            return '1005';
         }
         if (str_contains($key, 'shirt') || str_contains($key, 'clothes') || str_contains($key, 'menswear') || $title === '服饰') {
-            return '53';
+            return '1006';
         }
         if (str_contains($key, 'sofa') || str_contains($key, 'home') || str_contains($key, 'furniture') || $title === '家居') {
-            return '54';
+            return '1007';
         }
         if (str_contains($key, 'utensils') || str_contains($key, 'food') || $title === '美食') {
-            return '55';
+            return '1008';
         }
         if (str_contains($key, 'dumbbell') || str_contains($key, 'sport') || $title === '运动') {
-            return '56';
+            return '1009';
         }
         if (str_contains($key, 'smartphone') || str_contains($key, 'phone') || $title === '数码') {
-            return '51';
+            return '1004';
         }
 
         return $fallback;
+    }
+
+    protected function normalizeLegacyDecorationAssetValue(mixed $value): mixed
+    {
+        foreach ($this->legacyDecorationAssetCandidates($value) as $candidate) {
+            $candidate = trim((string) $candidate);
+            if ($candidate === '') {
+                continue;
+            }
+            if (isset(self::LEGACY_DECORATION_ASSET_MAP[$candidate])) {
+                return self::LEGACY_DECORATION_ASSET_MAP[$candidate];
+            }
+
+            $path = str_replace('\\', '/', $candidate);
+            foreach (self::LEGACY_DECORATION_DEMO_FILE_MAP as $filename => $target) {
+                if (str_contains($path, 'static/demo/' . $filename)) {
+                    return $target;
+                }
+            }
+        }
+
+        return $value;
+    }
+
+    /**
+     * @return array<int, mixed>
+     */
+    protected function legacyDecorationAssetCandidates(mixed $value): array
+    {
+        if (is_array($value)) {
+            $candidates = [];
+            foreach ([
+                'url',
+                'asset_id',
+                'id',
+                'path',
+                'src',
+                'image',
+                'image_url',
+                'imageUrl',
+                'icon_image',
+                'iconImage',
+                'background_image',
+                'backgroundImage',
+                'full_url',
+                'fullUrl',
+                'preview_url',
+                'previewUrl',
+            ] as $field) {
+                if (isset($value[$field]) && is_scalar($value[$field])) {
+                    $candidates[] = $value[$field];
+                }
+            }
+
+            return $candidates;
+        }
+
+        return is_scalar($value) ? [$value] : [];
     }
 
     protected function isLegacySvgImage(mixed $image): bool
@@ -1207,7 +1437,10 @@ class ClientDecorationSchemeService extends BaseService
     protected function hydrateSchemeListSchemaAssets(array $list): array
     {
         foreach ($list as &$item) {
-            $item['schema'] = $this->hydrateSchemeSchemaAssets($this->normalizeJsonValue($item['schema'] ?? []));
+            $item['schema'] = $this->hydrateSchemeSchemaAssets(
+                (string) ($item['type'] ?? ''),
+                $this->normalizeJsonValue($item['schema'] ?? [])
+            );
         }
         unset($item);
 
@@ -1218,12 +1451,14 @@ class ClientDecorationSchemeService extends BaseService
      * @param array<string, mixed> $schema
      * @return array<string, mixed>
      */
-    protected function hydrateSchemeSchemaAssets(array $schema): array
+    protected function hydrateSchemeSchemaAssets(string $type, array $schema): array
     {
         /** @var AssetHydrator $hydrator */
         $hydrator = app()->make(AssetHydrator::class);
 
-        return $hydrator->hydrateDecorationSchema($schema);
+        return $hydrator->hydrateDecorationSchema(
+            $this->normalizeSchemaByType($type, $schema)
+        );
     }
 
     protected function validateSchemaByType(string $type, array $schema, string $tabbarMode, bool $strict = false): void

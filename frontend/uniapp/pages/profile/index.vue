@@ -108,16 +108,16 @@ const profileIconPresets = [
 ];
 
 const defaultProfileOrderImages = [
-  "static/demo/profile-order-pay.svg",
-  "static/demo/profile-order-ship.svg",
-  "static/demo/profile-order-receive.svg",
-  "static/demo/profile-order-refund.svg",
+  "static/decorate/profile-order-pay.svg",
+  "static/decorate/profile-order-ship.svg",
+  "static/decorate/profile-order-receive.svg",
+  "static/decorate/profile-order-refund.svg",
 ];
 
 const defaultProfileServiceImages = [
-  "static/demo/profile-service-address.svg",
-  "static/demo/profile-service-settings.svg",
-  "static/demo/profile-service-support.svg",
+  "static/decorate/profile-service-address.svg",
+  "static/decorate/profile-service-settings.svg",
+  "static/decorate/profile-service-support.svg",
 ];
 
 function defaultProfileEntryImage(type, index) {

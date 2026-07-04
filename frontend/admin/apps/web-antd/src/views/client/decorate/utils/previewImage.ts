@@ -9,8 +9,11 @@ type FloatingIconItem = {
   type?: string;
 };
 
-const FLOATING_STATIC_ICON_PATH = 'static/client/floating';
-const LEGACY_FLOATING_STATIC_ICON_PATH = 'static/images/floating';
+const FLOATING_STATIC_ICON_PATH = 'static/decorate/floating';
+const LEGACY_FLOATING_STATIC_ICON_PATHS = [
+  'static/client/floating',
+  'static/images/floating',
+];
 
 const getApiOrigin = () => {
   const apiBase = import.meta.env.VITE_GLOB_API_URL || '';
@@ -42,7 +45,9 @@ const isFloatingSystemIconPath = (value: unknown) => {
   const normalized = value.replace(/^\/+/, '');
   return (
     normalized.startsWith(`${FLOATING_STATIC_ICON_PATH}/`) ||
-    normalized.startsWith(`${LEGACY_FLOATING_STATIC_ICON_PATH}/`)
+    LEGACY_FLOATING_STATIC_ICON_PATHS.some((path) =>
+      normalized.startsWith(`${path}/`),
+    )
   );
 };
 
@@ -59,7 +64,9 @@ const normalizePreviewImageUrl = (value: string) => {
   const normalizedStaticPath = path.replace(/^\/+/, '');
   if (
     normalizedStaticPath.startsWith(`${FLOATING_STATIC_ICON_PATH}/`) ||
-    normalizedStaticPath.startsWith(`${LEGACY_FLOATING_STATIC_ICON_PATH}/`)
+    LEGACY_FLOATING_STATIC_ICON_PATHS.some((legacyPath) =>
+      normalizedStaticPath.startsWith(`${legacyPath}/`),
+    )
   ) {
     const filename = normalizedStaticPath.split('/').pop();
     return filename ? resolveFloatingStaticIcon(filename) : '';
@@ -135,7 +142,11 @@ export const getFloatingPresetIconType = (item: FloatingIconItem | null) => {
 export const isFloatingPresetIcon = (item: FloatingIconItem | null) => {
   if (!item) return false;
   if (isFloatingSystemIconPath(item.icon)) return true;
-  if (resolvePreviewImageUrl(item.icon).includes('/static/client/floating/')) {
+  const resolvedIcon = resolvePreviewImageUrl(item.icon);
+  if (
+    resolvedIcon.includes('/static/decorate/floating/') ||
+    resolvedIcon.includes('/static/client/floating/')
+  ) {
     return true;
   }
   return getFloatingPresetIconType(item) !== '';

@@ -28,12 +28,11 @@
 | 文件 | 用途 | SQL 引用位置 |
 |---|---|---|
 | `cat-{phone,clothes,food,home,smartphone,tablet,menswear,womenswear,snacks,furniture}.png` | 分类卡 | `mb_goods_category.image` |
-| `decorate-banner-{market,member,home}.png` | 首页装修轮播 | `mb_upload_asset_file` / `mb_client_diy_scheme` |
-| `decorate-nav-{digital,beauty,fashion,home,food,sport}.png` | 首页装修导航 | `mb_upload_asset_file` / `mb_client_diy_scheme` |
-| `decorate-cube-{new,picks,member,sale}.png` `decorate-entry-category.png` | 首页装修图片组件 | `mb_upload_asset_file` / `mb_client_diy_scheme` |
 | `laptop-01-*.jpg` `camera-01-*.jpg` `jeans-01-*.jpg` `watch-01-main.png` `sofa-01-*.jpg` `vanity-01-*.png` | 演示商品图 / SKU 图 | `mb_goods.main_image` / `mb_goods.images` / `mb_goods_sku.image` |
 | `avatars/avatar-{1..5}.png` | 演示评价头像 | `mb_user.avatar` |
 | `recharge-dragon-card.png` | 充值套餐背景图 | `mb_recharge_package.background_image` |
+
+装修系统默认素材不属于演示数据，统一维护在 `backend/public/static/decorate/`。
 
 ## 替换素材时
 

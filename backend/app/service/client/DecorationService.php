@@ -36,6 +36,47 @@ class DecorationService extends BaseService
         self::MODE_CUSTOM,
     ];
 
+    private const LEGACY_DECORATION_ASSET_MAP = [
+        '48' => 'static/decorate/decorate-banner-market.png',
+        '49' => 'static/decorate/decorate-banner-member.png',
+        '50' => 'static/decorate/decorate-banner-home.png',
+        '51' => 'static/decorate/decorate-nav-digital.png',
+        '52' => 'static/decorate/decorate-nav-beauty.png',
+        '53' => 'static/decorate/decorate-nav-fashion.png',
+        '54' => 'static/decorate/decorate-nav-home.png',
+        '55' => 'static/decorate/decorate-nav-food.png',
+        '56' => 'static/decorate/decorate-nav-sport.png',
+        '57' => 'static/decorate/decorate-cube-new.png',
+        '58' => 'static/decorate/decorate-cube-picks.png',
+        '59' => 'static/decorate/decorate-cube-member.png',
+        '60' => 'static/decorate/decorate-cube-sale.png',
+        '61' => 'static/decorate/decorate-entry-category.png',
+    ];
+
+    private const LEGACY_DECORATION_DEMO_FILE_MAP = [
+        'decorate-banner-market.png' => 'static/decorate/decorate-banner-market.png',
+        'decorate-banner-member.png' => 'static/decorate/decorate-banner-member.png',
+        'decorate-banner-home.png' => 'static/decorate/decorate-banner-home.png',
+        'decorate-nav-digital.png' => 'static/decorate/decorate-nav-digital.png',
+        'decorate-nav-beauty.png' => 'static/decorate/decorate-nav-beauty.png',
+        'decorate-nav-fashion.png' => 'static/decorate/decorate-nav-fashion.png',
+        'decorate-nav-home.png' => 'static/decorate/decorate-nav-home.png',
+        'decorate-nav-food.png' => 'static/decorate/decorate-nav-food.png',
+        'decorate-nav-sport.png' => 'static/decorate/decorate-nav-sport.png',
+        'decorate-cube-new.png' => 'static/decorate/decorate-cube-new.png',
+        'decorate-cube-picks.png' => 'static/decorate/decorate-cube-picks.png',
+        'decorate-cube-member.png' => 'static/decorate/decorate-cube-member.png',
+        'decorate-cube-sale.png' => 'static/decorate/decorate-cube-sale.png',
+        'decorate-entry-category.png' => 'static/decorate/decorate-entry-category.png',
+        'profile-order-pay.svg' => 'static/decorate/profile-order-pay.svg',
+        'profile-order-ship.svg' => 'static/decorate/profile-order-ship.svg',
+        'profile-order-receive.svg' => 'static/decorate/profile-order-receive.svg',
+        'profile-order-refund.svg' => 'static/decorate/profile-order-refund.svg',
+        'profile-service-address.svg' => 'static/decorate/profile-service-address.svg',
+        'profile-service-settings.svg' => 'static/decorate/profile-service-settings.svg',
+        'profile-service-support.svg' => 'static/decorate/profile-service-support.svg',
+    ];
+
     /**
      * 获取客户端装修总配置。
      *
@@ -371,9 +412,9 @@ class DecorationService extends BaseService
             'enabled' => true,
             'hiddenPages' => ['/pages-sub/user/login', '/pages-sub/user/agreement'],
             'items' => [
-                ['enabled' => true, 'icon' => 'static/client/floating/service.png', 'id' => 'floating-service', 'text' => '客服', 'type' => 'customerService'],
-                ['enabled' => true, 'icon' => 'static/client/floating/cart.png', 'id' => 'floating-cart', 'path' => '/pages/cart/index', 'text' => '购物车', 'type' => 'page'],
-                ['enabled' => true, 'icon' => 'static/client/floating/home.png', 'id' => 'floating-home', 'path' => '/pages/index/index', 'text' => '首页', 'type' => 'page'],
+                ['enabled' => true, 'icon' => 'static/decorate/floating/service.png', 'id' => 'floating-service', 'text' => '客服', 'type' => 'customerService'],
+                ['enabled' => true, 'icon' => 'static/decorate/floating/cart.png', 'id' => 'floating-cart', 'path' => '/pages/cart/index', 'text' => '购物车', 'type' => 'page'],
+                ['enabled' => true, 'icon' => 'static/decorate/floating/home.png', 'id' => 'floating-home', 'path' => '/pages/index/index', 'text' => '首页', 'type' => 'page'],
             ],
             'mode' => 'expand',
             'offsetBottom' => 160,
@@ -938,6 +979,7 @@ class DecorationService extends BaseService
                     ?? $item['full_url']
                     ?? $item['fullUrl']
                     ?? '';
+                $image = $this->normalizeLegacyDecorationAssetValue($image);
                 if ($this->isLegacySvgImage($image) || $this->isLegacyDefaultNavImage($image)) {
                     $image = '';
                 }
@@ -956,17 +998,19 @@ class DecorationService extends BaseService
             if (!is_array($items) || $items === []) {
                 $items = $this->defaultCubeItems();
             }
+            $items = $this->normalizeImageCubeItems($items);
             $props['items'] = $items;
             $props['images'] = $items;
             $props['list'] = $items;
         }
 
         if ($type === 'entryCard') {
+            $props = $this->normalizeEntryCardImageProps($props);
             if (empty($props['icon_image']) && empty($props['iconImage'])) {
-                $props['icon_image'] = '61';
+                $props['icon_image'] = '1014';
             }
             if (empty($props['background_image']) && empty($props['backgroundImage'])) {
-                $props['background_image'] = '61';
+                $props['background_image'] = '1014';
             }
             $props['icon_mode'] = $props['icon_mode'] ?? $props['iconMode'] ?? 'image';
         }
@@ -1027,12 +1071,12 @@ class DecorationService extends BaseService
     {
         return [
             [
-                'image' => '48',
+                'image' => '1001',
                 'path' => '/pages-sub/goods/list?is_recommend=1',
                 'title' => '夏日好物限时满减',
             ],
             [
-                'image' => '49',
+                'image' => '1002',
                 'path' => '/pages-sub/goods/list?sort=sales',
                 'title' => '会员精选 每日上新',
             ],
@@ -1046,22 +1090,22 @@ class DecorationService extends BaseService
     {
         return [
             [
-                'image' => '57',
+                'image' => '1010',
                 'path' => '/pages-sub/goods/list?sort=newest',
                 'title' => '新品上架',
             ],
             [
-                'image' => '58',
+                'image' => '1011',
                 'path' => '/pages-sub/goods/list?is_recommend=1',
                 'title' => '精选榜单',
             ],
             [
-                'image' => '59',
+                'image' => '1012',
                 'path' => '/pages-sub/goods/list?sort=sales',
                 'title' => '会员专享',
             ],
             [
-                'image' => '60',
+                'image' => '1013',
                 'path' => '/pages-sub/goods/list?is_hot=1',
                 'title' => '限时满减',
             ],
@@ -1074,10 +1118,10 @@ class DecorationService extends BaseService
     protected function defaultProfileOrderItems(): array
     {
         return [
-            ['title' => '待付款', 'label' => '待付款', 'image' => 'static/demo/profile-order-pay.svg', 'path' => '/pages-sub/order/list?status=10'],
-            ['title' => '待发货', 'label' => '待发货', 'image' => 'static/demo/profile-order-ship.svg', 'path' => '/pages-sub/order/list?status=20'],
-            ['title' => '待收货', 'label' => '待收货', 'image' => 'static/demo/profile-order-receive.svg', 'path' => '/pages-sub/order/list?status=30'],
-            ['title' => '退款售后', 'label' => '退款售后', 'image' => 'static/demo/profile-order-refund.svg', 'path' => '/pages-sub/refund/list'],
+            ['title' => '待付款', 'label' => '待付款', 'image' => 'static/decorate/profile-order-pay.svg', 'path' => '/pages-sub/order/list?status=10'],
+            ['title' => '待发货', 'label' => '待发货', 'image' => 'static/decorate/profile-order-ship.svg', 'path' => '/pages-sub/order/list?status=20'],
+            ['title' => '待收货', 'label' => '待收货', 'image' => 'static/decorate/profile-order-receive.svg', 'path' => '/pages-sub/order/list?status=30'],
+            ['title' => '退款售后', 'label' => '退款售后', 'image' => 'static/decorate/profile-order-refund.svg', 'path' => '/pages-sub/refund/list'],
         ];
     }
 
@@ -1087,9 +1131,9 @@ class DecorationService extends BaseService
     protected function defaultProfileServiceItems(): array
     {
         return [
-            ['title' => '地址管理', 'label' => '地址管理', 'image' => 'static/demo/profile-service-address.svg', 'path' => '/pages-sub/address/list'],
-            ['title' => '系统设置', 'label' => '系统设置', 'image' => 'static/demo/profile-service-settings.svg', 'path' => '/pages-sub/user/settings'],
-            ['title' => '联系客服', 'label' => '联系客服', 'image' => 'static/demo/profile-service-support.svg', 'path' => ''],
+            ['title' => '地址管理', 'label' => '地址管理', 'image' => 'static/decorate/profile-service-address.svg', 'path' => '/pages-sub/address/list'],
+            ['title' => '系统设置', 'label' => '系统设置', 'image' => 'static/decorate/profile-service-settings.svg', 'path' => '/pages-sub/user/settings'],
+            ['title' => '联系客服', 'label' => '联系客服', 'image' => 'static/decorate/profile-service-support.svg', 'path' => ''],
         ];
     }
 
@@ -1116,6 +1160,7 @@ class DecorationService extends BaseService
                     ?? $item['icon_image']
                     ?? $item['iconImage']
                     ?? '');
+            $image = $this->normalizeLegacyDecorationAssetValue($image);
             $path = (string) ($item['path'] ?? $item['url'] ?? $item['link'] ?? $item['target_path'] ?? $item['targetPath'] ?? '');
             if (
                 ($item['action'] ?? '') === 'theme'
@@ -1183,15 +1228,15 @@ class DecorationService extends BaseService
     {
         $images = $type === 'orderShortcut'
             ? [
-                'static/demo/profile-order-pay.svg',
-                'static/demo/profile-order-ship.svg',
-                'static/demo/profile-order-receive.svg',
-                'static/demo/profile-order-refund.svg',
+                'static/decorate/profile-order-pay.svg',
+                'static/decorate/profile-order-ship.svg',
+                'static/decorate/profile-order-receive.svg',
+                'static/decorate/profile-order-refund.svg',
             ]
             : [
-                'static/demo/profile-service-address.svg',
-                'static/demo/profile-service-settings.svg',
-                'static/demo/profile-service-support.svg',
+                'static/decorate/profile-service-address.svg',
+                'static/decorate/profile-service-settings.svg',
+                'static/decorate/profile-service-support.svg',
             ];
 
         return $images[$index % count($images)];
@@ -1335,6 +1380,15 @@ class DecorationService extends BaseService
         $normalized = [];
         foreach (array_values($items) as $index => $item) {
             if (is_string($item)) {
+                $image = $this->normalizeLegacyDecorationAssetValue($item);
+                if ($image !== $item) {
+                    $normalized[] = [
+                        'image' => $image,
+                        'path' => '',
+                        'title' => '轮播图' . ($index + 1),
+                    ];
+                    continue;
+                }
                 $normalized[] = $this->isLegacySvgImage($item) || $this->isLegacyDefaultBannerImage($item)
                     ? [
                         'image' => $this->defaultBannerImageByIndex($index),
@@ -1348,8 +1402,11 @@ class DecorationService extends BaseService
                 continue;
             }
             $image = $item['image'] ?? $item['url'] ?? '';
+            $image = $this->normalizeLegacyDecorationAssetValue($image);
             if ($this->isLegacySvgImage($image) || $this->isLegacyDefaultBannerImage($image)) {
                 $item['image'] = $this->defaultBannerImageByIndex($index);
+            } elseif ($image !== ($item['image'] ?? $item['url'] ?? '')) {
+                $item['image'] = $image;
             }
             $normalized[] = $item;
         }
@@ -1357,9 +1414,75 @@ class DecorationService extends BaseService
         return $normalized;
     }
 
+    /**
+     * @param array<int, mixed> $items
+     * @return array<int, mixed>
+     */
+    protected function normalizeImageCubeItems(array $items): array
+    {
+        $normalized = [];
+        foreach (array_values($items) as $index => $item) {
+            if (is_string($item)) {
+                $image = $this->normalizeLegacyDecorationAssetValue($item);
+                if ($image !== $item) {
+                    $normalized[] = [
+                        'image' => $image,
+                        'path' => '',
+                        'title' => '图片' . ($index + 1),
+                    ];
+                    continue;
+                }
+                $normalized[] = $item;
+                continue;
+            }
+            if (!is_array($item)) {
+                continue;
+            }
+
+            $originalImage = $item['image']
+                ?? $item['url']
+                ?? $item['image_url']
+                ?? $item['imageUrl']
+                ?? $item['full_url']
+                ?? $item['fullUrl']
+                ?? '';
+            $image = $this->normalizeLegacyDecorationAssetValue($originalImage);
+            if ($this->isLegacySvgImage($image)) {
+                $item['image'] = $this->defaultCubeImageByIndex($index);
+            } elseif ($image !== $originalImage) {
+                $item['image'] = $image;
+            }
+
+            $normalized[] = $item;
+        }
+
+        return $normalized;
+    }
+
+    /**
+     * @param array<string, mixed> $props
+     * @return array<string, mixed>
+     */
+    protected function normalizeEntryCardImageProps(array $props): array
+    {
+        foreach (['icon_image', 'iconImage', 'background_image', 'backgroundImage'] as $field) {
+            if (array_key_exists($field, $props)) {
+                $props[$field] = $this->normalizeLegacyDecorationAssetValue($props[$field]);
+            }
+        }
+
+        return $props;
+    }
+
     protected function defaultBannerImageByIndex(int $index): string
     {
-        $ids = ['48', '49', '50'];
+        $ids = ['1001', '1002', '1003'];
+        return $ids[$index % count($ids)];
+    }
+
+    protected function defaultCubeImageByIndex(int $index): string
+    {
+        $ids = ['1010', '1011', '1012', '1013'];
         return $ids[$index % count($ids)];
     }
 
@@ -1371,37 +1494,37 @@ class DecorationService extends BaseService
         return [
             [
                 'icon' => 'lucide:smartphone',
-                'image' => '51',
+                'image' => '1004',
                 'path' => '/pages/category/index',
                 'title' => '数码',
             ],
             [
                 'icon' => 'lucide:sparkles',
-                'image' => '52',
+                'image' => '1005',
                 'path' => '/pages/category/index',
                 'title' => '美妆',
             ],
             [
                 'icon' => 'lucide:shirt',
-                'image' => '53',
+                'image' => '1006',
                 'path' => '/pages/category/index',
                 'title' => '服饰',
             ],
             [
                 'icon' => 'lucide:sofa',
-                'image' => '54',
+                'image' => '1007',
                 'path' => '/pages/category/index',
                 'title' => '家居',
             ],
             [
                 'icon' => 'lucide:utensils',
-                'image' => '55',
+                'image' => '1008',
                 'path' => '/pages/category/index',
                 'title' => '美食',
             ],
             [
                 'icon' => 'lucide:dumbbell',
-                'image' => '56',
+                'image' => '1009',
                 'path' => '/pages/category/index',
                 'title' => '运动',
             ],
@@ -1418,25 +1541,83 @@ class DecorationService extends BaseService
         $title = (string) ($item['title'] ?? $item['label'] ?? $item['text'] ?? '');
 
         if (str_contains($key, 'sparkles') || str_contains($key, 'beauty') || $title === '美妆') {
-            return '52';
+            return '1005';
         }
         if (str_contains($key, 'shirt') || str_contains($key, 'clothes') || str_contains($key, 'menswear') || $title === '服饰') {
-            return '53';
+            return '1006';
         }
         if (str_contains($key, 'sofa') || str_contains($key, 'home') || str_contains($key, 'furniture') || $title === '家居') {
-            return '54';
+            return '1007';
         }
         if (str_contains($key, 'utensils') || str_contains($key, 'food') || $title === '美食') {
-            return '55';
+            return '1008';
         }
         if (str_contains($key, 'dumbbell') || str_contains($key, 'sport') || $title === '运动') {
-            return '56';
+            return '1009';
         }
         if (str_contains($key, 'smartphone') || str_contains($key, 'phone') || $title === '数码') {
-            return '51';
+            return '1004';
         }
 
         return $fallback;
+    }
+
+    protected function normalizeLegacyDecorationAssetValue(mixed $value): mixed
+    {
+        foreach ($this->legacyDecorationAssetCandidates($value) as $candidate) {
+            $candidate = trim((string) $candidate);
+            if ($candidate === '') {
+                continue;
+            }
+            if (isset(self::LEGACY_DECORATION_ASSET_MAP[$candidate])) {
+                return self::LEGACY_DECORATION_ASSET_MAP[$candidate];
+            }
+
+            $path = str_replace('\\', '/', $candidate);
+            foreach (self::LEGACY_DECORATION_DEMO_FILE_MAP as $filename => $target) {
+                if (str_contains($path, 'static/demo/' . $filename)) {
+                    return $target;
+                }
+            }
+        }
+
+        return $value;
+    }
+
+    /**
+     * @return array<int, mixed>
+     */
+    protected function legacyDecorationAssetCandidates(mixed $value): array
+    {
+        if (is_array($value)) {
+            $candidates = [];
+            foreach ([
+                'url',
+                'asset_id',
+                'id',
+                'path',
+                'src',
+                'image',
+                'image_url',
+                'imageUrl',
+                'icon_image',
+                'iconImage',
+                'background_image',
+                'backgroundImage',
+                'full_url',
+                'fullUrl',
+                'preview_url',
+                'previewUrl',
+            ] as $field) {
+                if (isset($value[$field]) && is_scalar($value[$field])) {
+                    $candidates[] = $value[$field];
+                }
+            }
+
+            return $candidates;
+        }
+
+        return is_scalar($value) ? [$value] : [];
     }
 
     protected function isLegacySvgImage(mixed $image): bool

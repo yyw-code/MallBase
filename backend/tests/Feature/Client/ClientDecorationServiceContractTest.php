@@ -800,14 +800,14 @@ final class ClientDecorationServiceContractTest extends TestCase
         $this->assertCount(4, $modules['orderEntry']['props']['items']);
         $this->assertCount(3, $modules['serviceMenu']['props']['items']);
         $this->assertSame(
-            'static/demo/profile-order-pay.svg',
+            'static/decorate/profile-order-pay.svg',
             $modules['orderEntry']['props']['items'][0]['image']
         );
         $this->assertTrue(($modules['orderEntry']['props']['items'][0]['visible'] ?? true) !== false);
         $this->assertTrue(($modules['orderEntry']['props']['items'][0]['enabled'] ?? true) !== false);
         $this->assertArrayNotHasKey('icon', $modules['orderEntry']['props']['items'][0]);
         $this->assertSame(
-            'static/demo/profile-service-settings.svg',
+            'static/decorate/profile-service-settings.svg',
             $modules['serviceMenu']['props']['items'][1]['image']
         );
         $this->assertSame('系统设置', $modules['serviceMenu']['props']['items'][1]['label']);
@@ -854,6 +854,161 @@ final class ClientDecorationServiceContractTest extends TestCase
         $this->assertTrue($modules['pointsEntry']['props']['show_view_button']);
     }
 
+    public function testDecorationSchemaNormalizesLegacyDemoDecorationAssets(): void
+    {
+        $service = $this->makeDecorationServiceForSchemaNormalization();
+        $method = $this->schemaNormalizerMethod($service);
+        $schema = $method->invoke($service, 'home', [
+            'components' => [
+                [
+                    'id' => 'banner',
+                    'type' => 'banner',
+                    'props' => [
+                        'items' => [
+                            [
+                                'image' => [
+                                    'url' => '48',
+                                    'asset_id' => 48,
+                                    'full_url' => 'http://localhost:8080/static/demo/decorate-banner-market.png',
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+                [
+                    'id' => 'nav',
+                    'type' => 'navGrid',
+                    'props' => [
+                        'items' => [
+                            [
+                                'title' => '美妆',
+                                'image' => [
+                                    'url' => '52',
+                                    'asset_id' => 52,
+                                    'full_url' => 'http://localhost:8080/static/demo/decorate-nav-beauty.png',
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+                [
+                    'id' => 'cube',
+                    'type' => 'imageCube',
+                    'props' => [
+                        'items' => [
+                            [
+                                'title' => '新品',
+                                'image' => [
+                                    'url' => '57',
+                                    'asset_id' => 57,
+                                    'full_url' => 'http://localhost:8080/static/demo/decorate-cube-new.png',
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+                [
+                    'id' => 'entry',
+                    'type' => 'entryCard',
+                    'props' => [
+                        'icon_image' => [
+                            'url' => '61',
+                            'asset_id' => 61,
+                            'full_url' => 'http://localhost:8080/static/demo/decorate-entry-category.png',
+                        ],
+                        'background_image' => 'http://localhost:8080/static/demo/decorate-entry-category.png',
+                    ],
+                ],
+            ],
+        ]);
+        $modules = array_column($schema['components'], null, 'type');
+
+        $this->assertSame('static/decorate/decorate-banner-market.png', $modules['banner']['props']['items'][0]['image']);
+        $this->assertSame('static/decorate/decorate-nav-beauty.png', $modules['navGrid']['props']['items'][0]['image']);
+        $this->assertSame('static/decorate/decorate-cube-new.png', $modules['imageCube']['props']['items'][0]['image']);
+        $this->assertSame('static/decorate/decorate-entry-category.png', $modules['entryCard']['props']['icon_image']);
+        $this->assertSame('static/decorate/decorate-entry-category.png', $modules['entryCard']['props']['background_image']);
+
+        $profileSchema = $method->invoke($service, 'profile', [
+            'modules' => [
+                [
+                    'id' => 'order',
+                    'type' => 'orderEntry',
+                    'props' => [
+                        'items' => [
+                            [
+                                'label' => '待付款',
+                                'image' => 'http://localhost:8080/static/demo/profile-order-pay.svg',
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ]);
+        $profileModules = array_column($profileSchema['modules'], null, 'type');
+        $this->assertSame('static/decorate/profile-order-pay.svg', $profileModules['orderEntry']['props']['items'][0]['image']);
+    }
+
+    public function testAdminDecorationHydrationNormalizesLegacyDemoDecorationAssets(): void
+    {
+        $service = $this->makeService('app\\service\\admin\\client\\ClientDecorationSchemeService');
+        $method = new \ReflectionMethod($service, 'hydrateSchemeSchemaAssets');
+        $method->setAccessible(true);
+
+        $schema = $method->invoke($service, 'home', [
+            'components' => [
+                [
+                    'id' => 'banner',
+                    'type' => 'banner',
+                    'props' => [
+                        'items' => [
+                            [
+                                'image' => [
+                                    'url' => '48',
+                                    'asset_id' => 48,
+                                    'full_url' => 'http://localhost:8080/static/demo/decorate-banner-market.png',
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+                [
+                    'id' => 'nav',
+                    'type' => 'navGrid',
+                    'props' => [
+                        'items' => [
+                            [
+                                'title' => '美妆',
+                                'image' => 'http://localhost:8080/static/demo/decorate-nav-beauty.png',
+                            ],
+                        ],
+                    ],
+                ],
+                [
+                    'id' => 'cube',
+                    'type' => 'imageCube',
+                    'props' => [
+                        'items' => [
+                            [
+                                'title' => '新品',
+                                'image' => [
+                                    'url' => '57',
+                                    'asset_id' => 57,
+                                    'full_url' => 'http://localhost:8080/static/demo/decorate-cube-new.png',
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ]);
+        $modules = array_column($schema['components'], null, 'type');
+
+        $this->assertSame('static/decorate/decorate-banner-market.png', $modules['banner']['props']['items'][0]['image']);
+        $this->assertSame('static/decorate/decorate-nav-beauty.png', $modules['navGrid']['props']['items'][0]['image']);
+        $this->assertSame('static/decorate/decorate-cube-new.png', $modules['imageCube']['props']['items'][0]['image']);
+    }
+
     public function testDecorationProfileKeepsLegacyPageAndModuleStyleAliases(): void
     {
         $service = $this->makeDecorationServiceForSchemaNormalization();
@@ -874,7 +1029,7 @@ final class ClientDecorationServiceContractTest extends TestCase
                     'props' => [
                         'items' => [
                             [
-                                'image' => 'static/demo/profile-order-pay.svg',
+                                'image' => 'static/decorate/profile-order-pay.svg',
                                 'label' => '待付款',
                                 'path' => '/pages-sub/order/list?status=10',
                                 'visible' => false,

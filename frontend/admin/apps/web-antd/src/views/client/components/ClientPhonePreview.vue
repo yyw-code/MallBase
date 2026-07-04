@@ -120,11 +120,11 @@ const DEFAULT_HOME_MODULES: ModuleItem[] = [
       height: 314,
       list: [
         {
-          image: 'static/demo/decorate-banner-market.png',
+          image: 'static/decorate/decorate-banner-market.png',
           title: '夏日好物限时满减',
         },
         {
-          image: 'static/demo/decorate-banner-member.png',
+          image: 'static/decorate/decorate-banner-member.png',
           title: '会员精选 每日上新',
         },
       ],
@@ -136,12 +136,12 @@ const DEFAULT_HOME_MODULES: ModuleItem[] = [
     props: {
       columns: 6,
       items: [
-        { image: 'static/demo/decorate-nav-digital.png', label: '数码' },
-        { image: 'static/demo/decorate-nav-beauty.png', label: '美妆' },
-        { image: 'static/demo/decorate-nav-fashion.png', label: '服饰' },
-        { image: 'static/demo/decorate-nav-home.png', label: '家居' },
-        { image: 'static/demo/decorate-nav-food.png', label: '美食' },
-        { image: 'static/demo/decorate-nav-sport.png', label: '运动' },
+        { image: 'static/decorate/decorate-nav-digital.png', label: '数码' },
+        { image: 'static/decorate/decorate-nav-beauty.png', label: '美妆' },
+        { image: 'static/decorate/decorate-nav-fashion.png', label: '服饰' },
+        { image: 'static/decorate/decorate-nav-home.png', label: '家居' },
+        { image: 'static/decorate/decorate-nav-food.png', label: '美食' },
+        { image: 'static/decorate/decorate-nav-sport.png', label: '运动' },
       ],
     },
     type: 'navGrid',
@@ -160,22 +160,22 @@ const DEFAULT_HOME_MODULES: ModuleItem[] = [
 
 const DEFAULT_PROFILE_ORDER_ITEMS = [
   {
-    image: 'static/demo/profile-order-pay.svg',
+    image: 'static/decorate/profile-order-pay.svg',
     label: '待付款',
     path: '/pages-sub/order/list?status=10',
   },
   {
-    image: 'static/demo/profile-order-ship.svg',
+    image: 'static/decorate/profile-order-ship.svg',
     label: '待发货',
     path: '/pages-sub/order/list?status=20',
   },
   {
-    image: 'static/demo/profile-order-receive.svg',
+    image: 'static/decorate/profile-order-receive.svg',
     label: '待收货',
     path: '/pages-sub/order/list?status=30',
   },
   {
-    image: 'static/demo/profile-order-refund.svg',
+    image: 'static/decorate/profile-order-refund.svg',
     label: '退款售后',
     path: '/pages-sub/refund/list',
   },
@@ -183,17 +183,17 @@ const DEFAULT_PROFILE_ORDER_ITEMS = [
 
 const DEFAULT_PROFILE_SERVICE_ITEMS = [
   {
-    image: 'static/demo/profile-service-address.svg',
+    image: 'static/decorate/profile-service-address.svg',
     label: '地址管理',
     path: '/pages-sub/address/list',
   },
   {
-    image: 'static/demo/profile-service-settings.svg',
+    image: 'static/decorate/profile-service-settings.svg',
     label: '系统设置',
     path: '/pages-sub/user/settings',
   },
   {
-    image: 'static/demo/profile-service-support.svg',
+    image: 'static/decorate/profile-service-support.svg',
     label: '联系客服',
     path: '',
   },
@@ -485,12 +485,12 @@ const pageTitle = computed(() => {
 });
 
 const normalizedModules = computed(() => {
-  const fallback =
-    props.kind === 'floating'
-      ? []
-      : props.kind === 'profile'
-        ? DEFAULT_PROFILE_MODULES
-        : DEFAULT_HOME_MODULES;
+  let fallback: ModuleItem[] = DEFAULT_HOME_MODULES;
+  if (props.kind === 'floating') {
+    fallback = [];
+  } else if (props.kind === 'profile') {
+    fallback = DEFAULT_PROFILE_MODULES;
+  }
   const source = (
     props.modules.length > 0 ? props.modules : fallback
   ) as ModuleItem[];
@@ -1820,8 +1820,14 @@ const floatingPreviewConfig = computed(() => {
         styleColor(style.backgroundColor) || 'var(--mb-preview-primary)',
       color: styleColor(style.color) || '#ffffff',
       radius: clampNumber(style.radius, 44, 0, 120),
-      shadowBlur: clampNumber(style.shadowBlur ?? style.shadow_blur, 30, 0, 160),
-      shadowColor: styleColor(style.shadowColor ?? style.shadow_color) || '#0f172a',
+      shadowBlur: clampNumber(
+        style.shadowBlur ?? style.shadow_blur,
+        30,
+        0,
+        160,
+      ),
+      shadowColor:
+        styleColor(style.shadowColor ?? style.shadow_color) || '#0f172a',
       shadowEnabled: style.shadowEnabled !== false,
       shadowOffsetX: clampNumber(
         style.shadowOffsetX ?? style.shadow_offset_x,

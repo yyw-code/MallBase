@@ -1111,21 +1111,21 @@ const normalizeUploadImageValue = (value: any, previewUrl?: unknown) => {
   return undefined;
 };
 
-const demoAssetBaseUrl = `${
+const decorateAssetBaseUrl = `${
   new URL(import.meta.env.VITE_GLOB_API_URL || '/', window.location.origin)
     .origin
-}/static/demo/`;
+}/static/decorate/`;
 
-const createDemoAssetFile = (url: string, name: string) => ({
-  full_url: `${demoAssetBaseUrl}${name}`,
+const createDecorateAssetFile = (url: string, name: string) => ({
+  full_url: `${decorateAssetBaseUrl}${name}`,
   name,
   url,
 });
 
 const defaultBannerImageByIndex = [
-  createDemoAssetFile('48', 'decorate-banner-market.png'),
-  createDemoAssetFile('49', 'decorate-banner-member.png'),
-  createDemoAssetFile('50', 'decorate-banner-home.png'),
+  createDecorateAssetFile('1001', 'decorate-banner-market.png'),
+  createDecorateAssetFile('1002', 'decorate-banner-member.png'),
+  createDecorateAssetFile('1003', 'decorate-banner-home.png'),
 ];
 
 const legacyDefaultBannerIds = new Set(['6', '7', '8', '41']);
@@ -1135,12 +1135,12 @@ const defaultNavImageByKey: Record<
   string,
   { full_url: string; name: string; url: string }
 > = {
-  beauty: createDemoAssetFile('52', 'decorate-nav-beauty.png'),
-  food: createDemoAssetFile('55', 'decorate-nav-food.png'),
-  home: createDemoAssetFile('54', 'decorate-nav-home.png'),
-  phone: createDemoAssetFile('51', 'decorate-nav-digital.png'),
-  shirt: createDemoAssetFile('53', 'decorate-nav-fashion.png'),
-  sport: createDemoAssetFile('56', 'decorate-nav-sport.png'),
+  beauty: createDecorateAssetFile('1005', 'decorate-nav-beauty.png'),
+  food: createDecorateAssetFile('1008', 'decorate-nav-food.png'),
+  home: createDecorateAssetFile('1007', 'decorate-nav-home.png'),
+  phone: createDecorateAssetFile('1004', 'decorate-nav-digital.png'),
+  shirt: createDecorateAssetFile('1006', 'decorate-nav-fashion.png'),
+  sport: createDecorateAssetFile('1009', 'decorate-nav-sport.png'),
 };
 
 const getDefaultNavImageValue = (item: any) => {
@@ -1181,35 +1181,35 @@ const getDefaultBannerImageValue = (index: number) =>
   defaultBannerImageByIndex[index % defaultBannerImageByIndex.length];
 
 const defaultProfileOrderImageByIndex = [
-  createDemoAssetFile(
-    'static/demo/profile-order-pay.svg',
+  createDecorateAssetFile(
+    'static/decorate/profile-order-pay.svg',
     'profile-order-pay.svg',
   ),
-  createDemoAssetFile(
-    'static/demo/profile-order-ship.svg',
+  createDecorateAssetFile(
+    'static/decorate/profile-order-ship.svg',
     'profile-order-ship.svg',
   ),
-  createDemoAssetFile(
-    'static/demo/profile-order-receive.svg',
+  createDecorateAssetFile(
+    'static/decorate/profile-order-receive.svg',
     'profile-order-receive.svg',
   ),
-  createDemoAssetFile(
-    'static/demo/profile-order-refund.svg',
+  createDecorateAssetFile(
+    'static/decorate/profile-order-refund.svg',
     'profile-order-refund.svg',
   ),
 ];
 
 const defaultProfileServiceImageByIndex = [
-  createDemoAssetFile(
-    'static/demo/profile-service-address.svg',
+  createDecorateAssetFile(
+    'static/decorate/profile-service-address.svg',
     'profile-service-address.svg',
   ),
-  createDemoAssetFile(
-    'static/demo/profile-service-settings.svg',
+  createDecorateAssetFile(
+    'static/decorate/profile-service-settings.svg',
     'profile-service-settings.svg',
   ),
-  createDemoAssetFile(
-    'static/demo/profile-service-support.svg',
+  createDecorateAssetFile(
+    'static/decorate/profile-service-support.svg',
     'profile-service-support.svg',
   ),
 ];
@@ -1907,17 +1907,22 @@ const updateProfileItemImage = (item: any, value: any) => {
   setProfileItemImageRemoved(item, true);
 };
 
+const defaultCubeImageNames = [
+  'decorate-cube-new.png',
+  'decorate-cube-picks.png',
+  'decorate-cube-member.png',
+  'decorate-cube-sale.png',
+];
+
+const defaultCubeAssetIds = ['1010', '1011', '1012', '1013'];
+
 const createCubeItem = (index: number, visible = true) => ({
   id: createLocalId('cube_item'),
   enabled: visible,
-  image: createDemoAssetFile(
-    String(57 + (index % 4)),
-    [
+  image: createDecorateAssetFile(
+    defaultCubeAssetIds[index % defaultCubeAssetIds.length] || '1010',
+    defaultCubeImageNames[index % defaultCubeImageNames.length] ||
       'decorate-cube-new.png',
-      'decorate-cube-picks.png',
-      'decorate-cube-member.png',
-      'decorate-cube-sale.png',
-    ][index % 4] || 'decorate-cube-new.png',
   ),
   path:
     [

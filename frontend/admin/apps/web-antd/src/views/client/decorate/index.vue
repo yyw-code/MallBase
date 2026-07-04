@@ -343,13 +343,13 @@ const HOME_TYPE_ALIAS: Record<string, string> = {
   categoryEntry: 'entryCard',
 };
 
-const DEMO_ASSET_BASE_URL = `${
+const DECORATE_ASSET_BASE_URL = `${
   new URL(import.meta.env.VITE_GLOB_API_URL || '/', window.location.origin)
     .origin
-}/static/demo/`;
+}/static/decorate/`;
 
-const createDemoAssetFile = (url: string, name: string) => ({
-  full_url: `${DEMO_ASSET_BASE_URL}${name}`,
+const createDecorateAssetFile = (url: string, name: string) => ({
+  full_url: `${DECORATE_ASSET_BASE_URL}${name}`,
   name,
   url,
 });
@@ -406,9 +406,9 @@ const normalizeEditorUploadImage = (value: any) => {
 };
 
 const DEFAULT_BANNER_IMAGE_BY_INDEX = [
-  createDemoAssetFile('48', 'decorate-banner-market.png'),
-  createDemoAssetFile('49', 'decorate-banner-member.png'),
-  createDemoAssetFile('50', 'decorate-banner-home.png'),
+  createDecorateAssetFile('1001', 'decorate-banner-market.png'),
+  createDecorateAssetFile('1002', 'decorate-banner-member.png'),
+  createDecorateAssetFile('1003', 'decorate-banner-home.png'),
 ];
 
 const LEGACY_DEFAULT_BANNER_IDS = new Set(['6', '7', '8', '41']);
@@ -439,67 +439,67 @@ const DEFAULT_NAV_IMAGE_BY_KEY: Record<
   string,
   { full_url: string; name: string; url: string }
 > = {
-  beauty: createDemoAssetFile('52', 'decorate-nav-beauty.png'),
-  food: createDemoAssetFile('55', 'decorate-nav-food.png'),
-  home: createDemoAssetFile('54', 'decorate-nav-home.png'),
-  phone: createDemoAssetFile('51', 'decorate-nav-digital.png'),
-  shirt: createDemoAssetFile('53', 'decorate-nav-fashion.png'),
-  sport: createDemoAssetFile('56', 'decorate-nav-sport.png'),
+  beauty: createDecorateAssetFile('1005', 'decorate-nav-beauty.png'),
+  food: createDecorateAssetFile('1008', 'decorate-nav-food.png'),
+  home: createDecorateAssetFile('1007', 'decorate-nav-home.png'),
+  phone: createDecorateAssetFile('1004', 'decorate-nav-digital.png'),
+  shirt: createDecorateAssetFile('1006', 'decorate-nav-fashion.png'),
+  sport: createDecorateAssetFile('1009', 'decorate-nav-sport.png'),
 };
 
 const DEFAULT_CUBE_ITEMS = [
   {
-    image: createDemoAssetFile('57', 'decorate-cube-new.png'),
+    image: createDecorateAssetFile('1010', 'decorate-cube-new.png'),
     path: '/pages-sub/goods/list?sort=newest',
     title: '新品上架',
   },
   {
-    image: createDemoAssetFile('58', 'decorate-cube-picks.png'),
+    image: createDecorateAssetFile('1011', 'decorate-cube-picks.png'),
     path: '/pages-sub/goods/list?is_recommend=1',
     title: '精选榜单',
   },
   {
-    image: createDemoAssetFile('59', 'decorate-cube-member.png'),
+    image: createDecorateAssetFile('1012', 'decorate-cube-member.png'),
     path: '/pages-sub/goods/list?sort=sales',
     title: '会员专享',
   },
   {
-    image: createDemoAssetFile('60', 'decorate-cube-sale.png'),
+    image: createDecorateAssetFile('1013', 'decorate-cube-sale.png'),
     path: '/pages-sub/goods/list?is_hot=1',
     title: '限时满减',
   },
 ];
 
 const DEFAULT_PROFILE_ORDER_IMAGE_BY_INDEX = [
-  createDemoAssetFile(
-    'static/demo/profile-order-pay.svg',
+  createDecorateAssetFile(
+    'static/decorate/profile-order-pay.svg',
     'profile-order-pay.svg',
   ),
-  createDemoAssetFile(
-    'static/demo/profile-order-ship.svg',
+  createDecorateAssetFile(
+    'static/decorate/profile-order-ship.svg',
     'profile-order-ship.svg',
   ),
-  createDemoAssetFile(
-    'static/demo/profile-order-receive.svg',
+  createDecorateAssetFile(
+    'static/decorate/profile-order-receive.svg',
     'profile-order-receive.svg',
   ),
-  createDemoAssetFile(
-    'static/demo/profile-order-refund.svg',
+  createDecorateAssetFile(
+    'static/decorate/profile-order-refund.svg',
     'profile-order-refund.svg',
   ),
 ];
 
 const DEFAULT_PROFILE_SERVICE_IMAGE_BY_INDEX = [
-  createDemoAssetFile(
-    'static/demo/profile-service-address.svg',
+  createDecorateAssetFile(
+    'static/decorate/profile-service-address.svg',
     'profile-service-address.svg',
   ),
-  createDemoAssetFile(
-    'static/demo/profile-service-settings.svg',
+  createDecorateAssetFile(
+    'static/decorate/profile-service-settings.svg',
     'profile-service-settings.svg',
   ),
-  createDemoAssetFile(
-    'static/demo/profile-service-support.svg',
+  createDecorateAssetFile(
+    'static/decorate/profile-service-support.svg',
     'profile-service-support.svg',
   ),
 ];
@@ -1126,7 +1126,7 @@ const getTabbarStaticImagePath = (key: string, active = false) =>
   `static/images/tabbar/${key}${active ? '-active' : ''}.png`;
 
 const getFloatingStaticIconPath = (key: string) =>
-  `static/client/floating/${key}.png`;
+  `static/decorate/floating/${key}.png`;
 
 const SYSTEM_FLOATING_ITEM_IDS = new Set([
   'floating-cart',
@@ -2435,11 +2435,11 @@ const defaultHomeConfig = (
       title: '夏日好物限时满减',
     }),
     entryCard: withStyle({
-      background_image: createDemoAssetFile(
-        '61',
+      background_image: createDecorateAssetFile(
+        '1014',
         'decorate-entry-category.png',
       ),
-      icon_image: createDemoAssetFile('61', 'decorate-entry-category.png'),
+      icon_image: createDecorateAssetFile('1014', 'decorate-entry-category.png'),
       padding: 24,
       path: '/pages/category/index',
       radius: 24,

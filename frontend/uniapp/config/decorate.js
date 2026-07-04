@@ -63,12 +63,12 @@ export const DEFAULT_HOME_MODULES = [
       radius: 12,
       list: [
         {
-          image: "/static/demo/decorate-banner-market.png",
+          image: "/static/decorate/decorate-banner-market.png",
           title: "夏日好物限时满减",
           url: "/pages-sub/goods/list?is_recommend=1",
         },
         {
-          image: "/static/demo/decorate-banner-member.png",
+          image: "/static/decorate/decorate-banner-member.png",
           title: "会员精选 每日上新",
           url: "/pages-sub/goods/list?sort=sales",
         },
@@ -91,27 +91,27 @@ export const DEFAULT_HOME_MODULES = [
         {
           label: "数码",
           url: "/pages-sub/goods/list?keyword=数码",
-          image: "/static/demo/decorate-nav-digital.png",
+          image: "/static/decorate/decorate-nav-digital.png",
         },
         {
           label: "美妆",
           url: "/pages-sub/goods/list?keyword=美妆",
-          image: "/static/demo/decorate-nav-beauty.png",
+          image: "/static/decorate/decorate-nav-beauty.png",
         },
         {
           label: "服饰",
           url: "/pages-sub/goods/list?keyword=服饰",
-          image: "/static/demo/decorate-nav-fashion.png",
+          image: "/static/decorate/decorate-nav-fashion.png",
         },
         {
           label: "家居",
           url: "/pages-sub/goods/list?keyword=家居",
-          image: "/static/demo/decorate-nav-home.png",
+          image: "/static/decorate/decorate-nav-home.png",
         },
         {
           label: "美食",
           url: "/pages-sub/goods/list?keyword=美食",
-          image: "/static/demo/decorate-nav-food.png",
+          image: "/static/decorate/decorate-nav-food.png",
         },
       ],
     },
@@ -237,25 +237,25 @@ export const DEFAULT_PROFILE_MODULES = [
         {
           key: "pending_pay",
           label: "待付款",
-          image: "static/demo/profile-order-pay.svg",
+          image: "static/decorate/profile-order-pay.svg",
           path: "/pages-sub/order/list?status=10",
         },
         {
           key: "paid",
           label: "待发货",
-          image: "static/demo/profile-order-ship.svg",
+          image: "static/decorate/profile-order-ship.svg",
           path: "/pages-sub/order/list?status=20",
         },
         {
           key: "shipped",
           label: "待收货",
-          image: "static/demo/profile-order-receive.svg",
+          image: "static/decorate/profile-order-receive.svg",
           path: "/pages-sub/order/list?status=30",
         },
         {
           key: "refund",
           label: "退款售后",
-          image: "static/demo/profile-order-refund.svg",
+          image: "static/decorate/profile-order-refund.svg",
           path: "/pages-sub/refund/list",
         },
       ],
@@ -275,7 +275,7 @@ export const DEFAULT_PROFILE_MODULES = [
   },
   {
     id: "profile-points",
-    type: "pointsEntry",
+    type: "points",
     sort: 35,
     props: {
       ...DEFAULT_PROFILE_CARD_STYLE,
@@ -297,19 +297,19 @@ export const DEFAULT_PROFILE_MODULES = [
         {
           key: "address",
           label: "地址管理",
-          image: "static/demo/profile-service-address.svg",
+          image: "static/decorate/profile-service-address.svg",
           path: "/pages-sub/address/list",
         },
         {
           key: "settings",
           label: "系统设置",
-          image: "static/demo/profile-service-settings.svg",
+          image: "static/decorate/profile-service-settings.svg",
           path: "/pages-sub/user/settings",
         },
         {
           key: "service",
           label: "联系客服",
-          image: "static/demo/profile-service-support.svg",
+          image: "static/decorate/profile-service-support.svg",
           path: "",
         },
       ],
@@ -324,14 +324,14 @@ export const DEFAULT_FLOATING_CONFIG = {
   items: [
     {
       enabled: true,
-      icon: "static/client/floating/service.png",
+      icon: "static/decorate/floating/service.png",
       id: "floating-service",
       text: "客服",
       type: "customerService",
     },
     {
       enabled: true,
-      icon: "static/client/floating/cart.png",
+      icon: "static/decorate/floating/cart.png",
       id: "floating-cart",
       path: "/pages/cart/index",
       text: "购物车",
@@ -339,7 +339,7 @@ export const DEFAULT_FLOATING_CONFIG = {
     },
     {
       enabled: true,
-      icon: "static/client/floating/home.png",
+      icon: "static/decorate/floating/home.png",
       id: "floating-home",
       path: "/pages/index/index",
       text: "首页",

@@ -81,8 +81,11 @@ import {
 import { openCustomerService } from '@/utils/customer-service'
 
 const POSITION_STORAGE_KEY = 'mb_floating_action_position'
-const FLOATING_ICON_BASE = '/static/client/floating'
-const LEGACY_FLOATING_ICON_BASE = '/static/images/floating'
+const FLOATING_ICON_BASE = '/static/decorate/floating'
+const LEGACY_FLOATING_ICON_BASES = [
+  '/static/client/floating',
+  '/static/images/floating',
+]
 const POSITION_SETTLE_DELAY_MS = 32
 
 const decorateStore = useDecorateStore()
@@ -394,13 +397,16 @@ function floatingShadowStyle(style) {
 function normalizeFloatingIconPath(value) {
   let normalized = normalizeAssetPath(value)
   if (!normalized) return ''
-  if (normalized.startsWith(LEGACY_FLOATING_ICON_BASE)) {
+  const matchedLegacyBase = LEGACY_FLOATING_ICON_BASES.find((base) =>
+    normalized.startsWith(base),
+  )
+  if (matchedLegacyBase) {
     normalized = normalized
-      .replace(LEGACY_FLOATING_ICON_BASE, FLOATING_ICON_BASE)
+      .replace(matchedLegacyBase, FLOATING_ICON_BASE)
       .replace(/\.svg(?:[?#].*)?$/i, '.png')
   }
   if (
-    normalized.startsWith('/static/client/') &&
+    normalized.startsWith('/static/') &&
     appConfig.baseUrl &&
     !/^(?:https?:)?\/\//.test(normalized)
   ) {
@@ -411,7 +417,7 @@ function normalizeFloatingIconPath(value) {
 
 function isSystemFloatingIcon(value) {
   const normalized = normalizeFloatingIconPath(value)
-  return normalized.includes('/static/client/floating/')
+  return normalized.includes('/static/decorate/floating/')
 }
 
 function getUploadedIcon(item) {

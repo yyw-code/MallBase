@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96" role="img" aria-label="address management">
+  <rect width="96" height="96" rx="28" fill="#eff6ff"/>
+  <path d="M48 18c-15 0-26 11-26 25 0 18 26 36 26 36s26-18 26-36c0-14-11-25-26-25z" fill="#0ea5e9"/>
+  <circle cx="48" cy="43" r="10" fill="#e0f2fe"/>
+</svg>
