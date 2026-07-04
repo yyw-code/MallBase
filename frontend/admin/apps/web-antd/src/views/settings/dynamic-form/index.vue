@@ -90,8 +90,34 @@ const toFullUrl = (path: string) => {
   return `${apiBaseUrl}${path}`;
 };
 
+const ROUTE_SETTING_GROUP_MAP: Record<string, string> = {
+  '/member/config': 'MemberConfig',
+  '/points/config': 'PointsConfig',
+};
+
 /** 从路由路径中提取 groupCode */
 const routeGroupCode = computed(() => {
+  const queryGroupCode = route.query.groupCode;
+  if (typeof queryGroupCode === 'string' && queryGroupCode) {
+    return queryGroupCode;
+  }
+
+  const metaGroupCode =
+    route.meta?.settingGroupCode || route.meta?.groupCode || '';
+  if (typeof metaGroupCode === 'string' && metaGroupCode) {
+    return metaGroupCode;
+  }
+
+  const routeName = typeof route.name === 'string' ? route.name : '';
+  if (routeName.startsWith('SettingGroup:')) {
+    return routeName.slice('SettingGroup:'.length);
+  }
+
+  const mappedGroupCode = ROUTE_SETTING_GROUP_MAP[route.path];
+  if (mappedGroupCode) {
+    return mappedGroupCode;
+  }
+
   const path = route.path;
   const segments = path.split('/').filter(Boolean);
   return segments[segments.length - 1] || '';

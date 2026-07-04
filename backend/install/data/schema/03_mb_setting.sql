@@ -105,6 +105,11 @@ INSERT INTO `mb_setting_group` (`id`, `parent_id`, `permission_id`, `name`, `cod
 INSERT INTO `mb_setting_group` (`id`, `parent_id`, `permission_id`, `name`, `code`, `icon`, `description`, `sort`, `display_type`, `status`, `permission_parent_code`, `permission_path`, `permission_component`, `permission_status`) VALUES
 (108, 0, 0, '短信频控', 'SmsRateLimit', 'lucide:gauge', '验证码有效期与发送频控阈值', 80, 'page', 1, 'SmsConfig', '/sms/config', '/sms/config/index', 1);
 
+-- 营销配置：积分与会员使用系统表单数据源，挂载到「营销管理」下
+INSERT INTO `mb_setting_group` (`id`, `parent_id`, `permission_id`, `name`, `code`, `icon`, `description`, `sort`, `display_type`, `status`, `permission_parent_code`, `permission_path`, `permission_component`, `permission_status`) VALUES
+(109, 0, 0, '积分配置', 'PointsConfig', 'lucide:badge-plus', '积分总开关、发放、冻结与订单抵扣配置', 10, 'page', 1, 'SystemPointsManagement', '/points/config', '/settings/dynamic-form/index', 1),
+(110, 0, 0, '会员配置', 'MemberConfig', 'lucide:badge-check', '会员总开关与成长值比例配置', 20, 'page', 1, 'SystemMemberManagement', '/member/config', '/settings/dynamic-form/index', 1);
+
 -- 设置项：1011 SystemBasic 基础
 INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`, `rules`, `placeholder`, `remark`, `sort`) VALUES
 (1011, '站点名称', 'site_name', 'Mall Base', 'input', NULL, '[{"type":"required","message":"不能为空"}]', NULL, NULL, 10),
@@ -266,6 +271,20 @@ INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`
 INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`, `rules`, `placeholder`, `remark`, `sort`) VALUES
 (106, '待支付超时(分钟)', 'order_pending_pay_timeout_minutes', '30', 'number', NULL, '[{"type":"required","message":"不能为空"},{"type":"min","value":1,"message":"必须大于 0"}]', NULL, '订单创建后超过该分钟数仍未支付时，定时任务自动关闭订单并回滚库存', 10),
 (106, '自动确认收货(天)', 'order_auto_receive_days', '7', 'number', NULL, '[{"type":"required","message":"不能为空"},{"type":"min","value":1,"message":"必须大于 0"}]', NULL, '订单发货后超过该天数未确认收货时，定时任务自动确认收货', 20);
+
+-- 设置项：109 PointsConfig 积分配置
+INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`, `rules`, `placeholder`, `remark`, `sort`) VALUES
+(109, '启用积分功能', 'points_enabled', '1', 'switch', NULL, NULL, NULL, '关闭后客户端和商品编辑不展示积分入口，并停止新发放和新抵扣；历史返还、回收和释放继续处理', 10),
+(109, '启用积分赠送', 'points_reward_enabled', '1', 'switch', NULL, NULL, NULL, '关闭后订单完成不再产生新的赠送积分', 20),
+(109, '积分冻结天数', 'points_reward_freeze_days', '7', 'number', NULL, '[{"type":"required","message":"不能为空"},{"type":"min","value":0,"message":"不能小于 0"}]', NULL, '订单完成后赠送积分先冻结，超过该天数后释放为可用积分', 30),
+(109, '启用积分抵扣', 'points_deduction_enabled', '1', 'switch', NULL, NULL, NULL, '开启后客户端确认订单页可使用可用积分抵扣普通订单金额', 40),
+(109, '积分抵扣比例', 'points_deduction_points_per_yuan', '100', 'number', NULL, '[{"type":"required","message":"不能为空"},{"type":"min","value":1,"message":"必须大于 0"}]', NULL, '多少积分抵扣 1 元订单金额', 50),
+(109, '积分抵扣上限比例', 'points_deduction_max_percent', '50', 'number', NULL, '[{"type":"required","message":"不能为空"},{"type":"min","value":0,"message":"不能小于 0"},{"type":"max","value":100,"message":"不能大于 100"}]', NULL, '单笔订单商品金额最多可用积分抵扣的比例，可设为 100 表示允许全额抵扣，0 表示不允许抵扣', 60);
+
+-- 设置项：110 MemberConfig 会员配置
+INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`, `rules`, `placeholder`, `remark`, `sort`) VALUES
+(110, '启用会员功能', 'member_enabled', '0', 'switch', NULL, NULL, NULL, '关闭后客户端不展示会员入口，后续会员权益不参与订单计算', 10),
+(110, '成长值比例', 'member_growth_points_per_yuan', '1', 'number', NULL, '[{"type":"required","message":"不能为空"},{"type":"min","value":0,"message":"不能小于 0"}]', NULL, '每实付 1 元累计的成长值，0 表示不累计', 20);
 
 -- 设置项：107 RefundConfig 售后配置
 INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`, `rules`, `placeholder`, `remark`, `sort`) VALUES

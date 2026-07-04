@@ -91,6 +91,9 @@ class ConfigService extends BaseService
             }
         }
 
+        $merged['points_enabled'] = $this->settingEnabled('points_enabled', true) ? 1 : 0;
+        $merged['member_enabled'] = $this->settingEnabled('member_enabled', false) ? 1 : 0;
+
         // 版权 {year} 占位替换
         if (!empty($merged['copyright_date']) && is_string($merged['copyright_date'])) {
             $merged['copyright_date'] = str_replace('{year}', (string) date('Y'), $merged['copyright_date']);
@@ -150,6 +153,12 @@ class ConfigService extends BaseService
             ];
         }
         return $list;
+    }
+
+    private function settingEnabled(string $code, bool $default): bool
+    {
+        $value = (string) getSystemSetting($code, $default ? '1' : '0');
+        return in_array($value, ['1', 'true', 'on'], true);
     }
 
 }
