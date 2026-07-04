@@ -1,12 +1,13 @@
 <template>
   <view
-    v-if="visible"
+    v-if="visible && positionReady"
     class="mb-floating-action"
     :class="[
       `mb-floating-action--${currentSide}`,
       {
         'mb-floating-action--dragging': dragging,
         'mb-floating-action--open': menuOpened,
+        'mb-floating-action--position-settled': positionSettled,
         'mb-floating-action--single': isSingleMode,
       },
     ]"
@@ -82,6 +83,7 @@ import { openCustomerService } from '@/utils/customer-service'
 const POSITION_STORAGE_KEY = 'mb_floating_action_position'
 const FLOATING_ICON_BASE = '/static/client/floating'
 const LEGACY_FLOATING_ICON_BASE = '/static/images/floating'
+const POSITION_SETTLE_DELAY_MS = 32
 
 const decorateStore = useDecorateStore()
 const opened = ref(false)
@@ -91,6 +93,7 @@ const dragging = ref(false)
 const dragMoved = ref(false)
 const ignoreNextTap = ref(false)
 const positionReady = ref(false)
+const positionSettled = ref(false)
 const dragPosition = ref({ x: 0, y: 0 })
 const viewport = ref({ height: 667, safeBottom: 0, width: 375 })
 const touchState = ref({
@@ -101,6 +104,7 @@ const touchState = ref({
 })
 let dragFrame = 0
 let pendingDragPosition = null
+let positionSettleTimer = 0
 
 const config = computed(() => decorateStore.floatingConfig || {})
 
@@ -190,6 +194,9 @@ watch(
   () => {
     if (!visible.value) {
       opened.value = false
+      positionReady.value = false
+      positionSettled.value = false
+      cancelPositionSettle()
       return
     }
     nextTick(() => syncPosition(true))
@@ -231,6 +238,8 @@ function syncViewport() {
 }
 
 function syncPosition(preferStorage = true) {
+  cancelPositionSettle()
+  positionSettled.value = false
   syncViewport()
   const stored = preferStorage ? readStoredPosition() : null
   const nextPosition = stored || getDefaultPosition()
@@ -240,6 +249,7 @@ function syncPosition(preferStorage = true) {
       ? 'left'
       : 'right'
   positionReady.value = true
+  schedulePositionSettle()
 }
 
 function getDefaultPosition() {
@@ -529,7 +539,24 @@ function endDrag() {
 onBeforeUnmount(() => {
   removeMouseListeners()
   cancelDragFrame()
+  cancelPositionSettle()
 })
+
+function schedulePositionSettle() {
+  nextTick(() => {
+    cancelPositionSettle()
+    positionSettleTimer = setTimeout(() => {
+      positionSettleTimer = 0
+      positionSettled.value = true
+    }, POSITION_SETTLE_DELAY_MS)
+  })
+}
+
+function cancelPositionSettle() {
+  if (!positionSettleTimer) return
+  clearTimeout(positionSettleTimer)
+  positionSettleTimer = 0
+}
 
 function scheduleDragPosition(x, y) {
   pendingDragPosition = clampPosition(x, y)
@@ -602,8 +629,12 @@ async function handleItemTap(item) {
   width: var(--mb-floating-size);
   height: var(--mb-floating-size);
   color: var(--mb-floating-color);
-  transition: transform 0.2s ease;
+  transition: none;
   will-change: transform;
+}
+
+.mb-floating-action--position-settled {
+  transition: transform 0.2s ease;
 }
 
 .mb-floating-action--dragging {
