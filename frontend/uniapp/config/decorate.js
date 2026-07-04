@@ -275,7 +275,7 @@ export const DEFAULT_PROFILE_MODULES = [
   },
   {
     id: "profile-points",
-    type: "points",
+    type: "pointsEntry",
     sort: 35,
     props: {
       ...DEFAULT_PROFILE_CARD_STYLE,

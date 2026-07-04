@@ -362,7 +362,7 @@ const DEFAULT_PROFILE_MODULES: ModuleItem[] = [
       show_view_button: true,
       title: '我的积分',
     },
-    type: 'points',
+    type: 'pointsEntry',
   },
   {
     id: 'preview-service',
@@ -437,6 +437,7 @@ const MODULE_LABELS: Record<string, string> = {
   userCard: '用户信息',
   wallet: '钱包卡片',
   points: '积分卡片',
+  pointsEntry: '积分卡片',
 };
 
 const GOODS_FALLBACK = {
@@ -695,8 +696,8 @@ function normalizeProfileType(type: string) {
     categoryEntry: 'entryCard',
     customMenu: 'serviceMenu',
     orderEntry: 'orderShortcut',
-    pointsCard: 'points',
-    pointsEntry: 'points',
+    points: 'pointsEntry',
+    pointsCard: 'pointsEntry',
     profileHeader: 'userCard',
     userInfo: 'userCard',
     walletEntry: 'wallet',
@@ -2502,7 +2503,7 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
                 </div>
 
                 <div
-                  v-else-if="module.type === 'points'"
+                  v-else-if="module.type === 'pointsEntry'"
                   class="profile-points-card"
                   :style="moduleBoxStyle(module)"
                 >

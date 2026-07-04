@@ -763,12 +763,12 @@ function moduleBoxStyle(module) {
 
 function profileModuleVisible(module) {
   if (module.type === "wallet") return balancePaymentEnabled.value;
-  if (module.type === "points") return pointsEnabled.value;
+  if (module.type === "pointsEntry") return pointsEnabled.value;
   if (module.type === "logout") return logged.value;
   return [
     "divider",
     "orderShortcut",
-    "points",
+    "pointsEntry",
     "richText",
     "serviceMenu",
     "spacing",
@@ -1155,7 +1155,7 @@ function handleLogout() {
           </view>
 
           <view
-            v-else-if="module.type === 'points'"
+            v-else-if="module.type === 'pointsEntry'"
             class="points-card"
             :style="moduleBoxStyle(module)"
             @tap="goPoints"
