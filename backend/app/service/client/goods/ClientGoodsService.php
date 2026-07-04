@@ -9,6 +9,7 @@ use app\model\goods\GoodsDetail;
 use app\model\goods\GoodsSku;
 use app\model\goods\GoodsSkuDetail;
 use app\model\goods\GoodsTagRelation;
+use app\model\marketing\PointsRule;
 use app\service\upload\AssetHydrator;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
@@ -22,6 +23,13 @@ use mall_base\exception\BusinessException;
  */
 class ClientGoodsService extends BaseService
 {
+    private const REWARD_MODE_INHERIT = 'inherit';
+    private const REWARD_MODE_DISABLED = 'disabled';
+    private const REWARD_MODE_RATIO = 'ratio';
+    private const REWARD_MODE_FIXED = 'fixed';
+    private const REWARD_MODE_GLOBAL = 'global';
+    private const REWARD_MODE_SKU = 'sku';
+
     protected string $modelClass = Goods::class;
 
     /**
@@ -90,6 +98,7 @@ class ClientGoodsService extends BaseService
             ->select()
             ->toArray();
         $data['skus'] = $this->appendSkuDescriptions($skus);
+        $data = $this->appendMarketingPreviews($data);
         $data['guarantees'] = $this->goodsGuarantees();
 
         return app()->make(AssetHydrator::class)->hydrateGoodsDetail($data);
@@ -255,6 +264,202 @@ class ClientGoodsService extends BaseService
         return (string) ($this->model(GoodsDetail::class)
             ->where('goods_id', $goodsId)
             ->value('description') ?? '');
+    }
+
+    /**
+     * 给商品详情补充展示用的营销预估字段。
+     *
+     * 下单页仍以 OrderService::preview() 为权威金额；这里仅用于商品详情首屏和规格弹窗展示。
+     *
+     * @param array<string, mixed> $data
+     * @return array<string, mixed>
+     */
+    private function appendMarketingPreviews(array $data): array
+    {
+        $pointsEnabled = $this->settingBool('points_enabled', true)
+            && $this->settingBool('points_reward_enabled', true);
+        $memberEnabled = $this->settingBool('member_enabled', false);
+        $pointsRule = $pointsEnabled ? $this->activeOrderCompletePointsRule() : null;
+        $growthRateBasis = $memberEnabled ? $this->decimalRateBasis((string) getSystemSetting('member_growth_points_per_yuan', '1')) : 0;
+
+        $data['points_reward_preview_enabled'] = $pointsEnabled && $pointsRule !== null ? 1 : 0;
+        $data['member_growth_preview_enabled'] = $memberEnabled && $growthRateBasis > 0 ? 1 : 0;
+
+        $skus = is_array($data['skus'] ?? null) ? $data['skus'] : [];
+        foreach ($skus as &$sku) {
+            if (!is_array($sku)) {
+                continue;
+            }
+            $previewAmount = $this->marketingPreviewAmount($data, $sku, $memberEnabled);
+            $points = $pointsRule === null
+                ? 0
+                : $this->previewRewardPoints($data, $sku, $pointsRule, $previewAmount);
+            $growth = $growthRateBasis > 0
+                ? intdiv($this->decimalToCents($previewAmount) * $growthRateBasis, 10000)
+                : 0;
+
+            $sku['points_reward_preview_points'] = $points;
+            $sku['points_reward_preview_text'] = $points > 0 ? '预计赠送 ' . $points . ' 积分' : '';
+            $sku['member_growth_preview_value'] = $growth;
+            $sku['member_growth_preview_text'] = $growth > 0 ? '预计获 ' . $growth . ' 成长值' : '';
+        }
+        unset($sku);
+        $data['skus'] = $skus;
+
+        if ($skus !== []) {
+            $firstSku = $skus[0];
+            $data['points_reward_preview_points'] = (int) ($firstSku['points_reward_preview_points'] ?? 0);
+            $data['points_reward_preview_text'] = (string) ($firstSku['points_reward_preview_text'] ?? '');
+            $data['member_growth_preview_value'] = (int) ($firstSku['member_growth_preview_value'] ?? 0);
+            $data['member_growth_preview_text'] = (string) ($firstSku['member_growth_preview_text'] ?? '');
+        }
+
+        return $data;
+    }
+
+    private function activeOrderCompletePointsRule(): ?PointsRule
+    {
+        /** @var PointsRule|null $rule */
+        $rule = $this->model(PointsRule::class)
+            ->where('scene', PointsRule::SCENE_ORDER_COMPLETE)
+            ->where('status', 1)
+            ->find();
+
+        return $rule;
+    }
+
+    /**
+     * 商品详情页按当前可见权益估算展示金额；下单仍以后端 preview 的实付为准。
+     *
+     * @param array<string, mixed> $goods
+     * @param array<string, mixed> $sku
+     */
+    private function marketingPreviewAmount(array $goods, array $sku, bool $memberEnabled): string
+    {
+        $price = (string) ($sku['price'] ?? $goods['price'] ?? '0.00');
+        if (!$memberEnabled || (string) ($goods['member_benefit_mode'] ?? '') !== 'sku_price') {
+            return $price;
+        }
+
+        $priceCents = $this->decimalToCents($price);
+        $memberPrice = (string) ($sku['member_price'] ?? '');
+        $memberCents = $this->decimalToCents($memberPrice);
+        if ($memberCents <= 0 || ($priceCents > 0 && $memberCents >= $priceCents)) {
+            return $price;
+        }
+
+        return $memberPrice;
+    }
+
+    /**
+     * @param array<string, mixed> $goods
+     * @param array<string, mixed> $sku
+     */
+    private function previewRewardPoints(array $goods, array $sku, PointsRule $rule, string $previewAmount): int
+    {
+        $config = $this->resolveRewardPreviewConfig($goods, $sku, $rule);
+        if ($config['mode'] === self::REWARD_MODE_DISABLED) {
+            return 0;
+        }
+
+        $points = 0;
+        if ($config['mode'] === self::REWARD_MODE_FIXED) {
+            $points = max(0, $config['fixed']);
+        } else {
+            $ratio = max(0, $config['ratio']);
+            if ($ratio > 0) {
+                $points = intdiv($this->decimalToCents($previewAmount) * $ratio, 100);
+            }
+        }
+
+        $maxPoints = max(0, (int) ($rule->max_points ?? 0));
+        return $maxPoints > 0 ? min($points, $maxPoints) : $points;
+    }
+
+    /**
+     * @param array<string, mixed> $goods
+     * @param array<string, mixed> $sku
+     * @return array{mode:string,ratio:int,fixed:int}
+     */
+    private function resolveRewardPreviewConfig(array $goods, array $sku, PointsRule $rule): array
+    {
+        $goodsMode = $this->normalizeGoodsRewardMode((string) ($goods['points_reward_mode'] ?? self::REWARD_MODE_GLOBAL));
+        if (in_array($goodsMode, [self::REWARD_MODE_DISABLED, self::REWARD_MODE_RATIO, self::REWARD_MODE_FIXED], true)) {
+            return [
+                'mode' => $goodsMode,
+                'ratio' => max(0, (int) ($goods['points_reward_ratio'] ?? 0)),
+                'fixed' => max(0, (int) ($goods['points_reward_fixed'] ?? 0)),
+            ];
+        }
+
+        if ($goodsMode === self::REWARD_MODE_SKU) {
+            $skuMode = $this->normalizeSkuRewardMode((string) ($sku['points_reward_mode'] ?? self::REWARD_MODE_INHERIT));
+            if ($skuMode !== self::REWARD_MODE_INHERIT) {
+                return [
+                    'mode' => $skuMode,
+                    'ratio' => max(0, (int) ($sku['points_reward_ratio'] ?? 0)),
+                    'fixed' => max(0, (int) ($sku['points_reward_fixed'] ?? 0)),
+                ];
+            }
+        }
+
+        return [
+            'mode' => self::REWARD_MODE_GLOBAL,
+            'ratio' => max(0, (int) ($rule->points_per_yuan ?? 0)),
+            'fixed' => 0,
+        ];
+    }
+
+    private function normalizeGoodsRewardMode(string $mode): string
+    {
+        $mode = trim($mode);
+        if ($mode === '' || $mode === self::REWARD_MODE_INHERIT) {
+            return self::REWARD_MODE_GLOBAL;
+        }
+
+        return in_array($mode, [
+            self::REWARD_MODE_GLOBAL,
+            self::REWARD_MODE_DISABLED,
+            self::REWARD_MODE_RATIO,
+            self::REWARD_MODE_FIXED,
+            self::REWARD_MODE_SKU,
+        ], true) ? $mode : self::REWARD_MODE_GLOBAL;
+    }
+
+    private function normalizeSkuRewardMode(string $mode): string
+    {
+        return in_array($mode, [
+            self::REWARD_MODE_INHERIT,
+            self::REWARD_MODE_DISABLED,
+            self::REWARD_MODE_RATIO,
+            self::REWARD_MODE_FIXED,
+        ], true) ? $mode : self::REWARD_MODE_INHERIT;
+    }
+
+    private function settingBool(string $code, bool $default): bool
+    {
+        $value = getSystemSetting($code, $default ? '1' : '0');
+        return in_array((string) $value, ['1', 'true', 'on', 'yes'], true);
+    }
+
+    private function decimalRateBasis(string $value): int
+    {
+        $value = trim($value);
+        if ($value === '' || !is_numeric($value)) {
+            return 0;
+        }
+
+        return max(0, (int) round(((float) $value) * 100));
+    }
+
+    private function decimalToCents(string $amount): int
+    {
+        $amount = trim($amount);
+        if ($amount === '' || !is_numeric($amount)) {
+            return 0;
+        }
+
+        return max(0, (int) round(((float) $amount) * 100));
     }
 
     /**

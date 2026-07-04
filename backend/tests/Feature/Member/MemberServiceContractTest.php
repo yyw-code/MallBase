@@ -218,6 +218,48 @@ final class MemberServiceContractTest extends TestCase
         }
     }
 
+    public function testClientSummaryExposesLevelProgressAndNextLevel(): void
+    {
+        $this->requireDbTables([
+            'setting',
+            'member_level',
+            'user_member',
+        ]);
+
+        Db::startTrans();
+        try {
+            $this->enableMemberSettings();
+            $userId = $this->testUserId();
+            $silverId = $this->insertLevel('白银会员', 0, '98.00');
+            $goldId = $this->insertLevel('黄金会员', 100, '90.00');
+            $diamondId = $this->insertLevel('钻石会员', 300, '85.00');
+            Db::name('user_member')->insert([
+                'user_id' => $userId,
+                'growth_value' => 120,
+                'total_growth_value' => 180,
+                'level_id' => $goldId,
+                'level_name' => '黄金会员',
+                'level_source' => 'auto',
+            ]);
+
+            $summary = $this->memberService()->clientSummary($userId);
+
+            $this->assertTrue($summary['enabled']);
+            $this->assertSame($goldId, (int) ($summary['level']['id'] ?? 0));
+            $this->assertSame($diamondId, (int) ($summary['next_level']['id'] ?? 0));
+            $this->assertSame(120, $summary['growth_value']);
+            $this->assertSame(180, $summary['total_growth_value']);
+            $this->assertSame(180, $summary['growth_to_next']);
+            $this->assertSame(10, $summary['progress_percent']);
+            $this->assertSame('90.00', $summary['discount_percent']);
+            $this->assertSame('9折', $summary['discount_text']);
+            $this->assertFalse($summary['level_locked']);
+            $this->assertNotSame($silverId, (int) ($summary['level']['id'] ?? 0));
+        } finally {
+            Db::rollback();
+        }
+    }
+
     private function requireDbTables(array $tables): void
     {
         $this->bootApp();

@@ -61,6 +61,8 @@
       mode="cart"
       :selected-specs="specSelectedSpecs"
       :selected-sku-id="specSelectedSkuId"
+      :points-enabled="pointsEnabled"
+      :member-enabled="memberEnabled"
       @change="onSpecChange"
       @close="specVisible = false"
       @add-to-cart="onSpecAddToCart"
@@ -142,6 +144,8 @@ const showBadge = computed(() =>
 const showCartButton = computed(() =>
   configFlag(props.showCartButton, 'client_goods_card_show_cart_button'),
 )
+const pointsEnabled = computed(() => configFlag(undefined, 'points_enabled', true))
+const memberEnabled = computed(() => configFlag(undefined, 'member_enabled', false))
 
 const goodsBadgeConfig = computed(() =>
   normalizeGoodsBadgeConfig(appStore.siteConfig?.client_goods_badge_config),

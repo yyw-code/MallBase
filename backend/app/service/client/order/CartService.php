@@ -172,7 +172,7 @@ class CartService extends BaseService
                 'quantity'    => (int) $row['quantity'],
                 'selected'    => (int) $row['selected'],
                 'goods_name'  => $goods['name'] ?? '',
-                'goods_image' => $goods['main_image'] ?? '',
+                'goods_image' => ($sku['image'] ?? '') ?: ($goods['main_image'] ?? ''),
                 'sku_image'   => $sku['image'] ?? '',
                 'sku_spec'    => $sku['spec_values'] ?? '',
                 'unit_price'  => $sku !== null ? (string) $sku['price'] : '0.00',

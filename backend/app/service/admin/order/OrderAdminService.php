@@ -621,6 +621,13 @@ class OrderAdminService extends BaseService
                         operatorId: null,
                         remark: '发货后超时自动确认收货',
                     );
+                    $machine->transit(
+                        order: $order,
+                        toStatus: OrderStatus::COMPLETED,
+                        operatorType: OperatorType::SYSTEM,
+                        operatorId: null,
+                        remark: '自动确认收货后订单完成',
+                    );
                 });
                 $received++;
             } catch (\Throwable $e) {

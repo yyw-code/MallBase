@@ -257,6 +257,57 @@ class UserPointsAccountService extends BaseService
         ];
     }
 
+    /**
+     * 下单前积分赠送试算。
+     *
+     * 实际发放仍在订单完成后由 rewardOrderCompleted() 幂等落库；
+     * 这里仅复用同一套商品/SKU/全局规则，给确认页展示预期赠送积分。
+     *
+     * @param array<int,array{goods_id:int,sku_id:int,pay_amount:string,quantity:int}> $items
+     * @return array{
+     *   enabled:bool,reward_points:int,freeze_days:int,max_points:int,
+     *   items:array<int,array<string,mixed>>
+     * }
+     */
+    public function rewardQuote(array $items): array
+    {
+        $empty = [
+            'enabled' => false,
+            'reward_points' => 0,
+            'freeze_days' => $this->pointsRewardFreezeDays(),
+            'max_points' => 0,
+            'items' => [],
+        ];
+
+        if (!$this->isRewardEnabled() || $items === []) {
+            return $empty;
+        }
+
+        $rule = $this->activeRule(PointsRule::SCENE_ORDER_COMPLETE);
+        if ($rule === null) {
+            return [
+                ...$empty,
+                'enabled' => true,
+            ];
+        }
+
+        $rewardItems = $this->buildRewardItems($items, $rule);
+        $rewardPoints = array_sum(array_map(static fn(array $row): int => (int) $row['reward_points'], $rewardItems));
+        $maxPoints = (int) ($rule->max_points ?? 0);
+        if ($maxPoints > 0 && $rewardPoints > $maxPoints) {
+            $rewardItems = $this->capRewardItems($rewardItems, $maxPoints);
+            $rewardPoints = $maxPoints;
+        }
+
+        return [
+            'enabled' => true,
+            'reward_points' => $rewardPoints,
+            'freeze_days' => $this->pointsRewardFreezeDays(),
+            'max_points' => $maxPoints,
+            'items' => $rewardItems,
+        ];
+    }
+
     public function deductForOrder(int $userId, int $orderId, string $orderSn, int $usedPoints, string $discountAmount): void
     {
         if ($userId <= 0 || $orderId <= 0 || $orderSn === '' || $usedPoints <= 0) {
@@ -529,6 +580,19 @@ class UserPointsAccountService extends BaseService
             return [];
         }
 
+        return $this->buildRewardItems($items, $rule);
+    }
+
+    /**
+     * @param array<int,array<string,mixed>> $items
+     * @return array<int,array<string,mixed>>
+     */
+    private function buildRewardItems(array $items, PointsRule $rule): array
+    {
+        if ($items === []) {
+            return [];
+        }
+
         $goodsIds = array_values(array_unique(array_map(static fn(array $row): int => (int) $row['goods_id'], $items)));
         $skuIds = array_values(array_unique(array_map(static fn(array $row): int => (int) $row['sku_id'], $items)));
         $goodsMap = $goodsIds === [] ? [] : $this->model(Goods::class)
@@ -546,8 +610,8 @@ class UserPointsAccountService extends BaseService
                 continue;
             }
             $rows[] = [
-                'order_id' => $orderId,
-                'order_item_id' => (int) $item['id'],
+                'order_id' => (int) ($item['order_id'] ?? 0),
+                'order_item_id' => (int) ($item['order_item_id'] ?? $item['id'] ?? 0),
                 'goods_id' => (int) $item['goods_id'],
                 'sku_id' => (int) $item['sku_id'],
                 'pay_amount' => (string) $item['pay_amount'],
@@ -558,6 +622,9 @@ class UserPointsAccountService extends BaseService
                 'reward_points' => $rewardPoints,
                 'recovered_points' => 0,
             ];
+            if (array_key_exists('source_index', $item)) {
+                $rows[array_key_last($rows)]['source_index'] = (int) $item['source_index'];
+            }
         }
 
         return $rows;

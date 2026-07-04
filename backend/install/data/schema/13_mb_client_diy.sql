@@ -122,6 +122,7 @@ VALUES
 (20, '修改密码', '/pages-sub/user/change-password', 'subpackage', 'user', 'pages-sub/user', 1, 'system', '系统内置会员页面', 1450, 1),
 (21, '设置', '/pages-sub/user/settings', 'subpackage', 'user', 'pages-sub/user', 1, 'system', '系统内置会员页面', 1460, 1),
 (39, '关于我们', '/pages-sub/user/about', 'subpackage', 'user', 'pages-sub/user', 0, 'system', '系统内置会员页面', 1470, 1),
+(40, '会员等级', '/pages-sub/member/index', 'subpackage', 'user', 'pages-sub/member', 1, 'system', '系统内置会员页面', 1480, 1),
 (22, '钱包', '/pages-sub/wallet/index', 'subpackage', 'user', 'pages-sub/wallet', 1, 'system', '系统内置会员页面', 1510, 1),
 (23, '钱包记录', '/pages-sub/wallet/records', 'subpackage', 'user', 'pages-sub/wallet', 1, 'system', '系统内置会员页面', 1520, 1),
 (24, '余额充值', '/pages-sub/wallet/recharge', 'subpackage', 'user', 'pages-sub/wallet', 1, 'system', '系统内置会员页面', 1530, 1),

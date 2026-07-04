@@ -48,6 +48,12 @@
         <view class="goods-item__info">
           <text class="goods-item__name">{{ item.goods_name || item.name }}</text>
           <text v-if="item.sku_spec" class="goods-item__spec">{{ item.sku_spec }}</text>
+          <text v-if="hasItemMemberDiscount(item)" class="goods-item__benefit">
+            会员优惠 -¥{{ itemMemberDiscountAmount(item) }}
+          </text>
+          <text v-if="itemRewardPoints(item) > 0" class="goods-item__benefit">
+            预计赠送 {{ itemRewardPoints(item) }} 积分
+          </text>
           <view class="goods-item__bottom">
             <mb-price :value="item.unit_price" size="sm" color="var(--color-text-title)" />
             <text class="goods-item__qty">&times;{{ item.quantity }}</text>
@@ -95,6 +101,16 @@
         color="var(--color-primary, #0d50d5)"
         @change="onUsePointsChange"
       />
+    </view>
+
+    <view v-if="hasPointsReward" class="card points-card reward-card">
+      <view class="points-card__main">
+        <view class="points-card__title-row">
+          <text class="points-card__title">积分赠送</text>
+          <text class="points-card__reward">+{{ rewardPoints }} 积分</text>
+        </view>
+        <text class="points-card__meta">{{ rewardMetaText }}</text>
+      </view>
     </view>
 
     <!-- 价格明细 -->
@@ -225,6 +241,7 @@ const remark = ref('')
 const submitting = ref(false)
 const idempotencyKey = ref('')
 const orderItems = ref([])
+const selectedCartIds = ref([])
 // 后端订单试算结果（含权威运费），为 null 时回退本地兜底
 const previewResult = ref(null)
 const usePoints = ref(false)
@@ -262,10 +279,12 @@ onLoad((query) => {
     }
   } else {
     // 购物车模式
-    orderItems.value = cartStore.selectedItems.map((item) => ({
+    const selectedItems = cartStore.selectedItems.map((item) => ({
       ...item,
       quantity: item.quantity || 1,
     }))
+    selectedCartIds.value = selectedItems.map((item) => item.id)
+    orderItems.value = selectedItems
   }
 
   fetchDefaultAddress()
@@ -347,6 +366,9 @@ const isFreeFreight = computed(() => previewResult.value && isZeroPrice(displayF
 const pointsDeduction = computed(() =>
   pointsFeatureEnabled.value ? previewResult.value?.points_deduction || null : null,
 )
+const pointsReward = computed(() =>
+  pointsFeatureEnabled.value ? previewResult.value?.points_reward || null : null,
+)
 const memberDiscount = computed(() => previewResult.value?.member_discount || null)
 const canUsePoints = computed(() => {
   if (!pointsFeatureEnabled.value) return false
@@ -358,6 +380,28 @@ const pointsDiscountAmount = computed(() => normalizePrice(pointsDeduction.value
 const hasPointsDiscount = computed(() => shouldUsePoints.value && isPositivePrice(pointsDiscountAmount.value))
 const memberDiscountAmount = computed(() => normalizePrice(memberDiscount.value?.discount_amount || '0.00'))
 const hasMemberDiscount = computed(() => isPositivePrice(memberDiscountAmount.value))
+const rewardPoints = computed(() => Number(pointsReward.value?.reward_points || 0))
+const hasPointsReward = computed(() =>
+  !!pointsReward.value && pointsReward.value.enabled !== false && rewardPoints.value > 0,
+)
+const rewardMetaText = computed(() => {
+  const freezeDays = Number(pointsReward.value?.freeze_days || 0)
+  return freezeDays > 0
+    ? `订单完成后冻结 ${freezeDays} 天，售后期结束后发放`
+    : '订单完成后发放'
+})
+
+function hasItemMemberDiscount(item) {
+  return isPositivePrice(item?.member_discount_amount || '0.00')
+}
+
+function itemMemberDiscountAmount(item) {
+  return normalizePrice(item?.member_discount_amount || '0.00')
+}
+
+function itemRewardPoints(item) {
+  return Number(item?.points_reward_points || 0)
+}
 
 function onUsePointsChange(event) {
   if (!canUsePoints.value) {
@@ -387,11 +431,14 @@ async function fetchPreview() {
           source: 'cart',
           address_id: address.value.id,
           use_points: shouldUsePoints.value ? 1 : 0,
-          cart_ids: orderItems.value.map((item) => item.id),
+          cart_ids: selectedCartIds.value,
         }
   try {
     const result = await previewOrder(payload)
     previewResult.value = result
+    if (Array.isArray(result?.items) && result.items.length > 0) {
+      orderItems.value = result.items
+    }
     const deduction = result?.points_deduction
     if (usePoints.value && (!deduction || Number(deduction.used_points || 0) <= 0)) {
       usePoints.value = false
@@ -455,7 +502,7 @@ async function handleSubmit() {
       : {
           source: 'cart',
           address_id: address.value.id,
-          cart_ids: orderItems.value.map((item) => item.id),
+          cart_ids: selectedCartIds.value,
           buyer_remark: remark.value,
           idempotency_key: idempotencyKey.value,
           use_points: shouldUsePoints.value ? 1 : 0,
@@ -686,6 +733,13 @@ async function handleSubmit() {
   margin-top: 8rpx;
 }
 
+.goods-item__benefit {
+  margin-top: 6rpx;
+  font-size: 22rpx;
+  line-height: 1.35;
+  color: var(--color-primary, #0d50d5);
+}
+
 .goods-item__bottom {
   display: flex;
   align-items: baseline;
@@ -777,6 +831,7 @@ async function handleSubmit() {
 }
 
 .points-card__discount,
+.points-card__reward,
 .summary-row__discount {
   font-size: $mb-font-md;
   font-weight: 600;

@@ -11,6 +11,7 @@ use app\model\user\UserTag;
 use app\model\user\UserTagRelation;
 use app\service\UploadService;
 use app\service\upload\AssetHydrator;
+use app\service\user\UserMemberService;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
 use mall_base\service\JwtCacheService;
@@ -460,6 +461,8 @@ class UserService extends BaseService
 
         // 获取用户标签
         $info['tags'] = $this->getUserTags($userId);
+
+        $info['member'] = app()->make(UserMemberService::class)->clientSummary($userId);
 
         return $info;
     }

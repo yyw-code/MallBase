@@ -13,6 +13,11 @@
           <mb-price :value="currentPrice" size="lg" color="var(--color-primary, #0d50d5)" />
           <text class="mb-spec__stock">库存 {{ currentStock }}</text>
           <text v-if="selectedSpecText" class="mb-spec__selected">已选：{{ selectedSpecText }}</text>
+          <view v-if="hasSkuBenefit" class="mb-spec__benefits">
+            <text v-if="hasSelectedMemberPrice" class="mb-spec__benefit">会员价 ¥{{ selectedMemberPriceText }}</text>
+            <text v-if="pointsRewardText" class="mb-spec__benefit">{{ pointsRewardText }}</text>
+            <text v-if="memberGrowthText" class="mb-spec__benefit">{{ memberGrowthText }}</text>
+          </view>
         </view>
         <view class="mb-spec__close" @tap.stop="close">
           <text class="mb-spec__close-icon">✕</text>
@@ -87,6 +92,8 @@ const props = defineProps({
   mode: { type: String, default: 'both' },
   selectedSpecs: { type: Object, default: () => ({}) },
   selectedSkuId: { type: [Number, String], default: null },
+  pointsEnabled: { type: Boolean, default: true },
+  memberEnabled: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['close', 'change', 'addToCart', 'buyNow'])
@@ -121,6 +128,41 @@ const selectedSku = computed(() => {
 const currentPrice = computed(() => selectedSku.value?.price ?? props.goods.price ?? 0)
 const currentStock = computed(() => selectedSku.value?.stock ?? props.goods.stock ?? 0)
 const quantityMax = computed(() => Math.max(1, Number(currentStock.value) || 0))
+const selectedMemberPrice = computed(() => {
+  if (!props.memberEnabled || props.goods.member_benefit_mode !== 'sku_price') return ''
+  const price = Number(selectedSku.value?.price ?? props.goods.price ?? 0)
+  const memberPrice = Number(selectedSku.value?.member_price ?? 0)
+  if (!memberPrice || memberPrice >= price) return ''
+  return selectedSku.value?.member_price
+})
+const hasSelectedMemberPrice = computed(() => selectedMemberPrice.value !== '')
+const selectedMemberPriceText = computed(() => formatAmount(selectedMemberPrice.value))
+const pointsRewardText = computed(() => {
+  const previewText = selectedSku.value?.points_reward_preview_text || props.goods.points_reward_preview_text
+  if (previewText) return previewText
+  return legacyPointsRewardText.value
+})
+const memberGrowthText = computed(() => {
+  if (!props.memberEnabled) return ''
+  return selectedSku.value?.member_growth_preview_text || props.goods.member_growth_preview_text || ''
+})
+const legacyPointsRewardText = computed(() => {
+  if (!props.pointsEnabled) return ''
+  const mode = props.goods.points_reward_mode || 'global'
+  if (mode === 'disabled') return ''
+  if (mode === 'ratio') return rewardRatioText(props.goods.points_reward_ratio)
+  if (mode === 'fixed') return rewardFixedText(props.goods.points_reward_fixed)
+
+  if (mode === 'sku') {
+    const skuMode = selectedSku.value?.points_reward_mode || 'inherit'
+    if (skuMode === 'disabled') return ''
+    if (skuMode === 'ratio') return rewardRatioText(selectedSku.value?.points_reward_ratio)
+    if (skuMode === 'fixed') return rewardFixedText(selectedSku.value?.points_reward_fixed)
+  }
+
+  return '按全局规则赠送积分'
+})
+const hasSkuBenefit = computed(() => hasSelectedMemberPrice.value || !!pointsRewardText.value || !!memberGrowthText.value)
 
 const selectedSpecText = computed(() =>
   specGroups.value
@@ -144,6 +186,24 @@ function isColorGroup(name) {
   if (!name) return false
   const s = String(name).toLowerCase()
   return s.includes('颜色') || s.includes('color') || s.includes('款式')
+}
+
+function formatAmount(value) {
+  const num = Number(value)
+  if (Number.isNaN(num)) return '0'
+  const int = Math.floor(num).toLocaleString('zh-CN')
+  const dec = num.toFixed(2).split('.')[1]
+  return dec === '00' ? int : `${int}.${dec}`
+}
+
+function rewardRatioText(value) {
+  const ratio = Number(value || 0)
+  return ratio > 0 ? `每消费 1 元赠 ${ratio} 积分` : ''
+}
+
+function rewardFixedText(value) {
+  const fixed = Number(value || 0)
+  return fixed > 0 ? `每件赠 ${fixed} 积分` : ''
 }
 
 function isSpecDisabled(groupName, value) {
@@ -271,6 +331,23 @@ watch(currentStock, (stock) => {
 .mb-spec__selected {
   font-size: 24rpx;
   color: var(--color-text-secondary, #434654);
+}
+
+.mb-spec__benefits {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8rpx;
+}
+
+.mb-spec__benefit {
+  max-width: 100%;
+  padding: 4rpx 10rpx;
+  border-radius: 999rpx;
+  background: var(--color-primary-soft, rgba(13, 80, 213, 0.08));
+  color: var(--color-primary, #0d50d5);
+  font-size: 22rpx;
+  font-weight: 600;
 }
 
 .mb-spec__close {

@@ -180,6 +180,68 @@ class UserMemberService extends BaseService
 
     /**
      * @return array{
+     *   enabled:bool,level_enabled:bool,price_enabled:bool,growth_enabled:bool,
+     *   account:array<string,mixed>|null,level:array{id:int,name:string,growth_min:int,discount_percent:string}|null,
+     *   next_level:array{id:int,name:string,growth_min:int,discount_percent:string}|null,
+     *   growth_value:int,total_growth_value:int,growth_to_next:int,progress_percent:int,
+     *   discount_percent:string,discount_text:string,level_locked:bool
+     * }
+     */
+    public function clientSummary(int $userId): array
+    {
+        $empty = [
+            'enabled' => false,
+            'level_enabled' => false,
+            'price_enabled' => false,
+            'growth_enabled' => false,
+            'account' => null,
+            'level' => null,
+            'next_level' => null,
+            'growth_value' => 0,
+            'total_growth_value' => 0,
+            'growth_to_next' => 0,
+            'progress_percent' => 0,
+            'discount_percent' => '100.00',
+            'discount_text' => '',
+            'level_locked' => false,
+        ];
+        if ($userId <= 0 || !$this->isMemberEnabled()) {
+            return $empty;
+        }
+
+        $member = $this->ensureMember($userId);
+        $account = $this->formatMemberAccount($member->toArray());
+        $level = $this->isLevelEnabled() ? $this->accountLevel($member) : null;
+        $nextLevel = $level !== null
+            ? $this->nextLevelAfterGrowthMin((int) $level['growth_min'])
+            : $this->nextLevelAfterGrowthMin(-1);
+        $growthValue = (int) $account['growth_value'];
+        $levelGrowthMin = (int) ($level['growth_min'] ?? 0);
+        $nextGrowthMin = (int) ($nextLevel['growth_min'] ?? 0);
+        $growthToNext = $nextLevel !== null ? max(0, $nextGrowthMin - $growthValue) : 0;
+        $progressPercent = $this->growthProgressPercent($growthValue, $levelGrowthMin, $nextGrowthMin);
+        $discountPercent = (string) ($level['discount_percent'] ?? '100.00');
+
+        return [
+            'enabled' => true,
+            'level_enabled' => $this->isLevelEnabled(),
+            'price_enabled' => $this->isMemberPriceEnabled(),
+            'growth_enabled' => $this->isGrowthEnabled(),
+            'account' => $account,
+            'level' => $level,
+            'next_level' => $nextLevel,
+            'growth_value' => $growthValue,
+            'total_growth_value' => (int) $account['total_growth_value'],
+            'growth_to_next' => $growthToNext,
+            'progress_percent' => $progressPercent,
+            'discount_percent' => $discountPercent,
+            'discount_text' => $this->discountText($discountPercent),
+            'level_locked' => $this->isLevelLocked($member),
+        ];
+    }
+
+    /**
+     * @return array{
      *   level_id:int,level_name:string,level_source:string,level_lock_until:?string,
      *   level_remark:string,growth_value:int,total_growth_value:int
      * }
@@ -357,6 +419,23 @@ class UserMemberService extends BaseService
     }
 
     /**
+     * @return array{id:int,name:string,growth_min:int,discount_percent:string}|null
+     */
+    private function nextLevelAfterGrowthMin(int $growthMin): ?array
+    {
+        /** @var MemberLevel|null $level */
+        $level = $this->model(MemberLevel::class)
+            ->where('status', 1)
+            ->where('growth_min', '>', max(-1, $growthMin))
+            ->order('growth_min', 'asc')
+            ->order('sort', 'asc')
+            ->order('id', 'asc')
+            ->find();
+
+        return $level !== null ? $this->formatLevel($level->toArray()) : null;
+    }
+
+    /**
      * @param array{id:int,name:string,growth_min:int,discount_percent:string}|null $currentLevel
      * @param array{id:int,name:string,growth_min:int,discount_percent:string}|null $matchedLevel
      */
@@ -480,6 +559,28 @@ class UserMemberService extends BaseService
     private function discountBasis(string $discountPercent): int
     {
         return max(0, min(10000, $this->decimalPercentBasis($discountPercent)));
+    }
+
+    private function growthProgressPercent(int $growthValue, int $levelGrowthMin, int $nextGrowthMin): int
+    {
+        if ($nextGrowthMin <= 0) {
+            return 100;
+        }
+        $range = max(1, $nextGrowthMin - max(0, $levelGrowthMin));
+        $current = max(0, $growthValue - max(0, $levelGrowthMin));
+
+        return max(0, min(100, (int) floor($current * 100 / $range)));
+    }
+
+    private function discountText(string $discountPercent): string
+    {
+        $percent = (float) $discountPercent;
+        if ($percent <= 0 || $percent >= 100) {
+            return '';
+        }
+
+        $fold = rtrim(rtrim(number_format($percent / 10, 2, '.', ''), '0'), '.');
+        return $fold . '折';
     }
 
     private function decimalPercentBasis(string $value): int

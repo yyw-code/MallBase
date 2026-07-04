@@ -67,6 +67,20 @@ final class OrderSettingQueueContractTest extends TestCase
         $this->assertStringContainsString('setnx', $cronTask);
     }
 
+    public function testReceiveFlowsCompleteOrdersForRewards(): void
+    {
+        $clientOrderService = (string) file_get_contents(__DIR__ . '/../../../../app/service/client/order/OrderService.php');
+        $adminOrderService = (string) file_get_contents(__DIR__ . '/../../../../app/service/admin/order/OrderAdminService.php');
+
+        $this->assertStringContainsString('toStatus: OrderStatus::RECEIVED', $clientOrderService);
+        $this->assertStringContainsString('toStatus: OrderStatus::COMPLETED', $clientOrderService);
+        $this->assertStringContainsString('确认收货后订单完成', $clientOrderService);
+
+        $this->assertStringContainsString('toStatus: OrderStatus::RECEIVED', $adminOrderService);
+        $this->assertStringContainsString('toStatus: OrderStatus::COMPLETED', $adminOrderService);
+        $this->assertStringContainsString('自动确认收货后订单完成', $adminOrderService);
+    }
+
     public function testInstallSeedContainsOrderAndRefundDefaults(): void
     {
         $schema = file_get_contents(__DIR__ . '/../../../../../backend/install/data/schema/03_mb_setting.sql');

@@ -152,6 +152,20 @@
             </view>
           </view>
         </view>
+        <view v-if="hasSkuBenefit" class="goods-detail__benefits">
+          <view v-if="hasSelectedMemberPrice" class="goods-detail__benefit">
+            <text class="goods-detail__benefit-label">会员价</text>
+            <text class="goods-detail__benefit-value">¥{{ selectedMemberPriceText }}</text>
+          </view>
+          <view v-if="pointsRewardText" class="goods-detail__benefit">
+            <text class="goods-detail__benefit-label">积分</text>
+            <text class="goods-detail__benefit-value">{{ pointsRewardText }}</text>
+          </view>
+          <view v-if="memberGrowthText" class="goods-detail__benefit">
+            <text class="goods-detail__benefit-label">成长值</text>
+            <text class="goods-detail__benefit-value">{{ memberGrowthText }}</text>
+          </view>
+        </view>
       </view>
 
       <!-- Title section -->
@@ -394,6 +408,8 @@
       :mode="specMode"
       :selected-specs="selectedSpecs"
       :selected-sku-id="selectedSku?.id || null"
+      :points-enabled="pointsEnabled"
+      :member-enabled="memberEnabled"
       @change="onSpecChange"
       @close="showSpec = false"
       @add-to-cart="onAddToCart"
@@ -654,13 +670,48 @@ const displayPrice = computed(() => selectedSku.value?.price ?? goods.value?.pri
 const displayMarketPrice = computed(() => selectedSku.value?.market_price ?? goods.value?.market_price ?? '')
 const displayStock = computed(() => selectedSku.value?.stock ?? goods.value?.stock ?? 0)
 const guarantees = computed(() => (Array.isArray(goods.value?.guarantees) ? goods.value.guarantees : []))
+const pointsEnabled = computed(() => settingEnabled(appStore.siteConfig?.points_enabled, true))
+const memberEnabled = computed(() => settingEnabled(appStore.siteConfig?.member_enabled, false))
+
+const selectedMemberPrice = computed(() => {
+  if (!memberEnabled.value || goods.value?.member_benefit_mode !== 'sku_price') return ''
+  const price = Number(selectedSku.value?.price ?? goods.value?.price ?? 0)
+  const memberPrice = Number(selectedSku.value?.member_price ?? 0)
+  if (!memberPrice || memberPrice >= price) return ''
+  return selectedSku.value?.member_price
+})
+const hasSelectedMemberPrice = computed(() => selectedMemberPrice.value !== '')
+const selectedMemberPriceText = computed(() => formatAmount(selectedMemberPrice.value))
+const pointsRewardText = computed(() => {
+  const previewText = selectedSku.value?.points_reward_preview_text || goods.value?.points_reward_preview_text
+  if (previewText) return previewText
+  return legacyPointsRewardText.value
+})
+const memberGrowthText = computed(() => {
+  if (!memberEnabled.value) return ''
+  return selectedSku.value?.member_growth_preview_text || goods.value?.member_growth_preview_text || ''
+})
+const legacyPointsRewardText = computed(() => {
+  if (!pointsEnabled.value || !goods.value) return ''
+
+  const mode = goods.value.points_reward_mode || 'global'
+  if (mode === 'disabled') return ''
+  if (mode === 'ratio') return rewardRatioText(goods.value.points_reward_ratio)
+  if (mode === 'fixed') return rewardFixedText(goods.value.points_reward_fixed)
+
+  if (mode === 'sku') {
+    const skuMode = selectedSku.value?.points_reward_mode || 'inherit'
+    if (skuMode === 'disabled') return ''
+    if (skuMode === 'ratio') return rewardRatioText(selectedSku.value?.points_reward_ratio)
+    if (skuMode === 'fixed') return rewardFixedText(selectedSku.value?.points_reward_fixed)
+  }
+
+  return '按全局规则赠送'
+})
+const hasSkuBenefit = computed(() => hasSelectedMemberPrice.value || !!pointsRewardText.value || !!memberGrowthText.value)
 
 const formattedPrice = computed(() => {
-  const num = Number(displayPrice.value)
-  if (Number.isNaN(num)) return '0'
-  const int = Math.floor(num).toLocaleString('zh-CN')
-  const dec = num.toFixed(2).split('.')[1]
-  return dec === '00' ? int : `${int}.${dec}`
+  return formatAmount(displayPrice.value)
 })
 
 const cartCount = computed(() => cartStore.count)
@@ -706,6 +757,29 @@ function normalizeImageUrl(image) {
   if (!image) return ''
   if (typeof image === 'string') return image
   return image.full_url || image.url || image.image_full_url || image.image || image.src || ''
+}
+
+function settingEnabled(value, fallback = true) {
+  if (value === undefined || value === null || value === '') return fallback
+  return ['1', 'true', 'on'].includes(String(value).toLowerCase())
+}
+
+function formatAmount(value) {
+  const num = Number(value)
+  if (Number.isNaN(num)) return '0'
+  const int = Math.floor(num).toLocaleString('zh-CN')
+  const dec = num.toFixed(2).split('.')[1]
+  return dec === '00' ? int : `${int}.${dec}`
+}
+
+function rewardRatioText(value) {
+  const ratio = Number(value || 0)
+  return ratio > 0 ? `每消费 1 元赠 ${ratio} 积分` : ''
+}
+
+function rewardFixedText(value) {
+  const fixed = Number(value || 0)
+  return fixed > 0 ? `每件赠 ${fixed} 积分` : ''
 }
 
 function parseSkuSpecValues(sku) {
@@ -1251,7 +1325,7 @@ function onBuyNow({ sku, quantity }) {
   uni.setStorageSync('buy_now_sku', {
     sku_id: sku.id,
     goods_name: goods.value.name,
-    goods_image: sku.image_full_url || goods.value.main_image_full_url,
+    goods_image: getSkuImageUrl(sku),
     sku_spec: sku.spec_values || '',
     unit_price: sku.price,
   })
@@ -1502,6 +1576,37 @@ function onBuyNow({ sku, quantity }) {
   font-size: $mb-font-sm;
   color: var(--color-text-tertiary, #737686);
   text-decoration: line-through;
+}
+
+.goods-detail__benefits {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12rpx;
+  margin-top: 14rpx;
+}
+
+.goods-detail__benefit {
+  display: inline-flex;
+  align-items: center;
+  gap: 8rpx;
+  max-width: 100%;
+  padding: 6rpx 14rpx;
+  border-radius: $mb-radius-full;
+  background: var(--color-primary-soft, rgba(13, 80, 213, 0.08));
+}
+
+.goods-detail__benefit-label {
+  flex-shrink: 0;
+  font-size: $mb-font-xs;
+  color: var(--color-text-secondary, #434654);
+}
+
+.goods-detail__benefit-value {
+  min-width: 0;
+  font-size: $mb-font-xs;
+  font-weight: 700;
+  color: var(--color-primary, #0d50d5);
 }
 
 // ---------- Title section ----------

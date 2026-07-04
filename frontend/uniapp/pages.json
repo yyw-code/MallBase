@@ -187,6 +187,17 @@
       ]
     },
     {
+      "root": "pages-sub/member",
+      "pages": [
+        {
+          "path": "index",
+          "style": {
+            "navigationStyle": "custom"
+          }
+        }
+      ]
+    },
+    {
       "root": "pages-sub/points",
       "pages": [
         {

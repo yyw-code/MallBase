@@ -24,6 +24,7 @@ const points = ref({
 });
 const balancePaymentEnabled = ref(false);
 const pointsEnabled = ref(true);
+const memberEnabled = ref(false);
 const profileIconPresets = [
   {
     type: "pay",
@@ -159,6 +160,30 @@ const pointsIncome = computed(() =>
 const pointsExpense = computed(() =>
   Number(points.value.total_expense_points || 0),
 );
+const memberSummary = computed(() => userStore.userInfo?.member || {});
+const memberVisible = computed(
+  () => logged.value && memberEnabled.value && memberSummary.value?.enabled === true,
+);
+const memberLevelName = computed(
+  () =>
+    memberSummary.value?.level?.name ||
+    memberSummary.value?.account?.level_name ||
+    "普通会员",
+);
+const memberDiscountText = computed(() => memberSummary.value?.discount_text || "");
+const memberGrowthValue = computed(() =>
+  Number(memberSummary.value?.growth_value || 0),
+);
+const memberProgressPercent = computed(() =>
+  Math.max(0, Math.min(100, Number(memberSummary.value?.progress_percent || 0))),
+);
+const memberNextText = computed(() => {
+  const nextLevel = memberSummary.value?.next_level;
+  const growthToNext = Number(memberSummary.value?.growth_to_next || 0);
+  if (!nextLevel) return "已达最高等级";
+  if (growthToNext <= 0) return `已满足 ${nextLevel.name} 条件`;
+  return `距 ${nextLevel.name} 还差 ${growthToNext} 成长值`;
+});
 
 const profileModules = computed(() => {
   const modules = Array.isArray(decorateStore.profileModules)
@@ -218,8 +243,10 @@ async function fetchFeatureState() {
   try {
     const data = await getBasicConfig();
     pointsEnabled.value = settingSwitchEnabled(data?.points_enabled, true);
+    memberEnabled.value = settingSwitchEnabled(data?.member_enabled, false);
   } catch {
     pointsEnabled.value = true;
+    memberEnabled.value = false;
   }
 }
 
@@ -920,6 +947,18 @@ function goPointsRecords() {
   uni.navigateTo({ url: "/pages-sub/points/records" });
 }
 
+function goMember() {
+  if (!userStore.isLoggedIn) {
+    goLogin();
+    return;
+  }
+  if (!memberEnabled.value) {
+    uni.showToast({ title: "会员功能未开启", icon: "none" });
+    return;
+  }
+  uni.navigateTo({ url: "/pages-sub/member/index" });
+}
+
 async function callCustomerService() {
   await openCustomerService();
 }
@@ -1030,6 +1069,39 @@ function handleLogout() {
                   :style="textStyle(module, 'meta')"
                   >{{ bio }}</text
                 >
+                <view
+                  v-if="memberVisible"
+                  class="profile-member-entry"
+                  @tap.stop="goMember"
+                >
+                  <view class="profile-member-entry__head">
+                    <view class="profile-member-entry__main">
+                      <text class="profile-member-entry__label">会员等级</text>
+                      <text class="profile-member-entry__name">{{
+                        memberLevelName
+                      }}</text>
+                    </view>
+                    <text
+                      v-if="memberDiscountText"
+                      class="profile-member-entry__badge"
+                      >{{ memberDiscountText }}</text
+                    >
+                  </view>
+                  <view class="profile-member-entry__progress">
+                    <view
+                      class="profile-member-entry__bar"
+                      :style="{ width: `${memberProgressPercent}%` }"
+                    />
+                  </view>
+                  <view class="profile-member-entry__meta">
+                    <text class="profile-member-entry__meta-text"
+                      >成长值 {{ memberGrowthValue }}</text
+                    >
+                    <text class="profile-member-entry__meta-text">{{
+                      memberNextText
+                    }}</text>
+                  </view>
+                </view>
                 <view
                   class="profile-header__edit-btn"
                   @tap.stop="goEditProfile"
@@ -1520,6 +1592,75 @@ function handleLogout() {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.profile-member-entry {
+  margin-top: 16rpx;
+  padding: 18rpx;
+  border-radius: 18rpx;
+  background: var(--color-bg, #ffffff);
+  border: 1rpx solid var(--color-divider, #f0f2f5);
+}
+
+.profile-member-entry__head,
+.profile-member-entry__meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.profile-member-entry__main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.profile-member-entry__label {
+  color: var(--color-text-tertiary, #737686);
+  font-size: 20rpx;
+}
+
+.profile-member-entry__name {
+  margin-top: 6rpx;
+  color: var(--color-text-title, #191b23);
+  font-size: 26rpx;
+  font-weight: 700;
+}
+
+.profile-member-entry__badge {
+  flex-shrink: 0;
+  padding: 6rpx 14rpx;
+  border-radius: 999rpx;
+  background: var(--color-primary-soft, rgba(13, 80, 213, 0.1));
+  color: var(--color-primary, #0d50d5);
+  font-size: 20rpx;
+  font-weight: 600;
+}
+
+.profile-member-entry__progress {
+  margin-top: 14rpx;
+  height: 10rpx;
+  overflow: hidden;
+  border-radius: 999rpx;
+  background: var(--color-bg-surface, #f3f3fe);
+}
+
+.profile-member-entry__bar {
+  height: 100%;
+  border-radius: 999rpx;
+  background: var(--color-primary, #0d50d5);
+}
+
+.profile-member-entry__meta {
+  margin-top: 10rpx;
+}
+
+.profile-member-entry__meta-text {
+  min-width: 0;
+  color: var(--color-text-secondary, #434654);
+  font-size: 20rpx;
+  line-height: 1.4;
 }
 
 .profile-header__edit-btn {
