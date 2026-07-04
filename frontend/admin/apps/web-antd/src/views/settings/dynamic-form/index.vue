@@ -125,8 +125,14 @@ const routeGroupCode = computed(() => {
 
 const groupCode = computed(() => props.groupCode || routeGroupCode.value);
 
+const resolvedSaveAccessCode = computed(
+  () => props.saveAccessCode || (groupCode.value ? `SettingGroup:${groupCode.value}` : ''),
+);
+
 const canSave = computed(
-  () => !props.saveAccessCode || hasAccessByCodes([props.saveAccessCode]),
+  () =>
+    !resolvedSaveAccessCode.value ||
+    hasAccessByCodes([resolvedSaveAccessCode.value]),
 );
 
 /** 获取当前激活选项卡的设置项 */

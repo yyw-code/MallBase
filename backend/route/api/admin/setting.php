@@ -30,7 +30,14 @@ Route::group('setting/item', function () {
     Route::put('update/:id', 'update')->name('SettingItemUpdate')->option(['_alias' => '更新设置项', '_desc' => '更新设置项', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::delete('delete/:id', 'delete')->name('SettingItemDelete')->option(['_alias' => '删除设置项', '_desc' => '删除设置项', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::get('config/:groupCode', 'getConfig')->name('SettingConfig')->option(['_alias' => '获取配置', '_desc' => '获取分组配置', '_auth' => false]);
-    Route::post('saveConfig/:groupCode', 'saveConfig')->name('SettingSaveConfig')->option(['_alias' => '保存配置', '_desc' => '保存分组配置', '_auth' => false]);
+    Route::post('saveConfig/:groupCode', 'saveConfig')->name('SettingSaveConfig')->option([
+        '_alias'             => '保存配置',
+        '_desc'              => '保存分组配置',
+        '_auth'              => true,
+        '_type'              => Permission::TYPE_BUTTON,
+        '_permission_param'  => 'groupCode',
+        '_permission_prefix' => 'SettingGroup:',
+    ]);
 })->prefix('admin.setting.SettingItemController/')
     ->option([
         '_group_name' => '设置项管理',

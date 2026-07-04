@@ -56,4 +56,32 @@ final class CheckPermissionTest extends TestCase
 
         $this->assertSame('SystemRoleList', $middleware->exposePermissionCode($request));
     }
+
+    public function testRouteCanBuildPermissionCodeFromRouteParam(): void
+    {
+        $middleware = new class extends CheckPermission {
+            public function exposePermissionCode(Request $request): ?string
+            {
+                return $this->getPermissionCode($request);
+            }
+        };
+
+        $rule = new class extends Rule {
+            public function check(Request $request, string $url, bool $completeMatch = false)
+            {
+                return false;
+            }
+        };
+        $rule->name('SettingSaveConfig')->option([
+            '_auth' => true,
+            '_permission_param' => 'groupCode',
+            '_permission_prefix' => 'SettingGroup:',
+        ]);
+
+        $request = new Request();
+        $request->setRule($rule);
+        $request->setRoute(['groupCode' => 'PointsConfig']);
+
+        $this->assertSame('SettingGroup:PointsConfig', $middleware->exposePermissionCode($request));
+    }
 }
