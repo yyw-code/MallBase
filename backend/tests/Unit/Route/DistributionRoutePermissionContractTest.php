@@ -29,5 +29,13 @@ final class DistributionRoutePermissionContractTest extends TestCase
 
         $this->assertStringContainsString("name('SystemDistributionSettingsInfo')", $route);
         $this->assertStringContainsString("name('SystemDistributionSettingsSave')", $route);
+
+        $this->assertStringContainsString("'_group_name'      => '分销申请'", $route);
+        $this->assertStringContainsString("'_group_code'      => 'SystemDistributionApply'", $route);
+        $this->assertStringContainsString("'_path'            => '/distribution/apply'", $route);
+        $this->assertStringContainsString("'_component'       => '/distribution/apply/index'", $route);
+        $this->assertStringContainsString("name('SystemDistributionApplyList')", $route);
+        $this->assertStringContainsString("name('SystemDistributionApplyApprove')", $route);
+        $this->assertStringContainsString("name('SystemDistributionApplyReject')", $route);
     }
 }

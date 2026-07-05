@@ -32,9 +32,13 @@ class DistributionCommissionCalculator extends BaseService
 
         $rule = $this->matchRule($item);
         if ($rule !== null) {
-            $rate = $relationLevel === 1
-                ? (string) $rule->first_rate
-                : (string) $rule->second_rate;
+            if ((string) $rule->commission_type === DistributionCommissionRule::COMMISSION_TYPE_FIXED) {
+                $fixedCents = $relationLevel === 1
+                    ? (int) $rule->first_fixed_cents
+                    : (int) $rule->second_fixed_cents;
+                return $this->buildFixedQuote($baseCents, $fixedCents, (string) $rule->target_type, (int) $rule->id);
+            }
+            $rate = $relationLevel === 1 ? (string) $rule->first_rate : (string) $rule->second_rate;
             return $this->buildQuote($baseCents, $rate, (string) $rule->target_type, (int) $rule->id);
         }
 
@@ -124,6 +128,19 @@ class DistributionCommissionCalculator extends BaseService
         return [
             'rate' => $rate,
             'amount_cents' => max(0, $amount),
+            'rule_type' => $ruleType,
+            'rule_id' => $ruleId,
+        ];
+    }
+
+    /**
+     * @return array{rate:string,amount_cents:int,rule_type:string,rule_id:int}
+     */
+    private function buildFixedQuote(int $baseCents, int $fixedCents, string $ruleType, int $ruleId): array
+    {
+        return [
+            'rate' => '0.00',
+            'amount_cents' => max(0, min($baseCents, $fixedCents)),
             'rule_type' => $ruleType,
             'rule_id' => $ruleId,
         ];

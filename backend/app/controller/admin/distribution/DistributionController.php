@@ -29,11 +29,20 @@ class DistributionController extends BaseController
     {
         $data = $this->request->param([
             'distribution_enabled',
+            'distributor_open_mode',
+            'auto_open_level_id',
+            'second_level_enabled',
             'self_purchase_enabled',
+            'relation_valid_days',
             'settlement_days',
             'min_withdraw_cents',
             'global_first_rate',
             'global_second_rate',
+            'amount_open_threshold_cents',
+            'invite_reward_enabled',
+            'invite_reward_trigger',
+            'invite_reward_amount_cents',
+            'attribution_enabled',
         ]);
         $this->service()->saveSettings($data);
 

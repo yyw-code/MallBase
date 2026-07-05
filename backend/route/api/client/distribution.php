@@ -9,7 +9,9 @@ Route::group('distribution', function () {
     Route::get('logs', 'logs');
     Route::get('team', 'team');
     Route::get('withdraws', 'withdraws');
+    Route::get('shareInfo', 'shareInfo');
     Route::post('withdraw', 'applyWithdraw');
     Route::post('bindInvite', 'bindInvite');
+    Route::post('apply', 'apply');
 })->prefix('client.distribution.DistributionController/')
     ->middleware([JwtAuth::class]);

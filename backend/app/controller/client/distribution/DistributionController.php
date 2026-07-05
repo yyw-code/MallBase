@@ -64,8 +64,36 @@ class DistributionController extends BaseController
 
     public function bindInvite()
     {
-        $this->service()->bindInvite($this->userId(), (string) $this->request->param('invite_code', ''));
+        $this->service()->bindInviteWithAttribution($this->userId(), (string) $this->request->param('invite_code', ''), [
+            'scene' => (string) $this->request->param('dist_scene', ''),
+            'page' => (string) $this->request->param('dist_page', ''),
+            'target_type' => (string) $this->request->param('dist_target_type', ''),
+            'target_id' => (int) $this->request->param('dist_target_id', 0),
+        ]);
         return $this->success(null, '绑定成功');
+    }
+
+    public function apply()
+    {
+        $data = $this->request->param(['real_name', 'mobile', 'reason']);
+        $id = $this->service()->applyDistributor(
+            userId: $this->userId(),
+            realName: (string) ($data['real_name'] ?? ''),
+            mobile: (string) ($data['mobile'] ?? ''),
+            reason: (string) ($data['reason'] ?? ''),
+        );
+        return $this->success(['id' => $id], '提交成功');
+    }
+
+    public function shareInfo()
+    {
+        return $this->success($this->service()->shareInfo(
+            userId: $this->userId(),
+            targetType: (string) $this->request->param('target_type', ''),
+            targetId: (int) $this->request->param('target_id', 0),
+            page: (string) $this->request->param('page', ''),
+            scene: (string) $this->request->param('scene', 'share_link'),
+        ), '获取成功');
     }
 
     private function userId(): int

@@ -11,6 +11,7 @@ use app\model\distribution\DistributionWithdraw;
 use app\model\user\User;
 use app\service\distribution\DistributionAccountService;
 use app\service\distribution\DistributionConfigService;
+use app\service\distribution\DistributionEnrollmentService;
 use app\service\distribution\DistributionRelationService;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
@@ -26,14 +27,20 @@ class DistributionCenterService extends BaseService
 
     public function summary(int $userId): array
     {
+        /** @var DistributionEnrollmentService $enrollmentService */
+        $enrollmentService = app()->make(DistributionEnrollmentService::class);
+        $enrollmentService->ensureEveryoneDistributor($userId);
+
         $account = $this->distributor($userId);
         $settings = app()->make(DistributionConfigService::class)->settings();
+        $qualification = $enrollmentService->qualificationSummary($userId);
         if ($account === null) {
             return [
                 'enabled' => (bool) $settings['distribution_enabled'],
                 'is_distributor' => false,
                 'status' => 0,
                 'message' => '暂未开通分销员资格',
+                'qualification' => $qualification,
             ];
         }
 
@@ -51,6 +58,7 @@ class DistributionCenterService extends BaseService
             'indirect_user_count' => (int) $account->indirect_user_count,
             'order_count' => (int) $account->order_count,
             'min_withdraw_amount' => $this->centsToAmount((int) $settings['min_withdraw_cents']),
+            'qualification' => $qualification,
         ];
     }
 
@@ -182,6 +190,50 @@ class DistributionCenterService extends BaseService
     public function bindInvite(int $userId, string $inviteCode): void
     {
         app()->make(DistributionRelationService::class)->bindByInviteCode($userId, $inviteCode, 'client');
+    }
+
+    /**
+     * @param array<string,mixed> $attribution
+     */
+    public function bindInviteWithAttribution(int $userId, string $inviteCode, array $attribution): void
+    {
+        app()->make(DistributionRelationService::class)
+            ->bindByInviteCode($userId, $inviteCode, 'client', $attribution);
+    }
+
+    public function applyDistributor(int $userId, string $realName, string $mobile, string $reason): int
+    {
+        return app()->make(DistributionEnrollmentService::class)
+            ->apply($userId, $realName, $mobile, $reason);
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    public function shareInfo(int $userId, string $targetType, int $targetId, string $page = '', string $scene = 'share_link'): array
+    {
+        $account = $this->assertDistributor($userId);
+        $targetType = mb_substr(trim($targetType), 0, 32);
+        $targetId = max(0, $targetId);
+        $page = mb_substr(trim($page), 0, 128);
+        $scene = mb_substr(trim($scene), 0, 32) ?: 'share_link';
+        $inviteCode = (string) $account->invite_code;
+        $params = [
+            'invite_code' => $inviteCode,
+            'dist_scene' => $scene,
+            'dist_target_type' => $targetType,
+            'dist_target_id' => $targetId,
+        ];
+
+        return [
+            'invite_code' => $inviteCode,
+            'scene' => $scene,
+            'target_type' => $targetType,
+            'target_id' => $targetId,
+            'page' => $page,
+            'query' => http_build_query($params),
+            'path' => $page === '' ? '' : $page . (str_contains($page, '?') ? '&' : '?') . http_build_query($params),
+        ];
     }
 
     private function assertDistributor(int $userId): DistributionDistributor

@@ -273,12 +273,20 @@ INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`
 -- 设置项：111 DistributionConfig 分销基础设置
 INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`, `rules`, `placeholder`, `remark`, `sort`) VALUES
 (111, '启用分销功能', 'distribution_enabled', '1', 'switch', NULL, NULL, NULL, '关闭后客户端不展示分销入口，并停止新绑定、新佣金生成和新提现申请；历史佣金结算与扣回继续处理', 10),
-(111, '分销层级', 'distribution_level_depth', '2', 'number', NULL, NULL, NULL, '当前固定支持二级分销，仅作为配置展示值', 20),
+(111, '分销员开通方式', 'distributor_open_mode', 'manual', 'select', '[{"label":"后台手动开通","value":"manual"},{"label":"用户申请审核","value":"apply"},{"label":"人人分销","value":"everyone"},{"label":"满额自动开通","value":"amount"}]', '[{"type":"required","message":"请选择分销员开通方式"}]', NULL, '决定客户端是否可申请或自动获得分销员资格', 15),
+(111, '自动开通等级ID', 'auto_open_level_id', '1', 'number', NULL, '[{"type":"required","message":"请填写自动开通等级ID"},{"type":"integer","message":"等级ID必须是整数"},{"type":"min","value":1,"message":"不能小于 1"}]', NULL, '申请通过、人人分销、满额开通默认使用的分销员等级', 18),
+(111, '启用二级分佣', 'second_level_enabled', '0', 'switch', NULL, NULL, NULL, '默认关闭。开启后才按二级佣金比例生成二级分佣', 20),
 (111, '自购返佣', 'self_purchase_enabled', '0', 'switch', NULL, NULL, NULL, '开启后分销员自己下单可按一级比例返佣，默认关闭', 30),
+(111, '绑定关系有效期天数', 'relation_valid_days', '0', 'number', NULL, '[{"type":"required","message":"请填写绑定关系有效期"},{"type":"integer","message":"有效期必须是整数"},{"type":"min","value":0,"message":"不能小于 0"},{"type":"max","value":3650,"message":"不能大于 3650"}]', NULL, '0 表示永久有效；过期后不再按该关系生成佣金', 35),
 (111, '结算等待天数', 'settlement_days', '7', 'number', NULL, '[{"type":"required","message":"请填写结算等待天数"},{"type":"integer","message":"结算等待天数必须是整数"},{"type":"min","value":0,"message":"不能小于 0"},{"type":"max","value":365,"message":"不能大于 365"}]', NULL, '订单完成后等待多少天释放佣金；0 表示订单完成后立即结算', 40),
 (111, '最低提现金额(分)', 'min_withdraw_cents', '10000', 'number', NULL, '[{"type":"required","message":"请填写最低提现金额"},{"type":"integer","message":"最低提现金额必须是整数"},{"type":"min","value":0,"message":"不能小于 0"}]', NULL, '单位：分。10000 表示 100 元', 50),
 (111, '一级默认佣金比例(%)', 'global_first_rate', '5.00', 'number', NULL, '[{"type":"required","message":"请填写一级默认佣金比例"},{"type":"min","value":0,"message":"不能小于 0"},{"type":"max","value":100,"message":"不能大于 100"}]', NULL, '未命中特定规则时使用，支持两位小数', 60),
-(111, '二级默认佣金比例(%)', 'global_second_rate', '2.00', 'number', NULL, '[{"type":"required","message":"请填写二级默认佣金比例"},{"type":"min","value":0,"message":"不能小于 0"},{"type":"max","value":100,"message":"不能大于 100"}]', NULL, '未命中特定规则时使用，支持两位小数', 70);
+(111, '二级默认佣金比例(%)', 'global_second_rate', '0.00', 'number', NULL, '[{"type":"required","message":"请填写二级默认佣金比例"},{"type":"min","value":0,"message":"不能小于 0"},{"type":"max","value":100,"message":"不能大于 100"}]', NULL, '启用二级分佣后生效，未命中特定规则时使用，支持两位小数', 70),
+(111, '满额开通门槛(分)', 'amount_open_threshold_cents', '0', 'number', NULL, '[{"type":"required","message":"请填写满额开通门槛"},{"type":"integer","message":"满额开通门槛必须是整数"},{"type":"min","value":0,"message":"不能小于 0"}]', NULL, '仅开通方式为满额自动开通时生效；单位：分', 80),
+(111, '启用固定邀请奖励', 'invite_reward_enabled', '0', 'switch', NULL, NULL, NULL, '默认关闭；只奖励直接邀请人，不做团队层级滚动奖励', 90),
+(111, '固定邀请奖励触发', 'invite_reward_trigger', 'first_order', 'select', '[{"label":"被邀请人首单支付后","value":"first_order"},{"label":"绑定关系成功后","value":"bind"}]', '[{"type":"required","message":"请选择固定邀请奖励触发方式"}]', NULL, '建议使用首单支付后，降低无效拉新风险', 100),
+(111, '固定邀请奖励金额(分)', 'invite_reward_amount_cents', '0', 'number', NULL, '[{"type":"required","message":"请填写固定邀请奖励金额"},{"type":"integer","message":"固定邀请奖励金额必须是整数"},{"type":"min","value":0,"message":"不能小于 0"}]', NULL, '单位：分；只发放一次，通过关系表状态保证幂等', 110),
+(111, '启用分享归因', 'attribution_enabled', '1', 'switch', NULL, NULL, NULL, '开启后分享链接和海报参数会记录到绑定关系与佣金快照', 120);
 
 -- 设置项：107 RefundConfig 售后配置
 INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`, `rules`, `placeholder`, `remark`, `sort`) VALUES

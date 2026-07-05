@@ -58,6 +58,24 @@ Route::group('distribution/distributor', function () {
         '_sort'            => 30,
     ]);
 
+Route::group('distribution/apply', function () {
+    Route::get('list', 'list')->name('SystemDistributionApplyList')->option(['_alias' => '申请列表', '_desc' => '获取分销员申请列表', '_auth' => true, '_type' => Permission::TYPE_MENU]);
+    Route::post('approve/:id', 'approve')->name('SystemDistributionApplyApprove')->option(['_alias' => '通过申请', '_desc' => '审核通过分销员申请', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
+    Route::post('reject/:id', 'reject')->name('SystemDistributionApplyReject')->option(['_alias' => '驳回申请', '_desc' => '审核驳回分销员申请', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
+})->prefix('admin.distribution.ApplyController/')
+    ->middleware([JwtAuth::class, CheckPermission::class])
+    ->option([
+        '_group_name'      => '分销申请',
+        '_group_code'      => 'SystemDistributionApply',
+        '_group_name_desc' => '分销员申请与审核',
+        '_parent'          => 'SystemDistributionManagement',
+        '_icon'            => 'lucide:file-check-2',
+        '_path'            => '/distribution/apply',
+        '_auth'            => true,
+        '_component'       => '/distribution/apply/index',
+        '_sort'            => 35,
+    ]);
+
 Route::group('distribution/level', function () {
     Route::get('list', 'list')->name('SystemDistributionLevelList')->option(['_alias' => '等级列表', '_desc' => '获取分销员等级列表', '_auth' => true, '_type' => Permission::TYPE_MENU]);
     Route::get('info/:id', 'info')->name('SystemDistributionLevelInfo')->option(['_alias' => '等级详情', '_desc' => '获取分销员等级详情', '_auth' => true, '_type' => Permission::TYPE_MENU]);

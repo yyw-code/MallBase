@@ -40,6 +40,7 @@ class DistributionOrderEventService extends BaseService
             return;
         }
         if ($this->model()->where('order_sn', $orderSn)->count() > 0) {
+            app()->make(DistributionEnrollmentService::class)->handlePaidOrderQualification($order);
             return;
         }
 
@@ -47,9 +48,11 @@ class DistributionOrderEventService extends BaseService
         $relationService = app()->make(DistributionRelationService::class);
         $beneficiaries = $relationService->beneficiariesForBuyer(
             $buyerUserId,
-            (bool) $settings['self_purchase_enabled']
+            (bool) $settings['self_purchase_enabled'],
+            (bool) $settings['second_level_enabled']
         );
         if ($beneficiaries === []) {
+            app()->make(DistributionEnrollmentService::class)->handlePaidOrderQualification($order);
             return;
         }
 
@@ -58,11 +61,13 @@ class DistributionOrderEventService extends BaseService
         $accountService = app()->make(DistributionAccountService::class);
         $distributors = $accountService->activeDistributorsByUserIds($distributorIds);
         if ($distributors === []) {
+            app()->make(DistributionEnrollmentService::class)->handlePaidOrderQualification($order);
             return;
         }
 
         $items = $this->orderItems($orderId);
         if ($items === []) {
+            app()->make(DistributionEnrollmentService::class)->handlePaidOrderQualification($order);
             return;
         }
 
@@ -99,6 +104,7 @@ class DistributionOrderEventService extends BaseService
                         'order_item_id' => (int) $item['id'],
                         'buyer_user_id' => $buyerUserId,
                         'distributor_user_id' => $distributorUserId,
+                        'relation_id' => (int) ($beneficiary['relation_id'] ?? 0),
                         'relation_level' => $relationLevel,
                         'goods_id' => (int) $item['goods_id'],
                         'sku_id' => (int) $item['sku_id'],
@@ -108,6 +114,9 @@ class DistributionOrderEventService extends BaseService
                         'recovered_cents' => 0,
                         'rule_type' => $quote['rule_type'],
                         'rule_id' => $quote['rule_id'],
+                        'attribution_scene' => (string) ($beneficiary['attribution_scene'] ?? ''),
+                        'attribution_target_type' => (string) ($beneficiary['attribution_target_type'] ?? ''),
+                        'attribution_target_id' => (int) ($beneficiary['attribution_target_id'] ?? 0),
                         'status' => DistributionOrderCommission::STATUS_FROZEN,
                     ]);
 
@@ -129,6 +138,8 @@ class DistributionOrderEventService extends BaseService
                     ->update();
             }
         });
+
+        app()->make(DistributionEnrollmentService::class)->handlePaidOrderQualification($order);
     }
 
     public function handleOrderCompleted(Order $order): void

@@ -25,7 +25,7 @@ CREATE TABLE `mb_distribution_level` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='分销员等级表';
 
 INSERT INTO `mb_distribution_level` (`id`, `name`, `first_rate`, `second_rate`, `sort`, `status`, `remark`) VALUES
-(1, '默认分销员', 5.00, 2.00, 10, 1, '系统默认分销员等级')
+(1, '默认分销员', 5.00, 0.00, 10, 1, '系统默认分销员等级')
 ON DUPLICATE KEY UPDATE
   `name` = VALUES(`name`),
   `first_rate` = VALUES(`first_rate`),
@@ -50,6 +50,7 @@ CREATE TABLE `mb_distribution_distributor` (
   `direct_user_count` int(10) unsigned NOT NULL DEFAULT 0 COMMENT '一级团队人数',
   `indirect_user_count` int(10) unsigned NOT NULL DEFAULT 0 COMMENT '二级团队人数',
   `order_count` int(10) unsigned NOT NULL DEFAULT 0 COMMENT '产生佣金订单数',
+  `open_source` varchar(32) NOT NULL DEFAULT 'admin' COMMENT '开通来源（admin/apply/everyone/amount）',
   `opened_by` int(11) unsigned DEFAULT NULL COMMENT '开通管理员ID',
   `opened_at` datetime DEFAULT NULL COMMENT '开通时间',
   `remark` varchar(255) DEFAULT NULL COMMENT '备注',
@@ -69,12 +70,22 @@ CREATE TABLE `mb_distribution_relation` (
   `grandparent_user_id` int(11) unsigned NOT NULL DEFAULT 0 COMMENT '二级上级用户ID',
   `invite_code` varchar(32) NOT NULL DEFAULT '' COMMENT '绑定时使用的邀请码',
   `source` varchar(32) NOT NULL DEFAULT 'manual' COMMENT '来源',
+  `expire_time` datetime DEFAULT NULL COMMENT '关系有效期，NULL为永久有效',
+  `attribution_scene` varchar(32) NOT NULL DEFAULT '' COMMENT '归因场景（share_link/poster/manual）',
+  `attribution_page` varchar(128) NOT NULL DEFAULT '' COMMENT '归因页面路径',
+  `attribution_target_type` varchar(32) NOT NULL DEFAULT '' COMMENT '归因对象类型',
+  `attribution_target_id` int(11) unsigned NOT NULL DEFAULT 0 COMMENT '归因对象ID',
+  `invite_reward_status` tinyint(1) unsigned NOT NULL DEFAULT 0 COMMENT '邀请奖励状态（0未发放 1已发放）',
+  `invite_reward_cents` int(10) unsigned NOT NULL DEFAULT 0 COMMENT '邀请奖励金额（分）',
+  `invite_reward_at` datetime DEFAULT NULL COMMENT '邀请奖励发放时间',
   `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_user_id` (`user_id`),
   KEY `idx_parent_user_id` (`parent_user_id`),
-  KEY `idx_grandparent_user_id` (`grandparent_user_id`)
+  KEY `idx_grandparent_user_id` (`grandparent_user_id`),
+  KEY `idx_expire_time` (`expire_time`),
+  KEY `idx_attribution_target` (`attribution_target_type`, `attribution_target_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='分销邀请关系表';
 
 DROP TABLE IF EXISTS `mb_distribution_commission_rule`;
@@ -83,8 +94,11 @@ CREATE TABLE `mb_distribution_commission_rule` (
   `target_type` varchar(16) NOT NULL COMMENT '规则对象：category/goods/sku',
   `target_id` int(11) unsigned NOT NULL DEFAULT 0 COMMENT '对象ID',
   `name` varchar(100) NOT NULL DEFAULT '' COMMENT '规则名称',
+  `commission_type` varchar(16) NOT NULL DEFAULT 'rate' COMMENT '计佣方式（rate比例 fixed固定金额）',
   `first_rate` decimal(5,2) NOT NULL DEFAULT 0.00 COMMENT '一级佣金比例',
   `second_rate` decimal(5,2) NOT NULL DEFAULT 0.00 COMMENT '二级佣金比例',
+  `first_fixed_cents` int(10) unsigned NOT NULL DEFAULT 0 COMMENT '一级固定佣金（分）',
+  `second_fixed_cents` int(10) unsigned NOT NULL DEFAULT 0 COMMENT '二级固定佣金（分）',
   `status` tinyint(1) unsigned NOT NULL DEFAULT 1 COMMENT '状态（0禁用 1启用）',
   `remark` varchar(255) DEFAULT NULL COMMENT '备注',
   `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
@@ -102,6 +116,7 @@ CREATE TABLE `mb_distribution_order_commission` (
   `order_item_id` int(11) unsigned NOT NULL COMMENT '订单项ID',
   `buyer_user_id` int(11) unsigned NOT NULL COMMENT '买家用户ID',
   `distributor_user_id` int(11) unsigned NOT NULL COMMENT '分销员用户ID',
+  `relation_id` bigint(20) unsigned NOT NULL DEFAULT 0 COMMENT '邀请关系ID快照',
   `relation_level` tinyint(1) unsigned NOT NULL COMMENT '关系层级（1一级 2二级）',
   `goods_id` int(11) unsigned NOT NULL COMMENT '商品ID快照',
   `sku_id` int(11) unsigned NOT NULL COMMENT 'SKU ID快照',
@@ -111,6 +126,9 @@ CREATE TABLE `mb_distribution_order_commission` (
   `recovered_cents` int(10) unsigned NOT NULL DEFAULT 0 COMMENT '已扣回金额（分）',
   `rule_type` varchar(16) NOT NULL DEFAULT 'global' COMMENT '命中规则类型',
   `rule_id` bigint(20) unsigned NOT NULL DEFAULT 0 COMMENT '命中规则ID',
+  `attribution_scene` varchar(32) NOT NULL DEFAULT '' COMMENT '归因场景快照',
+  `attribution_target_type` varchar(32) NOT NULL DEFAULT '' COMMENT '归因对象类型快照',
+  `attribution_target_id` int(11) unsigned NOT NULL DEFAULT 0 COMMENT '归因对象ID快照',
   `status` tinyint(2) unsigned NOT NULL DEFAULT 10 COMMENT '状态（10冻结 20待结算 30已结算 80已扣回 90已取消）',
   `release_time` datetime DEFAULT NULL COMMENT '可结算时间',
   `settled_at` datetime DEFAULT NULL COMMENT '实际结算时间',
@@ -120,8 +138,27 @@ CREATE TABLE `mb_distribution_order_commission` (
   UNIQUE KEY `uk_item_distributor_level` (`order_item_id`, `distributor_user_id`, `relation_level`),
   KEY `idx_order_sn` (`order_sn`),
   KEY `idx_distributor_status` (`distributor_user_id`, `status`),
-  KEY `idx_release_status` (`status`, `release_time`)
+  KEY `idx_release_status` (`status`, `release_time`),
+  KEY `idx_attribution_target` (`attribution_target_type`, `attribution_target_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='分销订单佣金快照表';
+
+DROP TABLE IF EXISTS `mb_distribution_apply`;
+CREATE TABLE `mb_distribution_apply` (
+  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  `user_id` int(11) unsigned NOT NULL COMMENT '申请用户ID',
+  `real_name` varchar(60) NOT NULL DEFAULT '' COMMENT '申请人姓名',
+  `mobile` varchar(20) NOT NULL DEFAULT '' COMMENT '联系电话',
+  `reason` varchar(500) NOT NULL DEFAULT '' COMMENT '申请说明',
+  `status` tinyint(1) unsigned NOT NULL DEFAULT 0 COMMENT '状态（0待审核 10已通过 20已驳回）',
+  `review_admin_id` int(11) unsigned DEFAULT NULL COMMENT '审核管理员ID',
+  `review_remark` varchar(255) NOT NULL DEFAULT '' COMMENT '审核备注',
+  `reviewed_at` datetime DEFAULT NULL COMMENT '审核时间',
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  KEY `idx_user_status` (`user_id`, `status`),
+  KEY `idx_status_time` (`status`, `create_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='分销员申请表';
 
 DROP TABLE IF EXISTS `mb_distribution_commission_log`;
 CREATE TABLE `mb_distribution_commission_log` (

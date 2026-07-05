@@ -30,10 +30,25 @@ class DistributionAccountService extends BaseService
         if ($adminId <= 0) {
             throw new BusinessException('管理员身份无效');
         }
+
+        return $this->doOpenDistributor($userId, $levelId, $adminId, 'admin', $remark);
+    }
+
+    public function autoOpenDistributor(int $userId, int $levelId, string $source, string $remark = ''): int
+    {
+        $source = trim($source);
+        if ($source === '') {
+            throw new BusinessException('开通来源不能为空');
+        }
+        return $this->doOpenDistributor($userId, $levelId, null, $source, $remark);
+    }
+
+    private function doOpenDistributor(int $userId, int $levelId, ?int $adminId, string $source, string $remark): int
+    {
         $this->assertUserExists($userId);
         $this->assertLevelUsable($levelId);
 
-        return (int) $this->transaction(function () use ($userId, $levelId, $adminId, $remark): int {
+        return (int) $this->transaction(function () use ($userId, $levelId, $adminId, $source, $remark): int {
             /** @var DistributionDistributor|null $account */
             $account = $this->model()
                 ->where('user_id', $userId)
@@ -47,6 +62,7 @@ class DistributionAccountService extends BaseService
                     'level_id' => $levelId,
                     'invite_code' => $this->generateInviteCode($userId),
                     'status' => DistributionDistributor::STATUS_ENABLED,
+                    'open_source' => mb_substr($source, 0, 32),
                     'opened_by' => $adminId,
                     'opened_at' => date('Y-m-d H:i:s'),
                     'remark' => mb_substr(trim($remark), 0, 255),
@@ -56,6 +72,7 @@ class DistributionAccountService extends BaseService
 
             $account->level_id = $levelId;
             $account->status = DistributionDistributor::STATUS_ENABLED;
+            $account->open_source = mb_substr($source, 0, 32);
             $account->opened_by = $adminId;
             $account->opened_at = date('Y-m-d H:i:s');
             $account->remark = mb_substr(trim($remark), 0, 255);
@@ -214,6 +231,20 @@ class DistributionAccountService extends BaseService
         }
 
         $this->decreaseAccountOrDebt($userId, DistributionCommissionLog::ACCOUNT_AVAILABLE, $amountCents, DistributionCommissionLog::BIZ_ADMIN_ADJUST, $this->adjustNo(), null, OperatorType::ADMIN, $adminId, $remark, false);
+    }
+
+    public function addInviteReward(int $userId, int $amountCents, int $relationId, string $remark = '固定邀请奖励'): void
+    {
+        $this->increaseAccount(
+            userId: $userId,
+            accountType: DistributionCommissionLog::ACCOUNT_AVAILABLE,
+            amountCents: $amountCents,
+            bizType: DistributionCommissionLog::BIZ_INVITE_REWARD,
+            bizId: 'DR-' . $relationId,
+            operatorType: OperatorType::SYSTEM,
+            operatorId: null,
+            remark: $remark,
+        );
     }
 
     public function holdWithdraw(int $userId, int $amountCents, int $withdrawId, string $withdrawSn): void

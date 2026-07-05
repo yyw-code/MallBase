@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace app\service\admin\distribution;
 
 use app\common\enum\OperatorType;
+use app\model\distribution\DistributionApply;
 use app\model\distribution\DistributionCommissionLog;
 use app\model\distribution\DistributionCommissionRule;
 use app\model\distribution\DistributionDistributor;
@@ -15,6 +16,7 @@ use app\model\user\User;
 use app\service\admin\setting\SettingService;
 use app\service\distribution\DistributionAccountService;
 use app\service\distribution\DistributionConfigService;
+use app\service\distribution\DistributionEnrollmentService;
 use app\service\distribution\DistributionOrderEventService;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
@@ -61,9 +63,20 @@ class DistributionManagementService extends BaseService
         $firstRate = $configService->normalizeRate((string) ($data['global_first_rate'] ?? '0'));
         $secondRate = $configService->normalizeRate((string) ($data['global_second_rate'] ?? '0'));
         $configService->assertRatePair($firstRate, $secondRate);
-        $data['distribution_level_depth'] = '2';
+        $data['distributor_open_mode'] = $configService->normalizeOpenMode((string) ($data['distributor_open_mode'] ?? DistributionConfigService::OPEN_MODE_MANUAL));
+        $data['auto_open_level_id'] = $configService->normalizeUnsignedInt((string) ($data['auto_open_level_id'] ?? '1'), '自动开通等级ID不合法');
+        $data['second_level_enabled'] = $configService->normalizeSwitch((string) ($data['second_level_enabled'] ?? '0'));
+        $data['self_purchase_enabled'] = $configService->normalizeSwitch((string) ($data['self_purchase_enabled'] ?? '0'));
+        $data['relation_valid_days'] = $configService->normalizeUnsignedInt((string) ($data['relation_valid_days'] ?? '0'), '绑定关系有效期不合法');
+        $data['settlement_days'] = $configService->normalizeUnsignedInt((string) ($data['settlement_days'] ?? '0'), '结算等待天数不合法');
+        $data['min_withdraw_cents'] = $configService->normalizeCents((string) ($data['min_withdraw_cents'] ?? '0'), '最低提现金额不合法');
         $data['global_first_rate'] = $firstRate;
         $data['global_second_rate'] = $secondRate;
+        $data['amount_open_threshold_cents'] = $configService->normalizeCents((string) ($data['amount_open_threshold_cents'] ?? '0'), '满额开通门槛不合法');
+        $data['invite_reward_enabled'] = $configService->normalizeSwitch((string) ($data['invite_reward_enabled'] ?? '0'));
+        $data['invite_reward_trigger'] = $configService->normalizeInviteRewardTrigger((string) ($data['invite_reward_trigger'] ?? DistributionConfigService::INVITE_REWARD_TRIGGER_FIRST_ORDER));
+        $data['invite_reward_amount_cents'] = $configService->normalizeCents((string) ($data['invite_reward_amount_cents'] ?? '0'), '固定邀请奖励金额不合法');
+        $data['attribution_enabled'] = $configService->normalizeSwitch((string) ($data['attribution_enabled'] ?? '1'));
 
         app()->make(SettingService::class)->saveGroupValuesWithValidation(
             DistributionConfigService::GROUP_CODE,
@@ -109,6 +122,31 @@ class DistributionManagementService extends BaseService
     public function updateDistributorStatus(int $userId, int $status, int $adminId): void
     {
         app()->make(DistributionAccountService::class)->updateStatus($userId, $status, $adminId);
+    }
+
+    /**
+     * @return array{total:int,list:array<int,array<string,mixed>>}
+     */
+    public function applyList(array $where, int $page, int $limit): array
+    {
+        $query = $this->buildApplyListQuery($where);
+        $total = (int) (clone $query)->count();
+        $rows = $query->order('id', 'desc')->page($page, $limit)->select()->toArray();
+        $list = $this->formatApplies($rows);
+
+        return compact('total', 'list');
+    }
+
+    public function approveApply(int $applyId, int $adminId, int $levelId, string $remark = ''): void
+    {
+        app()->make(DistributionEnrollmentService::class)
+            ->approveApply($applyId, $adminId, $levelId, $remark);
+    }
+
+    public function rejectApply(int $applyId, int $adminId, string $remark): void
+    {
+        app()->make(DistributionEnrollmentService::class)
+            ->rejectApply($applyId, $adminId, $remark);
     }
 
     /**
@@ -367,6 +405,34 @@ class DistributionManagementService extends BaseService
             });
     }
 
+    private function buildApplyListQuery(array $where)
+    {
+        $keyword = trim((string) ($where['keyword'] ?? ''));
+        $userIds = [];
+        if ($keyword !== '') {
+            $userIds = $this->model(User::class)
+                ->whereLike('nickname|mobile|email', '%' . $keyword . '%')
+                ->column('id');
+            if (ctype_digit($keyword)) {
+                $userIds[] = (int) $keyword;
+            }
+            $userIds = array_values(array_unique(array_map('intval', $userIds)));
+        }
+
+        return $this->model(DistributionApply::class)
+            ->when($keyword !== '', function ($q) use ($userIds, $keyword) {
+                $q->where(function ($query) use ($userIds, $keyword) {
+                    $query->whereIn('user_id', $userIds !== [] ? $userIds : [0])
+                        ->whereOr(function ($subQuery) use ($keyword) {
+                            $subQuery->whereLike('real_name|mobile', '%' . $keyword . '%');
+                        });
+                });
+            })
+            ->when(($where['status'] ?? null) !== null && $where['status'] !== '', function ($q) use ($where) {
+                $q->where('status', (int) $where['status']);
+            });
+    }
+
     private function buildRuleListQuery(array $where)
     {
         return $this->model(DistributionCommissionRule::class)
@@ -482,6 +548,7 @@ class DistributionManagementService extends BaseService
                 'level_name' => (string) ($levels[$levelId]['name'] ?? ''),
                 'invite_code' => (string) ($row['invite_code'] ?? ''),
                 'status' => (int) ($row['status'] ?? 0),
+                'open_source' => (string) ($row['open_source'] ?? ''),
                 'available_commission' => $this->centsToAmount((int) ($row['available_commission_cents'] ?? 0)),
                 'frozen_commission' => $this->centsToAmount((int) ($row['frozen_commission_cents'] ?? 0)),
                 'pending_withdraw' => $this->centsToAmount((int) ($row['pending_withdraw_cents'] ?? 0)),
@@ -491,6 +558,36 @@ class DistributionManagementService extends BaseService
                 'indirect_user_count' => (int) ($row['indirect_user_count'] ?? 0),
                 'order_count' => (int) ($row['order_count'] ?? 0),
                 'remark' => (string) ($row['remark'] ?? ''),
+                'create_time' => (string) ($row['create_time'] ?? ''),
+                'update_time' => (string) ($row['update_time'] ?? ''),
+            ];
+        }, $rows);
+    }
+
+    /**
+     * @param array<int,array<string,mixed>> $rows
+     * @return array<int,array<string,mixed>>
+     */
+    private function formatApplies(array $rows): array
+    {
+        $userIds = array_values(array_unique(array_map(static fn(array $row): int => (int) ($row['user_id'] ?? 0), $rows)));
+        $users = $this->usersByIds($userIds);
+
+        return array_map(static function (array $row) use ($users): array {
+            $userId = (int) ($row['user_id'] ?? 0);
+            $status = (int) ($row['status'] ?? 0);
+            return [
+                'id' => (int) ($row['id'] ?? 0),
+                'user_id' => $userId,
+                'user' => $users[$userId] ?? null,
+                'real_name' => (string) ($row['real_name'] ?? ''),
+                'mobile' => (string) ($row['mobile'] ?? ''),
+                'reason' => (string) ($row['reason'] ?? ''),
+                'status' => $status,
+                'status_text' => DistributionApply::statusText($status),
+                'review_admin_id' => isset($row['review_admin_id']) ? (int) $row['review_admin_id'] : null,
+                'review_remark' => (string) ($row['review_remark'] ?? ''),
+                'reviewed_at' => (string) ($row['reviewed_at'] ?? ''),
                 'create_time' => (string) ($row['create_time'] ?? ''),
                 'update_time' => (string) ($row['update_time'] ?? ''),
             ];
@@ -520,8 +617,12 @@ class DistributionManagementService extends BaseService
             'target_type_text' => DistributionCommissionRule::targetText((string) ($row['target_type'] ?? '')),
             'target_id' => (int) ($row['target_id'] ?? 0),
             'name' => (string) ($row['name'] ?? ''),
+            'commission_type' => (string) ($row['commission_type'] ?? DistributionCommissionRule::COMMISSION_TYPE_RATE),
+            'commission_type_text' => DistributionCommissionRule::commissionTypeText((string) ($row['commission_type'] ?? DistributionCommissionRule::COMMISSION_TYPE_RATE)),
             'first_rate' => number_format((float) ($row['first_rate'] ?? 0), 2, '.', ''),
             'second_rate' => number_format((float) ($row['second_rate'] ?? 0), 2, '.', ''),
+            'first_fixed_amount' => $this->centsToAmount((int) ($row['first_fixed_cents'] ?? 0)),
+            'second_fixed_amount' => $this->centsToAmount((int) ($row['second_fixed_cents'] ?? 0)),
             'status' => (int) ($row['status'] ?? 0),
             'remark' => (string) ($row['remark'] ?? ''),
             'create_time' => (string) ($row['create_time'] ?? ''),
@@ -538,6 +639,7 @@ class DistributionManagementService extends BaseService
             'order_item_id' => (int) ($row['order_item_id'] ?? 0),
             'buyer_user_id' => (int) ($row['buyer_user_id'] ?? 0),
             'distributor_user_id' => (int) ($row['distributor_user_id'] ?? 0),
+            'relation_id' => (int) ($row['relation_id'] ?? 0),
             'relation_level' => (int) ($row['relation_level'] ?? 0),
             'goods_id' => (int) ($row['goods_id'] ?? 0),
             'sku_id' => (int) ($row['sku_id'] ?? 0),
@@ -547,6 +649,9 @@ class DistributionManagementService extends BaseService
             'recovered_amount' => $this->centsToAmount((int) ($row['recovered_cents'] ?? 0)),
             'rule_type' => (string) ($row['rule_type'] ?? ''),
             'rule_id' => (int) ($row['rule_id'] ?? 0),
+            'attribution_scene' => (string) ($row['attribution_scene'] ?? ''),
+            'attribution_target_type' => (string) ($row['attribution_target_type'] ?? ''),
+            'attribution_target_id' => (int) ($row['attribution_target_id'] ?? 0),
             'status' => (int) ($row['status'] ?? 0),
             'status_text' => DistributionOrderCommission::statusText((int) ($row['status'] ?? 0)),
             'release_time' => (string) ($row['release_time'] ?? ''),
@@ -638,16 +743,28 @@ class DistributionManagementService extends BaseService
         }
 
         $config = app()->make(DistributionConfigService::class);
+        $commissionType = (string) ($data['commission_type'] ?? DistributionCommissionRule::COMMISSION_TYPE_RATE);
+        if (!in_array($commissionType, [DistributionCommissionRule::COMMISSION_TYPE_RATE, DistributionCommissionRule::COMMISSION_TYPE_FIXED], true)) {
+            throw new BusinessException('计佣方式不合法');
+        }
         $firstRate = $config->normalizeRate((string) ($data['first_rate'] ?? '0'));
         $secondRate = $config->normalizeRate((string) ($data['second_rate'] ?? '0'));
         $config->assertRatePair($firstRate, $secondRate);
+        $firstFixedCents = $this->amountToCents((string) ($data['first_fixed_amount'] ?? '0'));
+        $secondFixedCents = $this->amountToCents((string) ($data['second_fixed_amount'] ?? '0'));
+        if ($commissionType === DistributionCommissionRule::COMMISSION_TYPE_FIXED && $firstFixedCents <= 0 && $secondFixedCents <= 0) {
+            throw new BusinessException('固定金额规则至少填写一个佣金金额');
+        }
 
         return [
             'target_type' => $targetType,
             'target_id' => $targetId,
             'name' => mb_substr(trim((string) ($data['name'] ?? '')), 0, 100),
+            'commission_type' => $commissionType,
             'first_rate' => $firstRate,
             'second_rate' => $secondRate,
+            'first_fixed_cents' => $firstFixedCents,
+            'second_fixed_cents' => $secondFixedCents,
             'status' => (int) ($data['status'] ?? 1),
             'remark' => mb_substr(trim((string) ($data['remark'] ?? '')), 0, 255),
         ];

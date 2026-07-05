@@ -23,6 +23,7 @@ class DistributionCommissionLog extends BaseModel
     public const BIZ_WITHDRAW_APPLY = 'withdraw_apply';
     public const BIZ_WITHDRAW_APPROVE = 'withdraw_approve';
     public const BIZ_WITHDRAW_REJECT = 'withdraw_reject';
+    public const BIZ_INVITE_REWARD = 'invite_reward';
 
     protected $name = 'distribution_commission_log';
     protected $pk = 'id';
@@ -38,6 +39,7 @@ class DistributionCommissionLog extends BaseModel
             self::BIZ_WITHDRAW_APPLY => '申请提现',
             self::BIZ_WITHDRAW_APPROVE => '提现通过',
             self::BIZ_WITHDRAW_REJECT => '提现驳回',
+            self::BIZ_INVITE_REWARD => '固定邀请奖励',
             default => '佣金变动',
         };
     }
