@@ -35,7 +35,7 @@ const form = reactive({
   first_rate: '5.00',
   name: '',
   remark: '',
-  second_rate: '2.00',
+  second_rate: '0.00',
   sort: 0,
   status: 1,
 });
@@ -76,7 +76,7 @@ function resetForm() {
     first_rate: '5.00',
     name: '',
     remark: '',
-    second_rate: '2.00',
+    second_rate: '0.00',
     sort: 0,
     status: 1,
   });

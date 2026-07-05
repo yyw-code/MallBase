@@ -53,6 +53,7 @@ export namespace DistributionApi {
     level_name: string;
     invite_code: string;
     status: number;
+    open_source: string;
     available_commission: string;
     frozen_commission: string;
     pending_withdraw: string;
@@ -71,10 +72,29 @@ export namespace DistributionApi {
     target_type_text: string;
     target_id: number;
     name: string;
+    commission_type: string;
+    commission_type_text: string;
     first_rate: string;
     second_rate: string;
+    first_fixed_amount: string;
+    second_fixed_amount: string;
     status: number;
     remark?: string;
+    create_time: string;
+  }
+
+  export interface ApplyItem {
+    id: number;
+    user_id: number;
+    user?: { id: number; mobile?: string; nickname?: string };
+    real_name: string;
+    mobile: string;
+    reason: string;
+    status: number;
+    status_text: string;
+    review_admin_id?: number | null;
+    review_remark?: string;
+    reviewed_at?: string;
     create_time: string;
   }
 
@@ -83,11 +103,15 @@ export namespace DistributionApi {
     order_sn: string;
     buyer_user_id: number;
     distributor_user_id: number;
+    relation_id: number;
     relation_level: number;
     base_amount: string;
     rate: string;
     amount: string;
     recovered_amount: string;
+    attribution_scene: string;
+    attribution_target_type: string;
+    attribution_target_id: number;
     status: number;
     status_text: string;
     release_time?: string;
@@ -157,6 +181,20 @@ export const openDistributionDistributorApi = (data: {
 
 export const updateDistributionDistributorStatusApi = (userId: number, status: number) =>
   requestClient.put(`/distribution/distributor/status/${userId}`, { status });
+
+export const getDistributionApplyListApi = (params?: DistributionApi.ListParams) =>
+  requestClient.get<{ list: DistributionApi.ApplyItem[]; total: number }>(
+    '/distribution/apply/list',
+    { params },
+  );
+
+export const approveDistributionApplyApi = (
+  id: number,
+  data: { level_id?: number; review_remark?: string },
+) => requestClient.post(`/distribution/apply/approve/${id}`, data);
+
+export const rejectDistributionApplyApi = (id: number, review_remark: string) =>
+  requestClient.post(`/distribution/apply/reject/${id}`, { review_remark });
 
 export const getDistributionLevelListApi = (params?: DistributionApi.ListParams) =>
   requestClient.get<{ list: DistributionApi.LevelItem[]; total: number }>(

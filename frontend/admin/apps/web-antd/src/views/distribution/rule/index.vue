@@ -37,10 +37,13 @@ const searchParams = ref({ status: undefined as number | undefined, target_type:
 const modalVisible = ref(false);
 const editingId = ref(0);
 const form = reactive({
+  commission_type: 'rate',
+  first_fixed_amount: '0.00',
   first_rate: '5.00',
   name: '',
   remark: '',
-  second_rate: '2.00',
+  second_fixed_amount: '0.00',
+  second_rate: '0.00',
   status: 1,
   target_id: undefined as number | undefined,
   target_type: 'goods',
@@ -51,8 +54,9 @@ const columns = [
   { title: '对象类型', dataIndex: 'target_type_text', width: 110 },
   { title: '对象ID', dataIndex: 'target_id', width: 100 },
   { title: '规则名称', dataIndex: 'name', width: 180, ellipsis: true },
-  { title: '一级比例', dataIndex: 'first_rate', width: 120 },
-  { title: '二级比例', dataIndex: 'second_rate', width: 120 },
+  { title: '计佣方式', dataIndex: 'commission_type_text', width: 110 },
+  { title: '一级佣金', key: 'first_commission', width: 120 },
+  { title: '二级佣金', key: 'second_commission', width: 120 },
   {
     title: '状态',
     dataIndex: 'status',
@@ -79,10 +83,13 @@ const columns = [
 
 function resetForm() {
   Object.assign(form, {
+    commission_type: 'rate',
+    first_fixed_amount: '0.00',
     first_rate: '5.00',
     name: '',
     remark: '',
-    second_rate: '2.00',
+    second_fixed_amount: '0.00',
+    second_rate: '0.00',
     status: 1,
     target_id: undefined,
     target_type: 'goods',
@@ -165,11 +172,17 @@ onMounted(() => loadData(searchParams.value));
         :data-source="tableData"
         :loading="loading"
         :pagination="pagination"
-        :scroll="{ x: 980 }"
+        :scroll="{ x: 1120 }"
         row-key="id"
         @change="(p: any) => { pagination.current = p.current; pagination.pageSize = p.pageSize; loadData(searchParams); }"
       >
         <template #bodyCell="{ column, record }">
+          <template v-if="column.key === 'first_commission'">
+            {{ record.commission_type === 'fixed' ? `¥${record.first_fixed_amount}` : `${record.first_rate}%` }}
+          </template>
+          <template v-else-if="column.key === 'second_commission'">
+            {{ record.commission_type === 'fixed' ? `¥${record.second_fixed_amount}` : `${record.second_rate}%` }}
+          </template>
           <template v-if="column.key === 'action'">
             <a-space>
               <a-button v-access:code="'SystemDistributionRuleUpdate'" size="small" type="link" @click="handleEdit(record)">编辑</a-button>
@@ -193,12 +206,28 @@ onMounted(() => loadData(searchParams.value));
         <a-form-item label="规则名称">
           <a-input v-model:value="form.name" allow-clear />
         </a-form-item>
-        <a-form-item label="一级比例">
-          <a-input-number v-model:value="form.first_rate" class="w-full" :max="100" :min="0" :precision="2" />
+        <a-form-item label="计佣方式">
+          <a-radio-group v-model:value="form.commission_type">
+            <a-radio value="rate">比例</a-radio>
+            <a-radio value="fixed">固定金额</a-radio>
+          </a-radio-group>
         </a-form-item>
-        <a-form-item label="二级比例">
-          <a-input-number v-model:value="form.second_rate" class="w-full" :max="100" :min="0" :precision="2" />
-        </a-form-item>
+        <template v-if="form.commission_type === 'fixed'">
+          <a-form-item label="一级固定金额">
+            <a-input-number v-model:value="form.first_fixed_amount" class="w-full" :min="0" :precision="2" />
+          </a-form-item>
+          <a-form-item label="二级固定金额">
+            <a-input-number v-model:value="form.second_fixed_amount" class="w-full" :min="0" :precision="2" />
+          </a-form-item>
+        </template>
+        <template v-else>
+          <a-form-item label="一级比例">
+            <a-input-number v-model:value="form.first_rate" class="w-full" :max="100" :min="0" :precision="2" />
+          </a-form-item>
+          <a-form-item label="二级比例">
+            <a-input-number v-model:value="form.second_rate" class="w-full" :max="100" :min="0" :precision="2" />
+          </a-form-item>
+        </template>
         <a-form-item label="状态">
           <a-radio-group v-model:value="form.status">
             <a-radio :value="1">启用</a-radio>

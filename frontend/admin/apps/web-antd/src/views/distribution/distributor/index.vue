@@ -42,6 +42,7 @@ const columns = [
   },
   { title: '等级', dataIndex: 'level_name', width: 130 },
   { title: '邀请码', dataIndex: 'invite_code', width: 130 },
+  { title: '开通来源', dataIndex: 'open_source', width: 110 },
   { title: '可提现', dataIndex: 'available_commission', width: 110 },
   { title: '冻结', dataIndex: 'frozen_commission', width: 110 },
   { title: '团队', key: 'team', width: 120 },
@@ -146,7 +147,7 @@ onMounted(async () => {
         :data-source="tableData"
         :loading="loading"
         :pagination="pagination"
-        :scroll="{ x: 1120 }"
+        :scroll="{ x: 1230 }"
         row-key="id"
         @change="(p: any) => { pagination.current = p.current; pagination.pageSize = p.pageSize; loadData(searchParams); }"
       >
