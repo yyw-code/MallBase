@@ -31,18 +31,30 @@ const decimal = computed(() => {
 .mb-price {
   display: inline-flex;
   align-items: baseline;
+  flex-shrink: 0;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .mb-price__symbol {
+  display: inline-block;
   font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .mb-price__integer {
+  display: inline-block;
   font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .mb-price__decimal {
+  display: inline-block;
   font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .mb-price--sm .mb-price__symbol { font-size: 20rpx; }
