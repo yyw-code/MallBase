@@ -9,6 +9,7 @@ use app\model\goods\Goods;
 use app\model\goods\GoodsSku;
 use app\model\marketing\PointsExchangeOrder;
 use app\model\marketing\PointsExchangeOrderLog;
+use app\service\logistics\LogisticsService;
 use app\service\marketing\PointsExchangeOrderLogService;
 use app\service\marketing\PointsExchangeOrderLifecycleService;
 use app\service\upload\AssetHydrator;
@@ -84,14 +85,35 @@ class PointsExchangeOrderService extends BaseService
 
     public function ship(int $id, array $data, int $adminId): bool
     {
-        $logisticsCompany = mb_substr(trim((string) ($data['logistics_company'] ?? '')), 0, 80);
-        $logisticsNo = mb_substr(trim((string) ($data['logistics_no'] ?? '')), 0, 80);
-        if ($logisticsCompany === '' || $logisticsNo === '') {
-            throw new BusinessException('请填写物流公司和物流单号');
+        if ($adminId <= 0) {
+            throw new BusinessException('管理员身份无效');
         }
 
-        $this->withDeadlockRetry(function () use ($id, $logisticsCompany, $logisticsNo, $data, $adminId): void {
-            $this->transaction(function () use ($id, $logisticsCompany, $logisticsNo, $data, $adminId): void {
+        $deliveryType = $this->normalizeDeliveryType((string) ($data['delivery_type'] ?? ''));
+        $deliveryNote = mb_substr(trim((string) ($data['delivery_note'] ?? '')), 0, 255);
+        $logisticsNo = mb_substr(trim((string) ($data['logistics_no'] ?? '')), 0, 80);
+        $company = null;
+
+        if ($deliveryType === PointsExchangeOrder::DELIVERY_TYPE_VIRTUAL) {
+            if ($deliveryNote === '') {
+                throw new BusinessException('请填写虚拟发货说明');
+            }
+        } else {
+            if ($logisticsNo === '') {
+                throw new BusinessException('请填写物流单号');
+            }
+            /** @var LogisticsService $logisticsService */
+            $logisticsService = app()->make(LogisticsService::class);
+            $company = $logisticsService->resolveCompany(
+                (string) ($data['logistics_platform'] ?? ''),
+                (int) ($data['logistics_company_id'] ?? 0),
+                (string) ($data['logistics_company_code'] ?? ''),
+                (string) ($data['logistics_company'] ?? '')
+            );
+        }
+
+        $this->withDeadlockRetry(function () use ($id, $deliveryType, $deliveryNote, $company, $logisticsNo, $data, $adminId): void {
+            $this->transaction(function () use ($id, $deliveryType, $deliveryNote, $company, $logisticsNo, $data, $adminId): void {
                 /** @var PointsExchangeOrder|null $order */
                 $order = $this->model()->where('id', $id)->lock(true)->find();
                 if (!$order) {
@@ -102,13 +124,33 @@ class PointsExchangeOrderService extends BaseService
                 }
                 $fromStatus = (int) $order->status;
 
-                $order->save([
+                $payload = [
                     'status' => PointsExchangeOrder::STATUS_SHIPPED,
-                    'logistics_company' => $logisticsCompany,
-                    'logistics_no' => $logisticsNo,
+                    'delivery_type' => $deliveryType,
+                    'delivery_note' => $deliveryType === PointsExchangeOrder::DELIVERY_TYPE_VIRTUAL ? $deliveryNote : null,
                     'admin_remark' => mb_substr(trim((string) ($data['admin_remark'] ?? '')), 0, 255),
                     'shipped_at' => date('Y-m-d H:i:s'),
-                ]);
+                ];
+                if ($deliveryType === PointsExchangeOrder::DELIVERY_TYPE_VIRTUAL) {
+                    $payload = array_merge($payload, [
+                        'logistics_platform' => null,
+                        'logistics_company_id' => 0,
+                        'logistics_company_code' => null,
+                        'logistics_company' => null,
+                        'logistics_no' => null,
+                    ]);
+                    $remark = '虚拟发货：' . $deliveryNote;
+                } else {
+                    $payload = array_merge($payload, [
+                        'logistics_platform' => mb_substr((string) $company['platform'], 0, 32),
+                        'logistics_company_id' => (int) $company['company_id'],
+                        'logistics_company_code' => mb_substr((string) $company['code'], 0, 64),
+                        'logistics_company' => mb_substr((string) $company['name'], 0, 80),
+                        'logistics_no' => $logisticsNo,
+                    ]);
+                    $remark = sprintf('物流公司：%s，物流单号：%s', $company['name'], $logisticsNo);
+                }
+                $order->save($payload);
                 app()->make(PointsExchangeOrderLogService::class)->record(
                     order: $order,
                     action: PointsExchangeOrderLog::ACTION_SHIP,
@@ -116,7 +158,7 @@ class PointsExchangeOrderService extends BaseService
                     toStatus: PointsExchangeOrder::STATUS_SHIPPED,
                     operatorType: OperatorType::ADMIN,
                     operatorId: $adminId,
-                    remark: sprintf('物流公司：%s，物流单号：%s', $logisticsCompany, $logisticsNo)
+                    remark: $remark
                 );
             });
         });
@@ -182,6 +224,8 @@ class PointsExchangeOrderService extends BaseService
         foreach ($rows as &$row) {
             $status = (int) ($row['status'] ?? 0);
             $row['status_text'] = PointsExchangeOrder::statusText($status);
+            $row['delivery_type'] = $this->normalizeDeliveryType((string) ($row['delivery_type'] ?? ''));
+            $row['delivery_type_text'] = PointsExchangeOrder::deliveryTypeLabel((string) $row['delivery_type']);
             $row['receiver_full_address'] = implode(' ', array_filter([
                 (string) ($row['receiver_province'] ?? ''),
                 (string) ($row['receiver_city'] ?? ''),
@@ -251,5 +295,12 @@ class PointsExchangeOrderService extends BaseService
         unset($row);
 
         return $rows;
+    }
+
+    private function normalizeDeliveryType(string $deliveryType): string
+    {
+        return $deliveryType === PointsExchangeOrder::DELIVERY_TYPE_VIRTUAL
+            ? PointsExchangeOrder::DELIVERY_TYPE_VIRTUAL
+            : PointsExchangeOrder::DELIVERY_TYPE_PHYSICAL;
     }
 }

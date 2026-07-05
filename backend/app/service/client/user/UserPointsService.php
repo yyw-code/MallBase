@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace app\service\client\user;
 
+use app\model\order\OrderPointsReward;
 use app\model\user\UserPoints;
 use app\model\user\UserPointsLog;
 use app\service\user\UserPointsAccountService;
@@ -19,7 +20,7 @@ class UserPointsService extends BaseService
     protected string $modelClass = UserPoints::class;
 
     /**
-     * @return array{balance_points:int,frozen_points:int,debt_points:int,total_income_points:int,total_expense_points:int,month_income_points:int,month_expense_points:int}
+     * @return array{balance_points:int,frozen_points:int,debt_points:int,total_income_points:int,total_expense_points:int,month_income_points:int,month_expense_points:int,frozen_rewards:array<int,array<string,mixed>>,next_release_time:?string}
      */
     public function info(int $userId): array
     {
@@ -45,6 +46,8 @@ class UserPointsService extends BaseService
         return array_merge($info, [
             'month_income_points' => $monthIncomePoints,
             'month_expense_points' => $monthExpensePoints,
+            'frozen_rewards' => $this->frozenRewards($userId),
+            'next_release_time' => $this->nextReleaseTime($userId),
         ]);
     }
 
@@ -102,6 +105,43 @@ class UserPointsService extends BaseService
             'three_months' => date('Y-m-d 00:00:00', strtotime('-3 months') ?: time()),
             default => null,
         };
+    }
+
+    /**
+     * @return array<int,array<string,mixed>>
+     */
+    private function frozenRewards(int $userId): array
+    {
+        $rows = $this->model(OrderPointsReward::class)
+            ->where('user_id', $userId)
+            ->where('status', OrderPointsReward::STATUS_FROZEN)
+            ->where('frozen_points', '>', 0)
+            ->order('release_time', 'asc')
+            ->limit(5)
+            ->select()
+            ->toArray();
+
+        return array_map(static fn(array $row): array => [
+            'order_id' => (int) ($row['order_id'] ?? 0),
+            'order_sn' => (string) ($row['order_sn'] ?? ''),
+            'reward_points' => (int) ($row['reward_points'] ?? 0),
+            'frozen_points' => (int) ($row['frozen_points'] ?? 0),
+            'released_points' => (int) ($row['released_points'] ?? 0),
+            'release_time' => (string) ($row['release_time'] ?? ''),
+            'status' => (string) ($row['status'] ?? ''),
+        ], $rows);
+    }
+
+    private function nextReleaseTime(int $userId): ?string
+    {
+        $releaseTime = $this->model(OrderPointsReward::class)
+            ->where('user_id', $userId)
+            ->where('status', OrderPointsReward::STATUS_FROZEN)
+            ->where('frozen_points', '>', 0)
+            ->order('release_time', 'asc')
+            ->value('release_time');
+
+        return $releaseTime !== null && $releaseTime !== '' ? (string) $releaseTime : null;
     }
 
     /**

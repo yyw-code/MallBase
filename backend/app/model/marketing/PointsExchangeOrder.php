@@ -10,6 +10,9 @@ use mall_base\base\BaseModel;
  */
 class PointsExchangeOrder extends BaseModel
 {
+    public const DELIVERY_TYPE_PHYSICAL = 'physical';
+    public const DELIVERY_TYPE_VIRTUAL = 'virtual';
+
     protected $name = 'points_exchange_order';
     protected $pk = 'id';
     protected $autoWriteTimestamp = 'datetime';
@@ -43,5 +46,13 @@ class PointsExchangeOrder extends BaseModel
             ['value' => self::STATUS_COMPLETED, 'label' => self::statusText(self::STATUS_COMPLETED)],
             ['value' => self::STATUS_CLOSED, 'label' => self::statusText(self::STATUS_CLOSED)],
         ];
+    }
+
+    public static function deliveryTypeLabel(string $type): string
+    {
+        return match ($type) {
+            self::DELIVERY_TYPE_VIRTUAL => '虚拟发货',
+            default => '实物快递',
+        };
     }
 }

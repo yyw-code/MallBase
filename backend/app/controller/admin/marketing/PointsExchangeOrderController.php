@@ -46,7 +46,16 @@ class PointsExchangeOrderController extends BaseController
             return $this->error('ID不能为空');
         }
 
-        $data = $this->request->param(['logistics_company', 'logistics_no', 'admin_remark']);
+        $data = $this->request->param([
+            'delivery_type',
+            'delivery_note',
+            'logistics_platform',
+            'logistics_company_id',
+            'logistics_company_code',
+            'logistics_company',
+            'logistics_no',
+            'admin_remark',
+        ]);
         $this->validate($data, PointsExchangeOrderValidate::class . '.ship');
         $this->service()->ship($orderId, $data, (int) ($this->request->admin_id ?? 0));
 

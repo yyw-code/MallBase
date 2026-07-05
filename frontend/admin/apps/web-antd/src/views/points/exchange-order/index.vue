@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import type { LogisticsApi } from '#/api/logistics';
 import type { PointsExchangeOrderApi } from '#/api/points';
 
 import { computed, onMounted, reactive, ref } from 'vue';
@@ -7,6 +8,10 @@ import { useAccess } from '@vben/access';
 
 import { message, Modal } from 'ant-design-vue';
 
+import {
+  getLogisticsCompanyOptionsApi,
+  getLogisticsPlatformListApi,
+} from '#/api/logistics';
 import {
   closePointsExchangeOrderApi,
   completePointsExchangeOrderApi,
@@ -49,10 +54,19 @@ const detailData = ref<null | PointsExchangeOrderApi.OrderItem>(null);
 
 const shipVisible = ref(false);
 const shipLoading = ref(false);
+const loadingPlatforms = ref(false);
+const loadingCompanies = ref(false);
 const shipFormRef = ref();
 const shipTarget = ref<null | PointsExchangeOrderApi.OrderItem>(null);
+const platformOptions = ref<LogisticsApi.PlatformItem[]>([]);
+const companyOptions = ref<LogisticsApi.CompanyOption[]>([]);
 const shipForm = reactive<PointsExchangeOrderApi.ShipParams>({
   admin_remark: '',
+  delivery_type: 'physical',
+  delivery_note: '',
+  logistics_platform: '',
+  logistics_company_id: undefined,
+  logistics_company_code: '',
   logistics_company: '',
   logistics_no: '',
 });
@@ -65,13 +79,41 @@ const closeForm = reactive<PointsExchangeOrderApi.CloseParams>({
   admin_remark: '',
 });
 const imageErrorKeys = ref<Record<string, true>>({});
+const isPhysicalShip = computed(() => shipForm.delivery_type !== 'virtual');
 
 const shipRules = {
-  logistics_company: [
-    { required: true, message: '请输入物流公司', trigger: 'blur' },
+  delivery_note: [
+    {
+      trigger: 'blur',
+      validator: async () => {
+        if (
+          shipForm.delivery_type === 'virtual' &&
+          !shipForm.delivery_note?.trim()
+        ) {
+          throw new Error('请填写虚拟发货说明');
+        }
+      },
+    },
+  ],
+  logistics_company_id: [
+    {
+      trigger: 'change',
+      validator: async () => {
+        if (isPhysicalShip.value && !shipForm.logistics_company_id) {
+          throw new Error('请选择物流公司');
+        }
+      },
+    },
   ],
   logistics_no: [
-    { required: true, message: '请输入物流单号', trigger: 'blur' },
+    {
+      trigger: 'blur',
+      validator: async () => {
+        if (isPhysicalShip.value && !shipForm.logistics_no?.trim()) {
+          throw new Error('请输入物流单号');
+        }
+      },
+    },
   ],
 };
 
@@ -97,6 +139,83 @@ const statusColor = (status: number) => {
   if (status === STATUS_COMPLETED) return 'green';
   if (status === STATUS_CLOSED) return 'default';
   return 'default';
+};
+
+const showPlatformSelect = computed(() => platformOptions.value.length > 1);
+
+const platformSelectOptions = computed(() =>
+  platformOptions.value.map((item) => ({
+    label: item.is_default === 1 ? `${item.name}（默认）` : item.name,
+    value: item.code,
+  })),
+);
+
+const companySelectOptions = computed(() =>
+  companyOptions.value.map((item) => ({
+    label: item.label || item.name,
+    value: item.value || item.id,
+  })),
+);
+
+const defaultPlatform = () =>
+  platformOptions.value.find((item) => item.is_default === 1) ||
+  platformOptions.value[0];
+
+const loadPlatforms = async () => {
+  if (platformOptions.value.length > 0 || loadingPlatforms.value) return;
+  loadingPlatforms.value = true;
+  try {
+    const res = await getLogisticsPlatformListApi({
+      limit: 100,
+      page: 1,
+      status: 1,
+    });
+    platformOptions.value = res.list || [];
+  } catch (error: any) {
+    message.error(error?.message || '物流平台加载失败');
+  } finally {
+    loadingPlatforms.value = false;
+  }
+};
+
+const loadCompanyOptions = async (platform: string) => {
+  companyOptions.value = [];
+  if (!platform) return;
+  loadingCompanies.value = true;
+  try {
+    companyOptions.value = await getLogisticsCompanyOptionsApi(platform);
+  } catch (error: any) {
+    message.error(error?.message || '物流公司加载失败');
+  } finally {
+    loadingCompanies.value = false;
+  }
+};
+
+const applyCompanySnapshot = (companyId: number) => {
+  const matched = companyOptions.value.find((item) => item.id === companyId);
+  shipForm.logistics_company_id = matched?.id;
+  shipForm.logistics_company_code = matched?.code || '';
+  shipForm.logistics_company = matched?.name || matched?.label || '';
+};
+
+const resetCompany = () => {
+  shipForm.logistics_company_id = undefined;
+  shipForm.logistics_company_code = '';
+  shipForm.logistics_company = '';
+};
+
+const handleShipPlatformChange = async (platform?: string) => {
+  shipForm.logistics_platform = platform || '';
+  resetCompany();
+  await loadCompanyOptions(shipForm.logistics_platform);
+};
+
+const handleShipCompanyChange = (value?: number) => {
+  applyCompanySnapshot(Number(value || 0));
+};
+
+const handleShipTypeChange = () => {
+  shipFormRef.value?.clearValidate?.();
 };
 
 const canShip = (record: PointsExchangeOrderApi.OrderItem) =>
@@ -165,13 +284,25 @@ const showDetail = async (record: PointsExchangeOrderApi.OrderItem) => {
   }
 };
 
-const openShip = (record: PointsExchangeOrderApi.OrderItem) => {
+const openShip = async (record: PointsExchangeOrderApi.OrderItem) => {
   shipTarget.value = record;
+  await loadPlatforms();
+  const platform = record.logistics_platform || defaultPlatform()?.code || '';
   Object.assign(shipForm, {
     admin_remark: record.admin_remark || '',
+    delivery_type: record.delivery_type || 'physical',
+    delivery_note: record.delivery_note || '',
+    logistics_platform: platform,
+    logistics_company_id: record.logistics_company_id || undefined,
+    logistics_company_code: record.logistics_company_code || '',
     logistics_company: record.logistics_company || '',
     logistics_no: record.logistics_no || '',
   });
+  await loadCompanyOptions(platform);
+  const companyId = shipForm.logistics_company_id;
+  if (typeof companyId === 'number' && companyId > 0) {
+    applyCompanySnapshot(companyId);
+  }
   shipVisible.value = true;
 };
 
@@ -180,7 +311,13 @@ const submitShip = async () => {
   try {
     await shipFormRef.value?.validate();
     shipLoading.value = true;
-    await shipPointsExchangeOrderApi(shipTarget.value.id, { ...shipForm });
+    await shipPointsExchangeOrderApi(shipTarget.value.id, {
+      ...shipForm,
+      delivery_note: shipForm.delivery_note?.trim() || '',
+      logistics_company_id: shipForm.logistics_company_id || 0,
+      logistics_company: shipForm.logistics_company.trim(),
+      logistics_no: shipForm.logistics_no.trim(),
+    });
     message.success('发货成功');
     shipVisible.value = false;
     await loadData(searchParams.value);
@@ -359,7 +496,15 @@ onMounted(async () => {
           </template>
 
           <template v-else-if="column.key === 'logistics'">
-            <template v-if="record.logistics_company || record.logistics_no">
+            <template v-if="record.delivery_type === 'virtual'">
+              <div>虚拟发货</div>
+              <div class="mt-1 truncate text-xs text-muted-foreground">
+                {{ record.delivery_note || '-' }}
+              </div>
+            </template>
+            <template
+              v-else-if="record.logistics_company || record.logistics_no"
+            >
               <div>{{ record.logistics_company || '-' }}</div>
               <div class="mt-1 text-xs text-muted-foreground">
                 {{ record.logistics_no || '-' }}
@@ -437,10 +582,25 @@ onMounted(async () => {
           <a-descriptions-item label="地址" :span="2">
             {{ detailData.receiver_full_address }}
           </a-descriptions-item>
-          <a-descriptions-item label="物流公司">
+          <a-descriptions-item label="发货方式">
+            {{ detailData.delivery_type_text || '实物快递' }}
+          </a-descriptions-item>
+          <a-descriptions-item
+            v-if="detailData.delivery_type === 'virtual'"
+            label="发货说明"
+          >
+            {{ detailData.delivery_note || '-' }}
+          </a-descriptions-item>
+          <a-descriptions-item
+            v-if="detailData.delivery_type !== 'virtual'"
+            label="物流公司"
+          >
             {{ detailData.logistics_company || '-' }}
           </a-descriptions-item>
-          <a-descriptions-item label="物流单号">
+          <a-descriptions-item
+            v-if="detailData.delivery_type !== 'virtual'"
+            label="物流单号"
+          >
             {{ detailData.logistics_no || '-' }}
           </a-descriptions-item>
           <a-descriptions-item label="买家备注" :span="2">
@@ -502,18 +662,63 @@ onMounted(async () => {
         :model="shipForm"
         :rules="shipRules"
       >
-        <a-form-item label="物流公司" name="logistics_company">
-          <a-input
-            v-model:value="shipForm.logistics_company"
-            allow-clear
-            placeholder="请输入物流公司"
+        <a-form-item label="发货方式" name="delivery_type">
+          <a-radio-group
+            v-model:value="shipForm.delivery_type"
+            button-style="solid"
+            @change="handleShipTypeChange"
+          >
+            <a-radio-button value="physical">实物快递</a-radio-button>
+            <a-radio-button value="virtual">虚拟发货</a-radio-button>
+          </a-radio-group>
+        </a-form-item>
+
+        <a-form-item
+          v-if="isPhysicalShip && showPlatformSelect"
+          label="物流平台"
+          name="logistics_platform"
+        >
+          <a-select
+            v-model:value="shipForm.logistics_platform"
+            :loading="loadingPlatforms"
+            :options="platformSelectOptions"
+            placeholder="请选择物流平台"
+            @change="handleShipPlatformChange"
           />
         </a-form-item>
-        <a-form-item label="物流单号" name="logistics_no">
+
+        <a-form-item
+          v-if="isPhysicalShip"
+          label="物流公司"
+          name="logistics_company_id"
+        >
+          <a-select
+            v-model:value="shipForm.logistics_company_id"
+            :disabled="!shipForm.logistics_platform"
+            :loading="loadingCompanies"
+            :options="companySelectOptions"
+            allow-clear
+            option-filter-prop="label"
+            placeholder="请选择物流公司"
+            show-search
+            @change="handleShipCompanyChange"
+          />
+        </a-form-item>
+        <a-form-item v-if="isPhysicalShip" label="物流单号" name="logistics_no">
           <a-input
             v-model:value="shipForm.logistics_no"
             allow-clear
             placeholder="请输入物流单号"
+          />
+        </a-form-item>
+        <a-form-item v-else label="发货说明" name="delivery_note">
+          <a-textarea
+            v-model:value="shipForm.delivery_note"
+            :maxlength="255"
+            :rows="3"
+            allow-clear
+            placeholder="请输入虚拟发货说明，如卡密已发放、权益已开通"
+            show-count
           />
         </a-form-item>
         <a-form-item label="后台备注" name="admin_remark">

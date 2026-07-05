@@ -371,6 +371,10 @@ class PointsMallService extends BaseService
         foreach ($rows as &$row) {
             $status = (int) ($row['status'] ?? 0);
             $row['status_text'] = PointsExchangeOrder::statusText($status);
+            $row['delivery_type'] = (string) (($row['delivery_type'] ?? '') === PointsExchangeOrder::DELIVERY_TYPE_VIRTUAL
+                ? PointsExchangeOrder::DELIVERY_TYPE_VIRTUAL
+                : PointsExchangeOrder::DELIVERY_TYPE_PHYSICAL);
+            $row['delivery_type_text'] = PointsExchangeOrder::deliveryTypeLabel((string) $row['delivery_type']);
             $row['receiver_full_address'] = implode(' ', array_filter([
                 (string) ($row['receiver_province'] ?? ''),
                 (string) ($row['receiver_city'] ?? ''),

@@ -42,6 +42,12 @@ export namespace PointsExchangeOrderApi {
     receiver_full_address?: string;
     status: number;
     status_text?: string;
+    delivery_type?: 'physical' | 'virtual';
+    delivery_type_text?: string;
+    delivery_note?: string;
+    logistics_platform?: string;
+    logistics_company_id?: number;
+    logistics_company_code?: string;
     logistics_company?: string;
     logistics_no?: string;
     buyer_remark?: string;
@@ -68,6 +74,11 @@ export namespace PointsExchangeOrderApi {
   }
 
   export interface ShipParams {
+    delivery_note?: string;
+    delivery_type: 'physical' | 'virtual';
+    logistics_platform: string;
+    logistics_company_id?: number;
+    logistics_company_code: string;
     logistics_company: string;
     logistics_no: string;
     admin_remark?: string;

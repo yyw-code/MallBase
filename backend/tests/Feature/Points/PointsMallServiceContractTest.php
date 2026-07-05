@@ -33,6 +33,7 @@ final class PointsMallServiceContractTest extends TestCase
             'goods_sku',
             'user_address',
             'region',
+            'logistics_company',
         ]);
 
         Db::startTrans();
@@ -198,10 +199,14 @@ final class PointsMallServiceContractTest extends TestCase
             $pointsGoodsId = $this->insertPointsGoods($goodsId, $skuId, 10, 3);
             $addressId = $this->insertAddress($userId);
             $this->insertPointsAccount($userId, 100);
+            $company = $this->insertLogisticsCompany();
 
             $result = $this->mallService()->exchange($userId, $pointsGoodsId, $addressId, 1, '', 'idem-key-shipped');
             $this->exchangeOrderService()->ship($result['id'], [
-                'logistics_company' => '测试快递',
+                'delivery_type' => PointsExchangeOrder::DELIVERY_TYPE_PHYSICAL,
+                'logistics_platform' => $company['platform'],
+                'logistics_company_id' => $company['company_id'],
+                'logistics_company_code' => $company['code'],
                 'logistics_no' => 'TEST123456',
             ], 1);
 
@@ -240,6 +245,7 @@ final class PointsMallServiceContractTest extends TestCase
             'goods_sku',
             'user_address',
             'region',
+            'logistics_company',
         ]);
 
         Db::startTrans();
@@ -251,10 +257,14 @@ final class PointsMallServiceContractTest extends TestCase
             $pointsGoodsId = $this->insertPointsGoods($goodsId, $skuId, 10, 3);
             $addressId = $this->insertAddress($userId);
             $this->insertPointsAccount($userId, 100);
+            $company = $this->insertLogisticsCompany();
 
             $result = $this->mallService()->exchange($userId, $pointsGoodsId, $addressId, 1, '', 'idem-key-complete');
             $this->exchangeOrderService()->ship($result['id'], [
-                'logistics_company' => '测试快递',
+                'delivery_type' => PointsExchangeOrder::DELIVERY_TYPE_PHYSICAL,
+                'logistics_platform' => $company['platform'],
+                'logistics_company_id' => $company['company_id'],
+                'logistics_company_code' => $company['code'],
                 'logistics_no' => 'TEST123456',
             ], 1);
             $this->exchangeOrderService()->complete($result['id'], 1);
@@ -268,6 +278,52 @@ final class PointsMallServiceContractTest extends TestCase
                 ->count());
             $info = $this->exchangeOrderService()->getInfo($result['id']);
             $this->assertGreaterThanOrEqual(3, count($info['logs'] ?? []));
+        } finally {
+            Db::rollback();
+            $this->flushSettings();
+        }
+    }
+
+    public function testVirtualShipDoesNotRequireLogisticsCompany(): void
+    {
+        $this->requireDbTables([
+            'points_goods',
+            'points_exchange_order',
+            'points_exchange_order_log',
+            'user_points',
+            'user_points_log',
+            'goods',
+            'goods_sku',
+            'user_address',
+            'region',
+        ]);
+
+        Db::startTrans();
+        try {
+            $this->enablePoints();
+            $userId = $this->testUserId();
+            $goodsId = $this->insertGoods();
+            $skuId = $this->insertSku($goodsId, 5);
+            $pointsGoodsId = $this->insertPointsGoods($goodsId, $skuId, 10, 3);
+            $addressId = $this->insertAddress($userId);
+            $this->insertPointsAccount($userId, 100);
+
+            $result = $this->mallService()->exchange($userId, $pointsGoodsId, $addressId, 1, '', 'idem-key-virtual');
+            $this->exchangeOrderService()->ship($result['id'], [
+                'delivery_type' => PointsExchangeOrder::DELIVERY_TYPE_VIRTUAL,
+                'delivery_note' => '兑换码已发送到站内信',
+            ], 1);
+
+            $row = Db::name('points_exchange_order')->where('id', $result['id'])->find();
+            $this->assertSame(PointsExchangeOrder::STATUS_SHIPPED, (int) ($row['status'] ?? 0));
+            $this->assertSame(PointsExchangeOrder::DELIVERY_TYPE_VIRTUAL, (string) ($row['delivery_type'] ?? ''));
+            $this->assertSame('兑换码已发送到站内信', (string) ($row['delivery_note'] ?? ''));
+            $this->assertSame('', (string) ($row['logistics_no'] ?? ''));
+            $this->assertSame(1, (int) Db::name('points_exchange_order_log')
+                ->where('exchange_order_id', $result['id'])
+                ->where('action', PointsExchangeOrderLog::ACTION_SHIP)
+                ->whereLike('remark', '虚拟发货%')
+                ->count());
         } finally {
             Db::rollback();
             $this->flushSettings();
@@ -400,6 +456,32 @@ final class PointsMallServiceContractTest extends TestCase
             'total_income_points' => $points,
             'total_expense_points' => 0,
         ]);
+    }
+
+    /**
+     * @return array{platform:string,company_id:int,code:string,name:string}
+     */
+    private function insertLogisticsCompany(): array
+    {
+        $suffix = (string) random_int(100000, 999999);
+        $platform = 'kdniao';
+        $code = 'CODEX' . $suffix;
+        $name = '测试快递' . $suffix;
+
+        $id = (int) Db::name('logistics_company')->insertGetId([
+            'platform' => $platform,
+            'code' => $code,
+            'name' => $name,
+            'status' => 1,
+            'sort' => 0,
+        ]);
+
+        return [
+            'platform' => $platform,
+            'company_id' => $id,
+            'code' => $code,
+            'name' => $name,
+        ];
     }
 
     private function insertAddress(int $userId): int
