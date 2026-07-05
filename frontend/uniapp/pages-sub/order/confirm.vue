@@ -48,11 +48,12 @@
         <view class="goods-item__info">
           <text class="goods-item__name">{{ item.goods_name || item.name }}</text>
           <text v-if="item.sku_spec" class="goods-item__spec">{{ item.sku_spec }}</text>
-          <text v-if="hasItemMemberDiscount(item)" class="goods-item__benefit">
-            会员优惠 -¥{{ itemMemberDiscountAmount(item) }}
-          </text>
-          <text v-if="itemRewardPoints(item) > 0" class="goods-item__benefit">
-            预计赠送 {{ itemRewardPoints(item) }} 积分
+          <text
+            v-for="line in orderItemBenefitLines(item)"
+            :key="line.key"
+            class="goods-item__benefit"
+          >
+            {{ line.text }}
           </text>
           <view class="goods-item__bottom">
             <mb-price :value="item.unit_price" size="sm" color="var(--color-text-title)" />
@@ -85,32 +86,31 @@
       />
     </view>
 
-    <view v-if="pointsDeduction" class="card points-card">
+    <view
+      v-for="slot in orderExtensionCards"
+      :key="slot.key"
+      class="card points-card"
+      :class="slot.className"
+    >
       <view class="points-card__main">
         <view class="points-card__title-row">
-          <text class="points-card__title">积分抵扣</text>
-          <text v-if="hasPointsDiscount" class="points-card__discount">-¥{{ pointsDiscountAmount }}</text>
+          <text class="points-card__title">{{ slot.title }}</text>
+          <text
+            v-if="slot.amountText"
+            :class="slot.switchable ? 'points-card__discount' : 'points-card__reward'"
+          >
+            {{ slot.amountText }}
+          </text>
         </view>
-        <text class="points-card__meta">
-          可用 {{ pointsDeduction.available_points || 0 }}，本单最多可用 {{ pointsDeduction.usable_points || 0 }}
-        </text>
+        <text class="points-card__meta">{{ slot.metaText }}</text>
       </view>
       <switch
-        :checked="usePoints"
-        :disabled="!canUsePoints"
+        v-if="slot.switchable"
+        :checked="slot.checked"
+        :disabled="slot.disabled"
         color="var(--color-primary, #0d50d5)"
         @change="onUsePointsChange"
       />
-    </view>
-
-    <view v-if="hasPointsReward" class="card points-card reward-card">
-      <view class="points-card__main">
-        <view class="points-card__title-row">
-          <text class="points-card__title">积分赠送</text>
-          <text class="points-card__reward">+{{ rewardPoints }} 积分</text>
-        </view>
-        <text class="points-card__meta">{{ rewardMetaText }}</text>
-      </view>
     </view>
 
     <!-- 价格明细 -->
@@ -125,13 +125,13 @@
         <text v-else-if="isFreeFreight" class="summary-row__free">免运费</text>
         <mb-price v-else :value="displayFreight" size="sm" color="var(--color-text)" />
       </view>
-      <view v-if="hasPointsDiscount" class="summary-row">
-        <text class="summary-row__label">积分抵扣</text>
-        <text class="summary-row__discount">-¥{{ pointsDiscountAmount }}</text>
-      </view>
-      <view v-if="hasMemberDiscount" class="summary-row">
-        <text class="summary-row__label">会员优惠</text>
-        <text class="summary-row__discount">-¥{{ memberDiscountAmount }}</text>
+      <view
+        v-for="row in summaryExtensionRows"
+        :key="row.key"
+        class="summary-row"
+      >
+        <text class="summary-row__label">{{ row.label }}</text>
+        <text class="summary-row__discount">{{ row.amountText }}</text>
       </view>
       <view class="summary-divider" />
       <view class="summary-row summary-row--total">
@@ -185,6 +185,10 @@ import { createOrder, previewOrder } from '@/api/order/order'
 import { isPointsEnabled as fetchPointsFeatureEnabled } from '@/utils/points-feature'
 import { usePayFlow } from '@/utils/usePayFlow'
 import { isPositivePrice, isZeroPrice, multiplyPrice, normalizePrice, sumPrices } from '@/utils/price'
+import {
+  buildOrderConfirmExtensionState,
+  buildOrderConfirmItemBenefitLines,
+} from '@/utils/extension-slots'
 const decorateStore = useDecorateStore()
 
 const {
@@ -365,44 +369,21 @@ const displayPayTotal = computed(() =>
 )
 const hasFreight = computed(() => isPositivePrice(displayFreight.value))
 const isFreeFreight = computed(() => previewResult.value && isZeroPrice(displayFreight.value))
-const pointsDeduction = computed(() =>
-  pointsFeatureEnabled.value ? previewResult.value?.points_deduction || null : null,
+const orderExtensionState = computed(() =>
+  buildOrderConfirmExtensionState({
+    pointsFeatureEnabled: pointsFeatureEnabled.value,
+    previewResult: previewResult.value,
+    usePoints: usePoints.value,
+  }),
 )
-const pointsReward = computed(() =>
-  pointsFeatureEnabled.value ? previewResult.value?.points_reward || null : null,
-)
-const memberDiscount = computed(() => previewResult.value?.member_discount || null)
-const canUsePoints = computed(() => {
-  if (!pointsFeatureEnabled.value) return false
-  const deduction = pointsDeduction.value
-  return !!deduction && deduction.enabled !== false && Number(deduction.usable_points || 0) > 0
-})
-const shouldUsePoints = computed(() => pointsFeatureEnabled.value && usePoints.value && canUsePoints.value)
-const pointsDiscountAmount = computed(() => normalizePrice(pointsDeduction.value?.discount_amount || '0.00'))
-const hasPointsDiscount = computed(() => shouldUsePoints.value && isPositivePrice(pointsDiscountAmount.value))
-const memberDiscountAmount = computed(() => normalizePrice(memberDiscount.value?.discount_amount || '0.00'))
-const hasMemberDiscount = computed(() => isPositivePrice(memberDiscountAmount.value))
-const rewardPoints = computed(() => Number(pointsReward.value?.reward_points || 0))
-const hasPointsReward = computed(() =>
-  !!pointsReward.value && pointsReward.value.enabled !== false && rewardPoints.value > 0,
-)
-const rewardMetaText = computed(() => {
-  const freezeDays = Number(pointsReward.value?.freeze_days || 0)
-  return freezeDays > 0
-    ? `订单完成后冻结 ${freezeDays} 天，售后期结束后发放`
-    : '订单完成后发放'
-})
+const pointsDeduction = computed(() => orderExtensionState.value.pointsDeduction)
+const canUsePoints = computed(() => orderExtensionState.value.canUsePoints)
+const shouldUsePoints = computed(() => orderExtensionState.value.shouldUsePoints)
+const orderExtensionCards = computed(() => orderExtensionState.value.cards)
+const summaryExtensionRows = computed(() => orderExtensionState.value.summaryRows)
 
-function hasItemMemberDiscount(item) {
-  return isPositivePrice(item?.member_discount_amount || '0.00')
-}
-
-function itemMemberDiscountAmount(item) {
-  return normalizePrice(item?.member_discount_amount || '0.00')
-}
-
-function itemRewardPoints(item) {
-  return Number(item?.points_reward_points || 0)
+function orderItemBenefitLines(item) {
+  return buildOrderConfirmItemBenefitLines(item)
 }
 
 function onUsePointsChange(event) {

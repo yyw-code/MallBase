@@ -36,6 +36,18 @@ import {
   type FreightTemplateApi,
 } from '#/api/setting/freight-template';
 
+import {
+  applyGoodsEditSkuBatch,
+  cloneGoodsEditSkuRowExtensionFields,
+  createGoodsEditSkuRowExtensionDefaults,
+  getGoodsEditSkuColumns,
+  hydrateGoodsEditResponse,
+  hydrateGoodsEditSingleSkuForm,
+  hydrateGoodsEditSkuRow,
+  transformGoodsEditSkuPayload,
+  transformGoodsEditSubmitData,
+} from '../extension-slots';
+
 export interface AttrDetail {
   id: string;
   value: string;
@@ -67,11 +79,6 @@ const SPEC_TYPE_SINGLE = 1;
 const SPEC_TYPE_MULTI = 2;
 const DEFAULT_SINGLE_SKU_SPEC_VALUES = '';
 type GoodsPointsRewardMode = Exclude<GoodsApi.GoodsPointsRewardMode, 'inherit'>;
-
-const normalizeGoodsPointsRewardMode = (
-  mode?: GoodsApi.GoodsPointsRewardMode,
-): GoodsPointsRewardMode =>
-  mode && mode !== 'inherit' ? mode : 'global';
 
 export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
   const createLocalId = () =>
@@ -239,21 +246,28 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
   };
 
   const buildSingleSkuPayload = () => ({
-    spec_values: DEFAULT_SINGLE_SKU_SPEC_VALUES,
-    price: formData.price,
-    market_price: formData.market_price,
-    stock: formData.stock,
-    sku_code: '',
-    image: toMediaSubmitValue(formData.main_image),
-    points_reward_mode:
-      formData.points_reward_mode === 'sku'
-        ? formData.sku_points_reward_mode
-        : ('inherit' as const),
-    points_reward_ratio: formData.sku_points_reward_ratio || 0,
-    points_reward_fixed: formData.sku_points_reward_fixed || 0,
-    member_price: formData.member_price ?? null,
-    description: '',
-    status: formData.status ?? 1,
+    ...transformGoodsEditSkuPayload(
+      {
+        spec_values: DEFAULT_SINGLE_SKU_SPEC_VALUES,
+        price: formData.price,
+        market_price: formData.market_price,
+        stock: formData.stock,
+        sku_code: '',
+        image: toMediaSubmitValue(formData.main_image),
+        description: '',
+        status: formData.status ?? 1,
+      },
+      {
+        points_reward_mode:
+          formData.points_reward_mode === 'sku'
+            ? formData.sku_points_reward_mode
+            : ('inherit' as const),
+        points_reward_ratio: formData.sku_points_reward_ratio || 0,
+        points_reward_fixed: formData.sku_points_reward_fixed || 0,
+        member_price: formData.member_price ?? null,
+      },
+      { formData },
+    ),
   });
 
   const updateMatchedSkuImages = (
@@ -476,10 +490,7 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
       stock: row.stock,
       sku_code: row.sku_code,
       image: row.image,
-      points_reward_mode: row.points_reward_mode,
-      points_reward_ratio: row.points_reward_ratio,
-      points_reward_fixed: row.points_reward_fixed,
-      member_price: row.member_price,
+      ...cloneGoodsEditSkuRowExtensionFields(row),
       description: row.description,
       is_show: row.is_show,
     }));
@@ -602,10 +613,7 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
       { title: '市场价', dataIndex: 'market_price', width: 110 },
       { title: '库存 *', dataIndex: 'stock', width: 100 },
       { title: 'SKU编码', dataIndex: 'sku_code', width: 130 },
-      { title: '积分模式', dataIndex: 'points_reward_mode', width: 120 },
-      { title: '每元积分', dataIndex: 'points_reward_ratio', width: 100 },
-      { title: '每件积分', dataIndex: 'points_reward_fixed', width: 100 },
-      { title: '会员价', dataIndex: 'member_price', width: 110 },
+      ...getGoodsEditSkuColumns(),
       { title: '规格详情', dataIndex: 'description', width: 90 },
       { title: '操作', dataIndex: '_action', width: 55 },
     ];
@@ -665,10 +673,7 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
         stock: formData.stock || undefined,
         sku_code: '',
         image: undefined,
-        points_reward_mode: 'inherit',
-        points_reward_ratio: 0,
-        points_reward_fixed: 0,
-        member_price: undefined,
+        ...createGoodsEditSkuRowExtensionDefaults(),
         description: '',
         is_show: 1,
       };
@@ -702,26 +707,7 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
       if (batchData['__sku_code__'])
         row.sku_code = String(batchData['__sku_code__']);
       if (batchData['__image__']) row.image = batchData['__image__'];
-      if (batchData['__points_reward_mode__'])
-        row.points_reward_mode = batchData['__points_reward_mode__'];
-      if (
-        batchData['__points_reward_ratio__'] !== undefined &&
-        batchData['__points_reward_ratio__'] !== null &&
-        batchData['__points_reward_ratio__'] !== ''
-      )
-        row.points_reward_ratio = Number(batchData['__points_reward_ratio__']);
-      if (
-        batchData['__points_reward_fixed__'] !== undefined &&
-        batchData['__points_reward_fixed__'] !== null &&
-        batchData['__points_reward_fixed__'] !== ''
-      )
-        row.points_reward_fixed = Number(batchData['__points_reward_fixed__']);
-      if (
-        batchData['__member_price__'] !== undefined &&
-        batchData['__member_price__'] !== null &&
-        batchData['__member_price__'] !== ''
-      )
-        row.member_price = Number(batchData['__member_price__']);
+      applyGoodsEditSkuBatch(row, batchData);
       if (
         batchData['__is_show__'] !== undefined &&
         batchData['__is_show__'] !== null &&
@@ -992,14 +978,9 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
         is_recommend: detail.is_recommend ?? 0,
         is_new: detail.is_new ?? 0,
         is_hot: detail.is_hot ?? 0,
-        points_reward_mode: normalizeGoodsPointsRewardMode(
-          detail.points_reward_mode,
-        ),
-        points_reward_ratio: detail.points_reward_ratio ?? 0,
-        points_reward_fixed: detail.points_reward_fixed ?? 0,
-        member_benefit_mode: detail.member_benefit_mode || 'global',
         tag_ids: (detail.tags || []).map((t) => t.id),
       });
+      hydrateGoodsEditResponse(formData, detail);
       if ((detail.spec_type ?? SPEC_TYPE_SINGLE) === SPEC_TYPE_MULTI) {
         specType.value = 'multi';
         const detailSkus = Array.isArray(detail.skus) ? detail.skus : [];
@@ -1050,13 +1031,7 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
             row.market_price = sku.market_price || 0;
             row.stock = sku.stock;
             row.sku_code = sku.sku_code || '';
-            row.points_reward_mode = sku.points_reward_mode || 'inherit';
-            row.points_reward_ratio = sku.points_reward_ratio ?? 0;
-            row.points_reward_fixed = sku.points_reward_fixed ?? 0;
-            row.member_price =
-              sku.member_price === null || sku.member_price === undefined
-                ? undefined
-                : Number(sku.member_price);
+            hydrateGoodsEditSkuRow(row, sku);
             row.description = sku.description || '';
             row.is_show = Number(sku.status ?? 1) as 0 | 1;
             row.image = toMediaFileInfo(sku.image, sku.image_full_url);
@@ -1072,17 +1047,7 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
         formData.market_price =
           defaultSku?.market_price ?? detail.market_price ?? 0;
         formData.stock = defaultSku?.stock ?? detail.stock ?? 0;
-        formData.member_price =
-          defaultSku?.member_price === null ||
-          defaultSku?.member_price === undefined
-            ? undefined
-            : Number(defaultSku.member_price);
-        formData.sku_points_reward_mode =
-          defaultSku?.points_reward_mode || 'inherit';
-        formData.sku_points_reward_ratio =
-          defaultSku?.points_reward_ratio ?? 0;
-        formData.sku_points_reward_fixed =
-          defaultSku?.points_reward_fixed ?? 0;
+        hydrateGoodsEditSingleSkuForm(formData, defaultSku);
         multiSpecDraft.value = { attrs: [], skuRows: [] };
       }
     } catch {
@@ -1105,28 +1070,30 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
           .map((img: FileInfo | string) => toMediaSubmitValue(img))
           .filter((img) => img !== ''),
       };
-      delete submitData.member_price;
-      delete submitData.sku_points_reward_mode;
-      delete submitData.sku_points_reward_ratio;
-      delete submitData.sku_points_reward_fixed;
+      transformGoodsEditSubmitData(submitData, {
+        formData,
+        specType: specType.value,
+      });
       if (specType.value === 'multi' && skuRows.value.length > 0) {
         submitData.spec_type = SPEC_TYPE_MULTI;
         validateUniqueSkuCodes();
         submitData.spec_meta = buildSpecMetaPayload();
-        submitData.skus = skuRows.value.map((sku) => ({
-          spec_values: sku.spec_values,
-          price: sku.price,
-          market_price: sku.market_price,
-          stock: sku.stock,
-          sku_code: sku.sku_code || '',
-          image: getSkuSubmitImage(sku),
-          points_reward_mode: sku.points_reward_mode || 'inherit',
-          points_reward_ratio: sku.points_reward_ratio || 0,
-          points_reward_fixed: sku.points_reward_fixed || 0,
-          member_price: sku.member_price ?? null,
-          description: sku.description || '',
-          status: sku.is_show ?? 1,
-        }));
+        submitData.skus = skuRows.value.map((sku) =>
+          transformGoodsEditSkuPayload(
+            {
+              spec_values: sku.spec_values,
+              price: sku.price,
+              market_price: sku.market_price,
+              stock: sku.stock,
+              sku_code: sku.sku_code || '',
+              image: getSkuSubmitImage(sku),
+              description: sku.description || '',
+              status: sku.is_show ?? 1,
+            },
+            sku,
+            { formData, specType: specType.value },
+          ),
+        );
       } else {
         submitData.spec_type = SPEC_TYPE_SINGLE;
         submitData.sku_detail_enabled = 0;

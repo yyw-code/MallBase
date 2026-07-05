@@ -422,6 +422,11 @@ import { useCartStore } from '@/store/cart'
 import { useAppStore } from '@/store/app'
 import { openCustomerService } from '@/utils/customer-service'
 import { appendDistributionParams, captureDistributionAttribution } from '@/utils/distribution-attribution'
+import {
+  buildGoodsDetailBenefitItems,
+  formatExtensionAmount,
+  isExtensionFeatureEnabled,
+} from '@/utils/extension-slots'
 const decorateStore = useDecorateStore()
 
 const MEDIA_HEIGHT = 660
@@ -681,89 +686,19 @@ const displayPrice = computed(() => selectedSku.value?.price ?? goods.value?.pri
 const displayMarketPrice = computed(() => selectedSku.value?.market_price ?? goods.value?.market_price ?? '')
 const displayStock = computed(() => selectedSku.value?.stock ?? goods.value?.stock ?? 0)
 const guarantees = computed(() => (Array.isArray(goods.value?.guarantees) ? goods.value.guarantees : []))
-const pointsEnabled = computed(() => settingEnabled(appStore.siteConfig?.points_enabled, true))
-const memberEnabled = computed(() => settingEnabled(appStore.siteConfig?.member_enabled, false))
-
-const selectedMemberPrice = computed(() => {
-  if (!memberEnabled.value || goods.value?.member_benefit_mode !== 'sku_price') return ''
-  const price = Number(selectedSku.value?.price ?? goods.value?.price ?? 0)
-  const memberPrice = Number(selectedSku.value?.member_price ?? 0)
-  if (!memberPrice || memberPrice >= price) return ''
-  return selectedSku.value?.member_price
-})
-const hasSelectedMemberPrice = computed(() => selectedMemberPrice.value !== '')
-const selectedMemberPriceText = computed(() => formatAmount(selectedMemberPrice.value))
-const memberDiscountText = computed(() => {
-  if (!memberEnabled.value || hasSelectedMemberPrice.value) return ''
-  const mode = goods.value?.member_benefit_mode || 'global'
-  if (!['global', 'level_discount'].includes(mode)) return ''
-  return '下单按会员等级优惠'
-})
-const pointsRewardText = computed(() => {
-  const previewText = selectedSku.value?.points_reward_preview_text || goods.value?.points_reward_preview_text
-  if (previewText) return previewText
-  return legacyPointsRewardText.value
-})
-const memberGrowthText = computed(() => {
-  if (!memberEnabled.value) return ''
-  return selectedSku.value?.member_growth_preview_text || goods.value?.member_growth_preview_text || ''
-})
-const legacyPointsRewardText = computed(() => {
-  if (!pointsEnabled.value || !goods.value) return ''
-
-  const mode = goods.value.points_reward_mode || 'global'
-  if (mode === 'disabled') return ''
-  if (mode === 'ratio') return rewardRatioText(goods.value.points_reward_ratio)
-  if (mode === 'fixed') return rewardFixedText(goods.value.points_reward_fixed)
-
-  if (mode === 'sku') {
-    const skuMode = selectedSku.value?.points_reward_mode || 'inherit'
-    if (skuMode === 'disabled') return ''
-    if (skuMode === 'ratio') return rewardRatioText(selectedSku.value?.points_reward_ratio)
-    if (skuMode === 'fixed') return rewardFixedText(selectedSku.value?.points_reward_fixed)
-  }
-
-  return '按全局规则赠送'
-})
-const benefitItems = computed(() => {
-  const items = []
-  if (hasSelectedMemberPrice.value) {
-    items.push({
-      key: 'member_price',
-      label: '会员价',
-      value: `¥${selectedMemberPriceText.value}`,
-      tone: 'member',
-    })
-  } else if (memberDiscountText.value) {
-    items.push({
-      key: 'member_discount',
-      label: '会员优惠',
-      value: memberDiscountText.value,
-      tone: 'member',
-    })
-  }
-  if (pointsRewardText.value) {
-    items.push({
-      key: 'points_reward',
-      label: '积分',
-      value: pointsRewardText.value,
-      tone: 'points',
-    })
-  }
-  if (memberGrowthText.value) {
-    items.push({
-      key: 'member_growth',
-      label: '成长值',
-      value: memberGrowthText.value,
-      tone: 'growth',
-    })
-  }
-  return items
-})
+const pointsEnabled = computed(() => isExtensionFeatureEnabled(appStore.siteConfig?.points_enabled, true))
+const memberEnabled = computed(() => isExtensionFeatureEnabled(appStore.siteConfig?.member_enabled, false))
+const benefitItems = computed(() =>
+  buildGoodsDetailBenefitItems({
+    goods: goods.value,
+    siteConfig: appStore.siteConfig,
+    sku: selectedSku.value,
+  }),
+)
 const hasSkuBenefit = computed(() => benefitItems.value.length > 0)
 
 const formattedPrice = computed(() => {
-  return formatAmount(displayPrice.value)
+  return formatExtensionAmount(displayPrice.value)
 })
 
 const cartCount = computed(() => cartStore.count)
@@ -809,29 +744,6 @@ function normalizeImageUrl(image) {
   if (!image) return ''
   if (typeof image === 'string') return image
   return image.full_url || image.url || image.image_full_url || image.image || image.src || ''
-}
-
-function settingEnabled(value, fallback = true) {
-  if (value === undefined || value === null || value === '') return fallback
-  return ['1', 'true', 'on'].includes(String(value).toLowerCase())
-}
-
-function formatAmount(value) {
-  const num = Number(value)
-  if (Number.isNaN(num)) return '0'
-  const int = Math.floor(num).toLocaleString('zh-CN')
-  const dec = num.toFixed(2).split('.')[1]
-  return dec === '00' ? int : `${int}.${dec}`
-}
-
-function rewardRatioText(value) {
-  const ratio = Number(value || 0)
-  return ratio > 0 ? `每消费 1 元赠 ${ratio} 积分` : ''
-}
-
-function rewardFixedText(value) {
-  const fixed = Number(value || 0)
-  return fixed > 0 ? `每件赠 ${fixed} 积分` : ''
 }
 
 function parseSkuSpecValues(sku) {

@@ -9,6 +9,17 @@ import RichTextEditor from '#/components/rich-text-editor/index.vue';
 import Upload from '#/components/upload/index.vue';
 
 import { type SkuRow, useGoodsEdit } from './composables/useGoodsEdit';
+import {
+  createGoodsEditBatchSkuRowExtensionDefaults,
+  getGoodsEditMarketingSlots,
+  getGoodsEditSingleSkuSlots,
+  getGoodsEditSkuFieldMap,
+  isGoodsEditSkuFieldVisible,
+  isGoodsEditSlotFeatureEnabled,
+  isGoodsEditSlotFieldVisible,
+  type GoodsEditMarketingSlot,
+  type GoodsEditSlotField,
+} from './extension-slots';
 
 defineOptions({ name: 'GoodsEdit' });
 
@@ -39,27 +50,33 @@ const handleCancel = () => router.back();
 const onSubmit = () => handleSubmit(() => router.back());
 const pointsEnabled = ref(true);
 const memberEnabled = ref(false);
-const pointsColumnKeys = new Set([
-  'points_reward_mode',
-  'points_reward_ratio',
-  'points_reward_fixed',
-]);
-const memberColumnKeys = new Set(['member_price']);
 const skuDetailColumnKeys = new Set(['description']);
-const showSkuPointsColumns = computed(
-  () => pointsEnabled.value && formData.points_reward_mode === 'sku',
-);
-const showSkuMemberColumns = computed(
-  () => memberEnabled.value && formData.member_benefit_mode === 'sku_price',
-);
 const showSkuDetailColumns = computed(
   () => specType.value === 'multi' && formData.sku_detail_enabled === 1,
 );
+const goodsEditSlotContext = computed(() => ({
+  features: {
+    member: memberEnabled.value,
+    points: pointsEnabled.value,
+  },
+  formData,
+  specType: specType.value,
+}));
+const marketingSlots = computed(() => getGoodsEditMarketingSlots());
+const singleSkuSlots = computed(() =>
+  getGoodsEditSingleSkuSlots(goodsEditSlotContext.value),
+);
+const skuExtensionFieldMap = computed(() => getGoodsEditSkuFieldMap());
 const visibleSkuColumns = computed(() =>
   (skuColumns.value as any[]).filter((column) => {
     const key = String(column.dataIndex || '');
-    if (pointsColumnKeys.has(key)) return showSkuPointsColumns.value;
-    if (memberColumnKeys.has(key)) return showSkuMemberColumns.value;
+    const extensionField = skuExtensionFieldMap.value.get(key);
+    if (extensionField) {
+      return isGoodsEditSkuFieldVisible(
+        extensionField,
+        goodsEditSlotContext.value,
+      );
+    }
     if (skuDetailColumnKeys.has(key)) return showSkuDetailColumns.value;
     return true;
   }),
@@ -81,10 +98,7 @@ const batchTableData = computed(() => [
     stock: undefined,
     sku_code: '',
     image: undefined,
-    points_reward_mode: undefined,
-    points_reward_ratio: undefined,
-    points_reward_fixed: undefined,
-    member_price: undefined,
+    ...createGoodsEditBatchSkuRowExtensionDefaults(),
     is_show: 1,
   } as SkuRow,
 ]);
@@ -109,6 +123,18 @@ const saveSkuDetail = () => {
 const updateSkuDetailDraft = (value: string) => {
   skuDetailDraft.value = value;
 };
+
+const isMarketingSlotEnabled = (slot: GoodsEditMarketingSlot) =>
+  isGoodsEditSlotFeatureEnabled(slot, goodsEditSlotContext.value);
+
+const isSlotFieldVisible = (field: GoodsEditSlotField) =>
+  isGoodsEditSlotFieldVisible(field, goodsEditSlotContext.value);
+
+const getSkuExtensionField = (column: any) =>
+  skuExtensionFieldMap.value.get(String(column.dataIndex || ''));
+
+const getSkuExtensionBatchKey = (column: any) =>
+  getSkuExtensionField(column)?.batchKey || '';
 
 function settingSwitchEnabled(value: unknown, fallback = true) {
   if (value === undefined || value === null || value === '') return fallback;
@@ -250,55 +276,40 @@ watch(editId, async (id) => {
             <!-- ===== 营销设置 ===== -->
             <a-tab-pane key="marketing" tab="营销设置">
               <div class="tab-body">
-                <div class="marketing-section">
-                  <div class="marketing-section-title">积分</div>
-                  <a-form-item v-if="pointsEnabled" label="赠送积分">
+                <div v-for="slot in marketingSlots" :key="slot.code" class="marketing-section">
+                  <div class="marketing-section-title">{{ slot.title }}</div>
+                  <a-form-item v-if="isMarketingSlotEnabled(slot)" :label="slot.label">
                     <div class="points-reward-row">
-                      <a-select v-model:value="formData.points_reward_mode" style="width: 180px">
-                        <a-select-option value="disabled">关闭</a-select-option>
-                        <a-select-option value="global">默认全局配置</a-select-option>
-                        <a-select-option value="ratio">按金额比例</a-select-option>
-                        <a-select-option value="fixed">固定积分</a-select-option>
-                        <a-select-option value="sku">规格单独配置</a-select-option>
-                      </a-select>
-                      <a-input-number
-                        v-if="formData.points_reward_mode === 'ratio'"
-                        v-model:value="formData.points_reward_ratio"
-                        :min="0"
-                        :precision="0"
-                        :controls="false"
-                        style="width: 150px"
-                      >
-                        <template #suffix>积分/元</template>
-                      </a-input-number>
-                      <a-input-number
-                        v-if="formData.points_reward_mode === 'fixed'"
-                        v-model:value="formData.points_reward_fixed"
-                        :min="0"
-                        :precision="0"
-                        :controls="false"
-                        style="width: 150px"
-                      >
-                        <template #suffix>积分/件</template>
-                      </a-input-number>
+                      <template v-for="field in slot.fields" :key="field.key">
+                        <a-select
+                          v-if="field.type === 'select' && isSlotFieldVisible(field)"
+                          v-model:value="(formData as any)[field.model]"
+                          :style="{ width: field.width || '180px' }"
+                        >
+                          <a-select-option
+                            v-for="option in field.options || []"
+                            :key="option.value"
+                            :value="option.value"
+                          >
+                            {{ option.label }}
+                          </a-select-option>
+                        </a-select>
+                        <a-input-number
+                          v-else-if="field.type === 'number' && isSlotFieldVisible(field)"
+                          v-model:value="(formData as any)[field.model]"
+                          :controls="field.controls ?? false"
+                          :min="field.min"
+                          :precision="field.precision"
+                          :placeholder="field.placeholder"
+                          :style="{ width: field.width || '150px' }"
+                        >
+                          <template v-if="field.prefix" #prefix>{{ field.prefix }}</template>
+                          <template v-if="field.suffix" #suffix>{{ field.suffix }}</template>
+                        </a-input-number>
+                      </template>
                     </div>
                   </a-form-item>
-                  <a-empty v-else description="积分功能未开启" />
-                </div>
-
-                <div class="marketing-section">
-                  <div class="marketing-section-title">会员</div>
-                  <a-form-item v-if="memberEnabled" label="会员权益">
-                    <div class="points-reward-row">
-                      <a-select v-model:value="formData.member_benefit_mode" style="width: 180px">
-                        <a-select-option value="global">默认全局配置</a-select-option>
-                        <a-select-option value="disabled">关闭</a-select-option>
-                        <a-select-option value="level_discount">参与等级折扣</a-select-option>
-                        <a-select-option value="sku_price">规格会员价</a-select-option>
-                      </a-select>
-                    </div>
-                  </a-form-item>
-                  <a-empty v-else description="会员功能未开启" />
+                  <a-empty v-else :description="slot.disabledDescription" />
                 </div>
               </div>
             </a-tab-pane>
@@ -333,46 +344,40 @@ watch(editId, async (id) => {
                   <a-form-item label="售价"><a-input-number v-model:value="formData.price" :min="0" :precision="2" :controls="false" style="width:160px"><template #prefix>¥</template></a-input-number></a-form-item>
                   <a-form-item label="市场价"><a-input-number v-model:value="formData.market_price" :min="0" :precision="2" :controls="false" style="width:160px"><template #prefix>¥</template></a-input-number></a-form-item>
                   <a-form-item label="库存"><a-input-number v-model:value="formData.stock" :min="0" :controls="false" style="width:160px"><template #suffix>件</template></a-input-number></a-form-item>
-                  <a-form-item v-if="pointsEnabled && formData.points_reward_mode === 'sku'" label="规格积分">
+                  <a-form-item
+                    v-for="slot in singleSkuSlots"
+                    :key="slot.code"
+                    :label="slot.label"
+                  >
                     <div class="points-reward-row">
-                      <a-select v-model:value="formData.sku_points_reward_mode" style="width: 180px">
-                        <a-select-option value="inherit">使用全局规则</a-select-option>
-                        <a-select-option value="disabled">不赠送积分</a-select-option>
-                        <a-select-option value="ratio">按金额比例</a-select-option>
-                        <a-select-option value="fixed">固定积分</a-select-option>
-                      </a-select>
-                      <a-input-number
-                        v-if="formData.sku_points_reward_mode === 'ratio'"
-                        v-model:value="formData.sku_points_reward_ratio"
-                        :min="0"
-                        :precision="0"
-                        :controls="false"
-                        style="width: 150px"
-                      >
-                        <template #suffix>积分/元</template>
-                      </a-input-number>
-                      <a-input-number
-                        v-if="formData.sku_points_reward_mode === 'fixed'"
-                        v-model:value="formData.sku_points_reward_fixed"
-                        :min="0"
-                        :precision="0"
-                        :controls="false"
-                        style="width: 150px"
-                      >
-                        <template #suffix>积分/件</template>
-                      </a-input-number>
+                      <template v-for="field in slot.fields" :key="field.key">
+                        <a-select
+                          v-if="field.type === 'select' && isSlotFieldVisible(field)"
+                          v-model:value="(formData as any)[field.model]"
+                          :style="{ width: field.width || '180px' }"
+                        >
+                          <a-select-option
+                            v-for="option in field.options || []"
+                            :key="option.value"
+                            :value="option.value"
+                          >
+                            {{ option.label }}
+                          </a-select-option>
+                        </a-select>
+                        <a-input-number
+                          v-else-if="field.type === 'number' && isSlotFieldVisible(field)"
+                          v-model:value="(formData as any)[field.model]"
+                          :controls="field.controls ?? false"
+                          :min="field.min"
+                          :precision="field.precision"
+                          :placeholder="field.placeholder"
+                          :style="{ width: field.width || '150px' }"
+                        >
+                          <template v-if="field.prefix" #prefix>{{ field.prefix }}</template>
+                          <template v-if="field.suffix" #suffix>{{ field.suffix }}</template>
+                        </a-input-number>
+                      </template>
                     </div>
-                  </a-form-item>
-                  <a-form-item v-if="memberEnabled && formData.member_benefit_mode === 'sku_price'" label="规格会员价">
-                    <a-input-number
-                      v-model:value="formData.member_price"
-                      :min="0"
-                      :precision="2"
-                      :controls="false"
-                      style="width: 160px"
-                    >
-                      <template #prefix>¥</template>
-                    </a-input-number>
                   </a-form-item>
                 </template>
                 <template v-else>
@@ -515,22 +520,37 @@ watch(editId, async (id) => {
                             <template v-else-if="column.dataIndex === 'sku_code'">
                               <a-input v-model:value="batchData['__sku_code__']" placeholder="批量SKU编码" size="small" class="batch-cell-control" />
                             </template>
-                            <template v-else-if="column.dataIndex === 'points_reward_mode'">
-                              <a-select v-model:value="batchData['__points_reward_mode__']" placeholder="积分模式" size="small" allow-clear class="batch-cell-control">
-                                <a-select-option value="inherit">使用全局规则</a-select-option>
-                                <a-select-option value="disabled">不赠送积分</a-select-option>
-                                <a-select-option value="ratio">按金额比例</a-select-option>
-                                <a-select-option value="fixed">固定积分</a-select-option>
+                            <template v-else-if="getSkuExtensionField(column)">
+                              <a-select
+                                v-if="getSkuExtensionField(column)?.type === 'select'"
+                                v-model:value="batchData[getSkuExtensionBatchKey(column)]"
+                                :placeholder="getSkuExtensionField(column)?.placeholder"
+                                size="small"
+                                allow-clear
+                                class="batch-cell-control"
+                              >
+                                <a-select-option
+                                  v-for="option in getSkuExtensionField(column)?.options || []"
+                                  :key="option.value"
+                                  :value="option.value"
+                                >
+                                  {{ option.label }}
+                                </a-select-option>
                               </a-select>
-                            </template>
-                            <template v-else-if="column.dataIndex === 'points_reward_ratio'">
-                              <a-input-number v-model:value="(batchData as any)['__points_reward_ratio__']" placeholder="每元积分" :min="0" :precision="0" size="small" :controls="false" class="batch-cell-control" />
-                            </template>
-                            <template v-else-if="column.dataIndex === 'points_reward_fixed'">
-                              <a-input-number v-model:value="(batchData as any)['__points_reward_fixed__']" placeholder="每件积分" :min="0" :precision="0" size="small" :controls="false" class="batch-cell-control" />
-                            </template>
-                            <template v-else-if="column.dataIndex === 'member_price'">
-                              <a-input-number v-model:value="(batchData as any)['__member_price__']" placeholder="会员价" :min="0" :precision="2" size="small" :controls="false" class="batch-cell-control" />
+                              <a-input-number
+                                v-else
+                                v-model:value="batchData[getSkuExtensionBatchKey(column)]"
+                                :placeholder="getSkuExtensionField(column)?.placeholder"
+                                :min="getSkuExtensionField(column)?.min"
+                                :precision="getSkuExtensionField(column)?.precision"
+                                size="small"
+                                :controls="false"
+                                class="batch-cell-control"
+                              >
+                                <template v-if="getSkuExtensionField(column)?.prefix" #prefix>
+                                  {{ getSkuExtensionField(column)?.prefix }}
+                                </template>
+                              </a-input-number>
                             </template>
                             <template v-else-if="column.dataIndex === '_action'">
                               <a-select v-model:value="(batchData as any)['__is_show__']" placeholder="显示状态" size="small" allow-clear class="batch-cell-control">
@@ -561,17 +581,35 @@ watch(editId, async (id) => {
                         <template v-else-if="column.dataIndex === 'market_price'"><a-input-number v-model:value="(record as SkuRow).market_price" :min="0" :precision="2" size="small" :controls="false" style="width:100%" /></template>
                         <template v-else-if="column.dataIndex === 'stock'"><a-input-number v-model:value="(record as SkuRow).stock" :min="0" size="small" :controls="false" style="width:100%" /></template>
                         <template v-else-if="column.dataIndex === 'sku_code'"><a-input v-model:value="(record as SkuRow).sku_code" size="small" placeholder="选填" allow-clear /></template>
-                        <template v-else-if="column.dataIndex === 'points_reward_mode'">
-                          <a-select v-model:value="(record as SkuRow).points_reward_mode" size="small" style="width:100%">
-                            <a-select-option value="inherit">使用全局规则</a-select-option>
-                            <a-select-option value="disabled">不赠送积分</a-select-option>
-                            <a-select-option value="ratio">按金额比例</a-select-option>
-                            <a-select-option value="fixed">固定积分</a-select-option>
+                        <template v-else-if="getSkuExtensionField(column)">
+                          <a-select
+                            v-if="getSkuExtensionField(column)?.type === 'select'"
+                            v-model:value="(record as any)[String(column.dataIndex)]"
+                            size="small"
+                            style="width:100%"
+                          >
+                            <a-select-option
+                              v-for="option in getSkuExtensionField(column)?.options || []"
+                              :key="option.value"
+                              :value="option.value"
+                            >
+                              {{ option.label }}
+                            </a-select-option>
                           </a-select>
+                          <a-input-number
+                            v-else
+                            v-model:value="(record as any)[String(column.dataIndex)]"
+                            :min="getSkuExtensionField(column)?.min"
+                            :precision="getSkuExtensionField(column)?.precision"
+                            size="small"
+                            :controls="false"
+                            style="width:100%"
+                          >
+                            <template v-if="getSkuExtensionField(column)?.prefix" #prefix>
+                              {{ getSkuExtensionField(column)?.prefix }}
+                            </template>
+                          </a-input-number>
                         </template>
-                        <template v-else-if="column.dataIndex === 'points_reward_ratio'"><a-input-number v-model:value="(record as SkuRow).points_reward_ratio" :min="0" :precision="0" size="small" :controls="false" style="width:100%" /></template>
-                        <template v-else-if="column.dataIndex === 'points_reward_fixed'"><a-input-number v-model:value="(record as SkuRow).points_reward_fixed" :min="0" :precision="0" size="small" :controls="false" style="width:100%" /></template>
-                        <template v-else-if="column.dataIndex === 'member_price'"><a-input-number v-model:value="(record as SkuRow).member_price" :min="0" :precision="2" size="small" :controls="false" style="width:100%"><template #prefix>¥</template></a-input-number></template>
                         <template v-else-if="column.dataIndex === 'description'">
                           <a-button size="small" type="link" @click="openSkuDetailEditor(record as SkuRow)">
                             {{ (record as SkuRow).description ? '已设置' : '编辑' }}
