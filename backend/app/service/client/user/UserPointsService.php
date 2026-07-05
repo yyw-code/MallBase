@@ -66,7 +66,14 @@ class UserPointsService extends BaseService
             ->select()
             ->toArray();
 
-        $list = array_map(fn (array $row): array => $this->formatLog($row), $rows);
+        $releaseTimes = $this->orderRewardReleaseTimes($userId, $rows);
+        $list = array_map(
+            fn (array $row): array => $this->formatLog(
+                $row,
+                $releaseTimes[(string) ($row['biz_id'] ?? '')] ?? null
+            ),
+            $rows
+        );
 
         return compact('total', 'list');
     }
@@ -148,7 +155,7 @@ class UserPointsService extends BaseService
      * @param array<string,mixed> $row
      * @return array<string,mixed>
      */
-    private function formatLog(array $row): array
+    private function formatLog(array $row, ?string $releaseTime = null): array
     {
         return [
             'id' => (int) ($row['id'] ?? 0),
@@ -165,7 +172,52 @@ class UserPointsService extends BaseService
             'operator_type' => (int) ($row['operator_type'] ?? 0),
             'operator_id' => isset($row['operator_id']) ? (int) $row['operator_id'] : null,
             'remark' => (string) ($row['remark'] ?? ''),
+            'release_time' => $releaseTime ?? '',
             'create_time' => (string) ($row['create_time'] ?? ''),
         ];
+    }
+
+    /**
+     * @param array<int,array<string,mixed>> $rows
+     * @return array<string,string>
+     */
+    private function orderRewardReleaseTimes(int $userId, array $rows): array
+    {
+        $orderSns = [];
+        foreach ($rows as $row) {
+            if (
+                (string) ($row['biz_type'] ?? '') !== UserPointsLog::BIZ_ORDER_COMPLETE
+                || (string) ($row['account_type'] ?? '') !== UserPointsLog::ACCOUNT_FROZEN
+            ) {
+                continue;
+            }
+
+            $orderSn = (string) ($row['biz_id'] ?? '');
+            if ($orderSn !== '') {
+                $orderSns[] = $orderSn;
+            }
+        }
+
+        $orderSns = array_values(array_unique($orderSns));
+        if ($orderSns === []) {
+            return [];
+        }
+
+        $rows = $this->model(OrderPointsReward::class)
+            ->where('user_id', $userId)
+            ->whereIn('order_sn', $orderSns)
+            ->field('order_sn, release_time')
+            ->select()
+            ->toArray();
+
+        $map = [];
+        foreach ($rows as $row) {
+            $orderSn = (string) ($row['order_sn'] ?? '');
+            if ($orderSn !== '') {
+                $map[$orderSn] = (string) ($row['release_time'] ?? '');
+            }
+        }
+
+        return $map;
     }
 }

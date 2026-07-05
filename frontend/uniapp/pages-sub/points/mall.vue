@@ -95,20 +95,33 @@ function imageUrl(item) {
   >
     <mb-navbar title="积分商城" bg-color="var(--color-bg, #ffffff)" />
 
-    <view class="search">
-      <input
-        v-model="keyword"
-        class="search__input"
-        confirm-type="search"
-        placeholder="搜索积分商品"
-        placeholder-class="search__placeholder"
-        type="text"
-        @confirm="onSearch"
-      />
-      <text v-if="keyword" class="search__clear" @tap="clearSearch">清空</text>
-      <view class="search__button" @tap="onSearch">
-        <text class="search__button-text">搜索</text>
+    <view class="search-capsule">
+      <view class="search-capsule__field">
+        <input
+          v-model="keyword"
+          class="search-capsule__input"
+          confirm-type="search"
+          placeholder="搜索积分商品"
+          placeholder-class="search-capsule__placeholder"
+          type="text"
+          @confirm="onSearch"
+        />
+        <text
+          v-if="keyword"
+          class="search-capsule__clear"
+          @tap.stop="clearSearch"
+        >
+          ×
+        </text>
       </view>
+      <mb-button
+        class="search-capsule__button"
+        type="primary"
+        size="small"
+        @click="onSearch"
+      >
+        搜索
+      </mb-button>
     </view>
 
     <view v-if="list.length" class="goods-list">
@@ -166,29 +179,37 @@ function imageUrl(item) {
   background: var(--color-bg-secondary, #faf8ff);
 }
 
-.search {
+.search-capsule {
   display: flex;
   align-items: center;
-  gap: 14rpx;
+  gap: 10rpx;
   margin-top: $mb-spacing-md;
-  padding: 14rpx;
+  padding: 10rpx;
   background: var(--color-bg, #ffffff);
   border: 1rpx solid var(--color-divider, #f0f2f5);
-  border-radius: $mb-radius-lg;
+  border-radius: $mb-radius-full;
 }
 
-.search__input {
+.search-capsule__field {
+  display: flex;
+  align-items: center;
   flex: 1;
+  min-width: 0;
   height: 64rpx;
-  padding: 0 18rpx;
+  padding: 0 8rpx 0 24rpx;
+  background: var(--color-bg-surface, #f8fafc);
+  border-radius: $mb-radius-full;
+}
+
+.search-capsule__input {
+  flex: 1;
+  min-width: 0;
+  height: 64rpx;
   color: var(--color-text, #111827);
   font-size: 26rpx;
-  background: var(--color-bg-surface, #f8fafc);
-  border-radius: $mb-radius-md;
 }
 
-.search__placeholder,
-.search__clear,
+.search-capsule__placeholder,
 .load-state__text,
 .empty__desc,
 .goods-card__subtitle,
@@ -198,20 +219,21 @@ function imageUrl(item) {
   font-size: 24rpx;
 }
 
-.search__button {
+.search-capsule__clear {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 112rpx;
-  height: 64rpx;
-  background: var(--color-primary, #0d50d5);
-  border-radius: $mb-radius-md;
+  flex-shrink: 0;
+  width: 44rpx;
+  height: 44rpx;
+  color: var(--color-text-muted, #6b7280);
+  font-size: 34rpx;
+  line-height: 1;
 }
 
-.search__button-text {
-  color: #ffffff;
-  font-size: 26rpx;
-  font-weight: 700;
+.search-capsule__button {
+  flex-shrink: 0;
+  min-width: 96rpx;
 }
 
 .goods-list {

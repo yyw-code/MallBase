@@ -9,6 +9,7 @@ use app\common\enum\RefundOrderStatus;
 use app\model\order\Order;
 use app\model\order\RefundOrder;
 use app\model\user\UserPointsLog;
+use app\service\client\user\UserPointsService as ClientUserPointsService;
 use app\service\SystemSettingService;
 use app\service\user\UserPointsAccountService;
 use PHPUnit\Framework\TestCase;
@@ -99,6 +100,12 @@ final class PointsAccountServiceContractTest extends TestCase
             $this->assertSame(0, (int) Db::name('user_points')->where('user_id', $userId)->value('balance_points'));
             $this->assertSame('fixed', (string) Db::name('order_points_reward_item')->where('order_id', $orderId)->value('reward_mode'));
             $this->assertSame(24, (int) Db::name('order_points_reward')->where('order_sn', $orderSn)->value('reward_points'));
+            $releaseTime = (string) Db::name('order_points_reward')->where('order_sn', $orderSn)->value('release_time');
+
+            $clientLogs = ($this->app?->make(ClientUserPointsService::class) ?? app()->make(ClientUserPointsService::class))
+                ->logs($userId, ['biz_type' => UserPointsLog::BIZ_ORDER_COMPLETE, 'range' => 'custom'], 1, 20);
+            $this->assertSame($orderSn, (string) ($clientLogs['list'][0]['biz_id'] ?? ''));
+            $this->assertSame($releaseTime, (string) ($clientLogs['list'][0]['release_time'] ?? ''));
 
             Db::name('order_points_reward')
                 ->where('order_sn', $orderSn)

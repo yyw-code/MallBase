@@ -45,6 +45,9 @@ const groupedList = computed(() => {
 onLoad(async (query) => {
   activeType.value = query?.type || "";
   activeBizType.value = query?.biz_type || "";
+  if (ranges.some((item) => item.key === query?.range)) {
+    activeRange.value = query.range;
+  }
   if (await ensurePointsEnabled()) {
     fetchLogs(true);
   }
@@ -111,13 +114,6 @@ function switchRange(range) {
   fetchLogs(true);
 }
 
-function resetFilter() {
-  activeType.value = "";
-  activeBizType.value = "";
-  activeRange.value = "month";
-  fetchLogs(true);
-}
-
 function dateLabel(value) {
   if (!value) return "更早";
   const date = String(value).slice(0, 10);
@@ -149,6 +145,17 @@ function titleOf(item) {
 function descOf(item) {
   return item.biz_sn || item.order_sn || item.biz_id || item.create_time || "";
 }
+
+function releaseTimeOf(item) {
+  if (
+    item.biz_type !== "order_complete" ||
+    item.account_type !== "frozen" ||
+    !item.release_time
+  ) {
+    return "";
+  }
+  return `解冻时间 ${item.release_time}`;
+}
 </script>
 
 <template>
@@ -159,27 +166,29 @@ function descOf(item) {
   >
     <mb-navbar title="积分明细" bg-color="var(--color-bg, #ffffff)" />
 
-    <view class="tabs">
-      <view
-        v-for="tab in tabs"
-        :key="tab.key"
-        class="tab"
-        :class="{ 'tab--active': activeType === tab.key }"
-        @tap="switchType(tab.key)"
-      >
-        <text class="tab__text">{{ tab.label }}</text>
+    <view class="filter-panel">
+      <view class="tabs">
+        <view
+          v-for="tab in tabs"
+          :key="tab.key"
+          class="tab"
+          :class="{ 'tab--active': activeType === tab.key }"
+          @tap="switchType(tab.key)"
+        >
+          <text class="tab__text">{{ tab.label }}</text>
+        </view>
       </view>
-    </view>
 
-    <view class="filter-row">
-      <view
-        v-for="range in ranges"
-        :key="range.key"
-        class="filter-chip"
-        :class="{ 'filter-chip--active': activeRange === range.key }"
-        @tap="switchRange(range.key)"
-      >
-        <text class="filter-chip__text">{{ range.label }}</text>
+      <view class="filter-row">
+        <view
+          v-for="range in ranges"
+          :key="range.key"
+          class="filter-chip"
+          :class="{ 'filter-chip--active': activeRange === range.key }"
+          @tap="switchRange(range.key)"
+        >
+          <text class="filter-chip__text">{{ range.label }}</text>
+        </view>
       </view>
     </view>
 
@@ -207,6 +216,9 @@ function descOf(item) {
             <view class="record-row__main">
               <text class="record-row__title">{{ titleOf(item) }}</text>
               <text class="record-row__desc">{{ descOf(item) }}</text>
+              <text v-if="releaseTimeOf(item)" class="record-row__release">
+                {{ releaseTimeOf(item) }}
+              </text>
             </view>
             <view class="record-row__right">
               <text
@@ -258,12 +270,8 @@ function descOf(item) {
           </text>
         </view>
       </view>
-
-      <view class="empty__button" @tap="resetFilter">
-        <text class="empty__button-text">重置筛选</text>
-      </view>
     </view>
-</view>
+  </view>
 </template>
 
 <style lang="scss" scoped>
@@ -273,14 +281,24 @@ function descOf(item) {
   background: var(--color-bg-secondary, #faf8ff);
 }
 
+.filter-panel {
+  margin-top: $mb-spacing-md;
+  padding: 12rpx;
+  background: var(--color-bg, #ffffff);
+  border: 1rpx solid var(--color-divider, #f0f2f5);
+  border-radius: $mb-radius-lg;
+}
+
 .tabs,
 .filter-row {
   display: flex;
-  gap: 16rpx;
+  gap: 12rpx;
 }
 
 .tabs {
-  margin-top: $mb-spacing-md;
+  padding: 6rpx;
+  background: var(--color-bg-surface, #f8fafc);
+  border-radius: $mb-radius-full;
 }
 
 .tab,
@@ -294,12 +312,13 @@ function descOf(item) {
 
 .tab {
   flex: 1;
-  height: 76rpx;
-  border-radius: $mb-radius-md;
+  height: 64rpx;
+  background: transparent;
+  border-color: transparent;
+  border-radius: $mb-radius-full;
 }
 
-.tab--active,
-.filter-chip--active {
+.tab--active {
   background: var(--color-primary, #0d50d5);
   border-color: var(--color-primary, #0d50d5);
 }
@@ -317,16 +336,23 @@ function descOf(item) {
 }
 
 .filter-row {
-  margin: 18rpx 0 24rpx;
+  margin: 14rpx 4rpx 0;
 }
 
 .filter-chip {
-  height: 58rpx;
-  padding: 0 24rpx;
-  border-radius: 999rpx;
+  height: 54rpx;
+  padding: 0 26rpx;
+  background: var(--color-bg-surface, #f8fafc);
+  border-radius: $mb-radius-full;
+}
+
+.filter-chip--active {
+  background: var(--color-primary, #0d50d5);
+  border-color: var(--color-primary, #0d50d5);
 }
 
 .record-group {
+  margin-top: 24rpx;
   margin-bottom: 22rpx;
 }
 
@@ -389,6 +415,7 @@ function descOf(item) {
 }
 
 .record-row__desc,
+.record-row__release,
 .record-row__balance,
 .load-state__text,
 .empty__desc,
@@ -400,6 +427,16 @@ function descOf(item) {
 .record-row__desc {
   display: block;
   margin-top: 6rpx;
+}
+
+.record-row__release {
+  display: inline-block;
+  margin-top: 10rpx;
+  padding: 5rpx 14rpx;
+  color: var(--color-primary, #0d50d5);
+  font-size: 22rpx;
+  background: rgba(13, 80, 213, 0.12);
+  border-radius: $mb-radius-full;
 }
 
 .record-row__right {
@@ -475,23 +512,6 @@ function descOf(item) {
 .empty-filter__value {
   color: var(--color-text, #111827);
   font-size: 24rpx;
-  font-weight: 700;
-}
-
-.empty__button {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 240rpx;
-  height: 72rpx;
-  margin-top: 28rpx;
-  background: var(--color-primary, #0d50d5);
-  border-radius: 999rpx;
-}
-
-.empty__button-text {
-  color: #ffffff;
-  font-size: 26rpx;
   font-weight: 700;
 }
 </style>

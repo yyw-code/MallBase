@@ -2,7 +2,7 @@
 import { useDecorateStore } from "@/store/decorate";
 import { computed, ref } from "vue";
 import { onShow } from "@dcloudio/uni-app";
-import { getPointsInfo, getPointsLogs } from "@/api/points/points";
+import { getPointsInfo } from "@/api/points/points";
 import { isPointsEnabled, leavePointsPage } from "@/utils/points-feature";
 
 const decorateStore = useDecorateStore();
@@ -16,10 +16,8 @@ const points = ref({
   total_expense_points: 0,
   month_income_points: 0,
   month_expense_points: 0,
-  frozen_rewards: [],
   next_release_time: "",
 });
-const recentLogs = ref([]);
 const pointsEnabled = ref(true);
 
 const balanceText = computed(() => Number(points.value.balance_points || 0));
@@ -37,10 +35,12 @@ const monthIncomeText = computed(() =>
 const monthExpenseText = computed(() =>
   Number(points.value.month_expense_points || 0),
 );
-const frozenRewards = computed(() =>
-  Array.isArray(points.value.frozen_rewards) ? points.value.frozen_rewards : [],
-);
 const nextReleaseTime = computed(() => points.value.next_release_time || "");
+
+const useActions = [
+  { label: "积分商城", primary: true, tap: goMall },
+  { label: "兑换记录", tap: goExchangeOrders },
+];
 
 onShow(async () => {
   if (await ensurePointsEnabled()) {
@@ -74,44 +74,11 @@ async function fetchPoints() {
       total_expense_points: 0,
       month_income_points: 0,
       month_expense_points: 0,
-      frozen_rewards: [],
       next_release_time: "",
     };
-  }
-
-  try {
-    const data = await getPointsLogs({ page: 1, limit: 3 });
-    recentLogs.value = Array.isArray(data?.list) ? data.list : [];
-  } catch {
-    recentLogs.value = [];
   } finally {
     loading.value = false;
   }
-}
-
-function signedPoints(item) {
-  const value = Number(item.change_points || 0);
-  const direction = String(item.direction || "");
-  const isIncome = direction === "income";
-  return `${isIncome ? "+" : "-"}${Math.abs(value)}`;
-}
-
-function logTitle(item) {
-  return item.title || item.biz_type_text || item.remark || "积分变动";
-}
-
-function logTime(item) {
-  return item.create_time || item.time || "";
-}
-
-function accountTypeText(item) {
-  return item.account_type_text || "";
-}
-
-function releaseDesc(item) {
-  const pointsValue = Number(item.frozen_points || item.reward_points || 0);
-  const releaseTime = item.release_time || "";
-  return `${pointsValue} 积分${releaseTime ? ` · ${releaseTime} 解冻` : ""}`;
 }
 
 function goRecords(params = {}) {
@@ -122,6 +89,18 @@ function goRecords(params = {}) {
   uni.navigateTo({
     url: `/pages-sub/points/records${query ? `?${query}` : ""}`,
   });
+}
+
+function goFrozenRecords() {
+  goRecords({ biz_type: "order_complete", range: "custom" });
+}
+
+function goIncomeRecords(range = "custom") {
+  goRecords({ type: "income", range });
+}
+
+function goExpenseRecords(range = "custom") {
+  goRecords({ type: "expense", range });
 }
 
 function goMall() {
@@ -153,30 +132,67 @@ function goExchangeOrders() {
         <text class="points-card__unit">积分</text>
       </view>
       <view class="points-card__summary">
-        <view class="points-summary">
-          <text class="points-summary__label">冻结积分</text>
+        <view
+          class="points-summary points-summary--link"
+          hover-class="points-summary--active"
+          @tap="goFrozenRecords"
+        >
+          <view class="points-summary__head">
+            <text class="points-summary__label">冻结积分</text>
+            <view class="points-summary__arrow" />
+          </view>
           <text class="points-summary__value">{{ frozenText }}</text>
         </view>
         <view class="points-summary">
-          <text class="points-summary__label">欠账积分</text>
+          <view class="points-summary__head">
+            <text class="points-summary__label">欠账积分</text>
+          </view>
           <text class="points-summary__value">{{ debtText }}</text>
         </view>
-        <view class="points-summary">
-          <text class="points-summary__label">累计获得</text>
+        <view
+          class="points-summary points-summary--link"
+          hover-class="points-summary--active"
+          @tap="goIncomeRecords('custom')"
+        >
+          <view class="points-summary__head">
+            <text class="points-summary__label">累计获得</text>
+            <view class="points-summary__arrow" />
+          </view>
           <text class="points-summary__value">{{ totalIncomeText }}</text>
         </view>
-        <view class="points-summary">
-          <text class="points-summary__label">累计使用</text>
+        <view
+          class="points-summary points-summary--link"
+          hover-class="points-summary--active"
+          @tap="goExpenseRecords('custom')"
+        >
+          <view class="points-summary__head">
+            <text class="points-summary__label">累计使用</text>
+            <view class="points-summary__arrow" />
+          </view>
           <text class="points-summary__value">{{ totalExpenseText }}</text>
         </view>
       </view>
       <view class="points-card__stats">
-        <view class="points-stat">
-          <text class="points-stat__label">本月获得</text>
+        <view
+          class="points-stat points-stat--link"
+          hover-class="points-stat--active"
+          @tap="goIncomeRecords('month')"
+        >
+          <view class="points-stat__head">
+            <text class="points-stat__label">本月获得</text>
+            <view class="points-stat__arrow" />
+          </view>
           <text class="points-stat__value">+{{ monthIncomeText }}</text>
         </view>
-        <view class="points-stat">
-          <text class="points-stat__label">本月使用</text>
+        <view
+          class="points-stat points-stat--link"
+          hover-class="points-stat--active"
+          @tap="goExpenseRecords('month')"
+        >
+          <view class="points-stat__head">
+            <text class="points-stat__label">本月使用</text>
+            <view class="points-stat__arrow" />
+          </view>
           <text class="points-stat__value">-{{ monthExpenseText }}</text>
         </view>
       </view>
@@ -185,105 +201,23 @@ function goExchangeOrders() {
       </text>
     </view>
 
-    <view class="section">
-      <view class="section__header">
-        <text class="section__title">待解冻积分</text>
-        <text class="section__more" @tap="goRecords({ biz_type: 'order_complete' })">冻结明细</text>
-      </view>
-      <view v-if="frozenRewards.length" class="release-list">
-        <view
-          v-for="item in frozenRewards"
-          :key="item.order_sn || item.order_id"
-          class="release-row"
+    <view class="entry-section">
+      <text class="section__title">使用积分</text>
+      <view class="action-grid action-grid--use">
+        <mb-button
+          v-for="item in useActions"
+          :key="item.label"
+          class="action-button"
+          :type="item.primary ? 'primary' : 'secondary'"
+          size="medium"
+          block
+          @click="item.tap()"
         >
-          <view class="release-row__main">
-            <text class="release-row__title">订单奖励冻结</text>
-            <text class="release-row__desc">{{ item.order_sn }}</text>
-          </view>
-          <view class="release-row__right">
-            <text class="release-row__points">{{ releaseDesc(item) }}</text>
-          </view>
-        </view>
-      </view>
-      <view v-else class="release-empty">
-        <text class="release-empty__text">暂无待解冻积分</text>
+          {{ item.label }}
+        </mb-button>
       </view>
     </view>
-
-    <view class="action-grid">
-      <view class="action-item action-item--primary" @tap="goMall">
-        <text class="action-item__label">积分商城</text>
-      </view>
-      <view class="action-item" @tap="goExchangeOrders">
-        <text class="action-item__label">兑换记录</text>
-      </view>
-      <view class="action-item" @tap="goRecords()">
-        <text class="action-item__label">积分明细</text>
-      </view>
-      <view
-        class="action-item"
-        @tap="goRecords({ biz_type: 'order_complete', type: 'income' })"
-      >
-        <text class="action-item__label">获得记录</text>
-      </view>
-      <view class="action-item" @tap="goRecords({ type: 'expense' })">
-        <text class="action-item__label">使用记录</text>
-      </view>
-      <view
-        class="action-item"
-        @tap="goRecords({ biz_type: 'refund', type: 'expense' })"
-      >
-        <text class="action-item__label">回收记录</text>
-      </view>
-    </view>
-
-    <view class="section">
-      <view class="section__header">
-        <text class="section__title">最近记录</text>
-        <text class="section__more" @tap="goRecords()">查看全部</text>
-      </view>
-
-      <view v-if="recentLogs.length" class="log-list">
-        <view
-          v-for="item in recentLogs"
-          :key="item.id || item.create_time"
-          class="log-row"
-        >
-          <view class="log-row__icon">
-            <text class="log-row__icon-text">P</text>
-          </view>
-          <view class="log-row__main">
-            <text class="log-row__title">{{ logTitle(item) }}</text>
-            <text class="log-row__time">
-              {{ accountTypeText(item) ? `${accountTypeText(item)} · ` : "" }}{{ logTime(item) }}
-            </text>
-          </view>
-          <view class="log-row__right">
-            <text
-              class="log-row__amount"
-              :class="{
-                'log-row__amount--income': signedPoints(item).startsWith('+'),
-              }"
-            >
-              {{ signedPoints(item) }}
-            </text>
-            <text
-              v-if="item.after_points !== undefined"
-              class="log-row__balance"
-            >
-              余额 {{ item.after_points }}
-            </text>
-          </view>
-        </view>
-      </view>
-
-      <view v-else class="empty">
-        <text class="empty__icon">P</text>
-        <text class="empty__title">暂无积分记录</text>
-        <text class="empty__desc">订单完成后会显示在这里</text>
-      </view>
-    </view>
-</view>
+  </view>
 </template>
 
 <style lang="scss" scoped>
@@ -302,15 +236,12 @@ function goExchangeOrders() {
 }
 
 .points-card__top,
-.points-card__stats,
-.section__header,
-.log-row {
+.points-card__stats {
   display: flex;
   align-items: center;
 }
 
-.points-card__top,
-.section__header {
+.points-card__top {
   justify-content: space-between;
 }
 
@@ -322,11 +253,7 @@ function goExchangeOrders() {
 }
 
 .points-card__status,
-.section__more,
-.points-stat__label,
-.log-row__time,
-.log-row__balance,
-.empty__desc {
+.points-stat__label {
   color: var(--color-text-muted, #6b7280);
   font-size: 24rpx;
 }
@@ -371,10 +298,38 @@ function goExchangeOrders() {
   border-radius: $mb-radius-md;
 }
 
+.points-summary--link,
+.points-stat--link {
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+
+.points-summary--active,
+.points-stat--active {
+  opacity: 0.86;
+  transform: scale(0.98);
+}
+
+.points-summary__head,
+.points-stat__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12rpx;
+}
+
 .points-summary__label {
-  display: block;
   color: var(--color-text-muted, #6b7280);
   font-size: 23rpx;
+}
+
+.points-summary__arrow,
+.points-stat__arrow {
+  flex-shrink: 0;
+  width: 14rpx;
+  height: 14rpx;
+  border-top: 3rpx solid var(--color-text-tertiary, #737686);
+  border-right: 3rpx solid var(--color-text-tertiary, #737686);
+  transform: rotate(45deg);
 }
 
 .points-summary__value {
@@ -414,186 +369,15 @@ function goExchangeOrders() {
   margin-top: 20rpx;
 }
 
-.action-item {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 78rpx;
-  background: var(--color-bg, #ffffff);
-  border: 1rpx solid var(--color-divider, #f0f2f5);
-  border-radius: $mb-radius-md;
+.action-grid--use {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.action-item--primary {
-  background: var(--color-primary, #0d50d5);
-  border-color: var(--color-primary, #0d50d5);
+.action-button {
+  min-width: 0;
 }
 
-.action-item__label {
-  color: var(--color-text, #111827);
-  font-size: 26rpx;
-  font-weight: 700;
-}
-
-.action-item--primary .action-item__label {
-  color: #ffffff;
-}
-
-.section {
+.entry-section {
   margin-top: 24rpx;
-  padding: 28rpx;
-  background: var(--color-bg, #ffffff);
-  border: 1rpx solid var(--color-divider, #f0f2f5);
-  border-radius: $mb-radius-lg;
-}
-
-.release-list {
-  margin-top: 18rpx;
-}
-
-.release-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20rpx;
-  padding: 18rpx 0;
-  border-bottom: 1rpx solid var(--color-divider, #f0f2f5);
-}
-
-.release-row:last-child {
-  border-bottom: none;
-}
-
-.release-row__main {
-  min-width: 0;
-}
-
-.release-row__title {
-  display: block;
-  color: var(--color-text, #111827);
-  font-size: 26rpx;
-  font-weight: 700;
-}
-
-.release-row__desc {
-  display: block;
-  margin-top: 6rpx;
-  color: var(--color-text-muted, #6b7280);
-  font-size: 23rpx;
-}
-
-.release-row__right {
-  flex-shrink: 0;
-  max-width: 360rpx;
-  text-align: right;
-}
-
-.release-row__points {
-  color: #047857;
-  font-size: 24rpx;
-  font-weight: 700;
-}
-
-.release-empty {
-  padding: 24rpx 0 4rpx;
-}
-
-.release-empty__text {
-  color: var(--color-text-muted, #6b7280);
-  font-size: 24rpx;
-}
-
-.log-list {
-  margin-top: 18rpx;
-}
-
-.log-row {
-  gap: 18rpx;
-  padding: 20rpx 0;
-  border-bottom: 1rpx solid var(--color-divider, #f0f2f5);
-}
-
-.log-row:last-child {
-  border-bottom: none;
-}
-
-.log-row__icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 58rpx;
-  height: 58rpx;
-  background: var(--color-primary-light, #386bef);
-  border-radius: 50%;
-}
-
-.log-row__icon-text {
-  color: #ffffff;
-  font-size: 24rpx;
-  font-weight: 800;
-}
-
-.log-row__main {
-  flex: 1;
-  min-width: 0;
-}
-
-.log-row__title {
-  display: block;
-  color: var(--color-text, #111827);
-  font-size: 27rpx;
-  font-weight: 700;
-}
-
-.log-row__time {
-  display: block;
-  margin-top: 6rpx;
-}
-
-.log-row__right {
-  text-align: right;
-}
-
-.log-row__amount {
-  display: block;
-  color: #f97316;
-  font-size: 28rpx;
-  font-weight: 800;
-}
-
-.log-row__amount--income {
-  color: #16a34a;
-}
-
-.empty {
-  display: flex;
-  align-items: center;
-  flex-direction: column;
-  padding: 54rpx 0;
-  text-align: center;
-}
-
-.empty__icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 72rpx;
-  height: 72rpx;
-  color: #ffffff;
-  font-size: 32rpx;
-  font-weight: 800;
-  background: var(--color-primary, #0d50d5);
-  border-radius: 50%;
-}
-
-.empty__title {
-  margin-top: 18rpx;
-  color: var(--color-text, #111827);
-  font-size: 28rpx;
-  font-weight: 700;
-}
-
-.empty__desc {
-  margin-top: 8rpx;
 }
 </style>
