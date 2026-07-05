@@ -114,6 +114,7 @@ const shipRules = {
         }
       },
     },
+    { max: 80, message: '物流单号最多 80 个字符', trigger: 'blur' },
   ],
 };
 
@@ -244,6 +245,19 @@ const imageKey = (record: PointsExchangeOrderApi.OrderItem) =>
 const hasGoodsImage = (record: PointsExchangeOrderApi.OrderItem) =>
   !!goodsImageUrl(record) && !imageErrorKeys.value[imageKey(record)];
 
+const hasDeliverySnapshot = (
+  record?: null | PointsExchangeOrderApi.OrderItem,
+) => {
+  if (!record) return false;
+  return (
+    record.delivery_type === 'virtual' ||
+    !!record.delivery_note ||
+    !!record.logistics_company ||
+    !!record.logistics_no ||
+    !!record.shipped_at
+  );
+};
+
 const markImageError = (record: PointsExchangeOrderApi.OrderItem) => {
   imageErrorKeys.value = {
     ...imageErrorKeys.value,
@@ -311,12 +325,16 @@ const submitShip = async () => {
   try {
     await shipFormRef.value?.validate();
     shipLoading.value = true;
+    const isVirtual = shipForm.delivery_type === 'virtual';
     await shipPointsExchangeOrderApi(shipTarget.value.id, {
-      ...shipForm,
-      delivery_note: shipForm.delivery_note?.trim() || '',
-      logistics_company_id: shipForm.logistics_company_id || 0,
-      logistics_company: shipForm.logistics_company.trim(),
-      logistics_no: shipForm.logistics_no.trim(),
+      admin_remark: shipForm.admin_remark?.trim() || '',
+      delivery_type: shipForm.delivery_type,
+      delivery_note: isVirtual ? shipForm.delivery_note?.trim() || '' : '',
+      logistics_platform: isVirtual ? '' : shipForm.logistics_platform,
+      logistics_company_id: isVirtual ? 0 : shipForm.logistics_company_id || 0,
+      logistics_company_code: isVirtual ? '' : shipForm.logistics_company_code,
+      logistics_company: isVirtual ? '' : shipForm.logistics_company.trim(),
+      logistics_no: isVirtual ? '' : shipForm.logistics_no.trim(),
     });
     message.success('发货成功');
     shipVisible.value = false;
@@ -368,6 +386,33 @@ const submitClose = async () => {
 
 const detailTitle = computed(() =>
   detailData.value ? `兑换单 ${detailData.value.sn}` : '兑换单详情',
+);
+const detailHasDeliverySnapshot = computed(() =>
+  hasDeliverySnapshot(detailData.value),
+);
+const detailDeliveryLabel = computed(() =>
+  detailHasDeliverySnapshot.value ? '发货方式' : '发货状态',
+);
+const detailDeliveryText = computed(() => {
+  const record = detailData.value;
+  if (!record) return '-';
+  if (!detailHasDeliverySnapshot.value) {
+    return record.status === STATUS_PENDING_SHIP ? '待发货' : '未发货';
+  }
+  return (
+    record.delivery_type_text ||
+    (record.delivery_type === 'virtual' ? '虚拟发货' : '实物快递')
+  );
+});
+const showDetailVirtualShipment = computed(
+  () =>
+    detailData.value?.delivery_type === 'virtual' &&
+    detailHasDeliverySnapshot.value,
+);
+const showDetailPhysicalShipment = computed(
+  () =>
+    detailData.value?.delivery_type !== 'virtual' &&
+    detailHasDeliverySnapshot.value,
 );
 
 onMounted(async () => {
@@ -557,7 +602,7 @@ onMounted(async () => {
       @ok="detailVisible = false"
     >
       <a-spin :spinning="detailLoading">
-        <a-descriptions v-if="detailData" bordered :column="2" size="small">
+        <a-descriptions v-if="detailData" bordered :column="1" size="small">
           <a-descriptions-item label="状态">
             <a-tag :color="statusColor(detailData.status)">
               {{ detailData.status_text }}
@@ -566,7 +611,7 @@ onMounted(async () => {
           <a-descriptions-item label="用户ID">
             {{ detailData.user_id }}
           </a-descriptions-item>
-          <a-descriptions-item label="商品" :span="2">
+          <a-descriptions-item label="商品">
             {{ detailData.goods_name }} /
             {{ detailData.sku_spec || '默认规格' }}
           </a-descriptions-item>
@@ -579,34 +624,46 @@ onMounted(async () => {
           <a-descriptions-item label="收货人">
             {{ detailData.receiver_name }} {{ detailData.receiver_phone }}
           </a-descriptions-item>
-          <a-descriptions-item label="地址" :span="2">
+          <a-descriptions-item label="地址">
             {{ detailData.receiver_full_address }}
           </a-descriptions-item>
-          <a-descriptions-item label="发货方式">
-            {{ detailData.delivery_type_text || '实物快递' }}
+          <a-descriptions-item :label="detailDeliveryLabel">
+            {{ detailDeliveryText }}
           </a-descriptions-item>
           <a-descriptions-item
-            v-if="detailData.delivery_type === 'virtual'"
+            v-if="showDetailVirtualShipment"
             label="发货说明"
           >
             {{ detailData.delivery_note || '-' }}
           </a-descriptions-item>
           <a-descriptions-item
-            v-if="detailData.delivery_type !== 'virtual'"
+            v-if="showDetailPhysicalShipment"
             label="物流公司"
           >
             {{ detailData.logistics_company || '-' }}
           </a-descriptions-item>
           <a-descriptions-item
-            v-if="detailData.delivery_type !== 'virtual'"
+            v-if="showDetailPhysicalShipment"
             label="物流单号"
           >
             {{ detailData.logistics_no || '-' }}
           </a-descriptions-item>
-          <a-descriptions-item label="买家备注" :span="2">
+          <a-descriptions-item
+            v-if="detailHasDeliverySnapshot"
+            label="发货时间"
+          >
+            {{ detailData.shipped_at || '-' }}
+          </a-descriptions-item>
+          <a-descriptions-item label="完成时间">
+            {{ detailData.completed_at || '-' }}
+          </a-descriptions-item>
+          <a-descriptions-item label="关闭时间">
+            {{ detailData.closed_at || '-' }}
+          </a-descriptions-item>
+          <a-descriptions-item label="买家备注">
             {{ detailData.buyer_remark || '-' }}
           </a-descriptions-item>
-          <a-descriptions-item label="后台备注" :span="2">
+          <a-descriptions-item label="后台备注">
             {{ detailData.admin_remark || '-' }}
           </a-descriptions-item>
         </a-descriptions>
@@ -655,6 +712,19 @@ onMounted(async () => {
       @cancel="shipVisible = false"
       @ok="submitShip"
     >
+      <div
+        v-if="shipTarget"
+        class="mb-3 rounded border border-[hsl(var(--border))] bg-[hsl(var(--muted))] p-3 text-xs text-[hsl(var(--foreground))]"
+      >
+        <div>兑换单号：{{ shipTarget.sn }}</div>
+        <div>商品：{{ shipTarget.goods_name || '-' }}</div>
+        <div v-if="shipTarget.receiver_name">
+          收件人：{{ shipTarget.receiver_name }}
+          <span v-if="shipTarget.receiver_phone">
+            · {{ shipTarget.receiver_phone }}
+          </span>
+        </div>
+      </div>
       <a-form
         ref="shipFormRef"
         class="pt-4"

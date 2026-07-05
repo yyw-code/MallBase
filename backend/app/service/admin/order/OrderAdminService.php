@@ -94,7 +94,7 @@ class OrderAdminService extends BaseService
         $company = $deliveryType === Order::DELIVERY_TYPE_PHYSICAL
             ? $logisticsService->resolveCompany($platform, $logisticsCompanyId, $companyCode, $companyName)
             : null;
-        $oldLogistics = trim(sprintf('%s %s', (string) ($order->logistics_company ?? ''), (string) ($order->logistics_sn ?? '')));
+        $oldLogistics = $this->deliverySummary($order);
         $ip = $this->requestIp();
 
         /** @var OrderStatusMachine $machine */
@@ -496,6 +496,23 @@ class OrderAdminService extends BaseService
             : Order::DELIVERY_TYPE_PHYSICAL;
     }
 
+    private function deliverySummary(Order $order): string
+    {
+        if (
+            (string) ($order->delivery_type ?? Order::DELIVERY_TYPE_PHYSICAL)
+            === Order::DELIVERY_TYPE_VIRTUAL
+        ) {
+            $note = trim((string) ($order->delivery_note ?? ''));
+            return $note !== '' ? '虚拟发货：' . $note : '虚拟发货';
+        }
+
+        return trim(sprintf(
+            '%s %s',
+            (string) ($order->logistics_company ?? ''),
+            (string) ($order->logistics_sn ?? '')
+        ));
+    }
+
     /**
      * @return array<string,mixed>|null
      */
@@ -814,6 +831,8 @@ class OrderAdminService extends BaseService
         $list = $this->hydrateOrderRelationAssets($list);
 
         foreach ($list as &$row) {
+            $row['delivery_type'] = $this->normalizeDeliveryType((string) ($row['delivery_type'] ?? ''));
+            $row['delivery_type_text'] = Order::deliveryTypeLabel((string) $row['delivery_type']);
             $row['after_sale_tag_text'] = (string) ($row['active_refunds'][0]['status_text'] ?? '');
             unset($row['active_refunds']);
         }
@@ -932,7 +951,8 @@ class OrderAdminService extends BaseService
         $data = $this->hydrateOrderRelationAssets([$data])[0];
         $data['after_sale_tag_text'] = (string) ($data['active_refunds'][0]['status_text'] ?? '');
         unset($data['active_refunds']);
-        $data['delivery_type_text'] = Order::deliveryTypeLabel((string) ($data['delivery_type'] ?? Order::DELIVERY_TYPE_PHYSICAL));
+        $data['delivery_type'] = $this->normalizeDeliveryType((string) ($data['delivery_type'] ?? ''));
+        $data['delivery_type_text'] = Order::deliveryTypeLabel((string) $data['delivery_type']);
         $data['points_deduction'] = $this->orderPointsDeductionSnapshot($orderId);
         $data['points_reward'] = $this->orderPointsRewardSnapshot($orderId);
         $data['member_discount'] = $this->orderMemberDiscountSnapshot($orderId);

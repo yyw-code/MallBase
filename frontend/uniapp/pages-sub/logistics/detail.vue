@@ -38,9 +38,11 @@ const receiver = computed(() => logistics.value?.receiver || {})
 const tracks = computed(() => logistics.value?.tracks || [])
 const queryError = computed(() => logistics.value?.query_error || '')
 const isAvailable = computed(() => logistics.value && logistics.value.available !== false)
+const isVirtualDelivery = computed(() => logistics.value?.delivery_type === 'virtual' || logistics.value?.state === 'virtual')
 const hasTracks = computed(() => tracks.value.length > 0)
 const emptyText = computed(() => errorText.value || logistics.value?.status || '暂无物流信息')
 const trackEmptyText = computed(() => queryError.value || '暂无物流轨迹')
+const latestDesc = computed(() => logistics.value?.latest_desc || logistics.value?.delivery_note || '虚拟商品已发货')
 
 const maskedPhone = computed(() => {
   const phone = receiver.value?.phone_masked || receiver.value?.phone || ''
@@ -89,14 +91,18 @@ function copyTrackingNo() {
         <text class="status-header__status">{{ statusText }}</text>
         <view class="status-header__info">
           <view class="status-header__info-item">
-            <text class="status-header__info-label">快递公司</text>
+            <text class="status-header__info-label">{{ isVirtualDelivery ? '发货方式' : '快递公司' }}</text>
             <text class="status-header__info-value">{{ company }}</text>
           </view>
-          <view class="status-header__info-item">
+          <view v-if="isVirtualDelivery" class="status-header__info-item">
+            <text class="status-header__info-label">发货说明</text>
+            <text class="status-header__info-value status-header__info-value--wrap">{{ latestDesc }}</text>
+          </view>
+          <view v-else class="status-header__info-item">
             <text class="status-header__info-label">运单号</text>
             <view class="status-header__info-row">
               <text class="status-header__info-value">{{ trackingNo }}</text>
-              <view class="copy-btn" @tap="copyTrackingNo">
+              <view v-if="trackingNo" class="copy-btn" @tap="copyTrackingNo">
                 <text class="copy-btn__text">复制</text>
               </view>
             </view>
@@ -118,8 +124,12 @@ function copyTrackingNo() {
 
       <!-- Timeline section -->
       <view class="section">
-        <text class="section__title">物流轨迹</text>
-        <view v-if="hasTracks" class="timeline">
+        <text class="section__title">{{ isVirtualDelivery ? '发货说明' : '物流轨迹' }}</text>
+        <view v-if="isVirtualDelivery" class="virtual-note">
+          <text class="virtual-note__text">{{ latestDesc }}</text>
+          <text v-if="logistics.latest_time" class="virtual-note__time">{{ logistics.latest_time }}</text>
+        </view>
+        <view v-else-if="hasTracks" class="timeline">
           <view
             v-for="(track, index) in tracks"
             :key="index"
@@ -233,6 +243,12 @@ function copyTrackingNo() {
   font-weight: 500;
 }
 
+.status-header__info-value--wrap {
+  flex: 1;
+  line-height: 1.45;
+  white-space: normal;
+}
+
 .copy-btn {
   flex-shrink: 0;
   padding: 4rpx 16rpx;
@@ -247,6 +263,25 @@ function copyTrackingNo() {
 .copy-btn__text {
   font-size: $mb-font-xs;
   color: var(--color-primary, #0d50d5);
+}
+
+.virtual-note {
+  padding: 32rpx $mb-spacing-page;
+}
+
+.virtual-note__text {
+  display: block;
+  color: var(--color-text, #191b23);
+  font-size: $mb-font-md;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.virtual-note__time {
+  display: block;
+  margin-top: $mb-spacing-sm;
+  color: var(--color-text-tertiary, #737686);
+  font-size: $mb-font-sm;
 }
 
 // ---- Card base ----

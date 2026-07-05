@@ -167,14 +167,15 @@ const itemColumns = [
           </a-descriptions-item>
           <a-descriptions-item label="物流" :span="2">
             <template v-if="detail.delivery_type === 'virtual'">
-              虚拟发货
-              <span v-if="detail.delivery_note">
-                / {{ detail.delivery_note }}
+              <a-tag>{{ detail.delivery_type_text || '虚拟发货' }}</a-tag>
+              <span class="text-muted-foreground">
+                {{ detail.delivery_note || '虚拟商品已发货' }}
               </span>
             </template>
             <template
               v-else-if="detail.logistics_company || detail.logistics_sn"
             >
+              <a-tag>{{ detail.delivery_type_text || '实物快递' }}</a-tag>
               {{ detail.logistics_company || '—' }} /
               {{ detail.logistics_sn || '—' }}
             </template>

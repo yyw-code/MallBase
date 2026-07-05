@@ -324,6 +324,20 @@ final class PointsMallServiceContractTest extends TestCase
                 ->where('action', PointsExchangeOrderLog::ACTION_SHIP)
                 ->whereLike('remark', '虚拟发货%')
                 ->count());
+
+            $adminInfo = $this->exchangeOrderService()->getInfo($result['id']);
+            $this->assertSame(PointsExchangeOrder::DELIVERY_TYPE_VIRTUAL, (string) ($adminInfo['delivery_type'] ?? ''));
+            $this->assertSame('虚拟发货', (string) ($adminInfo['delivery_type_text'] ?? ''));
+            $this->assertSame('兑换码已发送到站内信', (string) ($adminInfo['delivery_note'] ?? ''));
+            $this->assertSame('', (string) ($adminInfo['logistics_company'] ?? ''));
+            $this->assertSame('', (string) ($adminInfo['logistics_no'] ?? ''));
+
+            $buyerInfo = $this->mallService()->myOrderDetail($userId, $result['id']);
+            $this->assertSame(PointsExchangeOrder::DELIVERY_TYPE_VIRTUAL, (string) ($buyerInfo['delivery_type'] ?? ''));
+            $this->assertSame('虚拟发货', (string) ($buyerInfo['delivery_type_text'] ?? ''));
+            $this->assertSame('兑换码已发送到站内信', (string) ($buyerInfo['delivery_note'] ?? ''));
+            $this->assertSame('', (string) ($buyerInfo['logistics_company'] ?? ''));
+            $this->assertSame('', (string) ($buyerInfo['logistics_no'] ?? ''));
         } finally {
             Db::rollback();
             $this->flushSettings();

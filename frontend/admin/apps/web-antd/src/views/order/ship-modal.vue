@@ -34,7 +34,7 @@ const companyOptions = ref<LogisticsApi.CompanyOption[]>([]);
 const isEditLogistics = computed(() => props.order?.status === 20);
 const isPhysicalDelivery = computed(() => form.delivery_type !== 'virtual');
 const modalTitle = computed(() =>
-  isEditLogistics.value ? '修改物流信息' : '订单发货',
+  isEditLogistics.value ? '修改发货信息' : '订单发货',
 );
 const submitText = computed(() =>
   isEditLogistics.value ? '保存修改' : '确认发货',
@@ -80,7 +80,7 @@ const rules = {
         }
       },
     },
-    { max: 100, message: '运单号最长 100 个字符', trigger: 'blur' },
+    { max: 64, message: '运单号最长 64 个字符', trigger: 'blur' },
   ],
 };
 
@@ -212,16 +212,17 @@ const handleSubmit = async () => {
   }
   submitting.value = true;
   try {
+    const isVirtual = form.delivery_type === 'virtual';
     await shipOrderApi(props.order.id, {
       delivery_type: form.delivery_type,
-      delivery_note: form.delivery_note?.trim() || '',
-      logistics_platform: form.logistics_platform,
-      logistics_company_id: form.logistics_company_id || 0,
-      logistics_company_code: form.logistics_company_code,
-      logistics_company: form.logistics_company.trim(),
-      logistics_sn: form.logistics_sn.trim(),
+      delivery_note: isVirtual ? form.delivery_note?.trim() || '' : '',
+      logistics_platform: isVirtual ? '' : form.logistics_platform,
+      logistics_company_id: isVirtual ? 0 : form.logistics_company_id || 0,
+      logistics_company_code: isVirtual ? '' : form.logistics_company_code,
+      logistics_company: isVirtual ? '' : form.logistics_company.trim(),
+      logistics_sn: isVirtual ? '' : form.logistics_sn.trim(),
     });
-    message.success(isEditLogistics.value ? '物流信息已更新' : '发货成功');
+    message.success(isEditLogistics.value ? '发货信息已更新' : '发货成功');
     emit('success');
     emit('update:open', false);
   } catch (error: any) {
@@ -247,7 +248,7 @@ const handleSubmit = async () => {
   >
     <div
       v-if="order"
-      class="mb-3 rounded bg-gray-50 p-3 text-xs dark:bg-gray-800"
+      class="mb-3 rounded border border-[hsl(var(--border))] bg-[hsl(var(--muted))] p-3 text-xs text-[hsl(var(--foreground))]"
     >
       <div>订单号：{{ order.sn }}</div>
       <div v-if="order.receiver_name">

@@ -280,14 +280,19 @@ const columns = [
   {
     title: '发货',
     dataIndex: 'delivery_type',
-    width: 180,
+    width: 220,
     customRender: ({ record }: { record: OrderApi.OrderRecord }) => {
       if (record.delivery_type === 'virtual') {
         return record.delivery_note
           ? `虚拟发货 · ${record.delivery_note}`
           : '虚拟发货';
       }
-      return record.logistics_sn || '—';
+      if (record.logistics_company || record.logistics_sn) {
+        return [record.logistics_company, record.logistics_sn]
+          .filter(Boolean)
+          .join(' · ');
+      }
+      return '—';
     },
   },
   { title: '下单时间', dataIndex: 'create_time', width: 170 },
