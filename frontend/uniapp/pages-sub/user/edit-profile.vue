@@ -99,6 +99,7 @@
         <text class="primary-btn-text">{{ loading ? '保存中...' : '保存资料' }}</text>
       </view>
 
+      <mb-copyright-footer />
       <view class="bottom-spacer" />
     </scroll-view>
       <mb-floating-action />

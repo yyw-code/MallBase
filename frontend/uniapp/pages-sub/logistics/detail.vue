@@ -159,6 +159,7 @@ function copyTrackingNo() {
       </view>
 
       <!-- Bottom spacer -->
+      <mb-copyright-footer />
       <view class="bottom-spacer" />
     </template>
 

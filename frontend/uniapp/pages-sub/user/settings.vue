@@ -132,6 +132,7 @@
         </view>
       </view>
 
+      <mb-copyright-footer />
       <view class="bottom-spacer" />
     </scroll-view>
       <mb-floating-action />

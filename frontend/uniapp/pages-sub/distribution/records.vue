@@ -281,6 +281,7 @@ function logAmount(item) {
       <text class="empty__title">暂无记录</text>
     </view>
 
+    <mb-copyright-footer />
     <mb-floating-action />
   </view>
 </template>

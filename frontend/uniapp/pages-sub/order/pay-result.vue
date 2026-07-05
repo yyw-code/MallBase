@@ -288,6 +288,7 @@ async function onPayMethodSelect(code) {
       @select="onPayMethodSelect"
       @close="closeSheet"
     />
+      <mb-copyright-footer />
       <mb-floating-action />
 </view>
 </template>

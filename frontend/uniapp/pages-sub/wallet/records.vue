@@ -232,6 +232,7 @@ function formatAmount(value) {
         </view>
       </view>
     </view>
+      <mb-copyright-footer />
       <mb-floating-action />
 </view>
 </template>

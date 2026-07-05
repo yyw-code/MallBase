@@ -215,6 +215,7 @@ function goWithdraw() {
       }}</text>
     </view>
 
+    <mb-copyright-footer />
     <mb-floating-action />
   </view>
 </template>

@@ -19,6 +19,7 @@ onLoad((query) => {
     :style="decorateStore.themeStyle"
   >
     <mb-navbar title="我的订单" />
+      <mb-copyright-footer />
       <mb-floating-action />
 </view>
 </template>

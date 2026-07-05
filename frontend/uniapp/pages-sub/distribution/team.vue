@@ -140,6 +140,7 @@ function avatarText(item) {
       <text class="empty__title">暂无团队成员</text>
     </view>
 
+    <mb-copyright-footer />
     <mb-floating-action />
   </view>
 </template>

@@ -237,6 +237,8 @@ async function submitExchange() {
       </view>
     </view>
 
+    <mb-copyright-footer />
+
     <view v-if="detail" class="submit-bar">
       <view class="submit-bar__summary">
         <text class="submit-bar__label">需消耗</text>

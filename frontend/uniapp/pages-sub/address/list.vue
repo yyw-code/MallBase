@@ -72,6 +72,7 @@
         </view>
       </block>
 
+      <mb-copyright-footer />
       <view class="addr-list__bottom-spacer" />
     </scroll-view>
 

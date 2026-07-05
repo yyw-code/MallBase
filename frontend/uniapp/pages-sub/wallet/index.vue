@@ -154,6 +154,7 @@ function goRecharge() {
         <text class="empty__desc">完成支付或退款后会显示在这里</text>
       </view>
     </view>
+      <mb-copyright-footer />
       <mb-floating-action />
 </view>
 </template>

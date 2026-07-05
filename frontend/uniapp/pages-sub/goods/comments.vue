@@ -120,6 +120,7 @@
           <text class="goods-comments__state-text">没有更多评价</text>
         </view>
       </block>
+      <mb-copyright-footer />
     </scroll-view>
       <mb-floating-action />
 </view>

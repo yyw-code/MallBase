@@ -184,6 +184,8 @@ async function submitRecharge() {
       </view>
     </view>
 
+    <mb-copyright-footer />
+
     <view class="footer">
       <view class="footer__info">
         <text class="footer__label">到账余额</text>

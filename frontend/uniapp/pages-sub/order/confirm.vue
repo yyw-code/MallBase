@@ -140,6 +140,8 @@
       </view>
     </view>
 
+    <mb-copyright-footer />
+
     <!-- 底部提交栏 -->
     <view class="submit-bar">
       <view class="submit-bar__inner">

@@ -125,6 +125,7 @@ onShareTimeline(() => {
 
       <mb-decorate-renderer ref="rendererRef" :modules="homeModules" />
 
+      <mb-copyright-footer />
       <view v-if="decorateStore.tabbarMode === 'custom'" class="bottom-spacer" />
     </view>
     <mb-custom-tabbar current="/pages/index/index" />

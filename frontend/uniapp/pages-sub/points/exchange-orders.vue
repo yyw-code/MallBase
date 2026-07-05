@@ -208,6 +208,7 @@ function statusClass(status) {
         <text class="empty__button-text">去兑换</text>
       </view>
     </view>
+    <mb-copyright-footer />
   </view>
 </template>
 

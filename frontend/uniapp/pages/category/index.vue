@@ -294,6 +294,7 @@ onLoad(() => {
           />
         </view>
 
+        <mb-copyright-footer />
         <view v-if="decorateStore.tabbarMode === 'custom'" class="bottom-spacer" />
       </scroll-view>
     </view>

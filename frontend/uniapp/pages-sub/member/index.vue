@@ -93,6 +93,7 @@ function goProfile() {
         <text class="empty__btn-text">返回个人中心</text>
       </view>
     </view>
+    <mb-copyright-footer />
   </view>
 </template>
 

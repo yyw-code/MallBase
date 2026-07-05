@@ -271,6 +271,7 @@ function releaseTimeOf(item) {
         </view>
       </view>
     </view>
+    <mb-copyright-footer />
   </view>
 </template>
 

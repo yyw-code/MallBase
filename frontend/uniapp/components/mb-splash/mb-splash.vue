@@ -12,7 +12,9 @@
       <image class="mb-splash__logo" src="/static/logo-light.png" mode="aspectFit" />
       <text class="mb-splash__title">{{ brandName }}</text>
       <text class="mb-splash__slogan">{{ brandSlogan }}</text>
-      <text class="mb-splash__copyright">© {{ brandName }} · Enjoy the trend</text>
+      <text v-if="splashCopyrightLine" class="mb-splash__copyright">
+        {{ splashCopyrightLine }}
+      </text>
     </view>
 
     <view
@@ -64,6 +66,30 @@ const remoteEnabled = computed(() => {
   const v = appStore.siteConfig?.client_splash_enabled
   if (v === undefined || v === null || v === '') return true
   return Number(v) === 1 || v === true || v === '1' || v === 'true'
+})
+
+const copyrightEnabled = computed(() => {
+  const v = appStore.siteConfig?.copyright_enabled
+  if (v === undefined || v === null || v === '') return true
+  return Number(v) === 1 || v === true || v === '1' || v === 'true'
+})
+
+const copyrightCompany = computed(() => (
+  appStore.siteConfig?.copyright_company ||
+  appStore.siteConfig?.client_site_name ||
+  appStore.siteConfig?.site_name ||
+  brandName.value
+))
+
+const copyrightDate = computed(() => (
+  appStore.siteConfig?.copyright_date || new Date().getFullYear()
+))
+
+const splashCopyrightLine = computed(() => {
+  if (!copyrightEnabled.value || !copyrightCompany.value) return ''
+  const company = String(copyrightCompany.value)
+  const suffix = /版权所有|all rights reserved/i.test(company) ? '' : ' 版权所有'
+  return `© ${copyrightDate.value} ${company}${suffix}`
 })
 
 let autoCloseTimer = null

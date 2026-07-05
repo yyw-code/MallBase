@@ -360,6 +360,7 @@
       </view>
 
       <!-- Bottom spacer for fixed bar -->
+      <mb-copyright-footer />
       <view class="goods-detail__bottom-spacer" />
     </scroll-view>
 

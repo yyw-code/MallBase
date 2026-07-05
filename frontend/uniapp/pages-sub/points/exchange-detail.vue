@@ -176,6 +176,7 @@ function confirmCancel() {
         </view>
       </view>
     </view>
+    <mb-copyright-footer />
   </view>
 </template>
 

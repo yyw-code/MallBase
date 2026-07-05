@@ -169,6 +169,7 @@ function imageUrl(item) {
       <text class="empty__title">暂无积分商品</text>
       <text class="empty__desc">后台上架积分商品后会显示在这里</text>
     </view>
+    <mb-copyright-footer />
   </view>
 </template>
 

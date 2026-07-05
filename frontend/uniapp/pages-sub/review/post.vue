@@ -358,6 +358,7 @@ function normalizeUploadedPath(uploaded) {
     </view>
 
     <!-- Bottom spacer for fixed button -->
+    <mb-copyright-footer />
     <view class="bottom-spacer" />
 
     <!-- Fixed bottom submit bar -->

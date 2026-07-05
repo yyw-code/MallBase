@@ -307,6 +307,7 @@ function goGoodsDetail(item) {
       </view>
 
       <!-- Bottom spacer so last item isn't hidden behind bottom bar -->
+      <mb-copyright-footer />
       <view class="cart-list__spacer" />
     </view>
 

@@ -214,6 +214,7 @@
       </view>
       <text v-else-if="noMore" class="goods-list__no-more">没有更多了</text>
     </view>
+    <mb-copyright-footer />
     <mb-floating-action />
     <mb-spec-selector
       :visible="specVisible"

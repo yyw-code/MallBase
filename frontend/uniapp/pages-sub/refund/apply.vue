@@ -486,6 +486,7 @@ function redirectAfterSubmit(result) {
       </view>
     </view>
 
+    <mb-copyright-footer />
     <view class="bottom-spacer" />
     <view class="submit-bar">
       <view class="submit-bar__amount">

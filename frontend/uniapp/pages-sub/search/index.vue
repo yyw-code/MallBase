@@ -365,6 +365,7 @@ function parseConfigArray(value, fallback) {
         </view>
       </view>
 
+      <mb-copyright-footer />
       <view class="bottom-spacer" />
     </view>
       <mb-floating-action />

@@ -256,6 +256,7 @@ function statusColor(status) {
       <text class="empty__title">暂无提现记录</text>
     </view>
 
+    <mb-copyright-footer />
     <mb-floating-action />
   </view>
 </template>

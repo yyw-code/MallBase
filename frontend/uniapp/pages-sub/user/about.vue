@@ -60,15 +60,7 @@
         </view>
       </view>
 
-      <view v-if="copyrightVisible" class="section">
-        <text class="section__title">版权信息</text>
-        <view class="copyright">
-          <text class="copyright__line">© {{ copyrightDate }} {{ companyName }}</text>
-          <text v-if="copyrightIcp" class="copyright__line">{{ copyrightIcp }}</text>
-          <text v-if="copyrightPsb" class="copyright__line">{{ copyrightPsb }}</text>
-        </view>
-      </view>
-
+      <mb-copyright-footer />
       <view class="bottom-spacer" />
     </scroll-view>
       <mb-floating-action />
@@ -95,15 +87,6 @@ const logo = computed(() => siteConfig.value.client_logo || '/static/logo.png')
 const aboutContent = computed(() => siteConfig.value.client_about_content || '')
 const companyName = computed(() => siteConfig.value.copyright_company || 'MallBase Team')
 const companyUrl = computed(() => siteConfig.value.copyright_company_url || '')
-const copyrightDate = computed(() => siteConfig.value.copyright_date || new Date().getFullYear())
-const copyrightIcp = computed(() => siteConfig.value.copyright_icp || '')
-const copyrightPsb = computed(() => siteConfig.value.copyright_psb || '')
-const copyrightVisible = computed(() => {
-  const enabled = siteConfig.value.copyright_enabled
-  if (enabled === undefined || enabled === null || enabled === '') return true
-  return Number(enabled) === 1 || enabled === true || enabled === '1' || enabled === 'true'
-})
-
 onShow(() => {
   if (!appStore.siteConfig) {
     appStore.fetchBasicConfig()
@@ -265,22 +248,6 @@ function openCompanyUrl() {
   border-right: 3rpx solid var(--color-text-tertiary-on-bg, var(--color-text-tertiary, #737686));
   border-bottom: 3rpx solid var(--color-text-tertiary-on-bg, var(--color-text-tertiary, #737686));
   transform: rotate(-45deg);
-}
-
-.copyright {
-  display: flex;
-  flex-direction: column;
-  gap: 10rpx;
-  padding: 28rpx;
-  background: var(--color-bg, #ffffff);
-  border: 1rpx solid var(--color-divider, #f0f2f5);
-  border-radius: $mb-radius-lg;
-}
-
-.copyright__line {
-  font-size: $mb-font-sm;
-  line-height: 1.6;
-  color: var(--color-text-tertiary-on-bg, var(--color-text-tertiary, #737686));
 }
 
 .bottom-spacer {

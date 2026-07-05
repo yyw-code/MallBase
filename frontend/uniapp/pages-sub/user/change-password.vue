@@ -90,6 +90,7 @@
         <text class="primary-btn-text">{{ loading ? '提交中...' : '确认修改' }}</text>
       </view>
 
+      <mb-copyright-footer />
       <view class="bottom-spacer" />
     </scroll-view>
       <mb-floating-action />

@@ -440,6 +440,7 @@ async function onSubmitReturn() {
         </view>
       </view>
 
+      <mb-copyright-footer />
       <view v-if="canCancel" class="bottom-spacer" />
       <view v-if="canCancel" class="action-bar">
         <view class="action-bar__inner">

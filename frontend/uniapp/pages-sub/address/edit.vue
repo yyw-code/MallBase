@@ -130,6 +130,8 @@
       <view class="addr-edit__spacer" />
     </view>
 
+    <mb-copyright-footer />
+
     <!-- 底部操作 -->
     <view v-if="!pageLoading" class="addr-edit__footer">
       <mb-button

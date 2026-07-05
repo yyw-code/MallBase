@@ -217,6 +217,7 @@ function goExchangeOrders() {
         </mb-button>
       </view>
     </view>
+    <mb-copyright-footer />
   </view>
 </template>
 

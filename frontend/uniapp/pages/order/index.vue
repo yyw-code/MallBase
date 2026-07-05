@@ -157,8 +157,9 @@
       @close="closeRefundSheet"
     />
 
+    <mb-copyright-footer />
     <mb-custom-tabbar current="/pages/order/index" />
-      <mb-floating-action />
+    <mb-floating-action />
 </view>
 </template>
 
