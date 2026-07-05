@@ -280,6 +280,7 @@ docker compose restart
 ## 交流与反馈
 
 - QQ 群：958717939
+- 微信号：yyw1329847115
 
 ## 开源协议
 
