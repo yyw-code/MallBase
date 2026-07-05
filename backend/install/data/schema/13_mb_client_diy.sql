@@ -1,10 +1,29 @@
 -- ============================================
 -- 客户端装修系统数据库表结构
 -- 表前缀：mb_
--- 包含：页面库、装修方案、方案快照、主题方案、主题策略
+-- 包含：页面分类、页面库、装修方案、方案快照、主题方案、主题策略
 -- ============================================
 
 SET NAMES utf8mb4;
+
+DROP TABLE IF EXISTS `mb_client_page_category`;
+CREATE TABLE `mb_client_page_category` (
+  `id` int(11) unsigned NOT NULL AUTO_INCREMENT COMMENT '分类ID',
+  `code` varchar(30) NOT NULL COMMENT '分类编码',
+  `name` varchar(80) NOT NULL COMMENT '分类名称',
+  `description` varchar(255) DEFAULT NULL COMMENT '分类描述',
+  `sort` int(11) NOT NULL DEFAULT 0 COMMENT '排序',
+  `is_system` tinyint(1) NOT NULL DEFAULT 0 COMMENT '是否系统分类',
+  `status` tinyint(1) NOT NULL DEFAULT 1 COMMENT '状态：0禁用，1启用',
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `delete_time` int(11) unsigned DEFAULT NULL COMMENT '删除时间（软删除）',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_code` (`code`),
+  KEY `idx_status` (`status`),
+  KEY `idx_sort` (`sort`),
+  KEY `idx_delete_time` (`delete_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='客户端页面分类';
 
 DROP TABLE IF EXISTS `mb_client_page`;
 CREATE TABLE `mb_client_page` (
@@ -12,7 +31,7 @@ CREATE TABLE `mb_client_page` (
   `name` varchar(80) NOT NULL COMMENT '页面名称',
   `path` varchar(255) NOT NULL COMMENT 'UniApp 页面路径',
   `page_type` varchar(30) NOT NULL DEFAULT 'page' COMMENT '页面类型：tab/page/subpackage',
-  `category` varchar(30) NOT NULL DEFAULT 'other' COMMENT '页面分类：basic/goods/content/order/aftersale/user/marketing/other',
+  `category` varchar(30) NOT NULL DEFAULT 'other' COMMENT '页面分类编码',
   `package_root` varchar(120) DEFAULT NULL COMMENT '分包 root，主包为空',
   `need_login` tinyint(1) NOT NULL DEFAULT 0 COMMENT '是否需要登录',
   `source` varchar(20) NOT NULL DEFAULT 'manual' COMMENT '来源：auto/manual/system',
@@ -97,6 +116,19 @@ CREATE TABLE `mb_client_theme_policy` (
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='客户端主题策略';
 
+INSERT INTO `mb_client_page_category`
+(`id`, `code`, `name`, `description`, `sort`, `is_system`, `status`)
+VALUES
+(1, 'basic', '基础页面', '客户端主包、底部导航等基础页面', 10, 1, 1),
+(2, 'goods', '商品页面', '商品列表、详情、搜索等页面', 20, 1, 1),
+(3, 'content', '内容页面', '文章、内容等页面', 30, 1, 1),
+(4, 'order', '订单页面', '订单、物流、评价等页面', 40, 1, 1),
+(5, 'aftersale', '售后页面', '退款、售后等页面', 50, 1, 1),
+(6, 'user', '会员页面', '登录、资料、地址等会员页面', 60, 1, 1),
+(7, 'points', '积分页面', '积分、积分商城、兑换记录等页面', 70, 1, 1),
+(8, 'wallet', '余额页面', '余额、充值、余额记录等页面', 80, 1, 1),
+(9, 'other', '其他页面', '未归入固定业务模块的页面', 900, 1, 1);
+
 INSERT INTO `mb_client_page`
 (`id`, `name`, `path`, `page_type`, `category`, `package_root`, `need_login`, `source`, `remark`, `sort`, `status`)
 VALUES
@@ -123,11 +155,11 @@ VALUES
 (21, '设置', '/pages-sub/user/settings', 'subpackage', 'user', 'pages-sub/user', 1, 'system', '系统内置会员页面', 1460, 1),
 (39, '关于我们', '/pages-sub/user/about', 'subpackage', 'user', 'pages-sub/user', 0, 'system', '系统内置会员页面', 1470, 1),
 (40, '会员等级', '/pages-sub/member/index', 'subpackage', 'user', 'pages-sub/member', 1, 'system', '系统内置会员页面', 1480, 1),
-(22, '钱包', '/pages-sub/wallet/index', 'subpackage', 'user', 'pages-sub/wallet', 1, 'system', '系统内置会员页面', 1510, 1),
-(23, '钱包记录', '/pages-sub/wallet/records', 'subpackage', 'user', 'pages-sub/wallet', 1, 'system', '系统内置会员页面', 1520, 1),
-(24, '余额充值', '/pages-sub/wallet/recharge', 'subpackage', 'user', 'pages-sub/wallet', 1, 'system', '系统内置会员页面', 1530, 1),
-(25, '积分', '/pages-sub/points/index', 'subpackage', 'user', 'pages-sub/points', 1, 'system', '系统内置会员页面', 1540, 1),
-(26, '积分记录', '/pages-sub/points/records', 'subpackage', 'user', 'pages-sub/points', 1, 'system', '系统内置会员页面', 1550, 1),
+(22, '钱包', '/pages-sub/wallet/index', 'subpackage', 'wallet', 'pages-sub/wallet', 1, 'system', '系统内置余额页面', 1510, 1),
+(23, '钱包记录', '/pages-sub/wallet/records', 'subpackage', 'wallet', 'pages-sub/wallet', 1, 'system', '系统内置余额页面', 1520, 1),
+(24, '余额充值', '/pages-sub/wallet/recharge', 'subpackage', 'wallet', 'pages-sub/wallet', 1, 'system', '系统内置余额页面', 1530, 1),
+(25, '积分', '/pages-sub/points/index', 'subpackage', 'points', 'pages-sub/points', 1, 'system', '系统内置积分页面', 1540, 1),
+(26, '积分记录', '/pages-sub/points/records', 'subpackage', 'points', 'pages-sub/points', 1, 'system', '系统内置积分页面', 1550, 1),
 (27, '地址列表', '/pages-sub/address/list', 'subpackage', 'user', 'pages-sub/address', 1, 'system', '系统内置会员页面', 1610, 1),
 (28, '编辑地址', '/pages-sub/address/edit', 'subpackage', 'user', 'pages-sub/address', 1, 'system', '系统内置会员页面', 1620, 1),
 (29, '搜索', '/pages-sub/search/index', 'subpackage', 'goods', 'pages-sub/search', 0, 'system', '系统内置商品页面', 1710, 1),
@@ -135,11 +167,11 @@ VALUES
 (31, '物流详情', '/pages-sub/logistics/detail', 'subpackage', 'order', 'pages-sub/logistics', 1, 'system', '系统内置订单页面', 1910, 1),
 (32, '文章列表', '/pages-sub/article/list', 'subpackage', 'content', 'pages-sub/article', 0, 'system', '系统内置文章页面', 2010, 1),
 (33, '文章详情', '/pages-sub/article/detail', 'subpackage', 'content', 'pages-sub/article', 0, 'system', '系统内置文章页面', 2020, 1),
-(34, '积分商城', '/pages-sub/points/mall', 'subpackage', 'user', 'pages-sub/points', 0, 'system', '系统内置积分页面', 1560, 1),
-(35, '积分商品详情', '/pages-sub/points/mall-detail', 'subpackage', 'user', 'pages-sub/points', 0, 'system', '系统内置积分页面', 1570, 1),
-(36, '确认积分兑换', '/pages-sub/points/exchange-confirm', 'subpackage', 'user', 'pages-sub/points', 1, 'system', '系统内置积分页面', 1580, 1),
-(37, '积分兑换记录', '/pages-sub/points/exchange-orders', 'subpackage', 'user', 'pages-sub/points', 1, 'system', '系统内置积分页面', 1590, 1),
-(38, '积分兑换详情', '/pages-sub/points/exchange-detail', 'subpackage', 'user', 'pages-sub/points', 1, 'system', '系统内置积分页面', 1600, 1);
+(34, '积分商城', '/pages-sub/points/mall', 'subpackage', 'points', 'pages-sub/points', 0, 'system', '系统内置积分页面', 1560, 1),
+(35, '积分商品详情', '/pages-sub/points/mall-detail', 'subpackage', 'points', 'pages-sub/points', 0, 'system', '系统内置积分页面', 1570, 1),
+(36, '确认积分兑换', '/pages-sub/points/exchange-confirm', 'subpackage', 'points', 'pages-sub/points', 1, 'system', '系统内置积分页面', 1580, 1),
+(37, '积分兑换记录', '/pages-sub/points/exchange-orders', 'subpackage', 'points', 'pages-sub/points', 1, 'system', '系统内置积分页面', 1590, 1),
+(38, '积分兑换详情', '/pages-sub/points/exchange-detail', 'subpackage', 'points', 'pages-sub/points', 1, 'system', '系统内置积分页面', 1600, 1);
 
 INSERT INTO `mb_client_decoration_scheme`
 (`id`, `type`, `name`, `description`, `schema`, `tabbar_mode`, `is_system`, `is_active`, `sort`, `status`)

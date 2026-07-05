@@ -26,7 +26,8 @@ final class ClientDecorationServiceContractTest extends TestCase
 
     public function testPagesJsonImportCreatesAndUpdatesPageLibraryRows(): void
     {
-        $this->requireDbTables(['client_page']);
+        $this->requireDbTables(['client_page', 'client_page_category']);
+        $this->ensureClientPageDefaultCategories();
         $service = $this->makeService('app\\service\\admin\\client\\ClientPageService');
         $this->cleanupClientTestRows();
 
@@ -77,7 +78,8 @@ final class ClientDecorationServiceContractTest extends TestCase
 
     public function testClientPageProtectsSystemRowsAndRejectsDuplicatePaths(): void
     {
-        $this->requireDbTables(['client_page']);
+        $this->requireDbTables(['client_page', 'client_page_category']);
+        $this->ensureClientPageDefaultCategories();
         $service = $this->makeService('app\\service\\admin\\client\\ClientPageService');
         $this->cleanupClientTestRows();
 
@@ -123,6 +125,59 @@ final class ClientDecorationServiceContractTest extends TestCase
         ]));
         $this->assertNotNull($rootPathError);
         $this->assertStringContainsString('页面路径必须以 / 开头', $rootPathError->getMessage());
+    }
+
+    public function testClientPageCategoryCrudControlsPageBinding(): void
+    {
+        $this->requireDbTables(['client_page', 'client_page_category']);
+        $this->ensureClientPageDefaultCategories();
+        $pageService = $this->makeService('app\\service\\admin\\client\\ClientPageService');
+        $categoryService = $this->makeService('app\\service\\admin\\client\\ClientPageCategoryService');
+        $this->cleanupClientTestRows();
+
+        $categoryId = $categoryService->create([
+            'code' => 'codex_test',
+            'name' => 'CodexTest 分类',
+            'description' => 'CodexTest 页面分类',
+            'sort' => 88,
+            'status' => 1,
+        ]);
+        $this->assertGreaterThan(0, $categoryId);
+
+        $pageId = $pageService->create([
+            'name' => 'CodexTest 自定义分类页面',
+            'path' => '/codex-test/custom-category',
+            'page_type' => 'page',
+            'category' => 'codex_test',
+        ]);
+        $this->assertGreaterThan(0, $pageId);
+
+        $page = $pageService->getInfo($pageId);
+        $this->assertSame('codex_test', $page['category']);
+        $this->assertSame('CodexTest 分类', $page['category_label']);
+
+        $list = $pageService->getList(['category' => 'codex_test'], 1, 15);
+        $this->assertSame(1, (int) $list['total']);
+        $this->assertSame('CodexTest 分类', $list['list'][0]['category_label']);
+
+        $picker = $pageService->getPickerGroups([]);
+        $groups = array_column($picker['groups'], null, 'key');
+        $this->assertArrayHasKey('codex_test', $groups);
+        $this->assertSame('CodexTest 分类', $groups['codex_test']['label']);
+
+        $deleteError = $this->captureBusinessException(fn() => $categoryService->delete($categoryId));
+        $this->assertNotNull($deleteError);
+        $this->assertStringContainsString('该分类下还有页面', $deleteError->getMessage());
+
+        $categoryService->updateStatus($categoryId, 0);
+        $disabledError = $this->captureBusinessException(fn() => $pageService->create([
+            'name' => 'CodexTest 禁用分类页面',
+            'path' => '/codex-test/disabled-category',
+            'page_type' => 'page',
+            'category' => 'codex_test',
+        ]));
+        $this->assertNotNull($disabledError);
+        $this->assertStringContainsString('页面分类不存在或已禁用', $disabledError->getMessage());
     }
 
     public function testDecorationSchemeProtectsSystemRowsAndValidatesSchemas(): void
@@ -242,7 +297,8 @@ final class ClientDecorationServiceContractTest extends TestCase
 
     public function testDecorationTargetPickerDoesNotExposeThemeEntry(): void
     {
-        $this->requireDbTables(['client_page', 'goods', 'goods_category', 'goods_brand', 'goods_tag']);
+        $this->requireDbTables(['client_page', 'client_page_category', 'goods', 'goods_category', 'goods_brand', 'goods_tag']);
+        $this->ensureClientPageDefaultCategories();
         $service = $this->makeService('app\\service\\admin\\client\\ClientDecorationSchemeService');
 
         Db::startTrans();
@@ -1505,6 +1561,11 @@ final class ClientDecorationServiceContractTest extends TestCase
                     ->whereOr('path', 'like', '/codex-sub-test/%')
                     ->delete();
             }
+            if ($this->safeTableExists('client_page_category')) {
+                Db::name('client_page_category')
+                    ->whereLike('code', 'codex_test%')
+                    ->delete();
+            }
         } catch (Throwable) {
             // 清理失败不覆盖测试主体结果。
         }
@@ -1558,6 +1619,37 @@ final class ClientDecorationServiceContractTest extends TestCase
         $this->assertIsString($content);
 
         return $content;
+    }
+
+    private function ensureClientPageDefaultCategories(): void
+    {
+        $rows = [
+            ['code' => 'basic', 'name' => '基础页面', 'description' => '客户端主包、底部导航等基础页面', 'sort' => 10],
+            ['code' => 'goods', 'name' => '商品页面', 'description' => '商品列表、详情、搜索等页面', 'sort' => 20],
+            ['code' => 'content', 'name' => '内容页面', 'description' => '文章、内容等页面', 'sort' => 30],
+            ['code' => 'order', 'name' => '订单页面', 'description' => '订单、物流、评价等页面', 'sort' => 40],
+            ['code' => 'aftersale', 'name' => '售后页面', 'description' => '退款、售后等页面', 'sort' => 50],
+            ['code' => 'user', 'name' => '会员页面', 'description' => '登录、资料、地址等会员页面', 'sort' => 60],
+            ['code' => 'points', 'name' => '积分页面', 'description' => '积分、积分商城、兑换记录等页面', 'sort' => 70],
+            ['code' => 'wallet', 'name' => '余额页面', 'description' => '余额、充值、余额记录等页面', 'sort' => 80],
+            ['code' => 'other', 'name' => '其他页面', 'description' => '未归入固定业务模块的页面', 'sort' => 900],
+        ];
+
+        foreach ($rows as $row) {
+            $exists = Db::name('client_page_category')->where('code', $row['code'])->find();
+            $payload = array_merge($row, [
+                'is_system' => 1,
+                'status' => 1,
+                'delete_time' => null,
+            ]);
+
+            if ($exists) {
+                Db::name('client_page_category')->where('id', $exists['id'])->update($payload);
+                continue;
+            }
+
+            Db::name('client_page_category')->insert($payload);
+        }
     }
 
     private function captureBusinessException(callable $callback): ?BusinessException

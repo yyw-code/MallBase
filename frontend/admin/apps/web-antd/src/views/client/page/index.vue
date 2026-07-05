@@ -4,17 +4,24 @@ import type { FormInstance, Rule } from 'ant-design-vue/es/form';
 
 import type { ClientPageApi } from '#/api/client';
 
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
+import { useRoute } from 'vue-router';
 
 import { message, Modal, Switch } from 'ant-design-vue';
 
 import {
   createClientPageApi,
+  createClientPageCategoryApi,
   deleteClientPageApi,
+  deleteClientPageCategoryApi,
+  getAllClientPageCategoriesApi,
+  getClientPageCategoryListApi,
   getClientPageInfoApi,
   getClientPageListApi,
   importClientPageApi,
   updateClientPageApi,
+  updateClientPageCategoryApi,
+  updateClientPageCategoryStatusApi,
 } from '#/api/client';
 import { useTableCrud } from '#/composables/useTableCrud';
 
@@ -22,8 +29,20 @@ defineOptions({ name: 'ClientPageManagement' });
 
 const pagesJsonPlaceholder =
   '粘贴 pages.json 内容，例如：{"pages":[...],"subPackages":[...]}';
+const CATEGORY_TAG_COLORS = [
+  'blue',
+  'green',
+  'geekblue',
+  'purple',
+  'orange',
+  'cyan',
+  'magenta',
+  'gold',
+  'default',
+];
 
 type ImportMode = 'file' | 'json';
+type PageManageTab = 'categories' | 'pages';
 type PageCategoryRow = {
   category: ClientPageApi.PageCategory;
   children: PageTablePageRow[];
@@ -48,20 +67,6 @@ const PAGE_TYPE_OPTIONS: Array<{
   { label: '分包页面', value: 'subpackage', color: 'purple' },
 ];
 
-const CATEGORY_OPTIONS: Array<{
-  color: string;
-  label: string;
-  value: ClientPageApi.PageCategory;
-}> = [
-  { label: '基础页面', value: 'basic', color: 'blue' },
-  { label: '商品页面', value: 'goods', color: 'green' },
-  { label: '订单页面', value: 'order', color: 'purple' },
-  { label: '售后页面', value: 'aftersale', color: 'orange' },
-  { label: '会员页面', value: 'user', color: 'cyan' },
-  { label: '营销页面', value: 'marketing', color: 'magenta' },
-  { label: '其他页面', value: 'other', color: 'default' },
-];
-
 const SOURCE_OPTIONS: Array<{
   color: string;
   label: string;
@@ -76,11 +81,27 @@ const FORM_SOURCE_OPTIONS = SOURCE_OPTIONS.filter(
   (item) => item.value !== 'system',
 );
 
+const pageCategories = ref<ClientPageApi.PageCategoryItem[]>([]);
+const pageCategoryOptions = computed(() =>
+  pageCategories.value.map((item) => ({
+    label: item.name,
+    value: item.code,
+  })),
+);
+
 const typeMap = computed(() =>
   Object.fromEntries(PAGE_TYPE_OPTIONS.map((item) => [item.value, item])),
 );
 const categoryMap = computed(() =>
-  Object.fromEntries(CATEGORY_OPTIONS.map((item) => [item.value, item])),
+  Object.fromEntries(
+    pageCategories.value.map((item, index) => [
+      item.code,
+      {
+        color: CATEGORY_TAG_COLORS[index % CATEGORY_TAG_COLORS.length],
+        label: item.name,
+      },
+    ]),
+  ),
 );
 const sourceMap = computed(() =>
   Object.fromEntries(SOURCE_OPTIONS.map((item) => [item.value, item])),
@@ -104,6 +125,24 @@ const searchParams = ref<ClientPageApi.ListParams>({
   source: undefined,
   status: undefined,
 });
+
+const route = useRoute();
+
+const getActiveTabByPath = (path: string): PageManageTab =>
+  path.endsWith('/category') ? 'categories' : 'pages';
+
+const activeTab = ref<PageManageTab>(getActiveTabByPath(route.path));
+
+watch(
+  () => route.path,
+  (path) => {
+    activeTab.value = getActiveTabByPath(path);
+  },
+);
+
+const loadPageCategories = async () => {
+  pageCategories.value = await getAllClientPageCategoriesApi();
+};
 
 const resetSearch = () => {
   searchParams.value = {
@@ -134,8 +173,12 @@ const columns = [
 
 const treeTableData = computed<PageTableRow[]>(() => {
   const rows: PageTableRow[] = [];
+  const groupedCodes = new Set<string>();
 
-  CATEGORY_OPTIONS.forEach((category) => {
+  const pushCategoryGroup = (category: {
+    label: string;
+    value: ClientPageApi.PageCategory;
+  }) => {
     const children = tableData.value
       .filter((item) => (item.category || 'other') === category.value)
       .map((item) => ({
@@ -144,6 +187,7 @@ const treeTableData = computed<PageTableRow[]>(() => {
       }));
     if (children.length === 0) return;
 
+    groupedCodes.add(category.value);
     rows.push({
       category: category.value,
       children,
@@ -152,6 +196,21 @@ const treeTableData = computed<PageTableRow[]>(() => {
       name: `${category.label}（${children.length}）`,
       path: '',
       tableKey: `category-${category.value}`,
+    });
+  };
+
+  pageCategoryOptions.value.forEach((category) => pushCategoryGroup(category));
+
+  [
+    ...new Set(
+      tableData.value
+        .map((item) => item.category || 'other')
+        .filter((category) => !groupedCodes.has(category)),
+    ),
+  ].forEach((category) => {
+    pushCategoryGroup({
+      label: category,
+      value: category,
     });
   });
 
@@ -174,6 +233,30 @@ const formData = reactive<ClientPageApi.SaveParams>({
   remark: null,
   sort: 0,
   status: 1,
+});
+
+const enabledPageCategoryOptions = computed(() => {
+  const options = pageCategories.value
+    .filter((item) => item.status === 1)
+    .map((item) => ({
+      label: item.name,
+      value: item.code,
+    }));
+
+  if (
+    formData.category &&
+    !options.some((item) => item.value === formData.category)
+  ) {
+    const current = pageCategories.value.find(
+      (item) => item.code === formData.category,
+    );
+    options.push({
+      label: current?.name ?? formData.category,
+      value: formData.category,
+    });
+  }
+
+  return options;
 });
 
 const formRules: Record<string, Rule[]> = {
@@ -299,6 +382,180 @@ const importForm = reactive<ClientPageApi.ImportParams>({
 const importFile = ref<File>();
 const importFileList = ref<UploadFile[]>([]);
 
+const categoryLoading = ref(false);
+const categoryTableData = ref<ClientPageApi.PageCategoryItem[]>([]);
+const categoryPagination = reactive({ current: 1, pageSize: 15, total: 0 });
+const categorySearchParams = ref<ClientPageApi.CategoryListParams>({
+  keyword: '',
+  status: undefined,
+});
+const categoryModalVisible = ref(false);
+const categoryModalLoading = ref(false);
+const categoryFormRef = ref<FormInstance>();
+const editingCategoryId = ref<null | number>(null);
+const categoryFormData = reactive<ClientPageApi.CategorySaveParams>({
+  code: '',
+  description: null,
+  name: '',
+  sort: 0,
+  status: 1,
+});
+
+const categoryColumns = [
+  { title: 'ID', dataIndex: 'id', width: 80 },
+  { title: '分类名称', dataIndex: 'name', width: 180 },
+  { title: '编码', dataIndex: 'code', width: 160 },
+  { title: '描述', dataIndex: 'description', ellipsis: true },
+  { title: '系统', dataIndex: 'is_system', width: 90 },
+  { title: '排序', dataIndex: 'sort', width: 90 },
+  { title: '状态', dataIndex: 'status', width: 110 },
+  { title: '更新时间', dataIndex: 'update_time', width: 170 },
+  { title: '操作', key: 'action', fixed: 'right', width: 160 },
+];
+
+const categoryFormRules: Record<string, Rule[]> = {
+  code: [
+    { required: true, message: '请输入分类编码', whitespace: true },
+    {
+      pattern: /^[a-z][a-z0-9_]{0,29}$/,
+      message: '只能使用小写字母、数字和下划线，且必须以字母开头',
+    },
+  ],
+  name: [{ required: true, message: '请输入分类名称', whitespace: true }],
+};
+
+const categoryModalTitle = computed(() =>
+  editingCategoryId.value ? '编辑页面分类' : '新增页面分类',
+);
+
+const loadCategoryData = async () => {
+  categoryLoading.value = true;
+  try {
+    const result = await getClientPageCategoryListApi({
+      ...categorySearchParams.value,
+      limit: categoryPagination.pageSize,
+      page: categoryPagination.current,
+    });
+    categoryTableData.value = result.list || [];
+    categoryPagination.total = result.total || 0;
+  } finally {
+    categoryLoading.value = false;
+  }
+};
+
+const resetCategorySearch = () => {
+  categorySearchParams.value = {
+    keyword: '',
+    status: undefined,
+  };
+  categoryPagination.current = 1;
+  loadCategoryData();
+};
+
+const submitCategorySearch = () => {
+  categoryPagination.current = 1;
+  loadCategoryData();
+};
+
+const handleCategoryTableChange = (pager: {
+  current?: number;
+  pageSize?: number;
+}) => {
+  categoryPagination.current = pager.current ?? categoryPagination.current;
+  categoryPagination.pageSize = pager.pageSize ?? categoryPagination.pageSize;
+  loadCategoryData();
+};
+
+const resetCategoryForm = () => {
+  categoryFormRef.value?.resetFields();
+  Object.assign(categoryFormData, {
+    code: '',
+    description: null,
+    name: '',
+    sort: 0,
+    status: 1,
+  });
+};
+
+const handleCreateCategory = () => {
+  editingCategoryId.value = null;
+  resetCategoryForm();
+  categoryModalVisible.value = true;
+};
+
+const handleEditCategory = (record: ClientPageApi.PageCategoryItem) => {
+  editingCategoryId.value = record.id;
+  resetCategoryForm();
+  Object.assign(categoryFormData, {
+    code: record.code,
+    description: record.description ?? null,
+    name: record.name,
+    sort: record.sort ?? 0,
+    status: record.status ?? 1,
+  });
+  categoryModalVisible.value = true;
+};
+
+const buildCategorySubmitData = (): ClientPageApi.CategorySaveParams => ({
+  ...categoryFormData,
+  description: categoryFormData.description || null,
+});
+
+const refreshCategories = async () => {
+  await Promise.all([loadPageCategories(), loadCategoryData()]);
+};
+
+const handleSubmitCategory = async () => {
+  try {
+    await categoryFormRef.value?.validate();
+    categoryModalLoading.value = true;
+    const data = buildCategorySubmitData();
+    if (editingCategoryId.value) {
+      await updateClientPageCategoryApi(editingCategoryId.value, data);
+      message.success('更新成功');
+    } else {
+      await createClientPageCategoryApi(data);
+      message.success('创建成功');
+    }
+    categoryModalVisible.value = false;
+    await refreshCategories();
+  } catch (error: any) {
+    if (!error?.errorFields) {
+      console.error('保存页面分类失败:', error);
+    }
+  } finally {
+    categoryModalLoading.value = false;
+  }
+};
+
+const handleDeleteCategory = (record: ClientPageApi.PageCategoryItem) => {
+  Modal.confirm({
+    content: `确定要删除页面分类"${record.name}"吗？`,
+    title: '删除页面分类',
+    onOk: async () => {
+      await deleteClientPageCategoryApi(record.id);
+      message.success('删除成功');
+      await refreshCategories();
+      await loadData(searchParams.value);
+    },
+  });
+};
+
+const handleCategoryStatusChange = async (
+  record: ClientPageApi.PageCategoryItem,
+  checked: boolean | number | string,
+) => {
+  const nextStatus = checked === true ? 1 : 0;
+  try {
+    await updateClientPageCategoryStatusApi(record.id, nextStatus);
+    message.success('状态更新成功');
+    await refreshCategories();
+  } catch (error) {
+    console.error('更新页面分类状态失败:', error);
+    await refreshCategories();
+  }
+};
+
 const resetImportForm = () => {
   importMode.value = 'file';
   importForm.pages_json = '';
@@ -360,7 +617,8 @@ const handleImport = async () => {
   }
 };
 
-onMounted(() => {
+onMounted(async () => {
+  await Promise.all([loadPageCategories(), loadCategoryData()]);
   loadData(searchParams.value);
 });
 </script>
@@ -378,184 +636,301 @@ onMounted(() => {
       </div>
     </div>
 
-    <div class="client-page__filter">
-      <a-form
-        class="grid grid-cols-1 gap-x-4 gap-y-3 md:grid-cols-3 xl:grid-cols-6"
-      >
-        <a-form-item class="mb-0" label="关键词">
-          <a-input
-            v-model:value="searchParams.keyword"
-            allow-clear
-            class="w-full"
-            placeholder="名称/路径/备注"
-          />
-        </a-form-item>
-        <a-form-item class="mb-0" label="页面分类">
-          <a-select
-            v-model:value="searchParams.category"
-            :options="CATEGORY_OPTIONS"
-            allow-clear
-            class="w-full"
-            placeholder="请选择"
-          />
-        </a-form-item>
-        <a-form-item class="mb-0" label="页面类型">
-          <a-select
-            v-model:value="searchParams.page_type"
-            :options="PAGE_TYPE_OPTIONS"
-            allow-clear
-            class="w-full"
-            placeholder="请选择"
-          />
-        </a-form-item>
-        <a-form-item class="mb-0" label="来源">
-          <a-select
-            v-model:value="searchParams.source"
-            :options="SOURCE_OPTIONS"
-            allow-clear
-            class="w-full"
-            placeholder="请选择"
-          />
-        </a-form-item>
-        <a-form-item class="mb-0" label="状态">
-          <a-select
-            v-model:value="searchParams.status"
-            allow-clear
-            class="w-full"
-            placeholder="请选择"
+    <a-tabs v-model:active-key="activeTab">
+      <a-tab-pane key="pages" tab="页面列表">
+        <div class="client-page__filter">
+          <a-form
+            class="grid grid-cols-1 gap-x-4 gap-y-3 md:grid-cols-3 xl:grid-cols-6"
           >
-            <a-select-option :value="1">启用</a-select-option>
-            <a-select-option :value="0">禁用</a-select-option>
-          </a-select>
-        </a-form-item>
-        <a-form-item class="mb-0 md:col-span-3 xl:col-span-6">
-          <div class="flex justify-end gap-2">
-            <a-button
-              type="primary"
-              @click="
-                () => {
-                  pagination.current = 1;
-                  loadData(searchParams);
-                }
-              "
-            >
-              搜索
-            </a-button>
-            <a-button @click="resetSearch">重置</a-button>
-          </div>
-        </a-form-item>
-      </a-form>
-    </div>
-
-    <div class="client-page__table">
-      <div class="client-page__table-header">
-        <div>
-          <h3 class="client-page__table-title">页面列表</h3>
-        </div>
-        <div class="client-page__table-meta">
-          {{ treeTableData.length }} 个分组 / {{ tableData.length }} 个页面
-        </div>
-      </div>
-
-      <a-table
-        :columns="columns"
-        :data-source="treeTableData"
-        :loading="loading"
-        :pagination="false"
-        :row-class-name="getRowClassName"
-        :scroll="{ x: 1450 }"
-        row-key="tableKey"
-      >
-        <template #bodyCell="{ column, record }">
-          <template v-if="column.dataIndex === 'id'">
-            <span v-if="!isCategoryRow(record)">{{ record.id }}</span>
-          </template>
-
-          <template v-if="column.dataIndex === 'name'">
-            <strong v-if="isCategoryRow(record)">{{ record.name }}</strong>
-            <span v-else>{{ record.name }}</span>
-          </template>
-
-          <template v-if="column.dataIndex === 'path'">
-            <span v-if="isCategoryRow(record)">分类分组</span>
-            <span v-else>{{ record.path }}</span>
-          </template>
-
-          <template v-if="column.dataIndex === 'category'">
-            <a-tag :color="categoryMap[record.category]?.color || 'default'">
-              {{ categoryMap[record.category]?.label || record.category }}
-            </a-tag>
-          </template>
-
-          <template v-if="column.dataIndex === 'page_type'">
-            <a-tag
-              v-if="!isCategoryRow(record)"
-              :color="typeMap[record.page_type]?.color || 'default'"
-            >
-              {{ typeMap[record.page_type]?.label || record.page_type }}
-            </a-tag>
-          </template>
-
-          <template v-if="column.dataIndex === 'package_root'">
-            <span v-if="!isCategoryRow(record)">
-              {{ record.package_root || '-' }}
-            </span>
-          </template>
-
-          <template v-if="column.dataIndex === 'source'">
-            <a-tag
-              v-if="!isCategoryRow(record)"
-              :color="sourceMap[record.source]?.color || 'default'"
-            >
-              {{ sourceMap[record.source]?.label || record.source }}
-            </a-tag>
-          </template>
-
-          <template v-if="column.dataIndex === 'need_login'">
-            <a-tag
-              v-if="!isCategoryRow(record)"
-              :color="record.need_login ? 'orange' : 'green'"
-            >
-              {{ record.need_login ? '需要' : '不需要' }}
-            </a-tag>
-          </template>
-
-          <template v-if="column.dataIndex === 'sort'">
-            <span v-if="!isCategoryRow(record)">{{ record.sort }}</span>
-          </template>
-
-          <template v-if="column.dataIndex === 'status'">
-            <a-tag
-              v-if="!isCategoryRow(record)"
-              :color="record.status === 1 ? 'green' : 'default'"
-            >
-              {{ record.status === 1 ? '启用' : '禁用' }}
-            </a-tag>
-          </template>
-
-          <template v-if="column.dataIndex === 'update_time'">
-            <span v-if="!isCategoryRow(record)">{{ record.update_time }}</span>
-          </template>
-
-          <template v-if="column.key === 'action'">
-            <span v-if="isCategoryRow(record) || isSystemPage(record)"></span>
-            <a-space v-else>
-              <a-button type="link" size="small" @click="handleEdit(record)">
-                编辑
-              </a-button>
-              <a-button
-                type="link"
-                danger
-                size="small"
-                @click="handleDelete(record)"
+            <a-form-item class="mb-0" label="关键词">
+              <a-input
+                v-model:value="searchParams.keyword"
+                allow-clear
+                class="w-full"
+                placeholder="名称/路径/备注"
+              />
+            </a-form-item>
+            <a-form-item class="mb-0" label="页面分类">
+              <a-select
+                v-model:value="searchParams.category"
+                :options="pageCategoryOptions"
+                allow-clear
+                class="w-full"
+                placeholder="请选择"
+              />
+            </a-form-item>
+            <a-form-item class="mb-0" label="页面类型">
+              <a-select
+                v-model:value="searchParams.page_type"
+                :options="PAGE_TYPE_OPTIONS"
+                allow-clear
+                class="w-full"
+                placeholder="请选择"
+              />
+            </a-form-item>
+            <a-form-item class="mb-0" label="来源">
+              <a-select
+                v-model:value="searchParams.source"
+                :options="SOURCE_OPTIONS"
+                allow-clear
+                class="w-full"
+                placeholder="请选择"
+              />
+            </a-form-item>
+            <a-form-item class="mb-0" label="状态">
+              <a-select
+                v-model:value="searchParams.status"
+                allow-clear
+                class="w-full"
+                placeholder="请选择"
               >
-                删除
+                <a-select-option :value="1">启用</a-select-option>
+                <a-select-option :value="0">禁用</a-select-option>
+              </a-select>
+            </a-form-item>
+            <a-form-item class="mb-0 md:col-span-3 xl:col-span-6">
+              <div class="flex justify-end gap-2">
+                <a-button
+                  type="primary"
+                  @click="
+                    () => {
+                      pagination.current = 1;
+                      loadData(searchParams);
+                    }
+                  "
+                >
+                  搜索
+                </a-button>
+                <a-button @click="resetSearch">重置</a-button>
+              </div>
+            </a-form-item>
+          </a-form>
+        </div>
+
+        <div class="client-page__table">
+          <div class="client-page__table-header">
+            <div>
+              <h3 class="client-page__table-title">页面列表</h3>
+            </div>
+            <div class="client-page__table-meta">
+              {{ treeTableData.length }} 个分组 / {{ tableData.length }} 个页面
+            </div>
+          </div>
+
+          <a-table
+            :columns="columns"
+            :data-source="treeTableData"
+            :loading="loading"
+            :pagination="false"
+            :row-class-name="getRowClassName"
+            :scroll="{ x: 1450 }"
+            row-key="tableKey"
+          >
+            <template #bodyCell="{ column, record }">
+              <template v-if="column.dataIndex === 'id'">
+                <span v-if="!isCategoryRow(record)">{{ record.id }}</span>
+              </template>
+
+              <template v-if="column.dataIndex === 'name'">
+                <strong v-if="isCategoryRow(record)">{{ record.name }}</strong>
+                <span v-else>{{ record.name }}</span>
+              </template>
+
+              <template v-if="column.dataIndex === 'path'">
+                <span v-if="isCategoryRow(record)">分类分组</span>
+                <span v-else>{{ record.path }}</span>
+              </template>
+
+              <template v-if="column.dataIndex === 'category'">
+                <a-tag
+                  :color="categoryMap[record.category]?.color || 'default'"
+                >
+                  {{ categoryMap[record.category]?.label || record.category }}
+                </a-tag>
+              </template>
+
+              <template v-if="column.dataIndex === 'page_type'">
+                <a-tag
+                  v-if="!isCategoryRow(record)"
+                  :color="typeMap[record.page_type]?.color || 'default'"
+                >
+                  {{ typeMap[record.page_type]?.label || record.page_type }}
+                </a-tag>
+              </template>
+
+              <template v-if="column.dataIndex === 'package_root'">
+                <span v-if="!isCategoryRow(record)">
+                  {{ record.package_root || '-' }}
+                </span>
+              </template>
+
+              <template v-if="column.dataIndex === 'source'">
+                <a-tag
+                  v-if="!isCategoryRow(record)"
+                  :color="sourceMap[record.source]?.color || 'default'"
+                >
+                  {{ sourceMap[record.source]?.label || record.source }}
+                </a-tag>
+              </template>
+
+              <template v-if="column.dataIndex === 'need_login'">
+                <a-tag
+                  v-if="!isCategoryRow(record)"
+                  :color="record.need_login ? 'orange' : 'green'"
+                >
+                  {{ record.need_login ? '需要' : '不需要' }}
+                </a-tag>
+              </template>
+
+              <template v-if="column.dataIndex === 'sort'">
+                <span v-if="!isCategoryRow(record)">{{ record.sort }}</span>
+              </template>
+
+              <template v-if="column.dataIndex === 'status'">
+                <a-tag
+                  v-if="!isCategoryRow(record)"
+                  :color="record.status === 1 ? 'green' : 'default'"
+                >
+                  {{ record.status === 1 ? '启用' : '禁用' }}
+                </a-tag>
+              </template>
+
+              <template v-if="column.dataIndex === 'update_time'">
+                <span v-if="!isCategoryRow(record)">
+                  {{ record.update_time }}
+                </span>
+              </template>
+
+              <template v-if="column.key === 'action'">
+                <span
+                  v-if="isCategoryRow(record) || isSystemPage(record)"
+                ></span>
+                <a-space v-else>
+                  <a-button
+                    type="link"
+                    size="small"
+                    @click="handleEdit(record)"
+                  >
+                    编辑
+                  </a-button>
+                  <a-button
+                    type="link"
+                    danger
+                    size="small"
+                    @click="handleDelete(record)"
+                  >
+                    删除
+                  </a-button>
+                </a-space>
+              </template>
+            </template>
+          </a-table>
+        </div>
+      </a-tab-pane>
+
+      <a-tab-pane key="categories" tab="页面分类">
+        <div class="client-page__filter">
+          <a-form class="grid grid-cols-1 gap-x-4 gap-y-3 md:grid-cols-3">
+            <a-form-item class="mb-0" label="关键词">
+              <a-input
+                v-model:value="categorySearchParams.keyword"
+                allow-clear
+                class="w-full"
+                placeholder="名称/编码/描述"
+                @press-enter="submitCategorySearch"
+              />
+            </a-form-item>
+            <a-form-item class="mb-0" label="状态">
+              <a-select
+                v-model:value="categorySearchParams.status"
+                allow-clear
+                class="w-full"
+                placeholder="请选择"
+              >
+                <a-select-option :value="1">启用</a-select-option>
+                <a-select-option :value="0">禁用</a-select-option>
+              </a-select>
+            </a-form-item>
+            <a-form-item class="mb-0">
+              <div class="flex justify-end gap-2">
+                <a-button type="primary" @click="submitCategorySearch">
+                  搜索
+                </a-button>
+                <a-button @click="resetCategorySearch">重置</a-button>
+              </div>
+            </a-form-item>
+          </a-form>
+        </div>
+
+        <div class="client-page__table">
+          <div class="client-page__table-header">
+            <div>
+              <h3 class="client-page__table-title">页面分类</h3>
+            </div>
+            <div class="client-page__actions">
+              <a-button type="primary" @click="handleCreateCategory">
+                新增分类
               </a-button>
-            </a-space>
-          </template>
-        </template>
-      </a-table>
-    </div>
+              <a-button @click="refreshCategories">刷新</a-button>
+            </div>
+          </div>
+
+          <a-table
+            :columns="categoryColumns"
+            :data-source="categoryTableData"
+            :loading="categoryLoading"
+            :pagination="categoryPagination"
+            :scroll="{ x: 1050 }"
+            row-key="id"
+            @change="handleCategoryTableChange"
+          >
+            <template #bodyCell="{ column, record }">
+              <template v-if="column.dataIndex === 'description'">
+                {{ record.description || '-' }}
+              </template>
+
+              <template v-if="column.dataIndex === 'is_system'">
+                <a-tag :color="record.is_system === 1 ? 'gold' : 'default'">
+                  {{ record.is_system === 1 ? '系统' : '自定义' }}
+                </a-tag>
+              </template>
+
+              <template v-if="column.dataIndex === 'status'">
+                <Switch
+                  :checked="record.status === 1"
+                  checked-children="启用"
+                  un-checked-children="禁用"
+                  @change="
+                    (checked) => handleCategoryStatusChange(record, checked)
+                  "
+                />
+              </template>
+
+              <template v-if="column.key === 'action'">
+                <a-space>
+                  <a-button
+                    type="link"
+                    size="small"
+                    @click="handleEditCategory(record)"
+                  >
+                    编辑
+                  </a-button>
+                  <a-button
+                    type="link"
+                    danger
+                    size="small"
+                    :disabled="record.is_system === 1"
+                    @click="handleDeleteCategory(record)"
+                  >
+                    删除
+                  </a-button>
+                </a-space>
+              </template>
+            </template>
+          </a-table>
+        </div>
+      </a-tab-pane>
+    </a-tabs>
 
     <a-modal
       v-model:open="modalVisible"
@@ -595,7 +970,7 @@ onMounted(() => {
         <a-form-item label="页面分类" name="category">
           <a-select
             v-model:value="formData.category"
-            :options="CATEGORY_OPTIONS"
+            :options="enabledPageCategoryOptions"
             placeholder="请选择页面分类"
           />
         </a-form-item>
@@ -644,6 +1019,67 @@ onMounted(() => {
             allow-clear
             placeholder="可选"
           />
+        </a-form-item>
+      </a-form>
+    </a-modal>
+
+    <a-modal
+      v-model:open="categoryModalVisible"
+      :confirm-loading="categoryModalLoading"
+      :title="categoryModalTitle"
+      width="620px"
+      @ok="handleSubmitCategory"
+    >
+      <a-form
+        ref="categoryFormRef"
+        :label-col="{ style: { width: '100px' } }"
+        :model="categoryFormData"
+        :rules="categoryFormRules"
+        class="pt-4"
+      >
+        <a-form-item label="分类名称" name="name">
+          <a-input
+            v-model:value="categoryFormData.name"
+            allow-clear
+            :maxlength="80"
+            placeholder="请输入分类名称"
+            show-count
+          />
+        </a-form-item>
+        <a-form-item label="分类编码" name="code">
+          <a-input
+            v-model:value="categoryFormData.code"
+            allow-clear
+            :disabled="!!editingCategoryId"
+            :maxlength="30"
+            placeholder="如 marketing"
+            show-count
+          />
+        </a-form-item>
+        <a-form-item label="描述" name="description">
+          <a-textarea
+            v-model:value="categoryFormData.description"
+            :maxlength="255"
+            :rows="3"
+            allow-clear
+            placeholder="可选"
+            show-count
+          />
+        </a-form-item>
+        <a-form-item label="排序" name="sort">
+          <a-input-number
+            v-model:value="categoryFormData.sort"
+            :min="0"
+            :max="9999"
+            class="w-full"
+            placeholder="数字越小越靠前"
+          />
+        </a-form-item>
+        <a-form-item label="状态" name="status">
+          <a-radio-group v-model:value="categoryFormData.status">
+            <a-radio :value="1">启用</a-radio>
+            <a-radio :value="0">禁用</a-radio>
+          </a-radio-group>
         </a-form-item>
       </a-form>
     </a-modal>

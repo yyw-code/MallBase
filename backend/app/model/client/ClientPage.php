@@ -20,7 +20,8 @@ class ClientPage extends BaseModel
     public const CATEGORY_ORDER = 'order';
     public const CATEGORY_AFTERSALE = 'aftersale';
     public const CATEGORY_USER = 'user';
-    public const CATEGORY_MARKETING = 'marketing';
+    public const CATEGORY_POINTS = 'points';
+    public const CATEGORY_WALLET = 'wallet';
     public const CATEGORY_OTHER = 'other';
 
     public const SOURCE_AUTO = 'auto';
@@ -49,7 +50,8 @@ class ClientPage extends BaseModel
             self::CATEGORY_ORDER,
             self::CATEGORY_AFTERSALE,
             self::CATEGORY_USER,
-            self::CATEGORY_MARKETING,
+            self::CATEGORY_POINTS,
+            self::CATEGORY_WALLET,
             self::CATEGORY_OTHER,
         ];
     }

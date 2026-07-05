@@ -27,6 +27,29 @@ Route::group('client/page', function () {
         '_sort' => 10,
     ]);
 
+Route::group('client/page/category', function () {
+    Route::get('list', 'list')->name('SystemClientPageCategoryList')->option(['_alias' => '页面分类列表', '_desc' => '获取客户端页面分类列表', '_auth' => true, '_type' => Permission::TYPE_MENU]);
+    Route::get('all', 'all')->name('SystemClientPageCategoryAll')->option(['_alias' => '全部页面分类', '_desc' => '获取全部客户端页面分类', '_auth' => true, '_type' => Permission::TYPE_MENU]);
+    Route::get('info/:id', 'info')->name('SystemClientPageCategoryInfo')->option(['_alias' => '页面分类详情', '_desc' => '获取客户端页面分类详情', '_auth' => true, '_type' => Permission::TYPE_MENU]);
+    Route::post('create', 'create')->name('SystemClientPageCategoryCreate')->option(['_alias' => '创建页面分类', '_desc' => '创建客户端页面分类', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
+    Route::put('update/:id', 'update')->name('SystemClientPageCategoryUpdate')->option(['_alias' => '更新页面分类', '_desc' => '更新客户端页面分类', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
+    Route::delete('delete/:id', 'delete')->name('SystemClientPageCategoryDelete')->option(['_alias' => '删除页面分类', '_desc' => '删除客户端页面分类', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
+    Route::put('updateStatus/:id', 'updateStatus')->name('SystemClientPageCategoryUpdateStatus')->option(['_alias' => '页面分类状态', '_desc' => '更新客户端页面分类状态', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
+})->prefix('admin.client.PageCategoryController/')
+    ->middleware([JwtAuth::class, CheckPermission::class])
+    ->option([
+        '_group_name' => '页面分类',
+        '_group_code' => 'SystemClientPageCategory',
+        '_group_name_desc' => '客户端页面分类管理',
+        '_parent' => 'SystemClientPage',
+        '_icon' => 'lucide:folder-tree',
+        '_path' => '/client/page/category',
+        '_auth' => true,
+        '_component' => '/client/page/index',
+        '_is_show' => 0,
+        '_sort' => 11,
+    ]);
+
 Route::group('client/decorate/scheme', function () {
     Route::get('list', 'list')->name('SystemClientDecorationList')->option(['_alias' => '方案列表', '_desc' => '获取客户端装修方案列表', '_auth' => true, '_type' => Permission::TYPE_API]);
     Route::get('info/:id', 'info')->name('SystemClientDecorationInfo')->option(['_alias' => '方案详情', '_desc' => '获取客户端装修方案详情', '_auth' => true, '_type' => Permission::TYPE_API]);

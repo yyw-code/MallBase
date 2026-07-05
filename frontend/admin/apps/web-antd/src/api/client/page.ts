@@ -1,14 +1,7 @@
 import { requestClient } from '#/api/request';
 
 export namespace ClientPageApi {
-  export type PageCategory =
-    | 'aftersale'
-    | 'basic'
-    | 'goods'
-    | 'marketing'
-    | 'order'
-    | 'other'
-    | 'user';
+  export type PageCategory = string;
   export type PageSource = 'auto' | 'manual' | 'system';
   export type PageType = 'page' | 'subpackage' | 'tab';
 
@@ -50,6 +43,19 @@ export namespace ClientPageApi {
     label: string;
   }
 
+  export interface PageCategoryItem {
+    code: PageCategory;
+    create_time?: string;
+    delete_time?: null | number;
+    description?: null | string;
+    id: number;
+    is_system: number;
+    name: string;
+    sort: number;
+    status: number;
+    update_time?: string;
+  }
+
   export interface ListParams {
     keyword?: string;
     page?: number;
@@ -57,6 +63,13 @@ export namespace ClientPageApi {
     page_type?: PageType;
     limit?: number;
     source?: PageSource;
+    status?: number;
+  }
+
+  export interface CategoryListParams {
+    keyword?: string;
+    limit?: number;
+    page?: number;
     status?: number;
   }
 
@@ -73,6 +86,14 @@ export namespace ClientPageApi {
     need_login?: number;
     source?: PageSource;
     remark?: null | string;
+    sort?: number;
+    status?: number;
+  }
+
+  export interface CategorySaveParams {
+    code: PageCategory;
+    description?: null | string;
+    name: string;
     sort?: number;
     status?: number;
   }
@@ -142,5 +163,55 @@ export async function importClientPageApi(data?: ClientPageApi.ImportParams) {
 
   return requestClient.post<ClientPageApi.ImportResult>('/client/page/import', {
     pages_json: data?.pages_json ?? '',
+  });
+}
+
+export async function getClientPageCategoryListApi(
+  params?: ClientPageApi.CategoryListParams,
+) {
+  return requestClient.get<{
+    list: ClientPageApi.PageCategoryItem[];
+    total: number;
+  }>('/client/page/category/list', { params });
+}
+
+export async function getAllClientPageCategoriesApi() {
+  return requestClient.get<ClientPageApi.PageCategoryItem[]>(
+    '/client/page/category/all',
+  );
+}
+
+export async function getClientPageCategoryInfoApi(id: number) {
+  return requestClient.get<ClientPageApi.PageCategoryItem>(
+    `/client/page/category/info/${id}`,
+  );
+}
+
+export async function createClientPageCategoryApi(
+  data: ClientPageApi.CategorySaveParams,
+) {
+  return requestClient.post<{ id: number }>(
+    '/client/page/category/create',
+    data,
+  );
+}
+
+export async function updateClientPageCategoryApi(
+  id: number,
+  data: ClientPageApi.CategorySaveParams,
+) {
+  return requestClient.put(`/client/page/category/update/${id}`, data);
+}
+
+export async function deleteClientPageCategoryApi(id: number) {
+  return requestClient.delete(`/client/page/category/delete/${id}`);
+}
+
+export async function updateClientPageCategoryStatusApi(
+  id: number,
+  status: number,
+) {
+  return requestClient.put(`/client/page/category/updateStatus/${id}`, {
+    status,
   });
 }

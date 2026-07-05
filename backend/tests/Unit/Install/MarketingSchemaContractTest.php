@@ -16,6 +16,16 @@ final class MarketingSchemaContractTest extends TestCase
         $this->assertStringContainsString("'pages-sub/member'", $schema);
     }
 
+    public function testClientPageCategorySchemaContainsDefaultCategories(): void
+    {
+        $schema = (string) file_get_contents(dirname(__DIR__, 3) . '/install/data/schema/13_mb_client_diy.sql');
+
+        $this->assertStringContainsString('CREATE TABLE `mb_client_page_category`', $schema);
+        $this->assertStringContainsString("UNIQUE KEY `uk_code` (`code`)", $schema);
+        $this->assertStringContainsString("(1, 'basic', '基础页面'", $schema);
+        $this->assertStringContainsString("(9, 'other', '其他页面'", $schema);
+    }
+
     public function testPointsExchangeUpgradeContainsOrderLogTable(): void
     {
         $path = dirname(__DIR__, 3) . '/install/data/upgrade/2026_07_01_points_exchange.sql';
