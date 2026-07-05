@@ -8,6 +8,7 @@ use app\model\order\Order;
 use app\model\order\OrderLog;
 use app\common\enum\OperatorType;
 use app\common\enum\OrderStatus;
+use app\service\distribution\DistributionOrderEventService;
 use app\service\user\UserMemberService;
 use app\service\user\UserPointsAccountService;
 use mall_base\base\BaseService;
@@ -102,9 +103,16 @@ class OrderStatusMachine extends BaseService
                 'ip'            => $this->currentIp(),
             ]);
 
+            if ($toStatus === OrderStatus::PAID) {
+                app()->make(DistributionOrderEventService::class)->handleOrderPaid($order);
+            }
             if ($toStatus === OrderStatus::COMPLETED) {
                 app()->make(UserPointsAccountService::class)->rewardOrderCompleted($order);
                 app()->make(UserMemberService::class)->rewardOrderCompleted($order);
+                app()->make(DistributionOrderEventService::class)->handleOrderCompleted($order);
+            }
+            if ($toStatus === OrderStatus::CLOSED) {
+                app()->make(DistributionOrderEventService::class)->handleOrderClosed($order);
             }
             if ($fromStatus === OrderStatus::PENDING_PAY && $toStatus === OrderStatus::CLOSED) {
                 app()->make(UserPointsAccountService::class)->returnOrderDeduction($order);

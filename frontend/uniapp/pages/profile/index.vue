@@ -106,6 +106,11 @@ const profileIconPresets = [
       "ant-design:customer-service-outlined",
     ],
   },
+  {
+    type: "distribution",
+    text: "分",
+    keywords: ["distribution", "commission", "分销", "佣金", "团队"],
+  },
 ];
 
 const defaultProfileOrderImages = [
@@ -1942,6 +1947,11 @@ function handleLogout() {
 .profile-icon--service {
   --profile-icon-bg: rgba(0, 132, 135, 0.1);
   --profile-icon-color: #007f82;
+}
+
+.profile-icon--distribution {
+  --profile-icon-bg: rgba(96, 70, 185, 0.1);
+  --profile-icon-color: #6046b9;
 }
 
 .cell__label {

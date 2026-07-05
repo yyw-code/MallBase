@@ -80,6 +80,24 @@ class ClientPageCategoryService extends BaseService
         return $map;
     }
 
+    /**
+     * @return array<string, int>
+     */
+    public function getSystemNameIdMap(): array
+    {
+        $map = [];
+        $categories = $this->model()
+            ->where('is_system', 1)
+            ->whereNull('delete_time')
+            ->select()
+            ->toArray();
+        foreach ($categories as $category) {
+            $map[(string) $category['name']] = (int) $category['id'];
+        }
+
+        return $map;
+    }
+
     public function getInfo(int $id): array
     {
         return $this->findValidCategory($id)->toArray();

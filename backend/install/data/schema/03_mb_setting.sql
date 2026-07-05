@@ -108,6 +108,10 @@ INSERT INTO `mb_setting_group` (`id`, `parent_id`, `permission_id`, `name`, `cod
 (109, 0, 0, '积分配置', 'PointsConfig', 'lucide:badge-plus', '积分总开关、发放、冻结与订单抵扣配置', 10, 'page', 1, 'SystemPointsManagement', '/points/config', '/settings/dynamic-form/index', 1),
 (110, 0, 0, '会员配置', 'MemberConfig', 'lucide:badge-check', '会员总开关与成长值比例配置', 20, 'page', 1, 'SystemMemberManagement', '/member/config', '/settings/dynamic-form/index', 1);
 
+-- 分销配置：作为分销模块专属页面的系统表单数据源，不单独生成系统设置菜单
+INSERT INTO `mb_setting_group` (`id`, `parent_id`, `permission_id`, `name`, `code`, `icon`, `description`, `sort`, `display_type`, `status`, `permission_parent_code`, `permission_path`, `permission_component`, `permission_status`) VALUES
+(111, 0, 0, '分销基础设置', 'DistributionConfig', 'lucide:settings-2', '分销总开关、结算、提现与默认佣金比例配置', 30, 'page', 1, 'SystemDistributionSettings', '/distribution/settings', '/distribution/settings/index', 0);
+
 -- 设置项：1011 SystemBasic 基础
 INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`, `rules`, `placeholder`, `remark`, `sort`) VALUES
 (1011, '站点名称', 'site_name', 'Mall Base', 'input', NULL, '[{"type":"required","message":"不能为空"}]', NULL, NULL, 10),
@@ -265,6 +269,16 @@ INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`
 INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`, `rules`, `placeholder`, `remark`, `sort`) VALUES
 (110, '启用会员功能', 'member_enabled', '0', 'switch', NULL, NULL, NULL, '关闭后客户端不展示会员入口，后续会员权益不参与订单计算', 10),
 (110, '成长值比例', 'member_growth_points_per_yuan', '1', 'number', NULL, '[{"type":"required","message":"不能为空"},{"type":"min","value":0,"message":"不能小于 0"}]', NULL, '每实付 1 元累计的成长值，0 表示不累计', 20);
+
+-- 设置项：111 DistributionConfig 分销基础设置
+INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`, `rules`, `placeholder`, `remark`, `sort`) VALUES
+(111, '启用分销功能', 'distribution_enabled', '1', 'switch', NULL, NULL, NULL, '关闭后客户端不展示分销入口，并停止新绑定、新佣金生成和新提现申请；历史佣金结算与扣回继续处理', 10),
+(111, '分销层级', 'distribution_level_depth', '2', 'number', NULL, NULL, NULL, '当前固定支持二级分销，仅作为配置展示值', 20),
+(111, '自购返佣', 'self_purchase_enabled', '0', 'switch', NULL, NULL, NULL, '开启后分销员自己下单可按一级比例返佣，默认关闭', 30),
+(111, '结算等待天数', 'settlement_days', '7', 'number', NULL, '[{"type":"required","message":"请填写结算等待天数"},{"type":"integer","message":"结算等待天数必须是整数"},{"type":"min","value":0,"message":"不能小于 0"},{"type":"max","value":365,"message":"不能大于 365"}]', NULL, '订单完成后等待多少天释放佣金；0 表示订单完成后立即结算', 40),
+(111, '最低提现金额(分)', 'min_withdraw_cents', '10000', 'number', NULL, '[{"type":"required","message":"请填写最低提现金额"},{"type":"integer","message":"最低提现金额必须是整数"},{"type":"min","value":0,"message":"不能小于 0"}]', NULL, '单位：分。10000 表示 100 元', 50),
+(111, '一级默认佣金比例(%)', 'global_first_rate', '5.00', 'number', NULL, '[{"type":"required","message":"请填写一级默认佣金比例"},{"type":"min","value":0,"message":"不能小于 0"},{"type":"max","value":100,"message":"不能大于 100"}]', NULL, '未命中特定规则时使用，支持两位小数', 60),
+(111, '二级默认佣金比例(%)', 'global_second_rate', '2.00', 'number', NULL, '[{"type":"required","message":"请填写二级默认佣金比例"},{"type":"min","value":0,"message":"不能小于 0"},{"type":"max","value":100,"message":"不能大于 100"}]', NULL, '未命中特定规则时使用，支持两位小数', 70);
 
 -- 设置项：107 RefundConfig 售后配置
 INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`, `rules`, `placeholder`, `remark`, `sort`) VALUES

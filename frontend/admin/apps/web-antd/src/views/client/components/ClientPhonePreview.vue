@@ -322,6 +322,11 @@ const PROFILE_ICON_PRESETS = [
     text: '客',
     type: 'service',
   },
+  {
+    keywords: ['distribution', 'commission', '分销', '佣金', '团队'],
+    text: '分',
+    type: 'distribution',
+  },
 ];
 
 const DEFAULT_PROFILE_MODULES: ModuleItem[] = [
@@ -4535,6 +4540,11 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
 .profile-entry-icon--service {
   --profile-icon-bg: rgb(0 132 135 / 10%);
   --profile-icon-color: #007f82;
+}
+
+.profile-entry-icon--distribution {
+  --profile-icon-bg: rgb(96 70 185 / 10%);
+  --profile-icon-color: #6046b9;
 }
 
 .profile-cell strong {

@@ -16,6 +16,7 @@ class ClientPageService extends BaseService
     protected string $modelClass = ClientPage::class;
 
     private const THEME_SETTING_PAGE_PATH = '/pages-sub/user/theme';
+    private const CATEGORY_NAME_DISTRIBUTION = '分销页面';
 
     protected function buildListQuery(array $where)
     {
@@ -239,6 +240,7 @@ class ClientPageService extends BaseService
         $tabPaths = $this->collectTabPaths($decoded);
         $categoryService = app()->make(ClientPageCategoryService::class);
         $categoryIds = $categoryService->getIdMap();
+        $systemCategoryIds = $categoryService->getSystemNameIdMap();
         $defaultCategoryId = $categoryService->getDefaultCategoryId();
         $rows = [];
         foreach ((array) ($decoded['pages'] ?? []) as $index => $page) {
@@ -251,7 +253,7 @@ class ClientPageService extends BaseService
                 'path' => $path,
                 'page_type' => in_array($path, $tabPaths, true) ? ClientPage::TYPE_TAB : ClientPage::TYPE_PAGE,
                 'category_id' => $this->resolveCategoryId(
-                    $this->inferCategoryId($path, $defaultCategoryId),
+                    $this->inferCategoryId($path, $defaultCategoryId, $systemCategoryIds),
                     $categoryIds,
                     $defaultCategoryId
                 ),
@@ -279,7 +281,7 @@ class ClientPageService extends BaseService
                     'path' => $path,
                     'page_type' => ClientPage::TYPE_SUBPACKAGE,
                     'category_id' => $this->resolveCategoryId(
-                        $this->inferCategoryId($path, $defaultCategoryId),
+                        $this->inferCategoryId($path, $defaultCategoryId, $systemCategoryIds),
                         $categoryIds,
                         $defaultCategoryId
                     ),
@@ -342,7 +344,8 @@ class ClientPageService extends BaseService
             $data['category_id'] = $this->resolveCategoryId(
                 $this->inferCategoryId(
                     $data['path'],
-                    $categoryService->getDefaultCategoryId()
+                    $categoryService->getDefaultCategoryId(),
+                    $categoryService->getSystemNameIdMap()
                 ),
                 $categoryService->getIdMap(),
                 $categoryService->getDefaultCategoryId()
@@ -467,6 +470,10 @@ class ClientPageService extends BaseService
             '/pages-sub/points/exchange-confirm' => '确认积分兑换',
             '/pages-sub/points/exchange-orders' => '积分兑换记录',
             '/pages-sub/points/exchange-detail' => '积分兑换详情',
+            '/pages-sub/distribution/index' => '分销中心',
+            '/pages-sub/distribution/records' => '佣金明细',
+            '/pages-sub/distribution/team' => '我的团队',
+            '/pages-sub/distribution/withdraw' => '佣金提现',
             '/pages-sub/address/list' => '地址列表',
             '/pages-sub/address/edit' => '编辑地址',
             '/pages-sub/review/post' => '发布评价',
@@ -486,7 +493,10 @@ class ClientPageService extends BaseService
         return $categoryIds[$categoryId] ?? $defaultCategoryId;
     }
 
-    protected function inferCategoryId(string $path, int $defaultCategoryId): int
+    /**
+     * @param array<string, int> $systemCategoryIds
+     */
+    protected function inferCategoryId(string $path, int $defaultCategoryId, array $systemCategoryIds): int
     {
         if (str_starts_with($path, '/pages-sub/points/')) {
             return ClientPage::CATEGORY_ID_POINTS;
@@ -494,6 +504,10 @@ class ClientPageService extends BaseService
 
         if (str_starts_with($path, '/pages-sub/wallet/')) {
             return ClientPage::CATEGORY_ID_WALLET;
+        }
+
+        if (str_starts_with($path, '/pages-sub/distribution/')) {
+            return $systemCategoryIds[self::CATEGORY_NAME_DISTRIBUTION] ?? $defaultCategoryId;
         }
 
         foreach ([
@@ -523,6 +537,7 @@ class ClientPageService extends BaseService
             ClientPage::CATEGORY_ID_USER => ['user', 'address'],
             ClientPage::CATEGORY_ID_POINTS => ['points'],
             ClientPage::CATEGORY_ID_WALLET => ['wallet'],
+            $systemCategoryIds[self::CATEGORY_NAME_DISTRIBUTION] ?? $defaultCategoryId => ['distribution'],
         ] as $category => $markers) {
             foreach ($markers as $marker) {
                 if (in_array($marker, $segments, true)) {
@@ -542,7 +557,7 @@ class ClientPageService extends BaseService
             }
         }
 
-        foreach (['/pages/cart/', '/pages/order/', '/pages/profile/', '/pages-sub/order/', '/pages-sub/refund/', '/pages-sub/user/', '/pages-sub/wallet/', '/pages-sub/address/', '/pages-sub/review/'] as $prefix) {
+        foreach (['/pages/cart/', '/pages/order/', '/pages/profile/', '/pages-sub/order/', '/pages-sub/refund/', '/pages-sub/user/', '/pages-sub/wallet/', '/pages-sub/distribution/', '/pages-sub/address/', '/pages-sub/review/'] as $prefix) {
             if (str_starts_with($path, $prefix)) {
                 return true;
             }

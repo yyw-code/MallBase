@@ -1,0 +1,21 @@
+import { get, post } from "@/api/request";
+
+export const getDistributionSummary = () => get("/client/api/distribution/summary");
+
+export const getDistributionCommissions = (params) =>
+  get("/client/api/distribution/commissions", params);
+
+export const getDistributionLogs = (params) =>
+  get("/client/api/distribution/logs", params);
+
+export const getDistributionTeam = (params) =>
+  get("/client/api/distribution/team", params);
+
+export const getDistributionWithdraws = (params) =>
+  get("/client/api/distribution/withdraws", params);
+
+export const applyDistributionWithdraw = (data) =>
+  post("/client/api/distribution/withdraw", data);
+
+export const bindDistributionInvite = (data) =>
+  post("/client/api/distribution/bindInvite", data);
