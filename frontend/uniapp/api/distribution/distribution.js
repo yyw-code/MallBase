@@ -19,3 +19,9 @@ export const applyDistributionWithdraw = (data) =>
 
 export const bindDistributionInvite = (data) =>
   post("/client/api/distribution/bindInvite", data);
+
+export const applyDistributionDistributor = (data) =>
+  post("/client/api/distribution/apply", data);
+
+export const getDistributionShareInfo = (params) =>
+  get("/client/api/distribution/shareInfo", params);

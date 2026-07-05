@@ -421,6 +421,7 @@ import { getReviewList } from '@/api/goods/review'
 import { useCartStore } from '@/store/cart'
 import { useAppStore } from '@/store/app'
 import { openCustomerService } from '@/utils/customer-service'
+import { appendDistributionParams, captureDistributionAttribution } from '@/utils/distribution-attribution'
 const decorateStore = useDecorateStore()
 
 const MEDIA_HEIGHT = 660
@@ -451,6 +452,7 @@ let mediaTouchStartX = 0
 const preloadedMediaImages = new Set()
 
 onLoad((query) => {
+  captureDistributionAttribution(query || {}, '/pages-sub/goods/detail')
   const id = resolveGoodsId(query)
   if (id) {
     goodsId.value = id
@@ -1283,8 +1285,13 @@ function buildShareTarget() {
   const config = appStore.siteConfig || {}
   const title = goods.value?.name || config.client_share_title || config.site_name || 'MallBase'
   const id = goodsId.value
-  const path = `/pages-sub/goods/detail?id=${id}`
-  const query = `id=${id}`
+  const path = appendDistributionParams(`/pages-sub/goods/detail?id=${id}`, {
+    dist_page: '/pages-sub/goods/detail',
+    dist_scene: 'share_link',
+    dist_target_id: id,
+    dist_target_type: 'goods',
+  })
+  const query = path.split('?')[1] || `id=${id}`
   const imageUrl =
     goods.value?.main_image_full_url ||
     goods.value?.main_image ||
@@ -1298,8 +1305,11 @@ function onShare() {
   uni.showToast({ title: '点右上角 ··· 转发', icon: 'none' })
   // #endif
   // #ifdef H5
-  const { title } = buildShareTarget()
-  const url = (typeof location !== 'undefined' && location.href) || ''
+  const target = buildShareTarget()
+  const { title } = target
+  const url = typeof location !== 'undefined'
+    ? `${location.origin}${location.pathname}#${target.path}`
+    : ''
   const ua = ((typeof navigator !== 'undefined' && navigator.userAgent) || '').toLowerCase()
   const inWechat = ua.includes('micromessenger')
   if (!inWechat && typeof navigator !== 'undefined' && typeof navigator.share === 'function') {

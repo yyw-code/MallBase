@@ -1,9 +1,10 @@
 <script setup>
 import { computed, ref } from 'vue'
-import { onPullDownRefresh, onReachBottom, onShareAppMessage, onShareTimeline } from '@dcloudio/uni-app'
+import { onLoad, onPullDownRefresh, onReachBottom, onShareAppMessage, onShareTimeline } from '@dcloudio/uni-app'
 import { useAppStore } from '@/store/app'
 import { useDecorateStore } from '@/store/decorate'
 import { normalizeAssetPath } from '@/utils/decorate'
+import { appendDistributionParams, captureDistributionAttribution } from '@/utils/distribution-attribution'
 
 const appStore = useAppStore()
 const decorateStore = useDecorateStore()
@@ -13,6 +14,10 @@ const systemInfo = uni.getSystemInfoSync()
 const statusBarHeight = systemInfo.statusBarHeight || 0
 
 const homeModules = computed(() => decorateStore.homeModules)
+
+onLoad((query) => {
+  captureDistributionAttribution(query || {}, '/pages/index/index')
+})
 
 function pageBackgroundStyle(pageStyle) {
   const mode = pageStyle.backgroundMode || pageStyle.background_mode || 'color'
@@ -94,12 +99,23 @@ function shareConfig() {
 
 onShareAppMessage(() => {
   const { title, imageUrl } = shareConfig()
-  return { title, path: '/pages/index/index', imageUrl }
+  return {
+    title,
+    path: appendDistributionParams('/pages/index/index', {
+      dist_page: '/pages/index/index',
+      dist_scene: 'share_link',
+    }),
+    imageUrl,
+  }
 })
 
 onShareTimeline(() => {
   const { title, imageUrl } = shareConfig()
-  return { title, imageUrl }
+  const path = appendDistributionParams('/pages/index/index', {
+    dist_page: '/pages/index/index',
+    dist_scene: 'share_link',
+  })
+  return { title, query: path.split('?')[1] || '', imageUrl }
 })
 </script>
 

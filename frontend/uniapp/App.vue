@@ -3,12 +3,14 @@ import { onLaunch } from '@dcloudio/uni-app'
 import { useAppStore } from '@/store/app'
 import { useDecorateStore } from '@/store/decorate'
 import { useUserStore } from '@/store/user'
+import { captureDistributionAttribution } from '@/utils/distribution-attribution'
 import { setupRouterGuard } from '@/utils/router'
 
-onLaunch(() => {
+onLaunch((options) => {
   const appStore = useAppStore()
   const decorateStore = useDecorateStore()
   const userStore = useUserStore()
+  captureDistributionAttribution(options?.query || {}, options?.path || '')
   userStore.restoreToken()
   decorateStore.init()
   appStore.fetchBasicConfig()
