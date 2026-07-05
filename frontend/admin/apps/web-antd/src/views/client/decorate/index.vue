@@ -309,6 +309,12 @@ const PROFILE_MODULES = [
     type: 'userInfo',
   },
   {
+    desc: '会员等级、折扣和成长值进度',
+    icon: 'lucide:badge-check',
+    label: '会员卡片',
+    type: 'memberEntry',
+  },
+  {
     desc: '默认四个订单状态入口',
     icon: 'lucide:package-check',
     label: '订单入口',
@@ -336,6 +342,7 @@ const PROFILE_MODULES = [
 
 const PROFILE_TYPE_ALIAS: Record<string, string> = {
   customMenu: 'serviceMenu',
+  memberCard: 'memberEntry',
   orderShortcut: 'orderEntry',
   points: 'pointsEntry',
   pointsCard: 'pointsEntry',
@@ -961,7 +968,7 @@ const paletteGroups = computed(() => {
   if (activeType.value === 'profile') {
     return [
       {
-        items: pick(['userInfo', 'walletEntry', 'pointsEntry']),
+        items: pick(['userInfo', 'memberEntry', 'walletEntry', 'pointsEntry']),
         title: '基础组件',
       },
       {
@@ -1449,6 +1456,7 @@ const PROFILE_TEXT_STYLE_ROLES = [
 
 const PROFILE_TEXT_STYLE_ROLES_BY_TYPE: Record<string, string[]> = {
   orderEntry: ['itemLabel', 'more', 'title'],
+  memberEntry: ['amount', 'meta', 'title'],
   serviceMenu: ['itemLabel', 'title'],
   userInfo: ['meta', 'subtitle', 'title'],
   walletEntry: ['action', 'amount', 'meta', 'primaryAction', 'title'],
@@ -1806,6 +1814,7 @@ const normalizeProfileItems = (
 };
 
 const getProfileDefaultTitle = (type: string) => {
+  if (type === 'memberEntry') return '会员等级';
   if (type === 'orderEntry') return '我的订单';
   if (type === 'pointsEntry') return '我的积分';
   return '我的服务';
@@ -1825,6 +1834,11 @@ const getProfileStyleDefaults = (type: string): Record<string, any> => {
   };
   const defaults: Record<string, Record<string, any>> = {
     orderEntry: {
+      ...base,
+      paddingX: 28,
+      paddingY: 28,
+    },
+    memberEntry: {
       ...base,
       paddingX: 28,
       paddingY: 28,
@@ -1939,6 +1953,7 @@ const normalizeEditorConfig = (
 ) => {
   const profileTypes = new Set([
     'orderEntry',
+    'memberEntry',
     'serviceMenu',
     'userInfo',
     'walletEntry',
@@ -2361,6 +2376,12 @@ const normalizeEditorConfig = (
     delete config.show_level;
     config.show_mobile = normalizeBooleanValue(config.show_mobile, true);
   }
+  if (type === 'memberEntry') {
+    config.title = config.title || '会员等级';
+    config.show_discount = normalizeBooleanValue(config.show_discount, true);
+    config.show_growth = normalizeBooleanValue(config.show_growth, true);
+    config.show_progress = normalizeBooleanValue(config.show_progress, true);
+  }
   if (type === 'walletEntry') {
     config.title = config.title || '我的余额';
     config.show_balance = normalizeBooleanValue(config.show_balance, true);
@@ -2606,6 +2627,12 @@ const defaultProfileConfig = (type: string): Record<string, any> => {
       display: 'grid',
       items: defaultProfileOrderItems(),
       title: '我的订单',
+    }),
+    memberEntry: withStyle('memberEntry', {
+      show_discount: true,
+      show_growth: true,
+      show_progress: true,
+      title: '会员等级',
     }),
     serviceMenu: withStyle('serviceMenu', {
       columns: 4,
@@ -3224,6 +3251,12 @@ const normalizeSchemaForClient = (
         if (activeType.value === 'profile' && moduleType === 'userInfo') {
           delete props.show_level;
           props.show_mobile = normalizeBooleanValue(props.show_mobile, true);
+        }
+        if (activeType.value === 'profile' && moduleType === 'memberEntry') {
+          props.title = props.title || '会员等级';
+          props.show_discount = normalizeBooleanValue(props.show_discount, true);
+          props.show_growth = normalizeBooleanValue(props.show_growth, true);
+          props.show_progress = normalizeBooleanValue(props.show_progress, true);
         }
         if (activeType.value === 'profile' && moduleType === 'walletEntry') {
           props.title = props.title || '我的余额';

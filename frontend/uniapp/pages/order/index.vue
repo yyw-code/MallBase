@@ -9,6 +9,16 @@
   >
     <mb-navbar title="我的订单" :back="false" :accent-line="false" />
 
+    <view v-if="memberVisible" class="page__member-card">
+      <mb-member-card
+        :enabled="memberEnabled"
+        :logged="userStore.isLoggedIn"
+        :member="memberSummary"
+        variant="strip"
+        @tap="goMember"
+      />
+    </view>
+
     <!-- Tabs -->
     <view class="page__tabs">
       <view
@@ -159,9 +169,13 @@ import { getOrderList, cancelOrder, confirmReceive } from '@/api/order/order'
 import { usePayFlow } from '@/utils/usePayFlow'
 import config from '@/config/index'
 import { isLoggedIn } from '@/utils/auth'
+import { useAppStore } from '@/store/app'
 import { useDecorateStore } from '@/store/decorate'
+import { useUserStore } from '@/store/user'
 
+const appStore = useAppStore()
 const decorateStore = useDecorateStore()
+const userStore = useUserStore()
 const {
   sheetVisible,
   methods: payMethods,
@@ -232,6 +246,14 @@ const nowTs = ref(Date.now())
 let countdownTimer = null
 let lastExpiredRefreshAt = 0
 
+const memberSummary = computed(() => userStore.userInfo?.member || {})
+const memberEnabled = computed(() =>
+  settingSwitchEnabled(appStore.siteConfig?.member_enabled, false),
+)
+const memberVisible = computed(
+  () => userStore.isLoggedIn && memberEnabled.value && memberSummary.value?.enabled === true,
+)
+
 const currentTabLabel = computed(() => {
   const t = tabs.find((t) => t.key === currentTab.value)
   return t && t.key !== 'all' ? t.label : ''
@@ -241,6 +263,23 @@ const currentStatuses = computed(() => {
   const t = tabs.find((t) => t.key === currentTab.value)
   return t ? t.statuses : []
 })
+
+function settingSwitchEnabled(value, fallback = true) {
+  if (value === undefined || value === null || value === '') return fallback
+  return ['1', 'true', 'on'].includes(String(value).toLowerCase())
+}
+
+async function syncMemberState() {
+  userStore.restoreToken()
+  if (!appStore.siteConfig) {
+    appStore.fetchBasicConfig()
+  }
+  if (!userStore.isLoggedIn) return
+
+  try {
+    await userStore.fetchUserInfo()
+  } catch { /* non-blocking */ }
+}
 
 function isRefundCompletedOrder(order) {
   return Number(order?.status) === 90 && Number(order?.after_sale?.status) === 10
@@ -552,6 +591,10 @@ function goDetail(id) {
   uni.navigateTo({ url: `/pages-sub/order/detail?id=${id}` })
 }
 
+function goMember() {
+  uni.navigateTo({ url: '/pages-sub/member/index' })
+}
+
 function goShopping() {
   uni.switchTab({ url: '/pages/index/index' })
 }
@@ -576,6 +619,7 @@ function stopCountdownTimer() {
 onShow(() => {
   nowTs.value = Date.now()
   startCountdownTimer()
+  syncMemberState()
   const initialTab = uni.getStorageSync('order_initial_tab')
   if (initialTab) {
     uni.removeStorageSync('order_initial_tab')
@@ -606,6 +650,10 @@ onUnmounted(() => {
 .page {
   min-height: 100vh;
   background: var(--color-bg-secondary, #faf8ff);
+}
+
+.page__member-card {
+  padding: 18rpx $mb-spacing-md 0;
 }
 
 .page__tabs {

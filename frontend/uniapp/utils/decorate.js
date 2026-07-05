@@ -581,6 +581,7 @@ function normalizeModuleType(type) {
   const aliases = {
     categoryEntry: 'entryCard',
     customMenu: 'serviceMenu',
+    memberCard: 'memberEntry',
     orderEntry: 'orderShortcut',
     profileHeader: 'userCard',
     points: 'pointsEntry',

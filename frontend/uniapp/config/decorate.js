@@ -226,9 +226,21 @@ export const DEFAULT_PROFILE_MODULES = [
     },
   },
   {
+    id: "profile-member",
+    type: "memberEntry",
+    sort: 20,
+    props: {
+      ...DEFAULT_PROFILE_CARD_STYLE,
+      title: "会员等级",
+      show_discount: true,
+      show_growth: true,
+      show_progress: true,
+    },
+  },
+  {
     id: "profile-orders",
     type: "orderShortcut",
-    sort: 20,
+    sort: 30,
     props: {
       ...DEFAULT_PROFILE_CARD_STYLE,
       title: "我的订单",
@@ -264,7 +276,7 @@ export const DEFAULT_PROFILE_MODULES = [
   {
     id: "profile-wallet",
     type: "wallet",
-    sort: 30,
+    sort: 40,
     props: {
       ...DEFAULT_PROFILE_CARD_STYLE,
       title: "我的余额",
@@ -276,7 +288,7 @@ export const DEFAULT_PROFILE_MODULES = [
   {
     id: "profile-points",
     type: "points",
-    sort: 35,
+    sort: 45,
     props: {
       ...DEFAULT_PROFILE_CARD_STYLE,
       title: "我的积分",

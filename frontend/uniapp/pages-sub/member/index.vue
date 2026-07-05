@@ -11,25 +11,13 @@ const loading = ref(false)
 
 const member = computed(() => userStore.userInfo?.member || {})
 const enabled = computed(() => member.value?.enabled === true)
-const level = computed(() => member.value?.level || null)
-const nextLevel = computed(() => member.value?.next_level || null)
 const account = computed(() => member.value?.account || {})
-const levelName = computed(() => level.value?.name || account.value?.level_name || '普通会员')
-const discountText = computed(() => member.value?.discount_text || '暂无专属折扣')
-const growthValue = computed(() => Number(member.value?.growth_value || 0))
 const totalGrowthValue = computed(() => Number(member.value?.total_growth_value || 0))
-const growthToNext = computed(() => Number(member.value?.growth_to_next || 0))
-const progressPercent = computed(() => Math.max(0, Math.min(100, Number(member.value?.progress_percent || 0))))
 const levelLocked = computed(() => member.value?.level_locked === true)
 const levelSourceText = computed(() => {
   if (!levelLocked.value) return '成长值自动匹配'
   const lockUntil = account.value?.level_lock_until
   return lockUntil ? `人工保级至 ${lockUntil}` : '人工保级中'
-})
-const nextLevelText = computed(() => {
-  if (!nextLevel.value) return '已达最高等级'
-  if (growthToNext.value <= 0) return `已满足 ${nextLevel.value.name} 条件`
-  return `距 ${nextLevel.value.name} 还差 ${growthToNext.value} 成长值`
 })
 
 onShow(() => {
@@ -61,30 +49,14 @@ function goProfile() {
   >
     <mb-navbar title="会员等级" bg-color="var(--color-bg, #ffffff)" />
 
-    <view v-if="enabled" class="member-card">
-      <view class="member-card__top">
-        <view class="member-card__title-group">
-          <text class="member-card__label">当前等级</text>
-          <text class="member-card__name">{{ levelName }}</text>
-        </view>
-        <view class="member-card__badge">
-          <text class="member-card__badge-text">{{ discountText }}</text>
-        </view>
-      </view>
-
-      <view class="member-card__growth">
-        <view class="member-card__growth-head">
-          <text class="member-card__growth-label">成长值</text>
-          <text class="member-card__growth-value">{{ growthValue }}</text>
-        </view>
-        <view class="member-card__progress">
-          <view
-            class="member-card__progress-bar"
-            :style="{ width: `${progressPercent}%` }"
-          />
-        </view>
-        <text class="member-card__next">{{ nextLevelText }}</text>
-      </view>
+    <view v-if="enabled" class="member-page__card">
+      <mb-member-card
+        :clickable="false"
+        :enabled="enabled"
+        :logged="true"
+        :member="member"
+        variant="full"
+      />
     </view>
 
     <view v-if="enabled" class="stats-grid">
@@ -131,92 +103,17 @@ function goProfile() {
   background: var(--color-bg-secondary, #faf8ff);
 }
 
-.member-card {
+.member-page__card {
   margin-top: $mb-spacing-md;
-  padding: 34rpx;
-  border-radius: $mb-radius-lg;
-  background: var(--color-bg, #ffffff);
-  border: 1rpx solid var(--color-divider, #f0f2f5);
 }
 
-.member-card__top,
-.member-card__growth-head,
 .stats-grid,
 .rule-row {
   display: flex;
   align-items: center;
 }
 
-.member-card__top {
-  justify-content: space-between;
-  gap: 20rpx;
-}
-
-.member-card__title-group {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.member-card__label,
-.member-card__growth-label,
 .stats-item__label {
-  color: var(--color-text-secondary, #434654);
-  font-size: $mb-font-sm;
-}
-
-.member-card__name {
-  margin-top: 10rpx;
-  color: var(--color-text-title, #191b23);
-  font-size: 42rpx;
-  font-weight: 700;
-  line-height: 1.2;
-}
-
-.member-card__badge {
-  flex-shrink: 0;
-  padding: 10rpx 18rpx;
-  border-radius: $mb-radius-full;
-  background: var(--color-primary-soft, rgba(13, 80, 213, 0.1));
-}
-
-.member-card__badge-text {
-  color: var(--color-primary, #0d50d5);
-  font-size: $mb-font-sm;
-  font-weight: 600;
-}
-
-.member-card__growth {
-  margin-top: 34rpx;
-}
-
-.member-card__growth-head {
-  justify-content: space-between;
-}
-
-.member-card__growth-value {
-  color: var(--color-text-title, #191b23);
-  font-size: $mb-font-lg;
-  font-weight: 700;
-}
-
-.member-card__progress {
-  margin-top: 16rpx;
-  height: 14rpx;
-  overflow: hidden;
-  border-radius: $mb-radius-full;
-  background: var(--color-bg-surface, #f3f3fe);
-}
-
-.member-card__progress-bar {
-  height: 100%;
-  border-radius: $mb-radius-full;
-  background: var(--color-primary, #0d50d5);
-}
-
-.member-card__next {
-  display: block;
-  margin-top: 14rpx;
   color: var(--color-text-secondary, #434654);
   font-size: $mb-font-sm;
 }

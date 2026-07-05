@@ -322,6 +322,7 @@ class DecorationService extends BaseService
             }
             $schema['modules'] = $this->normalizeModuleListForClient($schema['modules'] ?? []);
             $schema['modules'] = $this->normalizeProfileServiceMenuModules($schema['modules']);
+            $schema['modules'] = $this->ensureProfileMemberEntryModule($schema['modules']);
         }
 
         if ($type === ClientDecorationScheme::TYPE_TABBAR && $isList) {
@@ -884,6 +885,39 @@ class DecorationService extends BaseService
     }
 
     /**
+     * @param array<int, array<string, mixed>> $modules
+     * @return array<int, array<string, mixed>>
+     */
+    protected function ensureProfileMemberEntryModule(array $modules): array
+    {
+        foreach ($modules as $module) {
+            if (($module['type'] ?? '') === 'memberEntry') {
+                return $modules;
+            }
+        }
+
+        $memberModule = [
+            'id' => 'profile-member',
+            'type' => 'memberEntry',
+            'title' => '',
+            'enabled' => true,
+            'sort' => 11,
+            'props' => $this->defaultProfileMemberEntryProps(),
+        ];
+
+        foreach ($modules as $index => $module) {
+            if (in_array((string) ($module['type'] ?? ''), ['profileHeader', 'userCard', 'userInfo'], true)) {
+                array_splice($modules, $index + 1, 0, [$memberModule]);
+                return array_values($modules);
+            }
+        }
+
+        array_unshift($modules, $memberModule);
+
+        return array_values($modules);
+    }
+
+    /**
      * @param array<string, mixed> $module
      * @return array<int, array<string, mixed>>
      */
@@ -1045,6 +1079,13 @@ class DecorationService extends BaseService
         if (in_array($type, ['profileHeader', 'userCard', 'userInfo'], true)) {
             unset($props['show_level']);
             $props['show_mobile'] = ($props['show_mobile'] ?? true) !== false;
+        }
+
+        if ($profileType === 'memberEntry') {
+            $props['title'] = (string) ($props['title'] ?? '会员等级');
+            $props['show_discount'] = ($props['show_discount'] ?? true) !== false;
+            $props['show_growth'] = ($props['show_growth'] ?? true) !== false;
+            $props['show_progress'] = ($props['show_progress'] ?? true) !== false;
         }
 
         if (in_array($type, ['wallet', 'walletCard', 'walletEntry'], true)) {
@@ -1282,6 +1323,7 @@ class DecorationService extends BaseService
             'points' => array_merge($base, ['paddingX' => 28, 'paddingY' => 28]),
             'pointsCard' => array_merge($base, ['paddingX' => 28, 'paddingY' => 28]),
             'pointsEntry' => array_merge($base, ['paddingX' => 28, 'paddingY' => 28]),
+            'memberEntry' => array_merge($base, ['paddingX' => 28, 'paddingY' => 28]),
             'serviceMenu' => $base,
             'userCard' => array_merge($base, ['paddingX' => 28, 'paddingY' => 28, 'radius' => 0]),
             'userInfo' => array_merge($base, ['paddingX' => 28, 'paddingY' => 28, 'radius' => 0]),
@@ -1291,6 +1333,19 @@ class DecorationService extends BaseService
         ];
 
         return $map[$type] ?? [];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function defaultProfileMemberEntryProps(): array
+    {
+        return array_merge($this->defaultProfileStyleProps('memberEntry'), [
+            'title' => '会员等级',
+            'show_discount' => true,
+            'show_growth' => true,
+            'show_progress' => true,
+        ]);
     }
 
     /**
@@ -1674,6 +1729,7 @@ class DecorationService extends BaseService
                 'pageStyle' => $this->defaultProfilePageStyle(),
                 'modules' => [
                     ['id' => 'profile-user', 'type' => 'userInfo', 'props' => array_merge($this->defaultProfileStyleProps('userInfo'), ['show_mobile' => true])],
+                    ['id' => 'profile-member', 'type' => 'memberEntry', 'props' => $this->defaultProfileMemberEntryProps()],
                     ['id' => 'profile-order', 'type' => 'orderEntry', 'props' => array_merge($this->defaultProfileStyleProps('orderEntry'), [
                         'title' => '我的订单',
                         'display' => 'grid',

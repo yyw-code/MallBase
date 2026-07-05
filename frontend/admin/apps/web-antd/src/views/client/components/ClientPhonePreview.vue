@@ -334,6 +334,17 @@ const DEFAULT_PROFILE_MODULES: ModuleItem[] = [
     type: 'userCard',
   },
   {
+    id: 'preview-member',
+    props: {
+      ...DEFAULT_PROFILE_CARD_STYLE,
+      show_discount: true,
+      show_growth: true,
+      show_progress: true,
+      title: '会员等级',
+    },
+    type: 'memberEntry',
+  },
+  {
     id: 'preview-orders',
     props: {
       ...DEFAULT_PROFILE_CARD_STYLE,
@@ -436,6 +447,7 @@ const MODULE_LABELS: Record<string, string> = {
   title: '标题栏',
   userCard: '用户信息',
   wallet: '钱包卡片',
+  memberEntry: '会员卡片',
   points: '积分卡片',
   pointsEntry: '积分卡片',
 };
@@ -695,6 +707,7 @@ function normalizeProfileType(type: string) {
   const alias: Record<string, string> = {
     categoryEntry: 'entryCard',
     customMenu: 'serviceMenu',
+    memberCard: 'memberEntry',
     orderEntry: 'orderShortcut',
     points: 'pointsEntry',
     pointsCard: 'pointsEntry',
@@ -2451,6 +2464,55 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
                 </div>
 
                 <div
+                  v-else-if="module.type === 'memberEntry'"
+                  class="profile-member-card"
+                  :style="moduleBoxStyle(module)"
+                >
+                  <div class="profile-member-card__top">
+                    <div class="profile-member-card__main">
+                      <small
+                        v-if="profileTextVisible(module, 'title')"
+                        :style="profileTextStyle(module, 'title')"
+                      >
+                        {{ module.props.title || '会员等级' }}
+                      </small>
+                      <strong
+                        v-if="profileTextVisible(module, 'amount')"
+                        :style="profileTextStyle(module, 'amount')"
+                      >
+                        普通会员
+                      </strong>
+                    </div>
+                    <span
+                      v-if="module.props.show_discount !== false"
+                      class="profile-member-card__badge"
+                    >
+                      暂无专属折扣
+                    </span>
+                  </div>
+                  <div
+                    v-if="module.props.show_progress !== false"
+                    class="profile-member-card__progress"
+                  >
+                    <i />
+                  </div>
+                  <p
+                    v-if="
+                      profileTextVisible(module, 'meta') &&
+                      (module.props.show_growth !== false ||
+                        module.props.show_progress !== false)
+                    "
+                    class="profile-member-card__meta"
+                    :style="profileTextStyle(module, 'meta')"
+                  >
+                    <span v-if="module.props.show_growth !== false">
+                      成长值 0
+                    </span>
+                    <span>距下一等级还差 0 成长值</span>
+                  </p>
+                </div>
+
+                <div
                   v-else-if="module.type === 'wallet'"
                   class="profile-wallet-card"
                   :style="moduleBoxStyle(module)"
@@ -3649,6 +3711,7 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
 
 .home-products,
 .home-rich,
+.profile-member-card,
 .profile-order-card,
 .profile-points-card,
 .profile-service-card,
@@ -3659,6 +3722,7 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
   background: var(--mb-preview-bg);
 }
 
+.profile-member-card,
 .profile-order-card,
 .profile-points-card,
 .profile-service-card,
@@ -3668,6 +3732,7 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
 
 .client-phone-preview--compact .home-products,
 .client-phone-preview--compact .home-rich,
+.client-phone-preview--compact .profile-member-card,
 .client-phone-preview--compact .profile-order-card,
 .client-phone-preview--compact .profile-points-card,
 .client-phone-preview--compact .profile-service-card,
@@ -4250,6 +4315,79 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
 
 .profile-header-card p {
   color: var(--mb-preview-text-secondary);
+}
+
+.profile-member-card__top,
+.profile-member-card__meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.profile-member-card__main {
+  min-width: 0;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+}
+
+.profile-member-card small {
+  color: var(--mb-preview-text-tertiary);
+  font-size: 10px;
+  line-height: 1.3;
+}
+
+.profile-member-card strong {
+  margin-top: 3px;
+  color: var(--mb-preview-text-title);
+  font-size: 14px;
+  line-height: 1.2;
+}
+
+.profile-member-card__badge {
+  max-width: 110px;
+  padding: 3px 7px;
+  overflow: hidden;
+  flex-shrink: 0;
+  color: var(--mb-preview-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--mb-preview-primary) 10%, transparent);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.profile-member-card__progress {
+  height: 5px;
+  margin-top: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--mb-preview-bg-surface);
+}
+
+.profile-member-card__progress i {
+  display: block;
+  width: 28%;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--mb-preview-primary);
+}
+
+.profile-member-card__meta {
+  margin: 6px 0 0;
+  color: var(--mb-preview-text-secondary);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.profile-member-card__meta span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .profile-points-card strong,

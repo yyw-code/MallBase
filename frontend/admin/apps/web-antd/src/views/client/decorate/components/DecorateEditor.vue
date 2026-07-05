@@ -532,6 +532,26 @@ const profileTextStyleDefaults: Record<
       textAlign: 'left',
     },
   },
+  memberEntry: {
+    amount: {
+      color: '#191b23',
+      fontSize: 26,
+      fontWeight: '700',
+      textAlign: 'left',
+    },
+    meta: {
+      color: '#434654',
+      fontSize: 20,
+      fontWeight: '400',
+      textAlign: 'left',
+    },
+    title: {
+      color: '#737686',
+      fontSize: 20,
+      fontWeight: '400',
+      textAlign: 'left',
+    },
+  },
   serviceMenu: {
     itemLabel: {
       color: '#191b23',
@@ -732,6 +752,11 @@ const profileTextStyleFieldsByType: Record<
     { label: '组件标题', role: 'title' },
     { label: '查看全部', role: 'more' },
     { label: '入口文字', role: 'itemLabel' },
+  ],
+  memberEntry: [
+    { label: '卡片标题', role: 'title' },
+    { label: '等级名称', role: 'amount' },
+    { label: '成长说明', role: 'meta' },
   ],
   serviceMenu: [
     { label: '组件标题', role: 'title' },
@@ -2058,6 +2083,23 @@ const profileTextStyleTargetText = (
       primaryAction: '当前未显示',
       subtitle: '登录后享受更多服务',
       title: '点击登录 / MallBase 用户',
+    };
+    return targets[role] || '当前未显示';
+  }
+  if (type === 'memberEntry') {
+    const targets: Partial<Record<ProfileTextStyleRole, string>> = {
+      action: '当前未显示',
+      amount: '普通会员',
+      iconText: '当前未显示',
+      itemLabel: '当前未显示',
+      meta:
+        config.show_growth === false && config.show_progress === false
+          ? '当前未显示'
+          : '成长值 0 / 距下一等级还差 0 成长值',
+      more: '当前未显示',
+      primaryAction: '当前未显示',
+      subtitle: '当前未显示',
+      title: String(config.title || '会员等级'),
     };
     return targets[role] || '当前未显示';
   }
@@ -4348,6 +4390,7 @@ const updateProfileItemVisible = updateConfigItemVisible;
                       serviceMenu:
                         '默认展示四个常用服务入口，可配置图片、名称和跳转。',
                       userInfo: '登录信息区域，控制手机号与签名展示。',
+                      memberEntry: '会员等级区域，控制折扣、成长值和进度展示。',
                       walletEntry: '钱包信息区域，控制余额、明细和查看入口。',
                       pointsEntry: '积分信息区域，控制积分、明细和查看入口。',
                     }[editableProfileType] || '配置当前个人中心组件内容。'
@@ -4369,6 +4412,32 @@ const updateProfileItemVisible = updateConfigItemVisible;
                 <a-form-item label="展示手机号">
                   <a-switch
                     v-model:checked="editableModule.config.show_mobile"
+                  />
+                </a-form-item>
+              </div>
+            </template>
+
+            <template v-else-if="editableProfileType === 'memberEntry'">
+              <a-form-item label="卡片标题">
+                <a-input
+                  v-model:value="editableModule.config.title"
+                  placeholder="如：会员等级"
+                />
+              </a-form-item>
+              <div class="profile-config-grid">
+                <a-form-item label="展示折扣">
+                  <a-switch
+                    v-model:checked="editableModule.config.show_discount"
+                  />
+                </a-form-item>
+                <a-form-item label="展示成长值">
+                  <a-switch
+                    v-model:checked="editableModule.config.show_growth"
+                  />
+                </a-form-item>
+                <a-form-item label="展示进度">
+                  <a-switch
+                    v-model:checked="editableModule.config.show_progress"
                   />
                 </a-form-item>
               </div>
