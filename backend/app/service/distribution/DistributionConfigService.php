@@ -15,7 +15,6 @@ class DistributionConfigService
     public const OPEN_MODE_APPLY = 'apply';
     public const OPEN_MODE_EVERYONE = 'everyone';
     public const OPEN_MODE_AMOUNT = 'amount';
-    public const INVITE_REWARD_TRIGGER_BIND = 'bind';
     public const INVITE_REWARD_TRIGGER_FIRST_ORDER = 'first_order';
 
     private const DEFAULTS = [
@@ -24,7 +23,6 @@ class DistributionConfigService
         'auto_open_level_id' => '1',
         'second_level_enabled' => '0',
         'self_purchase_enabled' => '0',
-        'relation_valid_days' => '0',
         'settlement_days' => '7',
         'min_withdraw_cents' => '10000',
         'global_first_rate' => '5.00',
@@ -52,7 +50,7 @@ class DistributionConfigService
             'auto_open_level_id' => max(1, (int) $map['auto_open_level_id']),
             'second_level_enabled' => $this->boolValue($map['second_level_enabled']),
             'self_purchase_enabled' => $this->boolValue($map['self_purchase_enabled']),
-            'relation_valid_days' => max(0, min(3650, (int) $map['relation_valid_days'])),
+            'relation_valid_days' => 0,
             'settlement_days' => max(0, min(365, (int) $map['settlement_days'])),
             'min_withdraw_cents' => max(0, (int) $map['min_withdraw_cents']),
             'global_first_rate' => $this->normalizeRate($map['global_first_rate']),
@@ -99,13 +97,9 @@ class DistributionConfigService
     public function normalizeInviteRewardTrigger(string $value): string
     {
         $value = trim($value);
-        if (!in_array($value, [
-            self::INVITE_REWARD_TRIGGER_BIND,
-            self::INVITE_REWARD_TRIGGER_FIRST_ORDER,
-        ], true)) {
-            throw new BusinessException('固定邀请奖励触发方式不合法');
-        }
-        return $value;
+        return $value === self::INVITE_REWARD_TRIGGER_FIRST_ORDER
+            ? self::INVITE_REWARD_TRIGGER_FIRST_ORDER
+            : self::INVITE_REWARD_TRIGGER_FIRST_ORDER;
     }
 
     public function normalizeCents(string $value, string $message = '金额格式不合法'): string

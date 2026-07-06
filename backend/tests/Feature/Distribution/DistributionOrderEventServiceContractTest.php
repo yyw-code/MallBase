@@ -18,6 +18,7 @@ use app\service\distribution\DistributionConfigService;
 use app\service\distribution\DistributionEnrollmentService;
 use app\service\distribution\DistributionOrderEventService;
 use app\service\distribution\DistributionRelationService;
+use app\service\admin\goods\GoodsService;
 use PHPUnit\Framework\TestCase;
 use think\App;
 use think\facade\Db;
@@ -193,13 +194,13 @@ final class DistributionOrderEventServiceContractTest extends TestCase
         }
     }
 
-    public function testExpiredRelationDoesNotGenerateCommission(): void
+    public function testRelationExpireTimeIsIgnoredForPermanentRelationPolicy(): void
     {
         $this->requireDbTables($this->distributionTables());
 
         Db::startTrans();
         try {
-            $this->resetDistributionConfig(7, false, '0.00', ['relation_valid_days' => '1']);
+            $this->resetDistributionConfig(7);
             [$parentId, $buyerId] = $this->createUsers(2);
             $this->openDistributor($parentId);
             $this->bindByInviteCode($buyerId, $this->inviteCode($parentId));
@@ -210,8 +211,8 @@ final class DistributionOrderEventServiceContractTest extends TestCase
             [$orderId, $orderSn] = $this->insertOrderWithItem($buyerId, '100.00');
             $this->eventService()->handleOrderPaid($this->findOrder($orderId));
 
-            $this->assertSame(0, (int) Db::name('distribution_order_commission')->where('order_sn', $orderSn)->count());
-            $this->assertSame(0, (int) Db::name('distribution_distributor')->where('user_id', $parentId)->value('frozen_commission_cents'));
+            $this->assertSame(1, (int) Db::name('distribution_order_commission')->where('order_sn', $orderSn)->count());
+            $this->assertSame(500, (int) Db::name('distribution_distributor')->where('user_id', $parentId)->value('frozen_commission_cents'));
         } finally {
             Db::rollback();
         }
@@ -254,6 +255,178 @@ final class DistributionOrderEventServiceContractTest extends TestCase
         }
     }
 
+    public function testFixedCommissionRulePaysPerQuantityWithoutOrderAmountCap(): void
+    {
+        $this->requireDbTables($this->distributionTables());
+
+        Db::startTrans();
+        try {
+            $this->resetDistributionConfig(7);
+            [$parentId, $buyerId] = $this->createUsers(2);
+            $this->openDistributor($parentId);
+            $this->bindByInviteCode($buyerId, $this->inviteCode($parentId));
+
+            [$orderId, $orderSn, $orderItemId, $goodsId] = $this->insertOrderWithItem($buyerId, '10.00');
+            Db::name('order_item')->where('id', $orderItemId)->update([
+                'quantity' => 3,
+                'subtotal' => '30.00',
+                'pay_amount' => '10.00',
+            ]);
+            Db::name('distribution_commission_rule')->insert([
+                'target_type' => DistributionCommissionRule::TARGET_GOODS,
+                'target_id' => $goodsId,
+                'name' => '固定金额按件测试',
+                'commission_type' => DistributionCommissionRule::COMMISSION_TYPE_FIXED,
+                'first_rate' => '0.00',
+                'second_rate' => '0.00',
+                'first_fixed_cents' => 1500,
+                'second_fixed_cents' => 0,
+                'status' => 1,
+            ]);
+
+            $this->eventService()->handleOrderPaid($this->findOrder($orderId));
+
+            $this->assertSame(4500, (int) Db::name('distribution_order_commission')->where('order_sn', $orderSn)->value('amount_cents'));
+            $this->assertSame(4500, (int) Db::name('distribution_distributor')->where('user_id', $parentId)->value('frozen_commission_cents'));
+        } finally {
+            Db::rollback();
+        }
+    }
+
+    public function testGoodsEditSyncsGoodsFixedCommissionRule(): void
+    {
+        $this->requireDbTables($this->distributionTables());
+
+        Db::startTrans();
+        try {
+            $this->resetDistributionConfig(7);
+            [$goodsId] = $this->insertGoodsWithSku('100.00');
+
+            $this->goodsService()->update($goodsId, [
+                'name' => '商品编辑固定佣金',
+                'category_id' => 1,
+                'price' => '100.00',
+                'market_price' => '120.00',
+                'stock' => 10,
+                'spec_type' => 1,
+                'spec_meta' => [],
+                'description' => '',
+                'sku_detail_enabled' => 0,
+                'distribution_commission_mode' => 'fixed',
+                'distribution_first_fixed_amount' => '12.34',
+                'distribution_second_fixed_amount' => '2.00',
+                'skus' => [[
+                    'spec_values' => '',
+                    'price' => '100.00',
+                    'market_price' => '120.00',
+                    'stock' => 10,
+                    'status' => 1,
+                ]],
+            ]);
+
+            $rule = Db::name('distribution_commission_rule')
+                ->where('target_type', DistributionCommissionRule::TARGET_GOODS)
+                ->where('target_id', $goodsId)
+                ->find();
+            $this->assertNotEmpty($rule);
+            $this->assertSame(DistributionCommissionRule::COMMISSION_TYPE_FIXED, (string) $rule['commission_type']);
+            $this->assertSame(1234, (int) $rule['first_fixed_cents']);
+            $this->assertSame(200, (int) $rule['second_fixed_cents']);
+
+            $info = $this->goodsService()->getInfo($goodsId);
+            $this->assertSame('fixed', $info['distribution_commission_mode']);
+            $this->assertSame('12.34', (string) $info['distribution_first_fixed_amount']);
+        } finally {
+            Db::rollback();
+        }
+    }
+
+    public function testGoodsEditSyncsSkuCommissionRulesAfterSkuRebuild(): void
+    {
+        $this->requireDbTables($this->distributionTables());
+
+        Db::startTrans();
+        try {
+            $this->resetDistributionConfig(7);
+            [$goodsId, $oldSkuId] = $this->insertGoodsWithSku('100.00');
+            Db::name('distribution_commission_rule')->insert([
+                'target_type' => DistributionCommissionRule::TARGET_SKU,
+                'target_id' => $oldSkuId,
+                'name' => '旧SKU规则',
+                'commission_type' => DistributionCommissionRule::COMMISSION_TYPE_RATE,
+                'first_rate' => '3.00',
+                'second_rate' => '0.00',
+                'first_fixed_cents' => 0,
+                'second_fixed_cents' => 0,
+                'status' => 1,
+            ]);
+
+            $this->goodsService()->update($goodsId, [
+                'name' => '商品编辑SKU佣金',
+                'category_id' => 1,
+                'price' => '100.00',
+                'market_price' => '120.00',
+                'stock' => 11,
+                'spec_type' => 2,
+                'spec_meta' => [[
+                    'name' => '颜色',
+                    'add_pic' => 0,
+                    'values' => [
+                        ['value' => '红', 'pic' => ''],
+                        ['value' => '蓝', 'pic' => ''],
+                    ],
+                ]],
+                'description' => '',
+                'sku_detail_enabled' => 0,
+                'distribution_commission_mode' => 'sku_rate',
+                'skus' => [
+                    [
+                        'spec_values' => '红',
+                        'price' => '100.00',
+                        'market_price' => '120.00',
+                        'stock' => 5,
+                        'status' => 1,
+                        'distribution_first_rate' => '10.00',
+                        'distribution_second_rate' => '1.00',
+                    ],
+                    [
+                        'spec_values' => '蓝',
+                        'price' => '120.00',
+                        'market_price' => '130.00',
+                        'stock' => 6,
+                        'status' => 1,
+                    ],
+                ],
+            ]);
+
+            $newSkuIds = Db::name('goods_sku')
+                ->where('goods_id', $goodsId)
+                ->column('id');
+            $this->assertNotContains($oldSkuId, array_map('intval', $newSkuIds));
+            $this->assertSame(0, (int) Db::name('distribution_commission_rule')->where('target_type', DistributionCommissionRule::TARGET_SKU)->where('target_id', $oldSkuId)->count());
+            $this->assertSame(0, (int) Db::name('distribution_commission_rule')->where('target_type', DistributionCommissionRule::TARGET_GOODS)->where('target_id', $goodsId)->count());
+
+            $rules = Db::name('distribution_commission_rule')
+                ->where('target_type', DistributionCommissionRule::TARGET_SKU)
+                ->whereIn('target_id', $newSkuIds)
+                ->select()
+                ->toArray();
+            $this->assertCount(2, $rules);
+            $redSkuId = (int) Db::name('goods_sku')->where('goods_id', $goodsId)->where('spec_values', '红')->value('id');
+            $blueSkuId = (int) Db::name('goods_sku')->where('goods_id', $goodsId)->where('spec_values', '蓝')->value('id');
+            $rulesBySku = [];
+            foreach ($rules as $rule) {
+                $rulesBySku[(int) $rule['target_id']] = $rule;
+            }
+            $this->assertSame('10.00', (string) $rulesBySku[$redSkuId]['first_rate']);
+            $this->assertSame('1.00', (string) $rulesBySku[$redSkuId]['second_rate']);
+            $this->assertSame('0.00', (string) $rulesBySku[$blueSkuId]['first_rate']);
+            $this->assertSame('sku_rate', (string) $this->goodsService()->getInfo($goodsId)['distribution_commission_mode']);
+        } finally {
+            Db::rollback();
+        }
+    }
+
     public function testInviteRewardIsGrantedOnFirstPaidOrderOnlyOnce(): void
     {
         $this->requireDbTables($this->distributionTables());
@@ -276,6 +449,44 @@ final class DistributionOrderEventServiceContractTest extends TestCase
             $service->handleOrderPaid($this->findOrder($orderId));
 
             $this->assertSame(888, (int) Db::name('distribution_distributor')->where('user_id', $parentId)->value('available_commission_cents'));
+            $this->assertSame(1, (int) Db::name('distribution_relation')->where('user_id', $buyerId)->value('invite_reward_status'));
+            $this->assertSame(1, (int) Db::name('distribution_commission_log')->where('user_id', $parentId)->where('biz_type', DistributionCommissionLog::BIZ_INVITE_REWARD)->count());
+        } finally {
+            Db::rollback();
+        }
+    }
+
+    public function testLegacyBindInviteRewardConfigStillGrantsOnFirstPaidOrderOnly(): void
+    {
+        $this->requireDbTables($this->distributionTables());
+
+        Db::startTrans();
+        try {
+            $this->resetDistributionConfig(7, false, '0.00', [
+                'invite_reward_enabled' => '1',
+                'invite_reward_amount_cents' => '666',
+            ]);
+            Db::name('setting')->where('code', 'invite_reward_trigger')->delete();
+            Db::name('setting')->insert([
+                'group_id' => $this->ensureDistributionConfigGroup(),
+                'name' => '固定邀请奖励触发',
+                'code' => 'invite_reward_trigger',
+                'value' => 'bind',
+                'type' => 'select',
+                'sort' => 100,
+            ]);
+            $this->flushSettings();
+            [$parentId, $buyerId] = $this->createUsers(2);
+            $this->openDistributor($parentId);
+
+            $this->bindByInviteCode($buyerId, $this->inviteCode($parentId));
+            $this->assertSame(0, (int) Db::name('distribution_distributor')->where('user_id', $parentId)->value('available_commission_cents'));
+            $this->assertSame(0, (int) Db::name('distribution_relation')->where('user_id', $buyerId)->value('invite_reward_status'));
+
+            [$orderId] = $this->insertOrderWithItem($buyerId, '100.00');
+            $this->eventService()->handleOrderPaid($this->findOrder($orderId));
+
+            $this->assertSame(666, (int) Db::name('distribution_distributor')->where('user_id', $parentId)->value('available_commission_cents'));
             $this->assertSame(1, (int) Db::name('distribution_relation')->where('user_id', $buyerId)->value('invite_reward_status'));
             $this->assertSame(1, (int) Db::name('distribution_commission_log')->where('user_id', $parentId)->where('biz_type', DistributionCommissionLog::BIZ_INVITE_REWARD)->count());
         } finally {
@@ -438,14 +649,12 @@ final class DistributionOrderEventServiceContractTest extends TestCase
             ['name' => '自动开通等级ID', 'code' => 'auto_open_level_id', 'value' => '1', 'type' => 'number', 'sort' => 18],
             ['name' => '启用二级分佣', 'code' => 'second_level_enabled', 'value' => $secondLevelEnabled ? '1' : '0', 'type' => 'switch', 'sort' => 20],
             ['name' => '自购返佣', 'code' => 'self_purchase_enabled', 'value' => '0', 'type' => 'switch', 'sort' => 30],
-            ['name' => '绑定关系有效期天数', 'code' => 'relation_valid_days', 'value' => '0', 'type' => 'number', 'sort' => 35],
             ['name' => '结算等待天数', 'code' => 'settlement_days', 'value' => (string) $settlementDays, 'type' => 'number', 'sort' => 40],
             ['name' => '最低提现金额(分)', 'code' => 'min_withdraw_cents', 'value' => '10000', 'type' => 'number', 'sort' => 50],
             ['name' => '一级默认佣金比例(%)', 'code' => 'global_first_rate', 'value' => '5.00', 'type' => 'number', 'sort' => 60],
             ['name' => '二级默认佣金比例(%)', 'code' => 'global_second_rate', 'value' => $secondRate, 'type' => 'number', 'sort' => 70],
             ['name' => '满额开通门槛(分)', 'code' => 'amount_open_threshold_cents', 'value' => '0', 'type' => 'number', 'sort' => 80],
             ['name' => '启用固定邀请奖励', 'code' => 'invite_reward_enabled', 'value' => '0', 'type' => 'switch', 'sort' => 90],
-            ['name' => '固定邀请奖励触发', 'code' => 'invite_reward_trigger', 'value' => DistributionConfigService::INVITE_REWARD_TRIGGER_FIRST_ORDER, 'type' => 'select', 'sort' => 100],
             ['name' => '固定邀请奖励金额(分)', 'code' => 'invite_reward_amount_cents', 'value' => '0', 'type' => 'number', 'sort' => 110],
             ['name' => '启用分享归因', 'code' => 'attribution_enabled', 'value' => '1', 'type' => 'switch', 'sort' => 120],
         ];
@@ -544,15 +753,16 @@ final class DistributionOrderEventServiceContractTest extends TestCase
     }
 
     /**
-     * @return array{0:int,1:string,2:int,3:int,4:int}
+     * @return array{0:int,1:int}
      */
-    private function insertOrderWithItem(int $buyerId, string $payAmount): array
+    private function insertGoodsWithSku(string $price): array
     {
+        $this->ensureGoodsCategory();
         $goodsId = (int) Db::name('goods')->insertGetId([
             'category_id' => 1,
             'name' => 'CodexTest Distribution Goods',
             'spec_type' => 1,
-            'price' => $payAmount,
+            'price' => $price,
             'stock' => 10,
             'is_on_sale' => 1,
             'status' => 1,
@@ -560,10 +770,40 @@ final class DistributionOrderEventServiceContractTest extends TestCase
         $skuId = (int) Db::name('goods_sku')->insertGetId([
             'goods_id' => $goodsId,
             'spec_values' => '',
-            'price' => $payAmount,
+            'price' => $price,
             'stock' => 10,
             'status' => 1,
         ]);
+
+        return [$goodsId, $skuId];
+    }
+
+    private function ensureGoodsCategory(): void
+    {
+        if ((int) Db::name('goods_category')->where('id', 1)->count() > 0) {
+            Db::name('goods_category')->where('id', 1)->update([
+                'name' => '分销测试分类',
+                'status' => 1,
+                'delete_time' => null,
+            ]);
+            return;
+        }
+
+        Db::name('goods_category')->insert([
+            'id' => 1,
+            'pid' => 0,
+            'name' => '分销测试分类',
+            'status' => 1,
+            'sort' => 0,
+        ]);
+    }
+
+    /**
+     * @return array{0:int,1:string,2:int,3:int,4:int}
+     */
+    private function insertOrderWithItem(int $buyerId, string $payAmount): array
+    {
+        [$goodsId, $skuId] = $this->insertGoodsWithSku($payAmount);
         $orderSn = $this->sn('DOD');
         $orderId = (int) Db::name('order')->insertGetId([
             'sn' => $orderSn,
@@ -644,6 +884,11 @@ final class DistributionOrderEventServiceContractTest extends TestCase
     private function relationService(): DistributionRelationService
     {
         return $this->app?->make(DistributionRelationService::class) ?? app()->make(DistributionRelationService::class);
+    }
+
+    private function goodsService(): GoodsService
+    {
+        return $this->app?->make(GoodsService::class) ?? app()->make(GoodsService::class);
     }
 
     private function eventService(): DistributionOrderEventService

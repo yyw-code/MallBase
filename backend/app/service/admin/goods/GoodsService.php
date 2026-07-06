@@ -11,6 +11,7 @@ use app\model\goods\GoodsSku;
 use app\model\goods\GoodsSkuDetail;
 use app\model\goods\GoodsTag;
 use app\model\goods\GoodsTagRelation;
+use app\model\distribution\DistributionCommissionRule;
 use app\model\setting\FreightTemplate;
 use app\service\admin\support\CsvExportService;
 use app\service\upload\AssetHydrator;
@@ -31,6 +32,15 @@ class GoodsService extends BaseService
     private const GOODS_POINTS_REWARD_MODES = ['global', 'disabled', 'ratio', 'fixed', 'sku'];
     private const SKU_POINTS_REWARD_MODES = ['inherit', 'disabled', 'ratio', 'fixed'];
     private const MEMBER_BENEFIT_MODES = ['global', 'disabled', 'level_discount', 'sku_price'];
+    private const GOODS_DISTRIBUTION_COMMISSION_MODES = ['global', 'disabled', 'rate', 'fixed', 'sku', 'sku_rate', 'sku_fixed'];
+    private const SKU_DISTRIBUTION_COMMISSION_MODES = ['inherit', 'disabled', 'rate', 'fixed'];
+    private const DISTRIBUTION_COMMISSION_FIELDS = [
+        'distribution_commission_mode',
+        'distribution_first_rate',
+        'distribution_second_rate',
+        'distribution_first_fixed_amount',
+        'distribution_second_fixed_amount',
+    ];
 
     /**
      * 默认 Model 类名
@@ -224,6 +234,7 @@ class GoodsService extends BaseService
             ->select();
         $result['description'] = $this->getGoodsDescription($id);
         $result['skus'] = $this->appendSkuDescriptions($skus->toArray());
+        $result = $this->appendDistributionCommissionRules($result);
 
         // 获取商品标签
         $tagIds = $this->model(GoodsTagRelation::class)
@@ -258,6 +269,7 @@ class GoodsService extends BaseService
         $data = $this->normalizeSpecType($data);
         $data = $this->normalizeSkuDetailEnabled($data);
         $data = $this->normalizeSpecMeta($data);
+        $data = $this->normalizeDistributionCommission($data);
         $data = $this->normalizeSkusBySpecType($data);
 
         // 业务校验（事务外）
@@ -276,9 +288,11 @@ class GoodsService extends BaseService
             $this->syncGoodsDetail((int) $goodsId, (string) ($data['description'] ?? ''));
 
             // 同步SKU
+            $savedSkus = [];
             if (!empty($data['skus']) && is_array($data['skus'])) {
-                $this->syncSkus($goodsId, $data['skus'], (int) ($data['sku_detail_enabled'] ?? 0) === 1);
+                $savedSkus = $this->syncSkus($goodsId, $data['skus'], (int) ($data['sku_detail_enabled'] ?? 0) === 1);
             }
+            $this->syncDistributionCommissionRules((int) $goodsId, $data, $savedSkus);
 
             // 同步标签
             if (!empty($data['tag_ids']) && is_array($data['tag_ids'])) {
@@ -313,6 +327,7 @@ class GoodsService extends BaseService
         $data = $this->normalizeSpecType($data);
         $data = $this->normalizeSkuDetailEnabled($data);
         $data = $this->normalizeSpecMeta($data);
+        $data = $this->normalizeDistributionCommission($data);
         $data = $this->normalizeSkusBySpecType($data);
 
         // 业务校验（事务外）
@@ -328,15 +343,21 @@ class GoodsService extends BaseService
         $this->validateAssetRefs($data);
 
         // 事务内只做写入
-        $this->transaction(function () use ($goods, $data) {
+        $oldSkuIds = !empty($data['_sync_distribution_commission'])
+            ? $this->skuIdsForGoods((int) $goods->id)
+            : [];
+
+        $this->transaction(function () use ($goods, $data, $oldSkuIds) {
             $goods->save($this->buildGoodsSaveData($data));
 
             $this->syncGoodsDetail((int) $goods->id, (string) ($data['description'] ?? ''));
 
             // 同步SKU
+            $savedSkus = [];
             if (array_key_exists('skus', $data) && is_array($data['skus'])) {
-                $this->syncSkus((int) $goods->id, $data['skus'], (int) ($data['sku_detail_enabled'] ?? 0) === 1);
+                $savedSkus = $this->syncSkus((int) $goods->id, $data['skus'], (int) ($data['sku_detail_enabled'] ?? 0) === 1);
             }
+            $this->syncDistributionCommissionRules((int) $goods->id, $data, $savedSkus, $oldSkuIds);
 
             // 同步标签
             if (array_key_exists('tag_ids', $data) && is_array($data['tag_ids'])) {
@@ -452,11 +473,12 @@ class GoodsService extends BaseService
      * @param int $goodsId 商品 ID
      * @param array $skus SKU数据
      */
-    protected function syncSkus(int $goodsId, array $skus, bool $syncDescriptions = true): void
+    protected function syncSkus(int $goodsId, array $skus, bool $syncDescriptions = true): array
     {
         $this->model(GoodsSku::class)->where('goods_id', $goodsId)->delete();
         $this->model(GoodsSkuDetail::class)->where('goods_id', $goodsId)->delete();
 
+        $savedSkus = [];
         if (!empty($skus)) {
             $data = array_map(function ($sku) use ($goodsId) {
                 return [
@@ -485,11 +507,23 @@ class GoodsService extends BaseService
                 $this->syncSkuDetails($goodsId, $savedSkus, $skus);
             }
         }
+
+        return $savedSkus;
     }
 
     protected function buildGoodsSaveData(array $data): array
     {
-        unset($data['description'], $data['skus'], $data['tag_ids']);
+        unset(
+            $data['description'],
+            $data['skus'],
+            $data['tag_ids'],
+            $data['_sync_distribution_commission'],
+            $data['distribution_commission_mode'],
+            $data['distribution_first_rate'],
+            $data['distribution_second_rate'],
+            $data['distribution_first_fixed_amount'],
+            $data['distribution_second_fixed_amount'],
+        );
         return $data;
     }
 
@@ -567,6 +601,221 @@ class GoodsService extends BaseService
         unset($sku);
 
         return $skus;
+    }
+
+    /**
+     * @param array<string, mixed> $result
+     * @return array<string, mixed>
+     */
+    protected function appendDistributionCommissionRules(array $result): array
+    {
+        $goodsId = (int) ($result['id'] ?? 0);
+        $skus = is_array($result['skus'] ?? null) ? $result['skus'] : [];
+        $result = $this->fillDistributionCommissionFields($result, null, 'global');
+        if ($goodsId <= 0) {
+            return $result;
+        }
+
+        $goodsRule = $this->model(DistributionCommissionRule::class)
+            ->where('target_type', DistributionCommissionRule::TARGET_GOODS)
+            ->where('target_id', $goodsId)
+            ->find();
+
+        $skuIds = array_values(array_filter(array_map(
+            static fn(array $sku): int => (int) ($sku['id'] ?? 0),
+            $skus
+        )));
+        $skuRuleMap = [];
+        if ($skuIds !== []) {
+            $skuRules = $this->model(DistributionCommissionRule::class)
+                ->where('target_type', DistributionCommissionRule::TARGET_SKU)
+                ->whereIn('target_id', $skuIds)
+                ->select()
+                ->toArray();
+            foreach ($skuRules as $rule) {
+                $skuRuleMap[(int) ($rule['target_id'] ?? 0)] = $rule;
+            }
+        }
+
+        $hasSkuRule = false;
+        foreach ($skus as &$sku) {
+            $rule = $skuRuleMap[(int) ($sku['id'] ?? 0)] ?? null;
+            if ($rule !== null) {
+                $hasSkuRule = true;
+            }
+            $sku = $this->fillDistributionCommissionFields($sku, $rule, 'inherit');
+        }
+        unset($sku);
+
+        $result['skus'] = $skus;
+        if ($hasSkuRule) {
+            $result['distribution_commission_mode'] = $this->distributionSkuGoodsModeFromRules(array_values($skuRuleMap));
+            return $result;
+        }
+
+        return $this->fillDistributionCommissionFields($result, $goodsRule?->toArray(), 'global');
+    }
+
+    /**
+     * @param array<string, mixed> $target
+     * @param array<string, mixed>|null $rule
+     * @return array<string, mixed>
+     */
+    private function fillDistributionCommissionFields(array $target, ?array $rule, string $fallbackMode): array
+    {
+        $mode = $this->distributionCommissionModeFromRule($rule, $fallbackMode);
+        $target['distribution_commission_mode'] = $mode;
+        $target['distribution_first_rate'] = $rule === null ? '0.00' : number_format((float) ($rule['first_rate'] ?? 0), 2, '.', '');
+        $target['distribution_second_rate'] = $rule === null ? '0.00' : number_format((float) ($rule['second_rate'] ?? 0), 2, '.', '');
+        $target['distribution_first_fixed_amount'] = $rule === null ? '0.00' : $this->centsToAmount((int) ($rule['first_fixed_cents'] ?? 0));
+        $target['distribution_second_fixed_amount'] = $rule === null ? '0.00' : $this->centsToAmount((int) ($rule['second_fixed_cents'] ?? 0));
+
+        return $target;
+    }
+
+    /**
+     * @param array<string, mixed>|null $rule
+     */
+    private function distributionCommissionModeFromRule(?array $rule, string $fallbackMode): string
+    {
+        if ($rule === null || (int) ($rule['status'] ?? 0) !== 1) {
+            return $fallbackMode;
+        }
+
+        $firstRate = (float) ($rule['first_rate'] ?? 0);
+        $secondRate = (float) ($rule['second_rate'] ?? 0);
+        $firstFixedCents = (int) ($rule['first_fixed_cents'] ?? 0);
+        $secondFixedCents = (int) ($rule['second_fixed_cents'] ?? 0);
+        if ($firstRate <= 0 && $secondRate <= 0 && $firstFixedCents <= 0 && $secondFixedCents <= 0) {
+            return 'disabled';
+        }
+
+        return (string) ($rule['commission_type'] ?? DistributionCommissionRule::COMMISSION_TYPE_RATE) === DistributionCommissionRule::COMMISSION_TYPE_FIXED
+            ? 'fixed'
+            : 'rate';
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $rules
+     */
+    private function distributionSkuGoodsModeFromRules(array $rules): string
+    {
+        foreach ($rules as $rule) {
+            if ((int) ($rule['status'] ?? 0) !== 1) {
+                continue;
+            }
+
+            return (string) ($rule['commission_type'] ?? DistributionCommissionRule::COMMISSION_TYPE_RATE) === DistributionCommissionRule::COMMISSION_TYPE_FIXED
+                ? 'sku_fixed'
+                : 'sku_rate';
+        }
+
+        return 'sku_rate';
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $savedSkus
+     * @param array<int, int> $oldSkuIds
+     */
+    protected function syncDistributionCommissionRules(int $goodsId, array $data, array $savedSkus, array $oldSkuIds = []): void
+    {
+        if (empty($data['_sync_distribution_commission'])) {
+            return;
+        }
+
+        $this->model(DistributionCommissionRule::class)
+            ->where('target_type', DistributionCommissionRule::TARGET_GOODS)
+            ->where('target_id', $goodsId)
+            ->delete();
+
+        $currentSkuIds = array_values(array_filter(array_map(
+            static fn(array $sku): int => (int) ($sku['id'] ?? 0),
+            $savedSkus
+        )));
+        if ($currentSkuIds === []) {
+            $currentSkuIds = $this->skuIdsForGoods($goodsId);
+        }
+        $skuIds = array_values(array_unique(array_filter(array_merge($oldSkuIds, $currentSkuIds))));
+        if ($skuIds !== []) {
+            $this->model(DistributionCommissionRule::class)
+                ->where('target_type', DistributionCommissionRule::TARGET_SKU)
+                ->whereIn('target_id', $skuIds)
+                ->delete();
+        }
+
+        $mode = (string) ($data['distribution_commission_mode'] ?? 'global');
+        $rows = [];
+        if (in_array($mode, ['disabled', 'rate', 'fixed'], true)) {
+            $rows[] = $this->buildDistributionCommissionRuleRow(
+                DistributionCommissionRule::TARGET_GOODS,
+                $goodsId,
+                '商品佣金规则',
+                $mode,
+                $data
+            );
+        } elseif (in_array($mode, ['sku_rate', 'sku_fixed'], true)) {
+            $skuMode = $mode === 'sku_fixed' ? 'fixed' : 'rate';
+            foreach ($savedSkus as $index => $sku) {
+                $inputSku = is_array($data['skus'][$index] ?? null) ? $data['skus'][$index] : [];
+                $specValues = trim((string) ($sku['spec_values'] ?? ''));
+                $rows[] = $this->buildDistributionCommissionRuleRow(
+                    DistributionCommissionRule::TARGET_SKU,
+                    (int) ($sku['id'] ?? 0),
+                    mb_substr($specValues === '' ? 'SKU佣金规则' : 'SKU佣金规则-' . $specValues, 0, 100),
+                    $skuMode,
+                    $inputSku
+                );
+            }
+        } elseif ($mode === 'sku') {
+            foreach ($savedSkus as $index => $sku) {
+                $inputSku = is_array($data['skus'][$index] ?? null) ? $data['skus'][$index] : [];
+                $skuMode = (string) ($inputSku['distribution_commission_mode'] ?? 'inherit');
+                if ($skuMode === 'inherit') {
+                    continue;
+                }
+                $specValues = trim((string) ($sku['spec_values'] ?? ''));
+                $rows[] = $this->buildDistributionCommissionRuleRow(
+                    DistributionCommissionRule::TARGET_SKU,
+                    (int) ($sku['id'] ?? 0),
+                    mb_substr($specValues === '' ? 'SKU佣金规则' : 'SKU佣金规则-' . $specValues, 0, 100),
+                    $skuMode,
+                    $inputSku
+                );
+            }
+        }
+
+        if ($rows !== []) {
+            $this->model(DistributionCommissionRule::class)->saveAll($rows);
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $source
+     * @return array<string, mixed>
+     */
+    private function buildDistributionCommissionRuleRow(
+        string $targetType,
+        int $targetId,
+        string $name,
+        string $mode,
+        array $source
+    ): array {
+        $commissionType = $mode === 'fixed'
+            ? DistributionCommissionRule::COMMISSION_TYPE_FIXED
+            : DistributionCommissionRule::COMMISSION_TYPE_RATE;
+
+        return [
+            'target_type' => $targetType,
+            'target_id' => $targetId,
+            'name' => $name,
+            'commission_type' => $commissionType,
+            'first_rate' => $mode === 'rate' ? (string) ($source['distribution_first_rate'] ?? '0.00') : '0.00',
+            'second_rate' => $mode === 'rate' ? (string) ($source['distribution_second_rate'] ?? '0.00') : '0.00',
+            'first_fixed_cents' => $mode === 'fixed' ? $this->amountToCents($source['distribution_first_fixed_amount'] ?? 0) : 0,
+            'second_fixed_cents' => $mode === 'fixed' ? $this->amountToCents($source['distribution_second_fixed_amount'] ?? 0) : 0,
+            'status' => 1,
+            'remark' => '商品编辑同步',
+        ];
     }
 
     /**
@@ -707,6 +956,11 @@ class GoodsService extends BaseService
             'points_reward_ratio' => max(0, (int) ($submittedSku['points_reward_ratio'] ?? 0)),
             'points_reward_fixed' => max(0, (int) ($submittedSku['points_reward_fixed'] ?? 0)),
             'member_price' => $this->normalizeNullablePrice($submittedSku['member_price'] ?? null),
+            'distribution_commission_mode' => $this->normalizeSkuDistributionCommissionMode((string) ($submittedSku['distribution_commission_mode'] ?? 'inherit')),
+            'distribution_first_rate' => $this->normalizeCommissionRate($submittedSku['distribution_first_rate'] ?? 0),
+            'distribution_second_rate' => $this->normalizeCommissionRate($submittedSku['distribution_second_rate'] ?? 0),
+            'distribution_first_fixed_amount' => $this->normalizeCommissionAmount($submittedSku['distribution_first_fixed_amount'] ?? 0),
+            'distribution_second_fixed_amount' => $this->normalizeCommissionAmount($submittedSku['distribution_second_fixed_amount'] ?? 0),
         ];
     }
 
@@ -738,6 +992,40 @@ class GoodsService extends BaseService
                 continue;
             }
             $sku['member_price'] = $this->normalizeNullablePrice($sku['member_price'] ?? null);
+        }
+        unset($sku);
+
+        return $data;
+    }
+
+    protected function normalizeDistributionCommission(array $data): array
+    {
+        if (!$this->hasDistributionCommissionPayload($data)) {
+            return $data;
+        }
+
+        $data['_sync_distribution_commission'] = true;
+        $data['distribution_commission_mode'] = $this->normalizeGoodsDistributionCommissionMode((string) ($data['distribution_commission_mode'] ?? 'global'));
+        $data['distribution_first_rate'] = $this->normalizeCommissionRate($data['distribution_first_rate'] ?? 0);
+        $data['distribution_second_rate'] = $this->normalizeCommissionRate($data['distribution_second_rate'] ?? 0);
+        $data['distribution_first_fixed_amount'] = $this->normalizeCommissionAmount($data['distribution_first_fixed_amount'] ?? 0);
+        $data['distribution_second_fixed_amount'] = $this->normalizeCommissionAmount($data['distribution_second_fixed_amount'] ?? 0);
+        if ($data['distribution_commission_mode'] === 'rate') {
+            $this->assertCommissionRatePair($data['distribution_first_rate'], $data['distribution_second_rate']);
+        }
+
+        foreach (($data['skus'] ?? []) as &$sku) {
+            if (!is_array($sku)) {
+                continue;
+            }
+            $sku['distribution_commission_mode'] = $this->normalizeSkuDistributionCommissionMode((string) ($sku['distribution_commission_mode'] ?? 'inherit'));
+            $sku['distribution_first_rate'] = $this->normalizeCommissionRate($sku['distribution_first_rate'] ?? 0);
+            $sku['distribution_second_rate'] = $this->normalizeCommissionRate($sku['distribution_second_rate'] ?? 0);
+            $sku['distribution_first_fixed_amount'] = $this->normalizeCommissionAmount($sku['distribution_first_fixed_amount'] ?? 0);
+            $sku['distribution_second_fixed_amount'] = $this->normalizeCommissionAmount($sku['distribution_second_fixed_amount'] ?? 0);
+            if ($sku['distribution_commission_mode'] === 'rate' || $data['distribution_commission_mode'] === 'sku_rate') {
+                $this->assertCommissionRatePair($sku['distribution_first_rate'], $sku['distribution_second_rate']);
+            }
         }
         unset($sku);
 
@@ -777,6 +1065,16 @@ class GoodsService extends BaseService
         return in_array($mode, self::MEMBER_BENEFIT_MODES, true) ? $mode : 'global';
     }
 
+    private function normalizeGoodsDistributionCommissionMode(string $mode): string
+    {
+        return in_array($mode, self::GOODS_DISTRIBUTION_COMMISSION_MODES, true) ? $mode : 'global';
+    }
+
+    private function normalizeSkuDistributionCommissionMode(string $mode): string
+    {
+        return in_array($mode, self::SKU_DISTRIBUTION_COMMISSION_MODES, true) ? $mode : 'inherit';
+    }
+
     private function normalizeNullablePrice(mixed $value): ?string
     {
         if ($value === null || $value === '') {
@@ -787,6 +1085,92 @@ class GoodsService extends BaseService
         }
 
         return number_format(max(0, (float) $value), 2, '.', '');
+    }
+
+    private function normalizeCommissionRate(mixed $value): string
+    {
+        $value = trim((string) ($value ?? '0'));
+        if ($value === '') {
+            $value = '0';
+        }
+        if (!preg_match('/^\d+(\.\d{1,2})?$/', $value)) {
+            throw new BusinessException('分销佣金比例格式不合法');
+        }
+        $rate = (float) $value;
+        if ($rate < 0 || $rate > 100) {
+            throw new BusinessException('分销佣金比例必须在0到100之间');
+        }
+        return number_format($rate, 2, '.', '');
+    }
+
+    private function normalizeCommissionAmount(mixed $value): string
+    {
+        $value = trim((string) ($value ?? '0'));
+        if ($value === '') {
+            $value = '0';
+        }
+        if (!preg_match('/^\d+(\.\d{1,2})?$/', $value)) {
+            throw new BusinessException('分销固定佣金金额格式不合法');
+        }
+        return number_format(max(0, (float) $value), 2, '.', '');
+    }
+
+    private function assertCommissionRatePair(string $firstRate, string $secondRate): void
+    {
+        if (((float) $firstRate + (float) $secondRate) > 100) {
+            throw new BusinessException('一级和二级分销佣金比例合计不能超过100%');
+        }
+    }
+
+    private function hasDistributionCommissionPayload(array $data): bool
+    {
+        foreach (self::DISTRIBUTION_COMMISSION_FIELDS as $field) {
+            if (array_key_exists($field, $data)) {
+                return true;
+            }
+        }
+
+        foreach (($data['skus'] ?? []) as $sku) {
+            if (!is_array($sku)) {
+                continue;
+            }
+            foreach (self::DISTRIBUTION_COMMISSION_FIELDS as $field) {
+                if (array_key_exists($field, $sku)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @return array<int, int>
+     */
+    private function skuIdsForGoods(int $goodsId): array
+    {
+        if ($goodsId <= 0) {
+            return [];
+        }
+
+        return array_values(array_map(
+            'intval',
+            $this->model(GoodsSku::class)
+                ->where('goods_id', $goodsId)
+                ->column('id')
+        ));
+    }
+
+    private function amountToCents(mixed $amount): int
+    {
+        $amount = $this->normalizeCommissionAmount($amount);
+        [$yuan, $cent] = array_pad(explode('.', $amount, 2), 2, '0');
+        return ((int) $yuan * 100) + (int) str_pad(substr($cent, 0, 2), 2, '0');
+    }
+
+    private function centsToAmount(int $cents): string
+    {
+        return number_format(max(0, $cents) / 100, 2, '.', '');
     }
 
     /**

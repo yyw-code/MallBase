@@ -29,13 +29,35 @@ class RuleController extends BaseController
 
     public function create()
     {
-        $data = $this->request->param(['target_type', 'target_id', 'name', 'first_rate', 'second_rate', 'status', 'remark']);
+        $data = $this->request->param([
+            'target_type',
+            'target_id',
+            'name',
+            'commission_type',
+            'first_rate',
+            'second_rate',
+            'first_fixed_amount',
+            'second_fixed_amount',
+            'status',
+            'remark',
+        ]);
         return $this->success(['id' => $this->service()->createRule($data)], '创建成功');
     }
 
     public function update($id)
     {
-        $data = $this->request->param(['target_type', 'target_id', 'name', 'first_rate', 'second_rate', 'status', 'remark']);
+        $data = $this->request->param([
+            'target_type',
+            'target_id',
+            'name',
+            'commission_type',
+            'first_rate',
+            'second_rate',
+            'first_fixed_amount',
+            'second_fixed_amount',
+            'status',
+            'remark',
+        ]);
         $this->service()->updateRule((int) $id, $data);
         return $this->success(null, '更新成功');
     }

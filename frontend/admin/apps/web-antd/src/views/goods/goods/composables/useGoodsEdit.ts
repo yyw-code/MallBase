@@ -1,24 +1,22 @@
-import type { GoodsBrandApi } from '#/api/goods';
-import type { GoodsCategoryApi } from '#/api/goods';
-import type { GoodsApi } from '#/api/goods';
-import type { GoodsSpecApi } from '#/api/goods';
-import type { GoodsSpecTemplateApi } from '#/api/goods';
-import type { GoodsTagApi } from '#/api/goods';
+import type { Ref } from 'vue';
 
+import type { GoodsEditFeatureState } from '../extension-slots';
+
+import type {
+  GoodsApi,
+  GoodsBrandApi,
+  GoodsCategoryApi,
+  GoodsSpecApi,
+  GoodsSpecTemplateApi,
+  GoodsTagApi,
+} from '#/api/goods';
+import type { FreightTemplateApi } from '#/api/setting/freight-template';
 import type { FileInfo } from '#/components/upload';
 
-import {
-  computed,
-  nextTick,
-  onBeforeUnmount,
-  reactive,
-  ref,
-  watch,
-  type Ref,
-} from 'vue';
+import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue';
 
+import { message, Modal } from 'ant-design-vue';
 import Sortable from 'sortablejs';
-import { Modal, message } from 'ant-design-vue';
 
 import {
   createGoodsApi,
@@ -31,10 +29,7 @@ import {
   getGoodsInfoApi,
   updateGoodsApi,
 } from '#/api/goods';
-import {
-  getFreightTemplateListApi,
-  type FreightTemplateApi,
-} from '#/api/setting/freight-template';
+import { getFreightTemplateListApi } from '#/api/setting/freight-template';
 
 import {
   applyGoodsEditSkuBatch,
@@ -71,6 +66,11 @@ export interface SkuRow {
   points_reward_ratio?: number;
   points_reward_fixed?: number;
   member_price?: number | undefined;
+  distribution_commission_mode?: GoodsApi.SkuDistributionCommissionMode;
+  distribution_first_rate?: number;
+  distribution_second_rate?: number;
+  distribution_first_fixed_amount?: number;
+  distribution_second_fixed_amount?: number;
   description?: string;
   is_show?: 0 | 1;
 }
@@ -131,6 +131,18 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
     points_reward_fixed: 0,
     member_benefit_mode: 'global' as GoodsApi.MemberBenefitMode,
     member_price: undefined as number | undefined,
+    distribution_commission_mode:
+      'global' as GoodsApi.DistributionCommissionMode,
+    distribution_first_rate: 0,
+    distribution_second_rate: 0,
+    distribution_first_fixed_amount: 0,
+    distribution_second_fixed_amount: 0,
+    sku_distribution_commission_mode:
+      'inherit' as GoodsApi.SkuDistributionCommissionMode,
+    sku_distribution_first_rate: 0,
+    sku_distribution_second_rate: 0,
+    sku_distribution_first_fixed_amount: 0,
+    sku_distribution_second_fixed_amount: 0,
     sku_points_reward_mode: 'inherit' as GoodsApi.SkuPointsRewardMode,
     sku_points_reward_ratio: 0,
     sku_points_reward_fixed: 0,
@@ -165,7 +177,7 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
       }));
 
   /* ---------- 规格 attrs ---------- */
-  const specType = ref<'single' | 'multi'>('single');
+  const specType = ref<'multi' | 'single'>('single');
   const attrs = ref<Attr[]>([]);
   const canAddPic = computed(() => !attrs.value.some((a) => a.add_pic === 1));
 
@@ -180,7 +192,7 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
 
   const toMediaSubmitValue = (
     media: FileInfo | string | undefined,
-  ): GoodsApi.MediaValue | '' => {
+  ): '' | GoodsApi.MediaValue => {
     if (!media) return '';
     if (typeof media === 'object') {
       if (media.asset_id && media.asset_id > 0) return media.asset_id;
@@ -210,7 +222,7 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
     };
   };
 
-  const getPicUrl = (pic: FileInfo | string): GoodsApi.MediaValue | '' => {
+  const getPicUrl = (pic: FileInfo | string): '' | GoodsApi.MediaValue => {
     if (!pic) return '';
     return toMediaSubmitValue(pic);
   };
@@ -240,12 +252,28 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
     return row.image || getSpecImageByRow(row);
   };
 
-  const getSkuSubmitImage = (row: SkuRow): GoodsApi.MediaValue | '' => {
+  const getSkuSubmitImage = (row: SkuRow): '' | GoodsApi.MediaValue => {
     const image = row.image || getSpecImageByRow(row);
     return getPicUrl(image || '');
   };
 
-  const buildSingleSkuPayload = () => ({
+  const currentSingleSkuPointsRewardMode = () => {
+    if (formData.points_reward_mode === 'sku_ratio') return 'ratio' as const;
+    if (formData.points_reward_mode === 'sku_fixed') return 'fixed' as const;
+    return 'inherit' as const;
+  };
+
+  const currentSingleSkuDistributionCommissionMode = () => {
+    if (formData.distribution_commission_mode === 'sku_rate') {
+      return 'rate' as const;
+    }
+    if (formData.distribution_commission_mode === 'sku_fixed') {
+      return 'fixed' as const;
+    }
+    return 'inherit' as const;
+  };
+
+  const buildSingleSkuPayload = (features?: GoodsEditFeatureState) => ({
     ...transformGoodsEditSkuPayload(
       {
         spec_values: DEFAULT_SINGLE_SKU_SPEC_VALUES,
@@ -258,15 +286,20 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
         status: formData.status ?? 1,
       },
       {
-        points_reward_mode:
-          formData.points_reward_mode === 'sku'
-            ? formData.sku_points_reward_mode
-            : ('inherit' as const),
+        points_reward_mode: currentSingleSkuPointsRewardMode(),
         points_reward_ratio: formData.sku_points_reward_ratio || 0,
         points_reward_fixed: formData.sku_points_reward_fixed || 0,
         member_price: formData.member_price ?? null,
+        distribution_commission_mode:
+          currentSingleSkuDistributionCommissionMode(),
+        distribution_first_rate: formData.sku_distribution_first_rate || 0,
+        distribution_second_rate: formData.sku_distribution_second_rate || 0,
+        distribution_first_fixed_amount:
+          formData.sku_distribution_first_fixed_amount || 0,
+        distribution_second_fixed_amount:
+          formData.sku_distribution_second_fixed_amount || 0,
       },
-      { formData },
+      { features, formData, specType: specType.value },
     ),
   });
 
@@ -373,7 +406,7 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
     generateSkuCombinations();
     nextTick(() => initValueDragAt(attrIdx));
   };
-  const toggleAddPic = (e: boolean | 0 | 1, idx: number) => {
+  const toggleAddPic = (e: 0 | 1 | boolean, idx: number) => {
     if (e) {
       attrs.value.forEach((a, i) => {
         if (i !== idx) a.add_pic = 0;
@@ -386,7 +419,7 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
   /* ---------- 拖拽 ---------- */
   const specListRef = ref<HTMLElement | null>(null);
   const valueListRefs = ref<(HTMLElement | null)[]>([]);
-  let specSortable: Sortable | null = null;
+  let specSortable: null | Sortable = null;
   const valueSortables: Sortable[] = [];
 
   const initSpecDrag = () => {
@@ -679,7 +712,7 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
       };
     });
   };
-  const applyBatch = () => {
+  const applyBatch = (features?: GoodsEditFeatureState) => {
     const targets = matchedSkuRows.value;
     if (targets.length === 0) {
       message.warning('当前筛选条件下没有可批量修改的 SKU');
@@ -687,33 +720,36 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
     }
     for (const row of targets) {
       if (
-        batchData['__price__'] !== undefined &&
-        batchData['__price__'] !== null &&
-        batchData['__price__'] !== ''
+        batchData.__price__ !== undefined &&
+        batchData.__price__ !== null &&
+        batchData.__price__ !== ''
       )
-        row.price = Number(batchData['__price__']);
+        row.price = Number(batchData.__price__);
       if (
-        batchData['__market_price__'] !== undefined &&
-        batchData['__market_price__'] !== null &&
-        batchData['__market_price__'] !== ''
+        batchData.__market_price__ !== undefined &&
+        batchData.__market_price__ !== null &&
+        batchData.__market_price__ !== ''
       )
-        row.market_price = Number(batchData['__market_price__']);
+        row.market_price = Number(batchData.__market_price__);
       if (
-        batchData['__stock__'] !== undefined &&
-        batchData['__stock__'] !== null &&
-        batchData['__stock__'] !== ''
+        batchData.__stock__ !== undefined &&
+        batchData.__stock__ !== null &&
+        batchData.__stock__ !== ''
       )
-        row.stock = Number(batchData['__stock__']);
-      if (batchData['__sku_code__'])
-        row.sku_code = String(batchData['__sku_code__']);
-      if (batchData['__image__']) row.image = batchData['__image__'];
-      applyGoodsEditSkuBatch(row, batchData);
+        row.stock = Number(batchData.__stock__);
+      if (batchData.__sku_code__) row.sku_code = String(batchData.__sku_code__);
+      if (batchData.__image__) row.image = batchData.__image__;
+      applyGoodsEditSkuBatch(row, batchData, {
+        features,
+        formData,
+        specType: specType.value,
+      });
       if (
-        batchData['__is_show__'] !== undefined &&
-        batchData['__is_show__'] !== null &&
-        batchData['__is_show__'] !== ''
+        batchData.__is_show__ !== undefined &&
+        batchData.__is_show__ !== null &&
+        batchData.__is_show__ !== ''
       ) {
-        row.is_show = Number(batchData['__is_show__']) as 0 | 1;
+        row.is_show = Number(batchData.__is_show__) as 0 | 1;
       }
     }
     message.success(`已批量修改 ${targets.length} 个 SKU`);
@@ -867,8 +903,8 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
       });
       message.success('模板保存成功，可在规格模板管理中查看');
       saveTemplateVisible.value = false;
-    } catch (e: any) {
-      message.error(e.message || '保存失败');
+    } catch (error: any) {
+      message.error(error.message || '保存失败');
     } finally {
       saveTemplateLoading.value = false;
     }
@@ -929,6 +965,16 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
       points_reward_fixed: 0,
       member_benefit_mode: 'global',
       member_price: undefined,
+      distribution_commission_mode: 'global',
+      distribution_first_rate: 0,
+      distribution_second_rate: 0,
+      distribution_first_fixed_amount: 0,
+      distribution_second_fixed_amount: 0,
+      sku_distribution_commission_mode: 'inherit',
+      sku_distribution_first_rate: 0,
+      sku_distribution_second_rate: 0,
+      sku_distribution_first_fixed_amount: 0,
+      sku_distribution_second_fixed_amount: 0,
       sku_points_reward_mode: 'inherit',
       sku_points_reward_ratio: 0,
       sku_points_reward_fixed: 0,
@@ -1058,7 +1104,10 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
   };
 
   /* ---------- 提交 ---------- */
-  const handleSubmit = async (onSuccess: () => void) => {
+  const handleSubmit = async (
+    onSuccess: () => void,
+    features?: GoodsEditFeatureState,
+  ) => {
     try {
       await formRef.value?.validate();
       loading.value = true;
@@ -1071,6 +1120,7 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
           .filter((img) => img !== ''),
       };
       transformGoodsEditSubmitData(submitData, {
+        features,
         formData,
         specType: specType.value,
       });
@@ -1091,14 +1141,14 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
               status: sku.is_show ?? 1,
             },
             sku,
-            { formData, specType: specType.value },
+            { features, formData, specType: specType.value },
           ),
         );
       } else {
         submitData.spec_type = SPEC_TYPE_SINGLE;
         submitData.sku_detail_enabled = 0;
         submitData.spec_meta = [];
-        submitData.skus = [buildSingleSkuPayload()];
+        submitData.skus = [buildSingleSkuPayload(features)];
       }
       if (isEdit.value) {
         await updateGoodsApi(editIdRef.value!, submitData);
@@ -1115,7 +1165,7 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
     }
   };
 
-  const handleSpecTypeChange = (val: 'single' | 'multi') => {
+  const handleSpecTypeChange = (val: 'multi' | 'single') => {
     if (val === 'single' && specType.value === 'multi') {
       saveMultiSpecDraft();
     }

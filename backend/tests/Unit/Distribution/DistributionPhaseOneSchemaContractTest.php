@@ -29,12 +29,14 @@ final class DistributionPhaseOneSchemaContractTest extends TestCase
 
         $this->assertStringContainsString("'distributor_open_mode'", $settings);
         $this->assertStringContainsString("'auto_open_level_id'", $settings);
-        $this->assertStringContainsString("'relation_valid_days'", $settings);
         $this->assertStringContainsString("'amount_open_threshold_cents'", $settings);
         $this->assertStringContainsString("'invite_reward_enabled'", $settings);
-        $this->assertStringContainsString("'invite_reward_trigger'", $settings);
         $this->assertStringContainsString("'invite_reward_amount_cents'", $settings);
         $this->assertStringContainsString("'attribution_enabled'", $settings);
+        $this->assertStringNotContainsString("'relation_valid_days'", $settings);
+        $this->assertStringNotContainsString("'invite_reward_trigger'", $settings);
+        $this->assertStringNotContainsString("'invite_reward_bind_daily_limit'", $settings);
+        $this->assertStringNotContainsString("'invite_reward_bind_total_limit'", $settings);
     }
 
     private function readBackendFile(string $path): string

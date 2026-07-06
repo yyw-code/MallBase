@@ -82,14 +82,12 @@ class DistributionManagementService extends BaseService
         $data['distribution_enabled'] = $distributionEnabled;
         $data['second_level_enabled'] = $secondLevelEnabled;
         $data['self_purchase_enabled'] = $configService->normalizeSwitch((string) ($data['self_purchase_enabled'] ?? '0'));
-        $data['relation_valid_days'] = $configService->normalizeUnsignedInt((string) ($data['relation_valid_days'] ?? '0'), '绑定关系有效期不合法');
         $data['settlement_days'] = $configService->normalizeUnsignedInt((string) ($data['settlement_days'] ?? '0'), '结算等待天数不合法');
         $data['min_withdraw_cents'] = $configService->normalizeCents((string) ($data['min_withdraw_cents'] ?? '0'), '最低提现金额不合法');
         $data['global_first_rate'] = $firstRate;
         $data['global_second_rate'] = $secondRate;
         $data['amount_open_threshold_cents'] = $configService->normalizeCents((string) ($data['amount_open_threshold_cents'] ?? '0'), '满额开通门槛不合法');
         $data['invite_reward_enabled'] = $configService->normalizeSwitch((string) ($data['invite_reward_enabled'] ?? '0'));
-        $data['invite_reward_trigger'] = $configService->normalizeInviteRewardTrigger((string) ($data['invite_reward_trigger'] ?? DistributionConfigService::INVITE_REWARD_TRIGGER_FIRST_ORDER));
         $data['invite_reward_amount_cents'] = $configService->normalizeCents((string) ($data['invite_reward_amount_cents'] ?? '0'), '固定邀请奖励金额不合法');
         $data['attribution_enabled'] = $configService->normalizeSwitch((string) ($data['attribution_enabled'] ?? '1'));
 

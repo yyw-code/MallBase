@@ -171,10 +171,18 @@ class DistributionEnrollmentService extends BaseService
             }
 
             $parentUserId = (int) $relation->parent_user_id;
-            if ($parentUserId <= 0 || $accountService->activeDistributorsByUserIds([$parentUserId]) === []) {
+            if ($parentUserId <= 0) {
                 return false;
             }
 
+            /** @var DistributionDistributor|null $parentDistributor */
+            $parentDistributor = $this->model(DistributionDistributor::class)
+                ->where('user_id', $parentUserId)
+                ->lock(true)
+                ->find();
+            if ($parentDistributor === null || (int) $parentDistributor->status !== DistributionDistributor::STATUS_ENABLED) {
+                return false;
+            }
             $amountCents = (int) $settings['invite_reward_amount_cents'];
             $relation->invite_reward_status = 1;
             $relation->invite_reward_cents = $amountCents;
@@ -280,15 +288,12 @@ class DistributionEnrollmentService extends BaseService
 
     private function validRelationQuery()
     {
-        return $this->model(DistributionRelation::class)
-            ->where(function ($q) {
-                $q->whereNull('expire_time')->whereOr('expire_time', '>', date('Y-m-d H:i:s'));
-            });
+        return $this->model(DistributionRelation::class);
     }
 
     private function isRelationValid(?string $expireTime): bool
     {
-        return $expireTime === null || $expireTime === '' || strtotime($expireTime) > time();
+        return true;
     }
 
     private function decimalToCents(string $amount): int

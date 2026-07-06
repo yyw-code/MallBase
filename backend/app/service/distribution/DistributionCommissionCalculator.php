@@ -29,6 +29,7 @@ class DistributionCommissionCalculator extends BaseService
         if ($baseCents <= 0 || !in_array($relationLevel, [1, 2], true)) {
             return ['rate' => '0.00', 'amount_cents' => 0, 'rule_type' => 'none', 'rule_id' => 0];
         }
+        $quantity = $this->normalizeQuantity($item['quantity'] ?? 1);
 
         $rule = $this->matchRule($item);
         if ($rule !== null) {
@@ -36,7 +37,7 @@ class DistributionCommissionCalculator extends BaseService
                 $fixedCents = $relationLevel === 1
                     ? (int) $rule->first_fixed_cents
                     : (int) $rule->second_fixed_cents;
-                return $this->buildFixedQuote($baseCents, $fixedCents, (string) $rule->target_type, (int) $rule->id);
+                return $this->buildFixedQuote($fixedCents, $quantity, (string) $rule->target_type, (int) $rule->id);
             }
             $rate = $relationLevel === 1 ? (string) $rule->first_rate : (string) $rule->second_rate;
             return $this->buildQuote($baseCents, $rate, (string) $rule->target_type, (int) $rule->id);
@@ -136,14 +137,19 @@ class DistributionCommissionCalculator extends BaseService
     /**
      * @return array{rate:string,amount_cents:int,rule_type:string,rule_id:int}
      */
-    private function buildFixedQuote(int $baseCents, int $fixedCents, string $ruleType, int $ruleId): array
+    private function buildFixedQuote(int $fixedCents, int $quantity, string $ruleType, int $ruleId): array
     {
         return [
             'rate' => '0.00',
-            'amount_cents' => max(0, min($baseCents, $fixedCents)),
+            'amount_cents' => max(0, $fixedCents) * $quantity,
             'rule_type' => $ruleType,
             'rule_id' => $ruleId,
         ];
+    }
+
+    private function normalizeQuantity(mixed $quantity): int
+    {
+        return is_numeric($quantity) ? max(1, (int) $quantity) : 1;
     }
 
     private function normalizeRate(string $rate): string
