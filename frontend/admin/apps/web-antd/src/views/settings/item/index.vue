@@ -11,6 +11,7 @@ import {
 } from '#/api/setting';
 import { useTableCrud } from '#/composables/useTableCrud';
 
+import ItemDetailDrawer from './item-detail-drawer.vue';
 import ItemModal from './item-modal.vue';
 
 defineOptions({ name: 'SettingItem' });
@@ -133,13 +134,21 @@ const resetSearch = () => {
 /* ---------------- 弹窗 ---------------- */
 const itemModalVisible = ref(false);
 const editingItem = ref<null | SettingApi.SettingItem>(null);
+const detailDrawerVisible = ref(false);
+const detailItem = ref<null | SettingApi.SettingItem>(null);
 
 const handleCreate = () => {
   editingItem.value = null;
   itemModalVisible.value = true;
 };
 
+const handleDetail = (record: SettingApi.SettingItem) => {
+  detailItem.value = record;
+  detailDrawerVisible.value = true;
+};
+
 const handleEdit = (record: SettingApi.SettingItem) => {
+  if (record.is_system === 1) return;
   editingItem.value = record;
   itemModalVisible.value = true;
 };
@@ -168,12 +177,18 @@ const columns = [
     width: 100,
   },
   {
+    title: '页内分组',
+    dataIndex: 'section',
+    width: 120,
+  },
+  { title: '来源', dataIndex: 'is_system', width: 100 },
+  {
     title: '当前值',
     dataIndex: 'value',
     ellipsis: true,
   },
   { title: '排序', dataIndex: 'sort', width: 80 },
-  { title: '操作', key: 'action', width: 160 },
+  { title: '操作', key: 'action', width: 220 },
 ];
 
 /* ---------------- 初始化 ---------------- */
@@ -189,8 +204,19 @@ onMounted(() => {
     <div class="mb-3 flex items-center justify-between gap-4">
       <h2 class="m-0 text-lg font-semibold">设置项管理</h2>
       <div class="flex flex-wrap justify-end gap-2">
-        <a-button type="primary" @click="handleCreate"> 新增设置项 </a-button>
-        <a-button @click="() => loadData(searchParams)"> 刷新 </a-button>
+        <a-button
+          type="primary"
+          @click="handleCreate"
+          v-access:code="'SettingItemCreate'"
+        >
+          新增设置项
+        </a-button>
+        <a-button
+          @click="() => loadData(searchParams)"
+          v-access:code="'SettingItemList'"
+        >
+          刷新
+        </a-button>
       </div>
     </div>
 
@@ -254,7 +280,7 @@ onMounted(() => {
         :data-source="tableData"
         :loading="loading"
         :pagination="pagination"
-        :scroll="{ x: 1000 }"
+        :scroll="{ x: 1120 }"
         row-key="id"
         @change="handleTableChange"
       >
@@ -262,6 +288,19 @@ onMounted(() => {
           <template v-if="column.dataIndex === 'type'">
             <a-tag :color="TYPE_LABEL_MAP[record.type]?.color || 'default'">
               {{ TYPE_LABEL_MAP[record.type]?.label || record.type }}
+            </a-tag>
+          </template>
+
+          <template v-if="column.dataIndex === 'section'">
+            <a-tag v-if="record.resolved_ui?.section || record.ui?.section">
+              {{ record.resolved_ui?.section || record.ui?.section }}
+            </a-tag>
+            <span v-else class="text-xs text-gray-400">-</span>
+          </template>
+
+          <template v-if="column.dataIndex === 'is_system'">
+            <a-tag :color="record.is_system === 1 ? 'blue' : 'default'">
+              {{ record.is_system === 1 ? '系统内置' : '用户添加' }}
             </a-tag>
           </template>
 
@@ -276,14 +315,30 @@ onMounted(() => {
 
           <template v-if="column.key === 'action'">
             <a-space>
-              <a-button type="link" size="small" @click="handleEdit(record)">
+              <a-button
+                type="link"
+                size="small"
+                @click="handleDetail(record)"
+                v-access:code="'SettingItemList'"
+              >
+                详情
+              </a-button>
+              <a-button
+                type="link"
+                size="small"
+                :disabled="record.is_system === 1"
+                @click="handleEdit(record)"
+                v-access:code="'SettingItemUpdate'"
+              >
                 编辑
               </a-button>
               <a-button
                 type="link"
                 danger
                 size="small"
+                :disabled="record.is_system === 1"
                 @click="handleDelete(record, 'name')"
+                v-access:code="'SettingItemDelete'"
               >
                 删除
               </a-button>
@@ -303,6 +358,14 @@ onMounted(() => {
       :form-warnings="formWarnings"
       :ui-component-options="uiComponentOptions"
       :ui-option-source-options="uiOptionSourceOptions"
+      @success="onModalSuccess"
+    />
+
+    <!-- 设置项详情 -->
+    <ItemDetailDrawer
+      v-model:visible="detailDrawerVisible"
+      :detail-data="detailItem"
+      :group-options="groupOptions"
       @success="onModalSuccess"
     />
   </div>

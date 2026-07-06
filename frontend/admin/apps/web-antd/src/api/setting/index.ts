@@ -32,6 +32,7 @@ export namespace SettingApi {
     description?: string;
     sort: number;
     status: number;
+    is_system: number;
     permission_parent_code?: string;
     permission_path?: string;
     permission_component?: string;
@@ -39,6 +40,18 @@ export namespace SettingApi {
     create_time?: string;
     update_time?: string;
     children?: SettingGroup[];
+  }
+
+  /** 设置页内分组 */
+  export interface SettingSection {
+    id: number;
+    group_id: number;
+    name: string;
+    code: string;
+    sort: number;
+    is_system: number;
+    create_time?: string;
+    update_time?: string;
   }
 
   /** 表单类型选项 */
@@ -128,7 +141,7 @@ export namespace SettingApi {
   export interface UiCondition {
     field: string;
     operator?: 'equals' | 'falsy' | 'in' | 'not_equals' | 'truthy';
-    value?: boolean | number | string | Array<boolean | number | string>;
+    value?: Array<boolean | number | string> | boolean | number | string;
   }
 
   export interface SettingItemUi {
@@ -136,6 +149,8 @@ export namespace SettingApi {
     label?: string;
     option_source?: UiOptionSourceValue;
     placeholder?: string;
+    section?: string;
+    section_code?: string;
     visible_when?: UiCondition[];
   }
 
@@ -154,11 +169,14 @@ export namespace SettingApi {
     placeholder?: string;
     remark?: string;
     sort: number;
+    is_system: number;
     is_required: number;
     /** 后端返回的验证规则列表 */
     rules?: ValidationRule[];
-    /** 仅用于后台动态表单的交互元数据，不参与配置值保存 */
-    ui?: SettingItemUi;
+    /** 设置项已保存的动态表单交互元数据 */
+    ui?: null | SettingItemUi;
+    /** 合并代码默认值后的动态表单交互元数据，仅用于列表展示 */
+    resolved_ui?: null | SettingItemUi;
   }
 
   /** 选项项 */
@@ -195,6 +213,19 @@ export namespace SettingApi {
     sort?: number;
     status?: number;
     display_type?: 'category' | 'page' | 'tab';
+  }
+
+  /** 创建页内分组参数 */
+  export interface CreateSectionParams {
+    group_id: number;
+    name: string;
+    code: string;
+    sort?: number;
+  }
+
+  /** 更新页内分组参数 */
+  export interface UpdateSectionParams extends Partial<CreateSectionParams> {
+    id: number;
   }
 
   /** 更新分组参数 */
@@ -319,10 +350,54 @@ export async function updateSettingGroupApi(
 }
 
 /**
+ * 修改分组状态
+ */
+export async function changeSettingGroupStatusApi(id: number, status: number) {
+  return requestClient.put(`/setting/group/changeStatus/${id}`, { status });
+}
+
+/**
  * 删除分组
  */
 export async function deleteSettingGroupApi(id: number) {
   return requestClient.delete(`/setting/group/delete/${id}`);
+}
+
+// ==================== 页内分组 API ====================
+
+/**
+ * 获取设置分组下的页内分组
+ */
+export async function getSettingSectionListApi(groupId: number) {
+  return requestClient.get<SettingApi.SettingSection[]>(
+    `/setting/section/list/${groupId}`,
+  );
+}
+
+/**
+ * 创建页内分组
+ */
+export async function createSettingSectionApi(
+  data: SettingApi.CreateSectionParams,
+) {
+  return requestClient.post<{ id: number }>('/setting/section/create', data);
+}
+
+/**
+ * 更新页内分组
+ */
+export async function updateSettingSectionApi(
+  id: number,
+  data: Omit<SettingApi.UpdateSectionParams, 'id'>,
+) {
+  return requestClient.put(`/setting/section/update/${id}`, data);
+}
+
+/**
+ * 删除页内分组
+ */
+export async function deleteSettingSectionApi(id: number) {
+  return requestClient.delete(`/setting/section/delete/${id}`);
 }
 
 // ==================== 表单配置 API ====================

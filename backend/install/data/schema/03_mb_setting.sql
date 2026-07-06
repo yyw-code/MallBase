@@ -18,6 +18,7 @@ CREATE TABLE `mb_setting_group` (
   `sort` int(11) NOT NULL DEFAULT 0 COMMENT '排序',
   `display_type` varchar(20) NOT NULL DEFAULT 'page' COMMENT '展示方式：category=目录 page=独立页面 tab=选项卡聚合',
   `status` tinyint(1) NOT NULL DEFAULT 1 COMMENT '状态：0=禁用 1=启用',
+  `is_system` tinyint(1) NOT NULL DEFAULT 0 COMMENT '是否系统内置：0=用户添加 1=系统内置',
   `permission_parent_code` varchar(100) DEFAULT NULL COMMENT '权限挂载父级编码（为空按设置分组层级）',
   `permission_path` varchar(255) DEFAULT NULL COMMENT '权限菜单路由覆盖（为空自动生成）',
   `permission_component` varchar(255) DEFAULT NULL COMMENT '权限菜单组件覆盖（为空使用系统设置表单）',
@@ -47,12 +48,31 @@ CREATE TABLE `mb_setting` (
   `placeholder` varchar(255) DEFAULT NULL COMMENT '输入提示',
   `remark` varchar(255) DEFAULT NULL COMMENT '备注说明',
   `sort` int(11) NOT NULL DEFAULT 0 COMMENT '排序',
+  `is_system` tinyint(1) NOT NULL DEFAULT 0 COMMENT '是否系统内置：0=用户添加 1=系统内置',
   `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_group_code` (`group_id`, `code`),
   KEY `idx_group_id` (`group_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='设置项表';
+
+-- -----------------------------
+-- 设置页内分组表
+-- -----------------------------
+DROP TABLE IF EXISTS `mb_setting_section`;
+CREATE TABLE `mb_setting_section` (
+  `id` int(11) unsigned NOT NULL AUTO_INCREMENT COMMENT '页内分组ID',
+  `group_id` int(11) unsigned NOT NULL COMMENT '设置分组ID',
+  `name` varchar(64) NOT NULL COMMENT '页内分组名称',
+  `code` varchar(64) NOT NULL COMMENT '页内分组编码',
+  `sort` int(11) NOT NULL DEFAULT 0 COMMENT '排序',
+  `is_system` tinyint(1) NOT NULL DEFAULT 0 COMMENT '是否系统内置：0=用户添加 1=系统内置',
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_group_code` (`group_id`, `code`),
+  KEY `idx_group_id` (`group_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='设置页内分组表';
 
 -- ============================================
 -- 系统设置 - 默认分组与设置项 seed
@@ -112,6 +132,15 @@ INSERT INTO `mb_setting_group` (`id`, `parent_id`, `permission_id`, `name`, `cod
 -- 分销配置：作为分销模块专属页面的系统表单数据源，不单独生成系统设置菜单
 INSERT INTO `mb_setting_group` (`id`, `parent_id`, `permission_id`, `name`, `code`, `icon`, `description`, `sort`, `display_type`, `status`, `permission_parent_code`, `permission_path`, `permission_component`, `permission_status`) VALUES
 (111, 0, 0, '分销基础设置', 'DistributionConfig', 'lucide:settings-2', '分销总开关、结算、提现与默认佣金比例配置', 30, 'page', 1, 'SystemDistributionSettings', '/distribution/settings', '/distribution/settings/index', 0);
+
+-- 页内分组：111 DistributionConfig 分销基础设置
+INSERT INTO `mb_setting_section` (`group_id`, `name`, `code`, `sort`, `is_system`) VALUES
+(111, '基础开关', 'basic', 10, 1),
+(111, '分销员开通', 'opening', 20, 1),
+(111, '分佣规则', 'commission', 30, 1),
+(111, '归因与结算', 'settlement', 40, 1),
+(111, '提现设置', 'withdraw', 50, 1),
+(111, '邀请奖励', 'invite', 60, 1);
 
 -- 设置项：1011 SystemBasic 基础
 INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`, `rules`, `placeholder`, `remark`, `sort`) VALUES
@@ -278,15 +307,13 @@ INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`
 (111, '自动开通等级ID', 'auto_open_level_id', '1', 'number', NULL, '[{"type":"required","message":"请填写自动开通等级ID"},{"type":"integer","message":"等级ID必须是整数"},{"type":"min","value":1,"message":"不能小于 1"}]', NULL, '申请通过、人人分销、满额开通默认使用的分销员等级', 18),
 (111, '启用二级分佣', 'second_level_enabled', '0', 'switch', NULL, NULL, NULL, '默认关闭。开启后才按二级佣金比例生成二级分佣', 20),
 (111, '自购返佣', 'self_purchase_enabled', '0', 'switch', NULL, NULL, NULL, '开启后分销员自己下单可按一级比例返佣，默认关闭', 30),
-(111, '绑定关系有效期天数', 'relation_valid_days', '0', 'number', NULL, '[{"type":"required","message":"请填写绑定关系有效期"},{"type":"integer","message":"有效期必须是整数"},{"type":"min","value":0,"message":"不能小于 0"},{"type":"max","value":3650,"message":"不能大于 3650"}]', NULL, '0 表示永久有效；过期后不再按该关系生成佣金', 35),
 (111, '结算等待天数', 'settlement_days', '7', 'number', NULL, '[{"type":"required","message":"请填写结算等待天数"},{"type":"integer","message":"结算等待天数必须是整数"},{"type":"min","value":0,"message":"不能小于 0"},{"type":"max","value":365,"message":"不能大于 365"}]', NULL, '订单完成后等待多少天释放佣金；0 表示订单完成后立即结算', 40),
 (111, '最低提现金额(分)', 'min_withdraw_cents', '10000', 'number', NULL, '[{"type":"required","message":"请填写最低提现金额"},{"type":"integer","message":"最低提现金额必须是整数"},{"type":"min","value":0,"message":"不能小于 0"}]', NULL, '单位：分。10000 表示 100 元', 50),
 (111, '一级默认佣金比例(%)', 'global_first_rate', '5.00', 'number', NULL, '[{"type":"required","message":"请填写一级默认佣金比例"},{"type":"min","value":0,"message":"不能小于 0"},{"type":"max","value":100,"message":"不能大于 100"}]', NULL, '未命中特定规则时使用，支持两位小数', 60),
 (111, '二级默认佣金比例(%)', 'global_second_rate', '0.00', 'number', NULL, '[{"type":"required","message":"请填写二级默认佣金比例"},{"type":"min","value":0,"message":"不能小于 0"},{"type":"max","value":100,"message":"不能大于 100"}]', NULL, '启用二级分佣后生效，未命中特定规则时使用，支持两位小数', 70),
 (111, '满额开通门槛(分)', 'amount_open_threshold_cents', '0', 'number', NULL, '[{"type":"required","message":"请填写满额开通门槛"},{"type":"integer","message":"满额开通门槛必须是整数"},{"type":"min","value":0,"message":"不能小于 0"}]', NULL, '仅开通方式为满额自动开通时生效；单位：分', 80),
 (111, '启用固定邀请奖励', 'invite_reward_enabled', '0', 'switch', NULL, NULL, NULL, '默认关闭；只奖励直接邀请人，不做团队层级滚动奖励', 90),
-(111, '固定邀请奖励触发', 'invite_reward_trigger', 'first_order', 'select', '[{"label":"被邀请人首单支付后","value":"first_order"},{"label":"绑定关系成功后","value":"bind"}]', '[{"type":"required","message":"请选择固定邀请奖励触发方式"}]', NULL, '建议使用首单支付后，降低无效拉新风险', 100),
-(111, '固定邀请奖励金额(分)', 'invite_reward_amount_cents', '0', 'number', NULL, '[{"type":"required","message":"请填写固定邀请奖励金额"},{"type":"integer","message":"固定邀请奖励金额必须是整数"},{"type":"min","value":0,"message":"不能小于 0"}]', NULL, '单位：分；只发放一次，通过关系表状态保证幂等', 110),
+(111, '固定邀请奖励金额(分)', 'invite_reward_amount_cents', '0', 'number', NULL, '[{"type":"required","message":"请填写固定邀请奖励金额"},{"type":"integer","message":"固定邀请奖励金额必须是整数"},{"type":"min","value":0,"message":"不能小于 0"}]', NULL, '单位：分；被邀请人首单支付后只发放一次，通过关系表状态保证幂等', 110),
 (111, '启用分享归因', 'attribution_enabled', '1', 'switch', NULL, NULL, NULL, '开启后分享链接和海报参数会记录到绑定关系与佣金快照', 120);
 
 -- 设置项：107 RefundConfig 售后配置
@@ -297,3 +324,6 @@ INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`
 (107, '退货收货人地址', 'refund_return_receiver_address', '', 'textarea', NULL, NULL, NULL, NULL, 40),
 (107, '售后原因选项', 'refund_reason_options', '[{"value":"MISTAKEN_ORDER","label":"订单拍错"},{"value":"QUALITY_ISSUE","label":"商品质量问题"},{"value":"NO_LONGER_WANTED","label":"不想要了"},{"value":"OTHER","label":"其他"}]', 'option_list', NULL, NULL, '请输入原因名称', '客户端售后申请页与后端校验共用；后台只维护原因名称，编码由系统自动维护', 50),
 (107, '常用驳回原因', 'refund_reject_reason_options', '[{"value":"商品已签收，不符合退款条件","label":"商品已签收，不符合退款条件"},{"value":"买家申请理由不成立","label":"买家申请理由不成立"},{"value":"已超过售后期限","label":"已超过售后期限"},{"value":"需提供相关凭证后重新申请","label":"需提供相关凭证后重新申请"}]', 'option_list', NULL, NULL, '请输入驳回原因', '后台驳回售后申请时快捷选择，买家可见；可继续手动补充详细说明', 60);
+
+UPDATE `mb_setting_group` SET `is_system` = 1;
+UPDATE `mb_setting` SET `is_system` = 1;

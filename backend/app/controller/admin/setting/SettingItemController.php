@@ -67,9 +67,15 @@ class SettingItemController extends BaseController
             return $this->error('ID不能为空');
         }
 
-        $data = $this->request->param(['group_id', 'name', 'code', 'value', 'type', 'options', 'rules', 'ui', 'placeholder', 'remark', 'sort']);
+        $fields = ['group_id', 'name', 'code', 'value', 'type', 'options', 'rules', 'ui', 'placeholder', 'remark', 'sort'];
+        $data = array_filter(
+            $this->request->param($fields),
+            fn ($value, $key) => $this->request->has((string)$key, 'param'),
+            ARRAY_FILTER_USE_BOTH
+        );
 
-        $this->validate($data, 'admin/setting/SettingItem.update');
+        $scene = array_keys($data) === ['ui'] ? 'uiUpdate' : 'update';
+        $this->validate($data, 'admin/setting/SettingItem.' . $scene);
 
         $result = $this->service()->updateSetting((int)$id, $data);
         return $this->success($result, '更新成功');

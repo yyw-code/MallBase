@@ -8,6 +8,7 @@ use app\model\auth\Permission;
 use app\model\setting\RuleType;
 use app\model\setting\Setting;
 use app\model\setting\SettingGroup;
+use app\model\setting\SettingSection;
 use app\service\cache\SettingCacheService;
 use app\service\upload\AssetHydrator;
 use app\validate\admin\setting\SettingValueValidate;
@@ -27,6 +28,10 @@ class SettingService extends BaseService
         'client_theme_admin_mode',
         'client_theme_admin_theme_id',
         'client_theme_user_select_enabled',
+        'invite_reward_bind_daily_limit',
+        'invite_reward_bind_total_limit',
+        'invite_reward_trigger',
+        'relation_valid_days',
     ];
 
     private const UI_COMPONENTS = [
@@ -123,12 +128,17 @@ class SettingService extends BaseService
             ],
         ],
         'DistributionConfig' => [
+            'distribution_enabled' => [
+                'section_code' => 'basic',
+            ],
             'distributor_open_mode' => [
+                'section_code' => 'opening',
                 'visible_when' => [
                     ['field' => 'distribution_enabled', 'operator' => 'truthy'],
                 ],
             ],
             'auto_open_level_id' => [
+                'section_code' => 'opening',
                 'component' => 'remote_select',
                 'option_source' => 'distribution_level',
                 'label' => '默认分销等级',
@@ -143,26 +153,31 @@ class SettingService extends BaseService
                 ],
             ],
             'second_level_enabled' => [
+                'section_code' => 'commission',
                 'visible_when' => [
                     ['field' => 'distribution_enabled', 'operator' => 'truthy'],
                 ],
             ],
             'self_purchase_enabled' => [
+                'section_code' => 'commission',
                 'visible_when' => [
                     ['field' => 'distribution_enabled', 'operator' => 'truthy'],
                 ],
             ],
             'relation_valid_days' => [
+                'section_code' => 'settlement',
                 'visible_when' => [
                     ['field' => 'distribution_enabled', 'operator' => 'truthy'],
                 ],
             ],
             'settlement_days' => [
+                'section_code' => 'settlement',
                 'visible_when' => [
                     ['field' => 'distribution_enabled', 'operator' => 'truthy'],
                 ],
             ],
             'min_withdraw_cents' => [
+                'section_code' => 'withdraw',
                 'component' => 'money_yuan',
                 'label' => '最低提现金额(元)',
                 'visible_when' => [
@@ -170,17 +185,20 @@ class SettingService extends BaseService
                 ],
             ],
             'global_first_rate' => [
+                'section_code' => 'commission',
                 'visible_when' => [
                     ['field' => 'distribution_enabled', 'operator' => 'truthy'],
                 ],
             ],
             'global_second_rate' => [
+                'section_code' => 'commission',
                 'visible_when' => [
                     ['field' => 'distribution_enabled', 'operator' => 'truthy'],
                     ['field' => 'second_level_enabled', 'operator' => 'truthy'],
                 ],
             ],
             'amount_open_threshold_cents' => [
+                'section_code' => 'opening',
                 'component' => 'money_yuan',
                 'label' => '满额开通门槛(元)',
                 'visible_when' => [
@@ -189,17 +207,20 @@ class SettingService extends BaseService
                 ],
             ],
             'invite_reward_enabled' => [
+                'section_code' => 'invite',
                 'visible_when' => [
                     ['field' => 'distribution_enabled', 'operator' => 'truthy'],
                 ],
             ],
             'invite_reward_trigger' => [
+                'section_code' => 'invite',
                 'visible_when' => [
                     ['field' => 'distribution_enabled', 'operator' => 'truthy'],
                     ['field' => 'invite_reward_enabled', 'operator' => 'truthy'],
                 ],
             ],
             'invite_reward_amount_cents' => [
+                'section_code' => 'invite',
                 'component' => 'money_yuan',
                 'label' => '固定邀请奖励金额(元)',
                 'visible_when' => [
@@ -208,6 +229,7 @@ class SettingService extends BaseService
                 ],
             ],
             'attribution_enabled' => [
+                'section_code' => 'settlement',
                 'visible_when' => [
                     ['field' => 'distribution_enabled', 'operator' => 'truthy'],
                 ],
@@ -398,6 +420,9 @@ class SettingService extends BaseService
         if (!$group) {
             throw new BusinessException('分组不存在');
         }
+        if ((int)($group->is_system ?? 0) === 1) {
+            throw new BusinessException('系统内置分组不允许修改基础信息');
+        }
 
         // 检查编码是否重复
         if (!empty($data['code']) && $data['code'] !== $group->code) {
@@ -496,6 +521,9 @@ class SettingService extends BaseService
         if (!$group) {
             throw new BusinessException('分组不存在');
         }
+        if ((int)($group->is_system ?? 0) === 1) {
+            throw new BusinessException('系统内置分组不允许删除');
+        }
 
         return $this->transaction(function () use ($id, $group) {
             // 收集所有需要删除的分组ID（包含子分组）
@@ -510,6 +538,9 @@ class SettingService extends BaseService
 
             // 删除所有分组下的设置项
             $this->model(Setting::class)->whereIn('group_id', $groupIds)->delete();
+
+            // 删除所有分组下的页内分组
+            $this->model(SettingSection::class)->whereIn('group_id', $groupIds)->delete();
 
             // 删除所有子分组和当前分组
             $this->model()->whereIn('id', $groupIds)->delete();
@@ -568,6 +599,9 @@ class SettingService extends BaseService
         if (!$group) {
             throw new BusinessException('分组不存在');
         }
+        if ((int)($group->is_system ?? 0) === 1) {
+            throw new BusinessException('系统内置分组不允许修改状态');
+        }
 
         $group->save(['status' => $status]);
 
@@ -621,6 +655,132 @@ class SettingService extends BaseService
         }
 
         return $group->toArray();
+    }
+
+    // ==================== 页内分组管理 ====================
+
+    /**
+     * 获取设置分组下的页内分组列表。
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function getSectionList(int $groupId): array
+    {
+        $group = $this->model()->find($groupId);
+        if (!$group) {
+            throw new BusinessException('分组不存在');
+        }
+
+        return $this->model(SettingSection::class)
+            ->where('group_id', $groupId)
+            ->order('sort', 'asc')
+            ->order('id', 'asc')
+            ->select()
+            ->toArray();
+    }
+
+    /**
+     * 创建页内分组。
+     */
+    public function createSection(array $data): int
+    {
+        $groupId = (int)($data['group_id'] ?? 0);
+        $group = $this->model()->find($groupId);
+        if (!$group) {
+            throw new BusinessException('分组不存在');
+        }
+        if ($group->display_type !== SettingGroup::DISPLAY_TYPE_PAGE) {
+            throw new BusinessException('只有页面类型分组可以管理页内分组');
+        }
+
+        $code = trim((string)($data['code'] ?? ''));
+        if ($this->model(SettingSection::class)->where('group_id', $groupId)->where('code', $code)->find()) {
+            throw new BusinessException('页内分组编码已存在');
+        }
+
+        $section = $this->model(SettingSection::class);
+        $section->save([
+            'group_id' => $groupId,
+            'name' => trim((string)$data['name']),
+            'code' => $code,
+            'sort' => (int)($data['sort'] ?? 0),
+            'is_system' => 0,
+        ]);
+
+        $this->cacheService->clearGroup($group->code);
+
+        return (int)$section->id;
+    }
+
+    /**
+     * 更新页内分组。
+     */
+    public function updateSection(int $id, array $data): bool
+    {
+        $section = $this->model(SettingSection::class)->find($id);
+        if (!$section) {
+            throw new BusinessException('页内分组不存在');
+        }
+
+        $group = $this->model()->find($section->group_id);
+        if (!$group) {
+            throw new BusinessException('分组不存在');
+        }
+
+        $updateData = [
+            'name' => trim((string)($data['name'] ?? $section->name)),
+            'sort' => (int)($data['sort'] ?? $section->sort),
+        ];
+
+        if ((int)$section->is_system !== 1) {
+            $code = trim((string)($data['code'] ?? $section->code));
+            if ($code !== $section->code && $this->model(SettingSection::class)
+                ->where('group_id', $section->group_id)
+                ->where('code', $code)
+                ->find()) {
+                throw new BusinessException('页内分组编码已存在');
+            }
+            $updateData['code'] = $code;
+        } elseif (isset($data['code']) && trim((string)$data['code']) !== $section->code) {
+            throw new BusinessException('系统内置页内分组编码不允许修改');
+        }
+
+        $section->save($updateData);
+        $this->cacheService->clearGroup($group->code);
+
+        return true;
+    }
+
+    /**
+     * 删除页内分组。
+     */
+    public function deleteSection(int $id): bool
+    {
+        $section = $this->model(SettingSection::class)->find($id);
+        if (!$section) {
+            throw new BusinessException('页内分组不存在');
+        }
+        if ((int)$section->is_system === 1) {
+            throw new BusinessException('系统内置页内分组不允许删除');
+        }
+
+        $group = $this->model()->find($section->group_id);
+        if (!$group) {
+            throw new BusinessException('分组不存在');
+        }
+
+        $used = $this->model(Setting::class)
+            ->where('group_id', $section->group_id)
+            ->whereRaw("JSON_UNQUOTE(JSON_EXTRACT(`ui`, '$.section_code')) = ?", [$section->code])
+            ->find();
+        if ($used) {
+            throw new BusinessException('页内分组已被设置项使用，不能删除');
+        }
+
+        $section->delete();
+        $this->cacheService->clearGroup($group->code);
+
+        return true;
     }
 
     // ==================== 权限同步 ====================
@@ -1330,7 +1490,7 @@ class SettingService extends BaseService
             ->toArray();
         $list = app()->make(AssetHydrator::class)->hydrateSettings($list);
         $list = $this->filterVisibleSettings($list);
-        $list = $this->applyUiMetaToSettingList($list);
+        $list = $this->attachResolvedUiMetaToSettingList($list);
 
         return compact('total', 'list');
     }
@@ -1415,6 +1575,33 @@ class SettingService extends BaseService
         $setting = $this->model(Setting::class)->find($id);
         if (!$setting) {
             throw new BusinessException('设置项不存在');
+        }
+
+        if ((int)($setting->is_system ?? 0) === 1) {
+            $unexpectedKeys = array_diff(array_keys($data), ['ui']);
+            if (!empty($unexpectedKeys)) {
+                throw new BusinessException('系统内置设置项只允许调整页内分组');
+            }
+
+            $ui = $this->normalizeSystemSettingUi(
+                $data['ui'] ?? null,
+                (int)$setting->group_id,
+                (string)$setting->code
+            );
+            $currentUi = is_array($setting->ui) ? $setting->ui : [];
+            if ($ui === null) {
+                unset($currentUi['section_code'], $currentUi['section']);
+            } else {
+                unset($currentUi['section']);
+                $currentUi['section_code'] = $ui['section_code'];
+            }
+            $setting->save(['ui' => empty($currentUi) ? null : $currentUi]);
+            $this->clearSettingGroupCaches($setting);
+
+            return [
+                'updated' => true,
+                'warnings' => [],
+            ];
         }
 
         // 记录原始 group_id，用于判断是否跨分组移动
@@ -1536,6 +1723,17 @@ class SettingService extends BaseService
             $result['component'] = $component;
         }
 
+        $sectionCode = trim((string)($ui['section_code'] ?? ''));
+        if ($sectionCode !== '') {
+            if (!preg_match('/^[A-Za-z][A-Za-z0-9_-]*$/', $sectionCode)) {
+                throw new BusinessException('页内分组编码不合法');
+            }
+            if (!$this->model(SettingSection::class)->where('group_id', $groupId)->where('code', $sectionCode)->find()) {
+                throw new BusinessException('页内分组不存在');
+            }
+            $result['section_code'] = mb_substr($sectionCode, 0, 64);
+        }
+
         if ($component === 'remote_select') {
             $optionSource = trim((string)($ui['option_source'] ?? ''));
             if ($optionSource === '') {
@@ -1557,6 +1755,45 @@ class SettingService extends BaseService
         }
 
         return empty($result) ? null : $result;
+    }
+
+    /**
+     * 系统内置设置项只允许保存页内分组归属。
+     */
+    protected function normalizeSystemSettingUi(mixed $ui, int $groupId, string $currentCode): ?array
+    {
+        $normalized = $this->normalizeSettingUi($ui, $groupId, $currentCode);
+        if ($normalized === null) {
+            return null;
+        }
+
+        $result = [];
+        if (!empty($normalized['section_code'])) {
+            $result['section_code'] = $normalized['section_code'];
+        }
+
+        return empty($result) ? null : $result;
+    }
+
+    /**
+     * 清理设置项所属分组相关缓存。
+     */
+    protected function clearSettingGroupCaches(Setting $setting): void
+    {
+        $this->cacheService->clearSettingValue($setting->code);
+
+        $group = $this->model()->find($setting->group_id);
+        if (!$group) {
+            return;
+        }
+
+        $this->cacheService->clearGroup($group->code);
+        if ($group->parent_id > 0) {
+            $parentGroup = $this->model()->find($group->parent_id);
+            if ($parentGroup && $parentGroup->display_type === SettingGroup::DISPLAY_TYPE_TAB) {
+                $this->cacheService->clearGroup($parentGroup->code);
+            }
+        }
     }
 
     /**
@@ -1785,6 +2022,9 @@ class SettingService extends BaseService
         if (!$setting) {
             throw new BusinessException('设置项不存在');
         }
+        if ((int)($setting->is_system ?? 0) === 1) {
+            throw new BusinessException('系统内置设置项不允许删除');
+        }
 
         $code = $setting->code;
         $groupId = $setting->group_id;
@@ -1979,8 +2219,11 @@ class SettingService extends BaseService
      */
     private function applyUiMetaToSettings(array $settings, string $groupCode): array
     {
+        $groupId = (int)($settings[0]['group_id'] ?? 0);
+        $sectionMap = $this->getSectionMapByGroupId($groupId);
         foreach ($settings as &$setting) {
             $setting = $this->applyUiMetaToSetting($setting, $groupCode);
+            $setting = $this->attachSectionLabelToSetting($setting, $sectionMap);
         }
         unset($setting);
 
@@ -1991,7 +2234,7 @@ class SettingService extends BaseService
      * @param array<int, array<string, mixed>> $settings
      * @return array<int, array<string, mixed>>
      */
-    private function applyUiMetaToSettingList(array $settings): array
+    private function attachResolvedUiMetaToSettingList(array $settings): array
     {
         $groupIds = array_values(array_unique(array_filter(array_map(
             fn (array $setting): int => (int)($setting['group_id'] ?? 0),
@@ -2009,16 +2252,77 @@ class SettingService extends BaseService
         foreach ($groups as $group) {
             $groupCodeMap[(int)$group['id']] = (string)$group['code'];
         }
+        $sectionMaps = $this->getSectionMapsByGroupIds($groupIds);
 
         foreach ($settings as &$setting) {
-            $groupCode = $groupCodeMap[(int)($setting['group_id'] ?? 0)] ?? '';
+            $groupId = (int)($setting['group_id'] ?? 0);
+            $groupCode = $groupCodeMap[$groupId] ?? '';
             if ($groupCode !== '') {
-                $setting = $this->applyUiMetaToSetting($setting, $groupCode);
+                $resolvedSetting = $this->applyUiMetaToSetting($setting, $groupCode);
+                $resolvedSetting = $this->attachSectionLabelToSetting($resolvedSetting, $sectionMaps[$groupId] ?? []);
+                $setting['resolved_ui'] = $resolvedSetting['ui'] ?? null;
             }
         }
         unset($setting);
 
         return $settings;
+    }
+
+    /**
+     * @param array<int, int> $groupIds
+     * @return array<int, array<string, string>>
+     */
+    private function getSectionMapsByGroupIds(array $groupIds): array
+    {
+        $groupIds = array_values(array_unique(array_filter(array_map('intval', $groupIds))));
+        if (empty($groupIds)) {
+            return [];
+        }
+
+        $sections = $this->model(SettingSection::class)
+            ->whereIn('group_id', $groupIds)
+            ->order('sort', 'asc')
+            ->select()
+            ->toArray();
+
+        $maps = [];
+        foreach ($sections as $section) {
+            $groupId = (int)($section['group_id'] ?? 0);
+            $code = (string)($section['code'] ?? '');
+            if ($groupId <= 0 || $code === '') {
+                continue;
+            }
+            $maps[$groupId][$code] = (string)($section['name'] ?? $code);
+        }
+
+        return $maps;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function getSectionMapByGroupId(int $groupId): array
+    {
+        return $this->getSectionMapsByGroupIds([$groupId])[$groupId] ?? [];
+    }
+
+    /**
+     * @param array<string, mixed> $setting
+     * @param array<string, string> $sectionMap
+     * @return array<string, mixed>
+     */
+    private function attachSectionLabelToSetting(array $setting, array $sectionMap): array
+    {
+        if (!isset($setting['ui']) || !is_array($setting['ui'])) {
+            return $setting;
+        }
+
+        $sectionCode = (string)($setting['ui']['section_code'] ?? '');
+        if ($sectionCode !== '') {
+            $setting['ui']['section'] = $sectionMap[$sectionCode] ?? $sectionCode;
+        }
+
+        return $setting;
     }
 
     /**

@@ -62,6 +62,9 @@ class SettingItem extends Validate
             'remark',
             'sort',
         ],
+        'uiUpdate' => [
+            'ui',
+        ],
     ];
 
     /**
@@ -256,6 +259,14 @@ class SettingItem extends Validate
             && !in_array($optionSource, self::UI_OPTION_SOURCES, true)
         ) {
             return '远程选项来源不合法';
+        }
+
+        $sectionCode = (string)($value['section_code'] ?? '');
+        if (
+            $sectionCode !== ''
+            && !preg_match('/^[A-Za-z][A-Za-z0-9_-]*$/', $sectionCode)
+        ) {
+            return '页内分组编码不合法';
         }
 
         $conditions = $value['visible_when'] ?? [];

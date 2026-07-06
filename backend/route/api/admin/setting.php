@@ -23,6 +23,20 @@ Route::group('setting/group', function () {
         '_component'  => '/settings/group/index',
     ]);
 
+Route::group('setting/section', function () {
+    Route::get('list/:groupId', 'list')->name('SettingSectionList')->option(['_alias' => '页内分组列表', '_desc' => '设置页内分组列表', '_auth' => true, '_type' => Permission::TYPE_MENU]);
+    Route::post('create', 'create')->name('SettingSectionCreate')->option(['_alias' => '创建页内分组', '_desc' => '创建设置页内分组', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
+    Route::put('update/:id', 'update')->name('SettingSectionUpdate')->option(['_alias' => '更新页内分组', '_desc' => '更新设置页内分组', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
+    Route::delete('delete/:id', 'delete')->name('SettingSectionDelete')->option(['_alias' => '删除页内分组', '_desc' => '删除设置页内分组', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
+})->prefix('admin.setting.SectionController/')
+    ->option([
+        '_group_name' => '设置页内分组',
+        '_group_code' => 'SettingSection',
+        '_path'       => '/settings/group',
+        '_auth'       => true,
+        '_parent'     => 'SettingGroup',
+    ]);
+
 Route::group('setting/item', function () {
     Route::get('form/config', 'formConfig')->name('SettingFormConfig')->option(['_alias' => '表单配置', '_desc' => '获取表单类型选项和验证规则类型', '_auth' => false]);
     Route::get('list', 'list')->name('SettingItemList')->option(['_alias' => '设置项列表', '_desc' => '分组下的设置项列表', '_auth' => true, '_type' => Permission::TYPE_MENU]);
