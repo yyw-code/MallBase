@@ -1167,12 +1167,13 @@ class DecorationService extends BaseService
     }
 
     /**
-     * @return array<int, array{title:string,label:string,image:string,path:string}>
+     * @return array<int, array<string, mixed>>
      */
     protected function defaultProfileServiceItems(): array
     {
         return [
             ['title' => '地址管理', 'label' => '地址管理', 'image' => 'static/decorate/profile-service-address.svg', 'path' => '/pages-sub/address/list'],
+            ['title' => '分销中心', 'label' => '分销中心', 'image' => '', 'imageRemoved' => true, 'image_removed' => true, 'path' => '/pages-sub/distribution/index'],
             ['title' => '系统设置', 'label' => '系统设置', 'image' => 'static/decorate/profile-service-settings.svg', 'path' => '/pages-sub/user/settings'],
             ['title' => '联系客服', 'label' => '联系客服', 'image' => 'static/decorate/profile-service-support.svg', 'path' => ''],
         ];

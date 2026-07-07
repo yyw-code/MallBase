@@ -39,9 +39,86 @@ final class DistributionPhaseOneSchemaContractTest extends TestCase
         $this->assertStringNotContainsString("'invite_reward_bind_total_limit'", $settings);
     }
 
+    public function testClientDistributionStopsNewActionsWhenDisabled(): void
+    {
+        $service = $this->readBackendFile('app/service/client/distribution/DistributionCenterService.php');
+
+        $this->assertStringContainsString('private function assertDistributionEnabled', $service);
+        $this->assertStringContainsString('$settings = $this->assertDistributionEnabled', $service);
+        $this->assertStringContainsString('$this->assertDistributionEnabled();', $service);
+        $this->assertStringContainsString("throw new BusinessException('分销功能未开启');", $service);
+    }
+
+    public function testDefaultProfileContainsDistributionCenterEntry(): void
+    {
+        $schema = $this->readBackendFile('install/data/schema/13_mb_client_diy.sql');
+
+        $this->assertStringContainsString("'分销中心'", $schema);
+        $this->assertStringContainsString("'/pages-sub/distribution/index'", $schema);
+    }
+
+    public function testUniappDistributionPagesAndApiContractAreRegistered(): void
+    {
+        $pages = $this->readProjectFile('frontend/uniapp/pages.json');
+        $this->assertStringContainsString('"root": "pages-sub/distribution"', $pages);
+        foreach (['"path": "index"', '"path": "records"', '"path": "team"', '"path": "withdraw"'] as $path) {
+            $this->assertStringContainsString($path, $pages);
+        }
+
+        $api = $this->readProjectFile('frontend/uniapp/api/distribution/distribution.js');
+        foreach ([
+            '/client/api/distribution/summary',
+            '/client/api/distribution/commissions',
+            '/client/api/distribution/logs',
+            '/client/api/distribution/team',
+            '/client/api/distribution/withdraws',
+            '/client/api/distribution/withdraw',
+            '/client/api/distribution/bindInvite',
+            '/client/api/distribution/apply',
+            '/client/api/distribution/shareInfo',
+        ] as $path) {
+            $this->assertStringContainsString($path, $api);
+        }
+
+        $center = $this->readProjectFile('frontend/uniapp/pages-sub/distribution/index.vue');
+        $this->assertStringContainsString('分销功能未开启', $center);
+        $this->assertStringContainsString('申请分销员', $center);
+        $this->assertStringContainsString('绑定邀请码', $center);
+        $this->assertStringContainsString('/pages-sub/distribution/withdraw', $center);
+        $this->assertStringContainsString('/pages-sub/distribution/records', $center);
+        $this->assertStringContainsString('/pages-sub/distribution/team', $center);
+
+        $withdraw = $this->readProjectFile('frontend/uniapp/pages-sub/distribution/withdraw.vue');
+        $this->assertStringContainsString('提现申请', $withdraw);
+        $this->assertStringContainsString('最低提现', $withdraw);
+        $this->assertStringContainsString('暂无提现记录', $withdraw);
+
+        $records = $this->readProjectFile('frontend/uniapp/pages-sub/distribution/records.vue');
+        $this->assertStringContainsString('佣金订单', $records);
+        $this->assertStringContainsString('佣金流水', $records);
+        $this->assertStringContainsString('暂无记录', $records);
+
+        $team = $this->readProjectFile('frontend/uniapp/pages-sub/distribution/team.vue');
+        $this->assertStringContainsString('一级团队', $team);
+        $this->assertStringContainsString('二级团队', $team);
+        $this->assertStringContainsString('暂无团队成员', $team);
+    }
+
     private function readBackendFile(string $path): string
     {
         $content = file_get_contents(dirname(__DIR__, 3) . '/' . $path);
+        $this->assertIsString($content);
+        return $content;
+    }
+
+    private function readProjectFile(string $path): string
+    {
+        $root = dirname(__DIR__, 4);
+        $file = $root . '/' . $path;
+        if (!is_file($file) && is_dir('/workspace')) {
+            $file = '/workspace/' . $path;
+        }
+        $content = file_get_contents($file);
         $this->assertIsString($content);
         return $content;
     }

@@ -151,7 +151,7 @@ class DistributionCenterService extends BaseService
     public function applyWithdraw(int $userId, string $amount, string $accountType, string $accountName, string $accountNo): int
     {
         $this->assertDistributor($userId);
-        $settings = app()->make(DistributionConfigService::class)->settings();
+        $settings = $this->assertDistributionEnabled(app()->make(DistributionConfigService::class)->settings());
         $amountCents = $this->amountToCents($amount);
         if ($amountCents < (int) $settings['min_withdraw_cents']) {
             throw new BusinessException('提现金额低于最低提现金额');
@@ -212,6 +212,7 @@ class DistributionCenterService extends BaseService
      */
     public function shareInfo(int $userId, string $targetType, int $targetId, string $page = '', string $scene = 'share_link'): array
     {
+        $this->assertDistributionEnabled();
         $account = $this->assertDistributor($userId);
         $targetType = mb_substr(trim($targetType), 0, 32);
         $targetId = max(0, $targetId);
@@ -234,6 +235,21 @@ class DistributionCenterService extends BaseService
             'query' => http_build_query($params),
             'path' => $page === '' ? '' : $page . (str_contains($page, '?') ? '&' : '?') . http_build_query($params),
         ];
+    }
+
+    /**
+     * @param array<string,mixed>|null $settings
+     * @return array<string,mixed>
+     */
+    private function assertDistributionEnabled(?array $settings = null): array
+    {
+        if ($settings === null) {
+            $settings = app()->make(DistributionConfigService::class)->settings();
+        }
+        if (!$settings['distribution_enabled']) {
+            throw new BusinessException('分销功能未开启');
+        }
+        return $settings;
     }
 
     private function assertDistributor(int $userId): DistributionDistributor
