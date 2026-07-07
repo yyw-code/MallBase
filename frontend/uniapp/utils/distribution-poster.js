@@ -1,3 +1,5 @@
+import QRCode from "qrcode";
+
 export const DISTRIBUTION_POSTER_CANVAS_ID = "distributionPosterCanvas";
 export const DISTRIBUTION_POSTER_SIZE = {
   height: 900,
@@ -7,50 +9,123 @@ export const DISTRIBUTION_POSTER_SIZE = {
 export function drawDistributionPoster(ctx, options = {}) {
   const width = DISTRIBUTION_POSTER_SIZE.width;
   const height = DISTRIBUTION_POSTER_SIZE.height;
-  const inviteCode = String(options.inviteCode || "");
-  const sharePath = String(options.sharePath || "");
-  const siteName = String(options.siteName || "MallBase");
+  const inviteCode = cleanText(options.inviteCode);
+  const qrText = String(options.qrText || options.sharePath || "");
+  const coverImage = cleanText(options.coverImage);
+  const siteName = cleanText(options.siteName);
+  const title = cleanText(options.title) || "分销邀请";
+  const subtitle = cleanText(options.subtitle);
+  const headerTextWidth = coverImage ? 284 : 432;
 
-  ctx.setFillStyle("#f5f7fb");
+  ctx.setFillStyle("#eef4ff");
   ctx.fillRect(0, 0, width, height);
 
-  drawRoundRect(ctx, 42, 42, 516, 816, 28, "#ffffff");
-  drawRoundRect(ctx, 42, 42, 516, 190, 28, "#0d50d5");
+  drawRoundRect(ctx, 30, 30, 540, 840, 34, "#ffffff");
+  drawRoundRect(ctx, 48, 48, 504, 238, 30, "#1155dc");
+  drawRoundRect(ctx, 72, 246, 112, 8, 4, "#16c784");
+  drawCoverImage(ctx, coverImage, 392, 86, 116, 116);
 
   ctx.setFillStyle("#ffffff");
-  ctx.setFontSize(36);
+  ctx.setFontSize(30);
   ctx.setTextAlign("left");
-  ctx.fillText(siteName, 82, 105);
-  ctx.setFontSize(54);
-  ctx.fillText("分销邀请", 82, 180);
+  if (siteName) {
+    ctx.fillText(clampText(ctx, siteName, headerTextWidth), 72, 102);
+  }
+  ctx.setFontSize(52);
+  ctx.fillText(clampText(ctx, title, headerTextWidth), 72, 168);
 
-  ctx.setFillStyle("#e8efff");
-  ctx.setFontSize(24);
-  ctx.fillText("邀请好友下单，成交后按规则计算佣金", 82, 225);
+  if (subtitle) {
+    ctx.setFillStyle("#dbeafe");
+    ctx.setFontSize(22);
+    wrapText(ctx, subtitle, 72, 218, headerTextWidth, 30, 2);
+  }
 
-  ctx.setFillStyle("#191b23");
-  ctx.setFontSize(26);
-  ctx.fillText("我的邀请码", 82, 312);
-  drawRoundRect(ctx, 82, 340, 436, 116, 18, "#f3f3fe");
-  ctx.setFillStyle("#0d50d5");
-  ctx.setFontSize(46);
+  drawRoundRect(ctx, 58, 312, 484, 142, 26, "#f7f9ff");
+  ctx.setFillStyle("#667085");
+  ctx.setFontSize(22);
+  ctx.setTextAlign("left");
+  ctx.fillText("我的邀请码", 92, 358);
+  ctx.setFillStyle("#1155dc");
+  ctx.setFontSize(48);
   ctx.setTextAlign("center");
-  ctx.fillText(inviteCode || "-", 300, 413);
+  ctx.fillText(inviteCode || "-", 300, 420);
 
-  ctx.setFillStyle("#191b23");
-  ctx.setFontSize(26);
-  ctx.setTextAlign("left");
-  ctx.fillText("分享路径", 82, 525);
-  drawRoundRect(ctx, 82, 552, 436, 138, 18, "#f8fafc");
-  ctx.setFillStyle("#434654");
-  ctx.setFontSize(20);
-  wrapText(ctx, sharePath || "-", 108, 592, 384, 30, 3);
+  ctx.setFillStyle("#111827");
+  ctx.setFontSize(28);
+  ctx.setTextAlign("center");
+  ctx.fillText("扫码进入商城", 300, 510);
+  drawRoundRect(ctx, 150, 540, 300, 300, 28, "#f8fafc");
+  drawRoundRect(ctx, 170, 560, 260, 260, 22, "#ffffff");
+  drawQrCode(ctx, qrText, 190, 580, 220);
 
-  drawRoundRect(ctx, 82, 728, 436, 72, 16, "#0d50d5");
+  ctx.setFillStyle("#667085");
+  ctx.setFontSize(22);
+  ctx.setTextAlign("center");
+  ctx.fillText(inviteCode ? "扫码或输入邀请码绑定" : "扫码打开分享页面", 300, 842);
+}
+
+function drawCoverImage(ctx, coverImage, x, y, width, height) {
+  if (!coverImage) return;
+
+  drawRoundRect(ctx, x - 10, y - 10, width + 20, height + 20, 22, "#ffffff");
+  try {
+    ctx.drawImage(coverImage, x, y, width, height);
+  } catch {
+    ctx.setFillStyle("#dbeafe");
+    ctx.fillRect(x, y, width, height);
+  }
+}
+
+function drawQrCode(ctx, text, x, y, size) {
+  const modules = createQrModules(text);
+  if (!modules) {
+    drawQrFallback(ctx, x, y, size);
+    return;
+  }
+
+  const count = modules.size;
+  const cellSize = Math.max(1, Math.floor(size / count));
+  const qrSize = cellSize * count;
+  const offsetX = x + Math.floor((size - qrSize) / 2);
+  const offsetY = y + Math.floor((size - qrSize) / 2);
+  const data = modules.data;
+
   ctx.setFillStyle("#ffffff");
-  ctx.setFontSize(24);
+  ctx.fillRect(x, y, size, size);
+  ctx.setFillStyle("#111827");
+  for (let row = 0; row < count; row += 1) {
+    for (let col = 0; col < count; col += 1) {
+      if (data[row * count + col]) {
+        ctx.fillRect(offsetX + col * cellSize, offsetY + row * cellSize, cellSize, cellSize);
+      }
+    }
+  }
+}
+
+function createQrModules(text) {
+  const value = String(text || "").trim();
+  if (!value) return null;
+
+  try {
+    return QRCode.create(value, {
+      errorCorrectionLevel: "M",
+      margin: 0,
+    }).modules;
+  } catch {
+    return null;
+  }
+}
+
+function drawQrFallback(ctx, x, y, size) {
+  drawRoundRect(ctx, x, y, size, size, 10, "#ffffff");
+  ctx.setFillStyle("#6b7280");
+  ctx.setFontSize(22);
   ctx.setTextAlign("center");
-  ctx.fillText("复制分享路径或输入邀请码绑定", 300, 773);
+  ctx.fillText("二维码生成失败", x + size / 2, y + size / 2);
+}
+
+function cleanText(value) {
+  return String(value || "").trim();
 }
 
 function drawRoundRect(ctx, x, y, width, height, radius, color) {
@@ -93,6 +168,19 @@ function wrapText(ctx, text, x, y, maxWidth, lineHeight, maxLines) {
   if (line) {
     ctx.fillText(line, x, y);
   }
+}
+
+function clampText(ctx, text, maxWidth) {
+  const value = String(text || "");
+  if (measureTextWidth(ctx, value) <= maxWidth) {
+    return value;
+  }
+
+  let result = value;
+  while (result.length > 0 && measureTextWidth(ctx, `${result}...`) > maxWidth) {
+    result = result.slice(0, -1);
+  }
+  return result ? `${result}...` : "...";
 }
 
 function measureTextWidth(ctx, text) {

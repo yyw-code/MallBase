@@ -656,6 +656,38 @@ const profileTextStyleDefaults: Record<
       textAlign: 'left',
     },
   },
+  distributionEntry: {
+    action: {
+      color: '#434654',
+      fontSize: 24,
+      fontWeight: '600',
+      textAlign: 'center',
+    },
+    amount: {
+      color: '#191b23',
+      fontSize: 52,
+      fontWeight: '800',
+      textAlign: 'left',
+    },
+    meta: {
+      color: '#737686',
+      fontSize: 22,
+      fontWeight: '400',
+      textAlign: 'left',
+    },
+    primaryAction: {
+      color: '#ffffff',
+      fontSize: 24,
+      fontWeight: '600',
+      textAlign: 'center',
+    },
+    title: {
+      color: '#434654',
+      fontSize: 24,
+      fontWeight: '400',
+      textAlign: 'left',
+    },
+  },
   entryCard: {
     subtitle: {
       color: '#737686',
@@ -777,6 +809,13 @@ const profileTextStyleFieldsByType: Record<
   pointsEntry: [
     { label: '卡片标题', role: 'title' },
     { label: '积分数字', role: 'amount' },
+    { label: '辅助说明', role: 'meta' },
+    { label: '普通按钮', role: 'action' },
+    { label: '主按钮', role: 'primaryAction' },
+  ],
+  distributionEntry: [
+    { label: '卡片标题', role: 'title' },
+    { label: '佣金金额', role: 'amount' },
     { label: '辅助说明', role: 'meta' },
     { label: '普通按钮', role: 'action' },
     { label: '主按钮', role: 'primaryAction' },
@@ -2134,6 +2173,24 @@ const profileTextStyleTargetText = (
         config.show_view_button === false ? '当前未显示' : '去查看',
       subtitle: '当前未显示',
       title: String(config.title || '我的积分'),
+    };
+    return targets[role] || '当前未显示';
+  }
+  if (type === 'distributionEntry') {
+    const targets: Partial<Record<ProfileTextStyleRole, string>> = {
+      action: config.show_records === false ? '当前未显示' : '佣金明细',
+      amount: config.show_commission === false ? '当前未显示' : '¥0.00',
+      iconText: '当前未显示',
+      itemLabel: '当前未显示',
+      meta:
+        config.show_team === false && config.show_invite === false
+          ? '当前未显示'
+          : '团队 0 人 / 邀请码 MB0000',
+      more: '当前未显示',
+      primaryAction:
+        config.show_withdraw_button === false ? '当前未显示' : '去提现',
+      subtitle: '当前未显示',
+      title: String(config.title || '分销中心'),
     };
     return targets[role] || '当前未显示';
   }
@@ -4393,6 +4450,8 @@ const updateProfileItemVisible = updateConfigItemVisible;
                       memberEntry: '会员等级区域，控制折扣、成长值和进度展示。',
                       walletEntry: '钱包信息区域，控制余额、明细和查看入口。',
                       pointsEntry: '积分信息区域，控制积分、明细和查看入口。',
+                      distributionEntry:
+                        '分销信息区域，控制佣金、团队、邀请码、提现和明细入口。',
                     }[editableProfileType] || '配置当前个人中心组件内容。'
                   }}
                 </div>
@@ -4485,6 +4544,40 @@ const updateProfileItemVisible = updateConfigItemVisible;
                 <a-form-item label="查看按钮">
                   <a-switch
                     v-model:checked="editableModule.config.show_view_button"
+                  />
+                </a-form-item>
+              </div>
+            </template>
+
+            <template v-else-if="editableProfileType === 'distributionEntry'">
+              <a-form-item label="卡片标题">
+                <a-input
+                  v-model:value="editableModule.config.title"
+                  placeholder="如：分销中心"
+                />
+              </a-form-item>
+              <div class="profile-config-grid">
+                <a-form-item label="展示佣金">
+                  <a-switch
+                    v-model:checked="editableModule.config.show_commission"
+                  />
+                </a-form-item>
+                <a-form-item label="展示团队">
+                  <a-switch v-model:checked="editableModule.config.show_team" />
+                </a-form-item>
+                <a-form-item label="展示邀请码">
+                  <a-switch
+                    v-model:checked="editableModule.config.show_invite"
+                  />
+                </a-form-item>
+                <a-form-item label="提现按钮">
+                  <a-switch
+                    v-model:checked="editableModule.config.show_withdraw_button"
+                  />
+                </a-form-item>
+                <a-form-item label="佣金明细">
+                  <a-switch
+                    v-model:checked="editableModule.config.show_records"
                   />
                 </a-form-item>
               </div>

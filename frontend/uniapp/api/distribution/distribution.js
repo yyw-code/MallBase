@@ -1,4 +1,4 @@
-import { get, post } from "@/api/request";
+import { get, post, postSilent } from "@/api/request";
 
 export const getDistributionSummary = () => get("/client/api/distribution/summary");
 
@@ -20,8 +20,14 @@ export const applyDistributionWithdraw = (data) =>
 export const bindDistributionInvite = (data) =>
   post("/client/api/distribution/bindInvite", data);
 
+export const autoBindDistributionInvite = (data) =>
+  postSilent("/client/api/distribution/bindInvite", data);
+
 export const applyDistributionDistributor = (data) =>
   post("/client/api/distribution/apply", data);
+
+export const withdrawDistributionApply = () =>
+  post("/client/api/distribution/withdrawApply");
 
 export const getDistributionShareInfo = (params) =>
   get("/client/api/distribution/shareInfo", params);

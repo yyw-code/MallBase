@@ -35,6 +35,7 @@ const total = ref(0);
 const loading = ref(false);
 const submitting = ref(false);
 const finished = ref(false);
+const featureClosed = ref(false);
 
 const availableText = computed(() =>
   formatAmount(summary.value.available_commission),
@@ -52,21 +53,31 @@ onPullDownRefresh(async () => {
 });
 
 onReachBottom(() => {
-  if (!finished.value && !loading.value) fetchWithdraws(false);
+  if (!featureClosed.value && !finished.value && !loading.value) {
+    fetchWithdraws(false);
+  }
 });
 
 async function fetchPage(reset) {
-  await Promise.all([fetchSummary(), fetchWithdraws(reset)]);
+  await fetchSummary();
+  if (featureClosed.value) {
+    if (reset) list.value = [];
+    finished.value = true;
+    return;
+  }
+  await fetchWithdraws(reset);
 }
 
 async function fetchSummary() {
   try {
     const data = await getDistributionSummary();
+    featureClosed.value = data?.enabled === false;
     summary.value = {
       ...summary.value,
       ...(data || {}),
     };
-  } catch {
+  } catch (error) {
+    featureClosed.value = isDistributionClosedError(error);
     summary.value = {
       available_commission: "0.00",
       min_withdraw_amount: "0.00",
@@ -90,11 +101,13 @@ async function fetchWithdraws(reset) {
       status: activeStatus.value,
     });
     const rows = Array.isArray(data?.list) ? data.list : [];
+    featureClosed.value = false;
     total.value = Number(data?.total || rows.length || 0);
     list.value = reset ? rows : list.value.concat(rows);
     finished.value = list.value.length >= total.value || rows.length === 0;
     if (!finished.value) page.value += 1;
-  } catch {
+  } catch (error) {
+    featureClosed.value = isDistributionClosedError(error);
     if (reset) list.value = [];
     finished.value = true;
   } finally {
@@ -102,11 +115,16 @@ async function fetchWithdraws(reset) {
   }
 }
 
+function isDistributionClosedError(error) {
+  return String(error?.message || "").includes("分销功能未开启");
+}
+
 function formatAmount(value) {
   return Number(value || 0).toFixed(2);
 }
 
 function switchStatus(status) {
+  if (featureClosed.value) return;
   if (activeStatus.value === status) return;
   activeStatus.value = status;
   fetchWithdraws(true);
@@ -114,6 +132,10 @@ function switchStatus(status) {
 
 async function submitWithdraw() {
   if (submitting.value) return;
+  if (featureClosed.value) {
+    uni.showToast({ title: "分销功能未开启", icon: "none" });
+    return;
+  }
   if (!form.amount) {
     uni.showToast({ title: "请输入提现金额", icon: "none" });
     return;
@@ -160,7 +182,11 @@ function statusColor(status) {
   >
     <mb-navbar title="佣金提现" bg-color="var(--color-bg, #ffffff)" />
 
-    <view class="summary-card">
+    <view v-if="featureClosed" class="empty">
+      <text class="empty__title">分销功能未开启</text>
+    </view>
+
+    <view v-if="!featureClosed" class="summary-card">
       <view>
         <text class="summary-card__label">可提现佣金</text>
         <view class="summary-card__amount">
@@ -174,7 +200,7 @@ function statusColor(status) {
       </view>
     </view>
 
-    <view class="form-card">
+    <view v-if="!featureClosed" class="form-card">
       <text class="form-card__title">提现申请</text>
       <view class="form-row">
         <text class="form-row__label">金额</text>
@@ -210,7 +236,7 @@ function statusColor(status) {
       </view>
     </view>
 
-    <view class="tabs">
+    <view v-if="!featureClosed" class="tabs">
       <view
         v-for="item in statusTabs"
         :key="item.key"
@@ -222,7 +248,7 @@ function statusColor(status) {
       </view>
     </view>
 
-    <view v-if="list.length" class="withdraw-list">
+    <view v-if="!featureClosed && list.length" class="withdraw-list">
       <view
         v-for="item in list"
         :key="item.id || item.sn"
@@ -252,7 +278,7 @@ function statusColor(status) {
       </view>
     </view>
 
-    <view v-else class="empty">
+    <view v-else-if="!featureClosed" class="empty">
       <text class="empty__title">暂无提现记录</text>
     </view>
 

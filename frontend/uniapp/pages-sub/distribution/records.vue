@@ -34,6 +34,7 @@ const page = ref(1);
 const total = ref(0);
 const loading = ref(false);
 const finished = ref(false);
+const featureClosed = ref(false);
 
 const filters = computed(() =>
   activeTab.value === "commissions" ? commissionStatuses : logDirections,
@@ -70,7 +71,9 @@ onPullDownRefresh(async () => {
 });
 
 onReachBottom(() => {
-  if (!finished.value && !loading.value) fetchRecords(false);
+  if (!featureClosed.value && !finished.value && !loading.value) {
+    fetchRecords(false);
+  }
 });
 
 async function fetchRecords(reset) {
@@ -97,16 +100,22 @@ async function fetchRecords(reset) {
             direction: activeDirection.value,
           });
     const rows = Array.isArray(data?.list) ? data.list : [];
+    featureClosed.value = false;
     total.value = Number(data?.total || rows.length || 0);
     list.value = reset ? rows : list.value.concat(rows);
     finished.value = list.value.length >= total.value || rows.length === 0;
     if (!finished.value) page.value += 1;
-  } catch {
+  } catch (error) {
+    featureClosed.value = isDistributionClosedError(error);
     if (reset) list.value = [];
     finished.value = true;
   } finally {
     loading.value = false;
   }
+}
+
+function isDistributionClosedError(error) {
+  return String(error?.message || "").includes("分销功能未开启");
 }
 
 function switchTab(tab) {
@@ -179,7 +188,11 @@ function logAmount(item) {
   >
     <mb-navbar title="佣金明细" bg-color="var(--color-bg, #ffffff)" />
 
-    <view class="tabs">
+    <view v-if="featureClosed" class="empty">
+      <text class="empty__title">分销功能未开启</text>
+    </view>
+
+    <view v-else class="tabs">
       <view
         v-for="tab in tabs"
         :key="tab.key"
@@ -191,7 +204,7 @@ function logAmount(item) {
       </view>
     </view>
 
-    <view class="filter-row">
+    <view v-if="!featureClosed" class="filter-row">
       <view
         v-for="item in filters"
         :key="item.key"
@@ -203,7 +216,7 @@ function logAmount(item) {
       </view>
     </view>
 
-    <view v-if="groupedList.length" class="record-list">
+    <view v-if="!featureClosed && groupedList.length" class="record-list">
       <view
         v-for="group in groupedList"
         :key="group.label"
@@ -277,7 +290,7 @@ function logAmount(item) {
       </view>
     </view>
 
-    <view v-else class="empty">
+    <view v-else-if="!featureClosed" class="empty">
       <text class="empty__title">暂无记录</text>
     </view>
 

@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import type { DistributionApi } from '#/api/distribution';
 
-import { h, onMounted, reactive, ref } from 'vue';
+import { h, onMounted, ref } from 'vue';
 
 import { useAccess } from '@vben/access';
 
@@ -10,7 +10,6 @@ import { message, Switch, Tag } from 'ant-design-vue';
 import {
   getDistributionDistributorListApi,
   getDistributionLevelListApi,
-  openDistributionDistributorApi,
   updateDistributionDistributorStatusApi,
 } from '#/api/distribution';
 import { useTableCrud } from '#/composables/useTableCrud';
@@ -26,10 +25,28 @@ const { tableData, loading, pagination, loadData } = useTableCrud<
   { immediateLoad: false },
 );
 
-const searchParams = ref({ keyword: '', level_id: undefined as number | undefined, status: undefined as number | undefined });
+const searchParams = ref({
+  keyword: '',
+  level_id: undefined as number | undefined,
+  status: undefined as number | undefined,
+});
 const levels = ref<DistributionApi.LevelItem[]>([]);
-const openVisible = ref(false);
-const openForm = reactive({ level_id: 1, remark: '', user_id: undefined as number | undefined });
+
+const OPEN_SOURCE_MAP: Record<string, { color: string; label: string }> = {
+  admin: { color: 'blue', label: '后台开通' },
+  amount: { color: 'orange', label: '消费达标' },
+  apply: { color: 'green', label: '申请审核' },
+  everyone: { color: 'purple', label: '自动开通' },
+  manual: { color: 'blue', label: '手动开通' },
+};
+
+function getOpenSourceOption(source?: string) {
+  const value = String(source || '').trim();
+  return OPEN_SOURCE_MAP[value] || {
+    color: 'default',
+    label: value || '-',
+  };
+}
 
 const columns = [
   { title: '用户ID', dataIndex: 'user_id', width: 90 },
@@ -42,7 +59,15 @@ const columns = [
   },
   { title: '等级', dataIndex: 'level_name', width: 130 },
   { title: '邀请码', dataIndex: 'invite_code', width: 130 },
-  { title: '开通来源', dataIndex: 'open_source', width: 110 },
+  {
+    title: '开通来源',
+    dataIndex: 'open_source',
+    width: 120,
+    customRender: ({ record }: { record: DistributionApi.DistributorItem }) => {
+      const option = getOpenSourceOption(record.open_source);
+      return h(Tag, { color: option.color }, () => option.label);
+    },
+  },
   { title: '可提现', dataIndex: 'available_commission', width: 110 },
   { title: '冻结', dataIndex: 'frozen_commission', width: 110 },
   { title: '团队', key: 'team', width: 120 },
@@ -60,7 +85,8 @@ const columns = [
         checked: record.status === 1,
         checkedChildren: '启用',
         unCheckedChildren: '禁用',
-        onChange: (checked: boolean | number | string) => updateStatus(record, checked === true ? 1 : 0),
+        onChange: (checked: boolean | number | string) =>
+          updateStatus(record, checked === true ? 1 : 0),
       });
     },
   },
@@ -79,25 +105,9 @@ async function updateStatus(record: DistributionApi.DistributorItem, status: num
   await loadData(searchParams.value);
 }
 
-async function submitOpen() {
-  if (!openForm.user_id) {
-    message.warning('请输入用户ID');
-    return;
-  }
-  await openDistributionDistributorApi({
-    level_id: openForm.level_id,
-    remark: openForm.remark,
-    user_id: openForm.user_id,
-  });
-  message.success('开通成功');
-  openVisible.value = false;
-  await loadData(searchParams.value);
-}
-
 onMounted(async () => {
   const data = await getDistributionLevelListApi({ limit: 100, page: 1, status: 1 });
   levels.value = data.list;
-  if (levels.value[0]) openForm.level_id = levels.value[0].id;
   await loadData(searchParams.value);
 });
 </script>
@@ -108,9 +118,6 @@ onMounted(async () => {
       <h2 class="m-0 text-lg font-semibold">分销员</h2>
       <div class="flex gap-2">
         <a-button @click="() => loadData(searchParams)">刷新</a-button>
-        <a-button v-access:code="'SystemDistributionDistributorOpen'" type="primary" @click="openVisible = true">
-          开通分销员
-        </a-button>
       </div>
     </div>
 
@@ -158,23 +165,5 @@ onMounted(async () => {
         </template>
       </a-table>
     </div>
-
-    <a-modal v-model:open="openVisible" title="开通分销员" @ok="submitOpen">
-      <a-form class="pt-4" :label-col="{ style: { width: '100px' } }">
-        <a-form-item label="用户ID">
-          <a-input-number v-model:value="openForm.user_id" class="w-full" :min="1" :precision="0" />
-        </a-form-item>
-        <a-form-item label="等级">
-          <a-select v-model:value="openForm.level_id">
-            <a-select-option v-for="level in levels" :key="level.id" :value="level.id">
-              {{ level.name }}
-            </a-select-option>
-          </a-select>
-        </a-form-item>
-        <a-form-item label="备注">
-          <a-textarea v-model:value="openForm.remark" :rows="3" allow-clear />
-        </a-form-item>
-      </a-form>
-    </a-modal>
   </div>
 </template>

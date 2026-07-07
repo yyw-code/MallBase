@@ -47,6 +47,39 @@ export namespace OrderApi {
     status?: null | number;
   }
 
+  export interface DistributionCommissionItem {
+    amount: string;
+    attribution_scene?: string;
+    attribution_target_id?: number;
+    attribution_target_type?: string;
+    base_amount: string;
+    buyer_user_id: number;
+    create_time: string;
+    distributor_user?: BuyerInfo | null;
+    distributor_user_id: number;
+    goods_id: number;
+    id: number;
+    order_id: number;
+    order_item_id: number;
+    order_sn: string;
+    rate: string;
+    recovered_amount: string;
+    relation_id: number;
+    relation_level: number;
+    release_time?: string;
+    rule_id: number;
+    rule_type: string;
+    settled_at?: string;
+    sku_id: number;
+    status: number;
+    status_text: string;
+  }
+
+  export interface DistributionCommissionSummary {
+    list: DistributionCommissionItem[];
+    total_amount: string;
+  }
+
   /** 订单主记录（含聚合字段） */
   export interface OrderRecord {
     id: number;
@@ -119,6 +152,7 @@ export namespace OrderApi {
       create_time: string;
       remark?: string;
     };
+    distribution_commissions?: DistributionCommissionSummary;
   }
 
   /** 详情响应（在 OrderRecord 基础上附带 logs） */

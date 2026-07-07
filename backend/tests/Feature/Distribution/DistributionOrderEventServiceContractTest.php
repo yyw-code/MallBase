@@ -12,13 +12,14 @@ use app\model\distribution\DistributionCommissionRule;
 use app\model\distribution\DistributionOrderCommission;
 use app\model\order\Order;
 use app\model\order\RefundOrder;
+use app\service\admin\goods\GoodsService;
 use app\service\SystemSettingService;
 use app\service\distribution\DistributionAccountService;
 use app\service\distribution\DistributionConfigService;
 use app\service\distribution\DistributionEnrollmentService;
 use app\service\distribution\DistributionOrderEventService;
 use app\service\distribution\DistributionRelationService;
-use app\service\admin\goods\GoodsService;
+use mall_base\exception\BusinessException;
 use PHPUnit\Framework\TestCase;
 use think\App;
 use think\facade\Db;
@@ -554,6 +555,56 @@ final class DistributionOrderEventServiceContractTest extends TestCase
         }
     }
 
+    public function testApplyModeStoresProofImageAndRejectsInvalidMobile(): void
+    {
+        $this->requireDbTables($this->distributionTables());
+
+        Db::startTrans();
+        try {
+            $this->resetDistributionConfig(7, false, '0.00', [
+                'distributor_open_mode' => DistributionConfigService::OPEN_MODE_APPLY,
+            ]);
+            [$userId, $invalidUserId, $withdrawUserId] = $this->createUsers(3);
+            $assetId = $this->insertImageAsset($userId);
+
+            $applyId = $this->enrollmentService()->apply($userId, '李四', '13900000000', '有线下推广资源', (string) $assetId);
+
+            $this->assertSame((string) $assetId, (string) Db::name('distribution_apply')->where('id', $applyId)->value('proof_image'));
+            $this->assertSame(1, (int) Db::name('upload_asset_usage')
+                ->where('owner_type', 'distribution_apply')
+                ->where('owner_id', $applyId)
+                ->where('field', 'proof_image')
+                ->where('asset_id', $assetId)
+                ->count());
+
+            try {
+                $this->enrollmentService()->apply($invalidUserId, '王五', '123456', '手机号不合法');
+                $this->fail('手机号不合法时应拒绝申请');
+            } catch (BusinessException $exception) {
+                $this->assertSame('请输入正确的手机号', $exception->getMessage());
+            }
+
+            $withdrawApplyId = $this->enrollmentService()->apply($withdrawUserId, '赵六', '13700000000', '先提交后补资料');
+            $summary = $this->enrollmentService()->qualificationSummary($withdrawUserId);
+            $this->assertSame(DistributionApply::STATUS_PENDING, (int) $summary['apply_status']);
+            $this->assertSame('赵六', $summary['latest_apply']['real_name'] ?? '');
+            $this->assertSame('13700000000', $summary['latest_apply']['mobile'] ?? '');
+
+            $this->enrollmentService()->withdrawPendingApply($withdrawUserId);
+
+            $this->assertSame(DistributionApply::STATUS_WITHDRAWN, (int) Db::name('distribution_apply')->where('id', $withdrawApplyId)->value('status'));
+            $summary = $this->enrollmentService()->qualificationSummary($withdrawUserId);
+            $this->assertSame(DistributionApply::STATUS_WITHDRAWN, (int) $summary['apply_status']);
+            $this->assertSame('已撤回', $summary['apply_status_text']);
+
+            $reapplyId = $this->enrollmentService()->apply($withdrawUserId, '赵六', '13700000000', '撤回后重新提交');
+            $this->assertGreaterThan($withdrawApplyId, $reapplyId);
+            $this->assertSame(DistributionApply::STATUS_PENDING, (int) Db::name('distribution_apply')->where('id', $reapplyId)->value('status'));
+        } finally {
+            Db::rollback();
+        }
+    }
+
     /**
      * @return array<int,string>
      */
@@ -568,6 +619,8 @@ final class DistributionOrderEventServiceContractTest extends TestCase
             'refund_order',
             'setting_group',
             'setting',
+            'upload_asset',
+            'upload_asset_usage',
             'distribution_level',
             'distribution_distributor',
             'distribution_relation',
@@ -646,6 +699,7 @@ final class DistributionOrderEventServiceContractTest extends TestCase
     private function requiredDistributionColumns(): array
     {
         return [
+            'distribution_apply' => ['proof_image'],
             'distribution_distributor' => ['open_source'],
             'distribution_relation' => ['expire_time', 'attribution_scene', 'attribution_target_type', 'attribution_target_id', 'invite_reward_status', 'invite_reward_cents', 'invite_reward_at'],
             'distribution_commission_rule' => ['commission_type', 'first_fixed_cents', 'second_fixed_cents'],
@@ -753,6 +807,28 @@ final class DistributionOrderEventServiceContractTest extends TestCase
             ]);
         }
         return $ids;
+    }
+
+    private function insertImageAsset(int $userId): int
+    {
+        return (int) Db::name('upload_asset')->insertGetId([
+            'category_id' => 0,
+            'type' => 'image',
+            'name' => 'distribution-proof.jpg',
+            'original_name' => 'distribution-proof.jpg',
+            'mime' => 'image/jpeg',
+            'ext' => 'jpg',
+            'size' => 1024,
+            'hash' => str_repeat('a', 64),
+            'width' => 640,
+            'height' => 480,
+            'module' => 'distribution_apply',
+            'uploader_type' => 'user',
+            'uploader_id' => $userId,
+            'visibility' => 'public',
+            'status' => 1,
+            'meta' => json_encode([], JSON_UNESCAPED_UNICODE),
+        ]);
     }
 
     private function openDistributor(int $userId): void

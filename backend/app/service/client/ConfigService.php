@@ -93,6 +93,7 @@ class ConfigService extends BaseService
 
         $merged['points_enabled'] = $this->settingEnabled('points_enabled', true) ? 1 : 0;
         $merged['member_enabled'] = $this->settingEnabled('member_enabled', false) ? 1 : 0;
+        $merged['distribution_enabled'] = $this->settingEnabled('distribution_enabled', true) ? 1 : 0;
 
         // 版权 {year} 占位替换
         if (!empty($merged['copyright_date']) && is_string($merged['copyright_date'])) {

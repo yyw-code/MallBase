@@ -10,6 +10,7 @@ class DistributionApply extends BaseModel
     public const STATUS_PENDING = 0;
     public const STATUS_APPROVED = 10;
     public const STATUS_REJECTED = 20;
+    public const STATUS_WITHDRAWN = 30;
 
     protected $name = 'distribution_apply';
     protected $pk = 'id';
@@ -23,6 +24,7 @@ class DistributionApply extends BaseModel
             self::STATUS_PENDING => '待审核',
             self::STATUS_APPROVED => '已通过',
             self::STATUS_REJECTED => '已驳回',
+            self::STATUS_WITHDRAWN => '已撤回',
             default => '未知',
         };
     }

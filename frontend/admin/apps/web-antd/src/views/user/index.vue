@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import type { DistributionApi } from '#/api/distribution';
 import type { ClientUserApi, UserGroupApi, UserTagApi } from '#/api/user';
 
 import { computed, h, onMounted, reactive, ref } from 'vue';
@@ -7,6 +8,10 @@ import { useAccess } from '@vben/access';
 
 import { message, Modal, Switch, Tag } from 'ant-design-vue';
 
+import {
+  getDistributionLevelListApi,
+  openDistributionDistributorApi,
+} from '#/api/distribution';
 import { getSettingConfigApi } from '#/api/setting';
 import {
   adjustClientUserPointsApi,
@@ -51,8 +56,10 @@ const REGISTER_TYPE_MAP: Record<string, { color: string; label: string }> = {
 const groupOptions = ref<UserGroupApi.GroupItem[]>([]);
 const tagOptions = ref<UserTagApi.TagItem[]>([]);
 const memberLevelOptions = ref<ClientUserApi.MemberLevelOption[]>([]);
+const distributionLevelOptions = ref<DistributionApi.LevelItem[]>([]);
 const pointsEnabled = ref(true);
 const memberEnabled = ref(false);
+const distributionEnabled = ref(true);
 
 /* ---------------- 表格 CRUD ---------------- */
 const { tableData, loading, pagination, loadData } = useTableCrud<
@@ -135,6 +142,15 @@ const formatEmpty = (value?: null | number | string) =>
 
 const formatUserLabel = (record?: ClientUserApi.UserItem | null) => {
   if (!record) return '';
+  return (
+    record.nickname || record.mobile || record.email || `用户 ${record.id}`
+  );
+};
+
+const formatDistributionUserLabel = (
+  record?: ClientUserApi.DistributionUserInfo | null,
+) => {
+  if (!record) return '-';
   return (
     record.nickname || record.mobile || record.email || `用户 ${record.id}`
   );
@@ -470,6 +486,83 @@ const memberSetForm = ref({
   remark: '',
 });
 
+/* ---------------- 设为分销员 ---------------- */
+const distributorSetVisible = ref(false);
+const distributorSetSubmitting = ref(false);
+const distributorSetUser = ref<ClientUserApi.UserItem | null>(null);
+const distributorSetForm = ref({
+  level_id: undefined as number | undefined,
+  remark: '',
+});
+
+async function loadDistributionLevelOptions() {
+  if (
+    !distributionEnabled.value ||
+    !hasAccessByCodes(['SystemDistributionDistributorOpen'])
+  ) {
+    distributionLevelOptions.value = [];
+    return;
+  }
+
+  try {
+    const data = await getDistributionLevelListApi({
+      limit: 100,
+      page: 1,
+      status: 1,
+    });
+    distributionLevelOptions.value = data.list || [];
+  } catch (error) {
+    console.error('加载分销等级选项失败:', error);
+    distributionLevelOptions.value = [];
+  }
+}
+
+const handleDistributorSet = (record: ClientUserApi.UserItem) => {
+  if (!distributionEnabled.value || record.distribution?.enabled === false) {
+    message.warning('分销功能未开启');
+    return;
+  }
+  if (distributionLevelOptions.value.length === 0) {
+    message.warning('暂无可用分销等级');
+    return;
+  }
+
+  distributorSetUser.value = record;
+  distributorSetForm.value = {
+    level_id:
+      record.distribution?.distributor?.level_id ||
+      distributionLevelOptions.value[0]?.id,
+    remark: '',
+  };
+  distributorSetVisible.value = true;
+};
+
+const submitDistributorSet = async () => {
+  const user = distributorSetUser.value;
+  const levelId = distributorSetForm.value.level_id;
+  if (!user || !levelId) {
+    message.warning('请选择分销等级');
+    return;
+  }
+
+  distributorSetSubmitting.value = true;
+  try {
+    await openDistributionDistributorApi({
+      level_id: levelId,
+      remark: distributorSetForm.value.remark,
+      user_id: user.id,
+    });
+    message.success('已设为分销员');
+    distributorSetVisible.value = false;
+    await refreshData();
+    if (detailDrawerVisible.value && detailUser.value?.id === user.id) {
+      await reloadDetailUser();
+    }
+  } finally {
+    distributorSetSubmitting.value = false;
+  }
+};
+
 const handleMemberSet = (record: ClientUserApi.UserItem) => {
   memberSetUser.value = record;
   memberSetForm.value = {
@@ -740,10 +833,12 @@ function settingItems(config: any) {
 }
 
 async function loadMarketingConfig() {
-  const [pointsResult, memberResult] = await Promise.allSettled([
-    getSettingConfigApi('PointsConfig'),
-    getSettingConfigApi('MemberConfig'),
-  ]);
+  const [pointsResult, memberResult, distributionResult] =
+    await Promise.allSettled([
+      getSettingConfigApi('PointsConfig'),
+      getSettingConfigApi('MemberConfig'),
+      getSettingConfigApi('DistributionConfig'),
+    ]);
 
   if (pointsResult.status === 'fulfilled') {
     const pointsSwitch = settingItems(pointsResult.value).find(
@@ -761,6 +856,18 @@ async function loadMarketingConfig() {
     memberEnabled.value = settingSwitchEnabled(memberSwitch?.value, false);
   } else {
     memberEnabled.value = false;
+  }
+
+  if (distributionResult.status === 'fulfilled') {
+    const distributionSwitch = settingItems(distributionResult.value).find(
+      (item) => item.code === 'distribution_enabled',
+    );
+    distributionEnabled.value = settingSwitchEnabled(
+      distributionSwitch?.value,
+      true,
+    );
+  } else {
+    distributionEnabled.value = true;
   }
 }
 
@@ -781,14 +888,17 @@ async function loadMemberLevelOptions() {
 /* ---------------- 初始化 ---------------- */
 onMounted(async () => {
   try {
+    await loadMarketingConfig();
     const [groups, tags] = await Promise.all([
       getUserGroupListApi({ status: 1, limit: 100 }),
       getUserTagListApi({ status: 1, limit: 100 }),
-      loadMarketingConfig(),
     ]);
     groupOptions.value = groups.list;
     tagOptions.value = tags.list;
-    await loadMemberLevelOptions();
+    await Promise.all([
+      loadMemberLevelOptions(),
+      loadDistributionLevelOptions(),
+    ]);
   } catch (error) {
     console.error('加载分组和标签失败:', error);
   }
@@ -1005,6 +1115,20 @@ onMounted(async () => {
                   设置会员
                 </a-button>
                 <a-button
+                  v-if="
+                    distributionEnabled &&
+                    detailUser.distribution?.enabled !== false
+                  "
+                  @click="handleDistributorSet(detailUser)"
+                  v-access:code="'SystemDistributionDistributorOpen'"
+                >
+                  {{
+                    detailUser.distribution?.is_distributor
+                      ? '调整分销员'
+                      : '设为分销员'
+                  }}
+                </a-button>
+                <a-button
                   danger
                   @click="handleResetPassword(detailUser)"
                   v-access:code="'SystemUserResetPassword'"
@@ -1152,6 +1276,157 @@ onMounted(async () => {
                     >
                       {{ formatEmpty(detailUser.member?.level_remark) }}
                     </a-descriptions-item>
+                  </a-descriptions>
+                </div>
+
+                <div
+                  v-if="detailUser.distribution"
+                  class="user-detail__section"
+                >
+                  <div class="user-detail__section-title">分销信息</div>
+                  <a-alert
+                    v-if="!detailUser.distribution.enabled"
+                    class="mb-3"
+                    message="分销功能未开启"
+                    show-icon
+                    type="warning"
+                  />
+                  <a-descriptions bordered size="small" :column="2">
+                    <a-descriptions-item label="分销员状态">
+                      <a-tag
+                        :color="
+                          detailUser.distribution.distributor?.status === 1
+                            ? 'green'
+                            : 'default'
+                        "
+                      >
+                        {{
+                          detailUser.distribution.distributor?.status_text ||
+                          '未开通'
+                        }}
+                      </a-tag>
+                    </a-descriptions-item>
+                    <a-descriptions-item label="绑定上级">
+                      {{
+                        formatDistributionUserLabel(
+                          detailUser.distribution.relation?.parent_user,
+                        )
+                      }}
+                    </a-descriptions-item>
+                    <template v-if="detailUser.distribution.distributor">
+                      <a-descriptions-item label="分销等级">
+                        {{
+                          formatEmpty(
+                            detailUser.distribution.distributor.level_name,
+                          )
+                        }}
+                      </a-descriptions-item>
+                      <a-descriptions-item label="邀请码">
+                        {{
+                          formatEmpty(
+                            detailUser.distribution.distributor.invite_code,
+                          )
+                        }}
+                      </a-descriptions-item>
+                      <a-descriptions-item label="开通来源">
+                        {{
+                          formatEmpty(
+                            detailUser.distribution.distributor
+                              .open_source_text,
+                          )
+                        }}
+                      </a-descriptions-item>
+                      <a-descriptions-item label="开通时间">
+                        {{
+                          formatEmpty(
+                            detailUser.distribution.distributor.opened_at,
+                          )
+                        }}
+                      </a-descriptions-item>
+                      <a-descriptions-item label="可提现佣金">
+                        ¥{{
+                          detailUser.distribution.distributor
+                            .available_commission
+                        }}
+                      </a-descriptions-item>
+                      <a-descriptions-item label="冻结佣金">
+                        ¥{{
+                          detailUser.distribution.distributor.frozen_commission
+                        }}
+                      </a-descriptions-item>
+                      <a-descriptions-item label="提现中">
+                        ¥{{
+                          detailUser.distribution.distributor.pending_withdraw
+                        }}
+                      </a-descriptions-item>
+                      <a-descriptions-item label="已提现">
+                        ¥{{
+                          detailUser.distribution.distributor
+                            .withdrawn_commission
+                        }}
+                      </a-descriptions-item>
+                      <a-descriptions-item label="累计净佣金">
+                        ¥{{
+                          detailUser.distribution.distributor.total_commission
+                        }}
+                      </a-descriptions-item>
+                      <a-descriptions-item label="待扣回">
+                        ¥{{
+                          detailUser.distribution.distributor.debt_commission
+                        }}
+                      </a-descriptions-item>
+                      <a-descriptions-item label="团队人数">
+                        {{
+                          detailUser.distribution.distributor.direct_user_count
+                        }}
+                        /
+                        {{
+                          detailUser.distribution.distributor
+                            .indirect_user_count
+                        }}
+                      </a-descriptions-item>
+                      <a-descriptions-item label="计佣订单">
+                        {{ detailUser.distribution.distributor.order_count }}
+                      </a-descriptions-item>
+                    </template>
+                    <template v-if="detailUser.distribution.relation">
+                      <a-descriptions-item label="绑定来源">
+                        {{
+                          formatEmpty(
+                            detailUser.distribution.relation.source_text,
+                          )
+                        }}
+                      </a-descriptions-item>
+                      <a-descriptions-item label="关系状态">
+                        <a-tag
+                          :color="
+                            detailUser.distribution.relation.is_valid
+                              ? 'green'
+                              : 'red'
+                          "
+                        >
+                          {{
+                            detailUser.distribution.relation.is_valid
+                              ? '有效'
+                              : '已过期'
+                          }}
+                        </a-tag>
+                      </a-descriptions-item>
+                      <a-descriptions-item label="绑定时间">
+                        {{
+                          formatEmpty(
+                            detailUser.distribution.relation.create_time,
+                          )
+                        }}
+                      </a-descriptions-item>
+                      <a-descriptions-item label="有效期">
+                        {{
+                          formatEmpty(
+                            detailUser.distribution.relation.expire_time,
+                          )
+                        }}
+                      </a-descriptions-item>
+                    </template>
                   </a-descriptions>
                 </div>
 
@@ -1421,6 +1696,55 @@ onMounted(async () => {
             :maxlength="255"
             :rows="3"
             placeholder="请填写设置会员等级的原因"
+            show-count
+          />
+        </a-form-item>
+      </a-form>
+    </a-modal>
+
+    <a-modal
+      v-model:open="distributorSetVisible"
+      :title="
+        distributorSetUser?.distribution?.is_distributor
+          ? '调整分销员'
+          : '设为分销员'
+      "
+      :confirm-loading="distributorSetSubmitting"
+      @ok="submitDistributorSet"
+    >
+      <a-form
+        :model="distributorSetForm"
+        :label-col="{ style: { width: '100px' } }"
+        class="pt-4"
+      >
+        <a-form-item label="用户">
+          <span>{{
+            distributorSetUser?.nickname ||
+            distributorSetUser?.mobile ||
+            distributorSetUser?.id
+          }}</span>
+        </a-form-item>
+        <a-form-item label="分销等级" required>
+          <a-select
+            v-model:value="distributorSetForm.level_id"
+            placeholder="请选择分销等级"
+          >
+            <a-select-option
+              v-for="level in distributionLevelOptions"
+              :key="level.id"
+              :value="level.id"
+            >
+              {{ level.name }}
+            </a-select-option>
+          </a-select>
+        </a-form-item>
+        <a-form-item label="备注">
+          <a-textarea
+            v-model:value="distributorSetForm.remark"
+            :maxlength="255"
+            :rows="3"
+            allow-clear
+            placeholder="可填写开通原因，便于后续审计"
             show-count
           />
         </a-form-item>

@@ -10,6 +10,7 @@ use app\model\distribution\DistributionCommissionRule;
 use app\model\distribution\DistributionDistributor;
 use app\model\distribution\DistributionLevel;
 use app\model\distribution\DistributionOrderCommission;
+use app\model\distribution\DistributionRelation;
 use app\model\distribution\DistributionWithdraw;
 use app\model\order\Order;
 use app\model\user\User;
@@ -18,6 +19,9 @@ use app\service\distribution\DistributionAccountService;
 use app\service\distribution\DistributionConfigService;
 use app\service\distribution\DistributionEnrollmentService;
 use app\service\distribution\DistributionOrderEventService;
+use app\service\upload\AssetHydrator;
+use app\service\upload\AssetIdNormalizer;
+use app\service\upload\AssetResolver;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
 
@@ -126,6 +130,64 @@ class DistributionManagementService extends BaseService
         }
         $list = $this->formatDistributors([$row->toArray()]);
         return $list[0] ?? [];
+    }
+
+    public function userDistributionSummary(int $userId): array
+    {
+        $settings = app()->make(DistributionConfigService::class)->settings();
+        /** @var DistributionDistributor|null $account */
+        $account = $this->model()->where('user_id', $userId)->find();
+        $distributor = null;
+        if ($account !== null) {
+            $rows = $this->formatDistributors([$account->toArray()]);
+            $distributor = $rows[0] ?? null;
+        }
+
+        return [
+            'enabled' => (bool) $settings['distribution_enabled'],
+            'is_distributor' => $distributor !== null,
+            'distributor' => $distributor,
+            'relation' => $this->userRelationSummary($userId),
+        ];
+    }
+
+    /**
+     * @return array{total_amount:string,list:array<int,array<string,mixed>>}
+     */
+    public function orderDistributionCommissions(int $orderId): array
+    {
+        if ($orderId <= 0) {
+            return ['total_amount' => '0.00', 'list' => []];
+        }
+
+        $rows = $this->model(DistributionOrderCommission::class)
+            ->where('order_id', $orderId)
+            ->order('relation_level', 'asc')
+            ->order('id', 'asc')
+            ->select()
+            ->toArray();
+        $totalCents = array_reduce(
+            $rows,
+            static fn(int $total, array $row): int => $total + (int) ($row['amount_cents'] ?? 0),
+            0
+        );
+        $list = array_map(fn(array $row): array => $this->formatCommission($row), $rows);
+        $users = $this->usersByIds(
+            array_map(
+                static fn(array $row): int => (int) ($row['distributor_user_id'] ?? 0),
+                $list
+            )
+        );
+        foreach ($list as &$item) {
+            $distributorUserId = (int) ($item['distributor_user_id'] ?? 0);
+            $item['distributor_user'] = $users[$distributorUserId] ?? null;
+        }
+        unset($item);
+
+        return [
+            'total_amount' => $this->centsToAmount($totalCents),
+            'list' => $list,
+        ];
     }
 
     public function openDistributor(int $userId, int $levelId, int $adminId, string $remark = ''): int
@@ -563,20 +625,83 @@ class DistributionManagementService extends BaseService
                 'level_name' => (string) ($levels[$levelId]['name'] ?? ''),
                 'invite_code' => (string) ($row['invite_code'] ?? ''),
                 'status' => (int) ($row['status'] ?? 0),
+                'status_text' => (int) ($row['status'] ?? 0) === DistributionDistributor::STATUS_ENABLED ? '启用' : '禁用',
                 'open_source' => (string) ($row['open_source'] ?? ''),
+                'open_source_text' => $this->openSourceText((string) ($row['open_source'] ?? '')),
                 'available_commission' => $this->centsToAmount((int) ($row['available_commission_cents'] ?? 0)),
                 'frozen_commission' => $this->centsToAmount((int) ($row['frozen_commission_cents'] ?? 0)),
                 'pending_withdraw' => $this->centsToAmount((int) ($row['pending_withdraw_cents'] ?? 0)),
                 'withdrawn_commission' => $this->centsToAmount((int) ($row['withdrawn_commission_cents'] ?? 0)),
                 'debt_commission' => $this->centsToAmount((int) ($row['debt_commission_cents'] ?? 0)),
+                'total_commission' => $this->centsToAmount((int) ($row['total_commission_cents'] ?? 0)),
                 'direct_user_count' => (int) ($row['direct_user_count'] ?? 0),
                 'indirect_user_count' => (int) ($row['indirect_user_count'] ?? 0),
                 'order_count' => (int) ($row['order_count'] ?? 0),
+                'opened_at' => (string) ($row['opened_at'] ?? ''),
                 'remark' => (string) ($row['remark'] ?? ''),
                 'create_time' => (string) ($row['create_time'] ?? ''),
                 'update_time' => (string) ($row['update_time'] ?? ''),
             ];
         }, $rows);
+    }
+
+    private function userRelationSummary(int $userId): ?array
+    {
+        /** @var DistributionRelation|null $row */
+        $row = $this->model(DistributionRelation::class)
+            ->where('user_id', $userId)
+            ->find();
+        if ($row === null) {
+            return null;
+        }
+
+        $parentUserId = (int) $row->parent_user_id;
+        $grandparentUserId = (int) $row->grandparent_user_id;
+        $users = $this->usersByIds([$parentUserId, $grandparentUserId]);
+        $expireTime = $row->expire_time === null ? '' : (string) $row->expire_time;
+
+        return [
+            'id' => (int) $row->id,
+            'parent_user_id' => $parentUserId,
+            'parent_user' => $users[$parentUserId] ?? null,
+            'grandparent_user_id' => $grandparentUserId,
+            'grandparent_user' => $users[$grandparentUserId] ?? null,
+            'invite_code' => (string) $row->invite_code,
+            'source' => (string) $row->source,
+            'source_text' => $this->relationSourceText((string) $row->source),
+            'expire_time' => $expireTime,
+            'is_valid' => $expireTime === '' || strtotime($expireTime) >= time(),
+            'attribution_scene' => (string) $row->attribution_scene,
+            'attribution_page' => (string) $row->attribution_page,
+            'attribution_target_type' => (string) $row->attribution_target_type,
+            'attribution_target_id' => (int) $row->attribution_target_id,
+            'invite_reward_status' => (int) $row->invite_reward_status,
+            'invite_reward_amount' => $this->centsToAmount((int) $row->invite_reward_cents),
+            'invite_reward_at' => (string) ($row->invite_reward_at ?? ''),
+            'create_time' => (string) $row->create_time,
+        ];
+    }
+
+    private function openSourceText(string $source): string
+    {
+        return match ($source) {
+            'admin' => '后台开通',
+            'amount' => '消费达标',
+            'apply' => '申请审核',
+            'everyone' => '自动开通',
+            'manual' => '手动开通',
+            default => $source !== '' ? $source : '-',
+        };
+    }
+
+    private function relationSourceText(string $source): string
+    {
+        return match ($source) {
+            'client' => '客户端绑定',
+            'invite' => '邀请链接',
+            'manual' => '手动绑定',
+            default => $source !== '' ? $source : '-',
+        };
     }
 
     /**
@@ -587,10 +712,17 @@ class DistributionManagementService extends BaseService
     {
         $userIds = array_values(array_unique(array_map(static fn(array $row): int => (int) ($row['user_id'] ?? 0), $rows)));
         $users = $this->usersByIds($userIds);
+        /** @var AssetIdNormalizer $normalizer */
+        $normalizer = app()->make(AssetIdNormalizer::class);
+        $proofImages = array_map(static fn(array $row): mixed => $row['proof_image'] ?? '', $rows);
+        $assetMap = app()->make(AssetResolver::class)->resolve($normalizer->collectAssetIds($proofImages));
+        /** @var AssetHydrator $hydrator */
+        $hydrator = app()->make(AssetHydrator::class);
 
-        return array_map(static function (array $row) use ($users): array {
+        return array_map(static function (array $row) use ($users, $assetMap, $hydrator): array {
             $userId = (int) ($row['user_id'] ?? 0);
             $status = (int) ($row['status'] ?? 0);
+            $proofImage = (string) ($row['proof_image'] ?? '');
             return [
                 'id' => (int) ($row['id'] ?? 0),
                 'user_id' => $userId,
@@ -598,6 +730,8 @@ class DistributionManagementService extends BaseService
                 'real_name' => (string) ($row['real_name'] ?? ''),
                 'mobile' => (string) ($row['mobile'] ?? ''),
                 'reason' => (string) ($row['reason'] ?? ''),
+                'proof_image' => $proofImage,
+                'proof_image_full_url' => $hydrator->fullUrl($proofImage, $assetMap),
                 'status' => $status,
                 'status_text' => DistributionApply::statusText($status),
                 'review_admin_id' => isset($row['review_admin_id']) ? (int) $row['review_admin_id'] : null,

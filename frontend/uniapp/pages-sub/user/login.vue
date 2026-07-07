@@ -351,6 +351,7 @@ import {
   wechatOfficialBindMobile
 } from '@/api/user/auth'
 import { getUploadedAssetValue, getUploadedPreviewUrl } from '@/api/upload'
+import { tryAutoBindDistributionInvite } from '@/utils/distribution-attribution'
 const decorateStore = useDecorateStore()
 
 const userStore = useUserStore()
@@ -534,6 +535,7 @@ async function onLoginSuccess(data) {
     throw new Error('登录结果缺少令牌')
   }
   userStore.setToken(data.access_token, data.refresh_token)
+  await tryAutoBindDistributionInvite()
   await userStore.fetchUserInfo()
   await decorateStore.fetchMyThemePreference({ force: true })
   if (redirectUrl.value) {

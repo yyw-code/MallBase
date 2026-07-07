@@ -15,7 +15,7 @@ Route::group('distribution', function () {
         '_group_code'      => 'SystemDistribution',
         '_group_name_desc' => '分销模块概览与基础设置',
         '_parent'          => 'SystemDistributionManagement',
-        '_icon'            => 'lucide:network',
+        '_icon'            => 'lucide:area-chart',
         '_path'            => '/distribution',
         '_auth'            => true,
         '_component'       => '/distribution/index',

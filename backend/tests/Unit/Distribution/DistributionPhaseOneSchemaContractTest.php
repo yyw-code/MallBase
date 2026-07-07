@@ -11,8 +11,13 @@ final class DistributionPhaseOneSchemaContractTest extends TestCase
     public function testDistributionSchemaContainsPhaseOneTablesAndColumns(): void
     {
         $schema = $this->readBackendFile('install/data/schema/19_mb_distribution.sql');
+        $applyModel = $this->readBackendFile('app/model/distribution/DistributionApply.php');
 
         $this->assertStringContainsString('CREATE TABLE `mb_distribution_apply`', $schema);
+        $this->assertStringContainsString('`proof_image` varchar(255) NOT NULL DEFAULT \'\' COMMENT \'申请凭证图片\'', $schema);
+        $this->assertStringContainsString('30已撤回', $schema);
+        $this->assertStringContainsString('STATUS_WITHDRAWN', $applyModel);
+        $this->assertStringContainsString('已撤回', $applyModel);
         $this->assertStringContainsString('`open_source` varchar(32) NOT NULL DEFAULT \'admin\'', $schema);
         $this->assertStringContainsString('`expire_time` datetime DEFAULT NULL COMMENT \'关系有效期，NULL为永久有效\'', $schema);
         $this->assertStringContainsString('`attribution_scene` varchar(32) NOT NULL DEFAULT \'\' COMMENT \'归因场景', $schema);
@@ -52,9 +57,14 @@ final class DistributionPhaseOneSchemaContractTest extends TestCase
     public function testDefaultProfileContainsDistributionCenterEntry(): void
     {
         $schema = $this->readBackendFile('install/data/schema/13_mb_client_diy.sql');
+        $decorationService = $this->readBackendFile('app/service/client/DecorationService.php');
 
+        $this->assertStringContainsString("'profile-distribution'", $schema);
+        $this->assertStringContainsString("'distributionEntry'", $schema);
         $this->assertStringContainsString("'分销中心'", $schema);
-        $this->assertStringContainsString("'/pages-sub/distribution/index'", $schema);
+        $this->assertStringContainsString("'show_commission', true", $schema);
+        $this->assertStringContainsString('defaultProfileDistributionEntryProps', $decorationService);
+        $this->assertStringContainsString("'distributionEntry'", $decorationService);
     }
 
     public function testUniappDistributionPagesAndApiContractAreRegistered(): void
@@ -75,18 +85,80 @@ final class DistributionPhaseOneSchemaContractTest extends TestCase
             '/client/api/distribution/withdraw',
             '/client/api/distribution/bindInvite',
             '/client/api/distribution/apply',
+            '/client/api/distribution/withdrawApply',
             '/client/api/distribution/shareInfo',
         ] as $path) {
             $this->assertStringContainsString($path, $api);
         }
 
+        $clientRoute = $this->readBackendFile('route/api/client/distribution.php');
+        $this->assertStringContainsString("Route::post('withdrawApply', 'withdrawApply')", $clientRoute);
+
+        $profile = $this->readProjectFile('frontend/uniapp/pages/profile/index.vue');
+        $this->assertStringContainsString('getDistributionSummary', $profile);
+        $this->assertStringContainsString("module.type === 'distributionEntry'", $profile);
+        $this->assertStringContainsString('class="distribution-card"', $profile);
+        $this->assertStringContainsString('/pages-sub/distribution/index', $profile);
+
+        $decorateConfig = $this->readProjectFile('frontend/uniapp/config/decorate.js');
+        $this->assertStringContainsString('type: "distributionEntry"', $decorateConfig);
+
+        $decorateUtils = $this->readProjectFile('frontend/uniapp/utils/decorate.js');
+        $this->assertStringContainsString("distributionCard: 'distributionEntry'", $decorateUtils);
+
+        $adminDecorate = $this->readProjectFile('frontend/admin/apps/web-antd/src/views/client/decorate/index.vue');
+        $this->assertStringContainsString("type: 'distributionEntry'", $adminDecorate);
+
+        $adminEditor = $this->readProjectFile('frontend/admin/apps/web-antd/src/views/client/decorate/components/DecorateEditor.vue');
+        $this->assertStringContainsString("editableProfileType === 'distributionEntry'", $adminEditor);
+
+        $adminPreview = $this->readProjectFile('frontend/admin/apps/web-antd/src/views/client/components/ClientPhonePreview.vue');
+        $this->assertStringContainsString("module.type === 'distributionEntry'", $adminPreview);
+
+        $adminDistributionApi = $this->readProjectFile('frontend/admin/apps/web-antd/src/api/distribution/index.ts');
+        $this->assertStringContainsString('proof_image_full_url', $adminDistributionApi);
+
+        $adminApply = $this->readProjectFile('frontend/admin/apps/web-antd/src/views/distribution/apply/index.vue');
+        $this->assertStringContainsString('申请凭证', $adminApply);
+        $this->assertStringContainsString('proof_image_full_url', $adminApply);
+        $this->assertLessThan(
+            strpos($adminApply, "title: '申请说明'"),
+            strpos($adminApply, "title: '状态'"),
+            '后台分销申请列表应优先展示申请状态',
+        );
+
         $center = $this->readProjectFile('frontend/uniapp/pages-sub/distribution/index.vue');
         $this->assertStringContainsString('分销功能未开启', $center);
         $this->assertStringContainsString('申请分销员', $center);
+        $this->assertStringContainsString('申请凭证', $center);
+        $this->assertStringContainsString('getUploadConfig("image")', $center);
+        $this->assertStringContainsString('isUploadFileSizeAllowed', $center);
+        $this->assertStringContainsString('isValidMobile', $center);
+        $this->assertStringContainsString('applyMobileError', $center);
+        $this->assertStringContainsString('申请已提交', $center);
+        $this->assertStringContainsString('hasPendingApply', $center);
+        $this->assertStringContainsString('查看申请', $center);
+        $this->assertStringContainsString('撤回申请', $center);
+        $this->assertStringContainsString('withdrawDistributionApply', $center);
+        $this->assertStringContainsString('latest_apply', $center);
+        $this->assertStringContainsString('buildPosterQrText', $center);
+        $this->assertStringContainsString('client_share_title', $center);
+        $this->assertStringContainsString('client_share_desc', $center);
+        $this->assertStringContainsString('client_share_cover', $center);
+        $this->assertStringContainsString('onShareAppMessage', $center);
+        $this->assertStringContainsString('onShareTimeline', $center);
         $this->assertStringContainsString('绑定邀请码', $center);
         $this->assertStringContainsString('/pages-sub/distribution/withdraw', $center);
         $this->assertStringContainsString('/pages-sub/distribution/records', $center);
         $this->assertStringContainsString('/pages-sub/distribution/team', $center);
+
+        $poster = $this->readProjectFile('frontend/uniapp/utils/distribution-poster.js');
+        $this->assertStringContainsString('import QRCode from "qrcode"', $poster);
+        $this->assertStringContainsString('drawCoverImage', $poster);
+        $this->assertStringContainsString('coverImage', $poster);
+        $this->assertStringContainsString('drawQrCode', $poster);
+        $this->assertStringContainsString('QRCode.create', $poster);
+        $this->assertStringContainsString('扫码进入商城', $poster);
 
         $withdraw = $this->readProjectFile('frontend/uniapp/pages-sub/distribution/withdraw.vue');
         $this->assertStringContainsString('提现申请', $withdraw);

@@ -4,6 +4,65 @@ import type { UserTagApi } from './tag';
 import { requestClient } from '#/api/request';
 
 export namespace ClientUserApi {
+  export interface DistributionUserInfo {
+    avatar?: null | number | string;
+    email?: string;
+    id: number;
+    mobile?: string;
+    nickname?: string;
+  }
+
+  export interface UserDistributionAccount {
+    available_commission: string;
+    debt_commission: string;
+    direct_user_count: number;
+    frozen_commission: string;
+    id: number;
+    indirect_user_count: number;
+    invite_code: string;
+    level_id: number;
+    level_name: string;
+    open_source: string;
+    open_source_text: string;
+    opened_at?: string;
+    order_count: number;
+    pending_withdraw: string;
+    remark?: string;
+    status: number;
+    status_text: string;
+    total_commission: string;
+    user_id: number;
+    withdrawn_commission: string;
+  }
+
+  export interface UserDistributionRelation {
+    attribution_page?: string;
+    attribution_scene?: string;
+    attribution_target_id?: number;
+    attribution_target_type?: string;
+    create_time: string;
+    expire_time?: string;
+    grandparent_user?: DistributionUserInfo | null;
+    grandparent_user_id: number;
+    id: number;
+    invite_code: string;
+    invite_reward_amount: string;
+    invite_reward_at?: string;
+    invite_reward_status: number;
+    is_valid: boolean;
+    parent_user?: DistributionUserInfo | null;
+    parent_user_id: number;
+    source: string;
+    source_text: string;
+  }
+
+  export interface UserDistributionSummary {
+    distributor?: null | UserDistributionAccount;
+    enabled: boolean;
+    is_distributor: boolean;
+    relation?: null | UserDistributionRelation;
+  }
+
   /** 用户信息 */
   export interface UserItem {
     id: number;
@@ -48,6 +107,7 @@ export namespace ClientUserApi {
     };
     groups?: UserGroupApi.GroupItem[];
     tags?: UserTagApi.TagItem[];
+    distribution?: UserDistributionSummary;
   }
 
   /** 列表参数 */

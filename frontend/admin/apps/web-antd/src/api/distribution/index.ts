@@ -90,6 +90,8 @@ export namespace DistributionApi {
     real_name: string;
     mobile: string;
     reason: string;
+    proof_image: string;
+    proof_image_full_url: string;
     status: number;
     status_text: string;
     review_admin_id?: number | null;

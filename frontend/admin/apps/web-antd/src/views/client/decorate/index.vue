@@ -333,6 +333,12 @@ const PROFILE_MODULES = [
     type: 'pointsEntry',
   },
   {
+    desc: '分销佣金、团队和推广入口',
+    icon: 'lucide:network',
+    label: '分销卡片',
+    type: 'distributionEntry',
+  },
+  {
     desc: '默认四个常用服务入口',
     icon: 'lucide:layout-list',
     label: '服务菜单',
@@ -342,6 +348,8 @@ const PROFILE_MODULES = [
 
 const PROFILE_TYPE_ALIAS: Record<string, string> = {
   customMenu: 'serviceMenu',
+  distribution: 'distributionEntry',
+  distributionCard: 'distributionEntry',
   memberCard: 'memberEntry',
   orderShortcut: 'orderEntry',
   points: 'pointsEntry',
@@ -968,7 +976,13 @@ const paletteGroups = computed(() => {
   if (activeType.value === 'profile') {
     return [
       {
-        items: pick(['userInfo', 'memberEntry', 'walletEntry', 'pointsEntry']),
+        items: pick([
+          'userInfo',
+          'memberEntry',
+          'walletEntry',
+          'pointsEntry',
+          'distributionEntry',
+        ]),
         title: '基础组件',
       },
       {
@@ -1461,6 +1475,7 @@ const PROFILE_TEXT_STYLE_ROLES_BY_TYPE: Record<string, string[]> = {
   userInfo: ['meta', 'subtitle', 'title'],
   walletEntry: ['action', 'amount', 'meta', 'primaryAction', 'title'],
   pointsEntry: ['action', 'amount', 'meta', 'primaryAction', 'title'],
+  distributionEntry: ['action', 'amount', 'meta', 'primaryAction', 'title'],
   entryCard: ['subtitle', 'title'],
   imageCube: ['itemLabel'],
   navGrid: ['itemLabel'],
@@ -1817,6 +1832,7 @@ const getProfileDefaultTitle = (type: string) => {
   if (type === 'memberEntry') return '会员等级';
   if (type === 'orderEntry') return '我的订单';
   if (type === 'pointsEntry') return '我的积分';
+  if (type === 'distributionEntry') return '分销中心';
   return '我的服务';
 };
 
@@ -1856,6 +1872,11 @@ const getProfileStyleDefaults = (type: string): Record<string, any> => {
       paddingY: 28,
     },
     pointsEntry: {
+      ...base,
+      paddingX: 28,
+      paddingY: 28,
+    },
+    distributionEntry: {
       ...base,
       paddingX: 28,
       paddingY: 28,
@@ -1952,12 +1973,13 @@ const normalizeEditorConfig = (
   schemeType: ClientDecorateApi.SchemeType = activeType.value,
 ) => {
   const profileTypes = new Set([
-    'orderEntry',
+    'distributionEntry',
     'memberEntry',
+    'orderEntry',
+    'pointsEntry',
     'serviceMenu',
     'userInfo',
     'walletEntry',
-    'pointsEntry',
   ]);
   const profileType = normalizeProfileModuleType(type);
   const isProfileModule =
@@ -2400,6 +2422,20 @@ const normalizeEditorConfig = (
       true,
     );
   }
+  if (type === 'distributionEntry') {
+    config.title = config.title || '分销中心';
+    config.show_commission = normalizeBooleanValue(
+      config.show_commission,
+      true,
+    );
+    config.show_team = normalizeBooleanValue(config.show_team, true);
+    config.show_invite = normalizeBooleanValue(config.show_invite, true);
+    config.show_withdraw_button = normalizeBooleanValue(
+      config.show_withdraw_button,
+      true,
+    );
+    config.show_records = normalizeBooleanValue(config.show_records, true);
+  }
   if (isHomeModule || isProfileModule) {
     syncProfilePaddingCompat(config);
     syncProfileMarginCompat(config);
@@ -2653,6 +2689,14 @@ const defaultProfileConfig = (type: string): Record<string, any> => {
       show_records: true,
       show_view_button: true,
       title: '我的积分',
+    }),
+    distributionEntry: withStyle('distributionEntry', {
+      show_commission: true,
+      show_team: true,
+      show_invite: true,
+      show_withdraw_button: true,
+      show_records: true,
+      title: '分销中心',
     }),
   };
   const config = defaults[normalizeProfileModuleType(type)] ||
@@ -3275,6 +3319,23 @@ const normalizeSchemaForClient = (
             props.show_view_button,
             true,
           );
+        }
+        if (
+          activeType.value === 'profile' &&
+          moduleType === 'distributionEntry'
+        ) {
+          props.title = props.title || '分销中心';
+          props.show_commission = normalizeBooleanValue(
+            props.show_commission,
+            true,
+          );
+          props.show_team = normalizeBooleanValue(props.show_team, true);
+          props.show_invite = normalizeBooleanValue(props.show_invite, true);
+          props.show_withdraw_button = normalizeBooleanValue(
+            props.show_withdraw_button,
+            true,
+          );
+          props.show_records = normalizeBooleanValue(props.show_records, true);
         }
         if (activeType.value === 'home' && moduleType === 'entryCard') {
           props.icon_image = normalizeEditorUploadImage(

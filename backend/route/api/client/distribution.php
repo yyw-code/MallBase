@@ -13,5 +13,6 @@ Route::group('distribution', function () {
     Route::post('withdraw', 'applyWithdraw');
     Route::post('bindInvite', 'bindInvite');
     Route::post('apply', 'apply');
+    Route::post('withdrawApply', 'withdrawApply');
 })->prefix('client.distribution.DistributionController/')
     ->middleware([JwtAuth::class]);

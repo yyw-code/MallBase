@@ -381,6 +381,19 @@ const DEFAULT_PROFILE_MODULES: ModuleItem[] = [
     type: 'pointsEntry',
   },
   {
+    id: 'preview-distribution',
+    props: {
+      ...DEFAULT_PROFILE_CARD_STYLE,
+      show_commission: true,
+      show_invite: true,
+      show_records: true,
+      show_team: true,
+      show_withdraw_button: true,
+      title: '分销中心',
+    },
+    type: 'distributionEntry',
+  },
+  {
     id: 'preview-service',
     props: {
       ...DEFAULT_PROFILE_MENU_STYLE,
@@ -455,6 +468,7 @@ const MODULE_LABELS: Record<string, string> = {
   memberEntry: '会员卡片',
   points: '积分卡片',
   pointsEntry: '积分卡片',
+  distributionEntry: '分销卡片',
 };
 
 const GOODS_FALLBACK = {
@@ -712,6 +726,8 @@ function normalizeProfileType(type: string) {
   const alias: Record<string, string> = {
     categoryEntry: 'entryCard',
     customMenu: 'serviceMenu',
+    distribution: 'distributionEntry',
+    distributionCard: 'distributionEntry',
     memberCard: 'memberEntry',
     orderEntry: 'orderShortcut',
     points: 'pointsEntry',
@@ -1751,6 +1767,21 @@ function pointsActions(module: ModuleItem): WalletPreviewAction[] {
   return actions;
 }
 
+function distributionShowCommission(module: ModuleItem) {
+  return module.props.show_commission !== false;
+}
+
+function distributionActions(module: ModuleItem): WalletPreviewAction[] {
+  const actions: WalletPreviewAction[] = [];
+  if (module.props.show_records !== false) {
+    actions.push({ key: 'records', label: '佣金明细', primary: false });
+  }
+  if (module.props.show_withdraw_button !== false) {
+    actions.push({ key: 'withdraw', label: '去提现', primary: true });
+  }
+  return actions;
+}
+
 function richTextHtml(module: ModuleItem) {
   return (
     module.props?.content ||
@@ -2607,6 +2638,76 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
                   >
                     <span
                       v-for="action in pointsActions(module)"
+                      :key="action.key"
+                      :style="
+                        profileTextStyle(
+                          module,
+                          action.primary ? 'primaryAction' : 'action',
+                        )
+                      "
+                    >
+                      {{
+                        profileTextVisible(
+                          module,
+                          action.primary ? 'primaryAction' : 'action',
+                        )
+                          ? action.label
+                          : ''
+                      }}
+                    </span>
+                  </div>
+                </div>
+
+                <div
+                  v-else-if="module.type === 'distributionEntry'"
+                  class="profile-distribution-card"
+                  :style="moduleBoxStyle(module)"
+                >
+                  <small
+                    v-if="profileTextVisible(module, 'title')"
+                    :style="profileTextStyle(module, 'title')"
+                  >
+                    {{ module.props.title || '分销中心' }}
+                  </small>
+                  <strong
+                    v-if="
+                      distributionShowCommission(module) &&
+                      profileTextVisible(module, 'amount')
+                    "
+                    :style="profileTextStyle(module, 'amount')"
+                  >
+                    ¥0.00
+                  </strong>
+                  <p
+                    v-if="
+                      profileTextVisible(module, 'meta') &&
+                      (module.props.show_team !== false ||
+                        module.props.show_invite !== false)
+                    "
+                    class="profile-distribution-card__meta"
+                    :style="profileTextStyle(module, 'meta')"
+                  >
+                    <span v-if="module.props.show_team !== false">
+                      团队 0 人
+                    </span>
+                    <i
+                      v-if="
+                        module.props.show_team !== false &&
+                        module.props.show_invite !== false
+                      "
+                    >
+                      •
+                    </i>
+                    <span v-if="module.props.show_invite !== false">
+                      邀请码 MB0000
+                    </span>
+                  </p>
+                  <div
+                    v-if="distributionActions(module).length > 0"
+                    class="profile-distribution-card__actions"
+                  >
+                    <span
+                      v-for="action in distributionActions(module)"
                       :key="action.key"
                       :style="
                         profileTextStyle(
@@ -4395,6 +4496,7 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
   white-space: nowrap;
 }
 
+.profile-distribution-card strong,
 .profile-points-card strong,
 .profile-wallet-card strong {
   display: block;
@@ -4404,12 +4506,14 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
   line-height: 1;
 }
 
+.profile-distribution-card small,
 .profile-points-card small,
 .profile-wallet-card small {
   display: block;
   color: var(--mb-preview-text-secondary);
 }
 
+.profile-distribution-card__meta,
 .profile-points-card__meta,
 .profile-wallet-card__meta {
   display: flex;
@@ -4422,11 +4526,13 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
   line-height: 1.4;
 }
 
+.profile-distribution-card__meta i,
 .profile-points-card__meta i,
 .profile-wallet-card__meta i {
   font-style: normal;
 }
 
+.profile-distribution-card__actions,
 .profile-points-card__actions,
 .profile-wallet-card__actions {
   display: grid;
@@ -4435,6 +4541,7 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
   margin-top: 12px;
 }
 
+.profile-distribution-card__actions span,
 .profile-points-card__actions span,
 .profile-wallet-card__actions span {
   padding: 7px;
@@ -4448,6 +4555,7 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
   white-space: nowrap;
 }
 
+.profile-distribution-card__actions span:last-child,
 .profile-points-card__actions span:last-child,
 .profile-wallet-card__actions span:last-child {
   color: white;

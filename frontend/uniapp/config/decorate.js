@@ -297,6 +297,20 @@ export const DEFAULT_PROFILE_MODULES = [
     },
   },
   {
+    id: "profile-distribution",
+    type: "distributionEntry",
+    sort: 47,
+    props: {
+      ...DEFAULT_PROFILE_CARD_STYLE,
+      title: "分销中心",
+      show_commission: true,
+      show_team: true,
+      show_invite: true,
+      show_withdraw_button: true,
+      show_records: true,
+    },
+  },
+  {
     id: "profile-service",
     type: "serviceMenu",
     sort: 50,

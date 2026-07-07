@@ -19,6 +19,7 @@ use app\service\order\OrderSettingService;
 use app\service\order\StockService;
 use app\service\order\WechatPrepayCloseService;
 use app\service\logistics\LogisticsService;
+use app\service\admin\distribution\DistributionManagementService;
 use app\service\admin\support\CsvExportService;
 use app\service\upload\AssetHydrator;
 use app\common\enum\OperatorType;
@@ -957,6 +958,8 @@ class OrderAdminService extends BaseService
         $data['points_reward'] = $this->orderPointsRewardSnapshot($orderId);
         $data['member_discount'] = $this->orderMemberDiscountSnapshot($orderId);
         $data['member_growth'] = $this->orderMemberGrowthSnapshot((string) ($data['sn'] ?? ''));
+        $data['distribution_commissions'] = app()->make(DistributionManagementService::class)
+            ->orderDistributionCommissions($orderId);
 
         return $data;
     }

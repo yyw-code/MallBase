@@ -13,6 +13,7 @@ use app\model\user\UserPoints;
 use app\model\user\UserTag;
 use app\model\user\UserTagRelation;
 use app\model\user\UserWallet;
+use app\service\admin\distribution\DistributionManagementService;
 use app\service\admin\support\CsvExportService;
 use app\service\upload\AssetHydrator;
 use app\service\user\UserMemberService;
@@ -410,6 +411,8 @@ class UserService extends BaseService
             'level_lock_until' => null,
             'level_remark' => '',
         ];
+        $result['distribution'] = app()->make(DistributionManagementService::class)
+            ->userDistributionSummary($id);
 
         return $result;
     }

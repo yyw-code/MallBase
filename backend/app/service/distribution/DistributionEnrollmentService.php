@@ -9,6 +9,8 @@ use app\model\distribution\DistributionDistributor;
 use app\model\distribution\DistributionRelation;
 use app\model\order\Order;
 use app\model\user\User;
+use app\service\upload\AssetHydrator;
+use app\service\upload\AssetService;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
 
@@ -71,12 +73,13 @@ class DistributionEnrollmentService extends BaseService
             'apply_status' => $latestApply['status'] ?? null,
             'apply_status_text' => isset($latestApply['status']) ? DistributionApply::statusText((int) $latestApply['status']) : '',
             'apply_review_remark' => (string) ($latestApply['review_remark'] ?? ''),
+            'latest_apply' => $latestApply === null ? null : $this->formatLatestApply($latestApply),
             'amount_open_threshold' => app()->make(DistributionAccountService::class)->centsToAmount((int) $settings['amount_open_threshold_cents']),
             'amount_open_paid' => app()->make(DistributionAccountService::class)->centsToAmount($paidCents),
         ];
     }
 
-    public function apply(int $userId, string $realName, string $mobile, string $reason): int
+    public function apply(int $userId, string $realName, string $mobile, string $reason, string $proofImage = ''): int
     {
         $settings = app()->make(DistributionConfigService::class)->settings();
         if (!$settings['distribution_enabled']) {
@@ -102,18 +105,29 @@ class DistributionEnrollmentService extends BaseService
         if ($mobile === '') {
             throw new BusinessException('请填写联系电话');
         }
+        if (!preg_match('/^1[3-9]\d{9}$/', $mobile)) {
+            throw new BusinessException('请输入正确的手机号');
+        }
+        $proofImage = $this->normalizeProofImage($proofImage);
 
-        /** @var DistributionApply $apply */
-        $apply = $this->model();
-        $apply->save([
-            'user_id' => $userId,
-            'real_name' => $realName,
-            'mobile' => $mobile,
-            'reason' => $reason,
-            'status' => DistributionApply::STATUS_PENDING,
-        ]);
+        return (int) $this->transaction(function () use ($userId, $realName, $mobile, $reason, $proofImage): int {
+            /** @var DistributionApply $apply */
+            $apply = $this->model();
+            $apply->save([
+                'user_id' => $userId,
+                'real_name' => $realName,
+                'mobile' => $mobile,
+                'reason' => $reason,
+                'proof_image' => $proofImage,
+                'status' => DistributionApply::STATUS_PENDING,
+            ]);
 
-        return (int) $apply->id;
+            if ($proofImage !== '') {
+                app()->make(AssetService::class)->syncUsage('distribution_apply', (int) $apply->id, 'proof_image', [$proofImage]);
+            }
+
+            return (int) $apply->id;
+        });
     }
 
     public function approveApply(int $applyId, int $adminId, int $levelId, string $remark = ''): void
@@ -127,6 +141,44 @@ class DistributionEnrollmentService extends BaseService
             throw new BusinessException('请填写驳回原因');
         }
         $this->reviewApply($applyId, DistributionApply::STATUS_REJECTED, $adminId, 0, $remark);
+    }
+
+    public function withdrawPendingApply(int $userId): void
+    {
+        $settings = app()->make(DistributionConfigService::class)->settings();
+        if (!$settings['distribution_enabled']) {
+            throw new BusinessException('分销功能未开启');
+        }
+        if ($settings['distributor_open_mode'] !== DistributionConfigService::OPEN_MODE_APPLY) {
+            throw new BusinessException('当前不支持申请开通分销员');
+        }
+        $this->assertUserExists($userId);
+        if ($this->distributorExists($userId)) {
+            throw new BusinessException('已开通分销员资格');
+        }
+
+        $applyId = (int) $this->model()
+            ->where('user_id', $userId)
+            ->where('status', DistributionApply::STATUS_PENDING)
+            ->order('id', 'desc')
+            ->value('id');
+        if ($applyId <= 0) {
+            throw new BusinessException('暂无待审核申请');
+        }
+
+        $updated = 0;
+        $this->transaction(function () use ($applyId, &$updated): void {
+            $updated = (int) $this->model()
+                ->where('id', $applyId)
+                ->where('status', DistributionApply::STATUS_PENDING)
+                ->update([
+                    'status' => DistributionApply::STATUS_WITHDRAWN,
+                    'update_time' => date('Y-m-d H:i:s'),
+                ]);
+        });
+        if ($updated <= 0) {
+            throw new BusinessException('分销员申请已处理');
+        }
     }
 
     public function tryGrantInviteRewardForBuyer(int $buyerUserId, string $trigger): bool
@@ -229,6 +281,25 @@ class DistributionEnrollmentService extends BaseService
         });
     }
 
+    private function normalizeProofImage(string $proofImage): string
+    {
+        $proofImage = trim($proofImage);
+        if ($proofImage === '') {
+            return '';
+        }
+        if (!ctype_digit($proofImage)) {
+            throw new BusinessException('请先上传申请凭证图片');
+        }
+
+        $assetId = (int) $proofImage;
+        if ($assetId <= 0) {
+            throw new BusinessException('申请凭证图片不正确');
+        }
+        app()->make(AssetService::class)->assertUsableImageAssets([$assetId]);
+
+        return (string) $assetId;
+    }
+
     private function ensureDistributor(int $userId, int $levelId, string $source, string $remark): void
     {
         if ($userId <= 0 || $this->distributorExists($userId)) {
@@ -274,6 +345,35 @@ class DistributionEnrollmentService extends BaseService
             ->order('id', 'desc')
             ->find();
         return $row?->toArray();
+    }
+
+    /**
+     * @param array<string,mixed> $row
+     * @return array<string,mixed>
+     */
+    private function formatLatestApply(array $row): array
+    {
+        $proofImage = (string) ($row['proof_image'] ?? '');
+        $hydrated = app()->make(AssetHydrator::class)->hydrateFields([$row], [
+            'proof_image' => 'proof_image_full_url',
+        ]);
+        $row = $hydrated[0] ?? $row;
+        $status = (int) ($row['status'] ?? 0);
+
+        return [
+            'id' => (int) ($row['id'] ?? 0),
+            'real_name' => (string) ($row['real_name'] ?? ''),
+            'mobile' => (string) ($row['mobile'] ?? ''),
+            'reason' => (string) ($row['reason'] ?? ''),
+            'proof_image' => $proofImage,
+            'proof_image_full_url' => (string) ($row['proof_image_full_url'] ?? ''),
+            'status' => $status,
+            'status_text' => DistributionApply::statusText($status),
+            'review_remark' => (string) ($row['review_remark'] ?? ''),
+            'reviewed_at' => (string) ($row['reviewed_at'] ?? ''),
+            'create_time' => (string) ($row['create_time'] ?? ''),
+            'update_time' => (string) ($row['update_time'] ?? ''),
+        ];
     }
 
     private function assertUserExists(int $userId): void

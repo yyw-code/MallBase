@@ -5,7 +5,7 @@ import { h, onMounted, reactive, ref } from 'vue';
 
 import { useAccess } from '@vben/access';
 
-import { message, Tag } from 'ant-design-vue';
+import { Image, message, Tag } from 'ant-design-vue';
 
 import {
   approveDistributionApplyApi,
@@ -49,17 +49,39 @@ const columns = [
     customRender: ({ record }: { record: DistributionApi.ApplyItem }) =>
       record.user?.nickname || record.user?.mobile || '-',
   },
-  { title: '姓名', dataIndex: 'real_name', width: 120 },
-  { title: '联系电话', dataIndex: 'mobile', width: 140 },
-  { title: '申请说明', dataIndex: 'reason', ellipsis: true },
   {
     title: '状态',
     dataIndex: 'status',
     width: 110,
     customRender: ({ record }: { record: DistributionApi.ApplyItem }) => {
-      const color = record.status === 10 ? 'green' : record.status === 20 ? 'red' : 'blue';
+      const color =
+        record.status === 10
+          ? 'green'
+          : record.status === 20
+            ? 'red'
+            : record.status === 30
+              ? 'default'
+              : 'blue';
       return h(Tag, { color }, () => record.status_text || '-');
     },
+  },
+  { title: '姓名', dataIndex: 'real_name', width: 120 },
+  { title: '联系电话', dataIndex: 'mobile', width: 140 },
+  { title: '申请说明', dataIndex: 'reason', ellipsis: true },
+  {
+    title: '申请凭证',
+    dataIndex: 'proof_image_full_url',
+    width: 110,
+    customRender: ({ record }: { record: DistributionApi.ApplyItem }) =>
+      record.proof_image_full_url
+        ? h(Image, {
+            height: 48,
+            preview: { src: record.proof_image_full_url },
+            src: record.proof_image_full_url,
+            style: { borderRadius: '6px', objectFit: 'cover' },
+            width: 48,
+          })
+        : '-',
   },
   { title: '申请时间', dataIndex: 'create_time', width: 170 },
   { title: '操作', key: 'action', width: 160, fixed: 'right' },
@@ -127,6 +149,7 @@ onMounted(async () => {
             <a-select-option :value="0">待审核</a-select-option>
             <a-select-option :value="10">已通过</a-select-option>
             <a-select-option :value="20">已驳回</a-select-option>
+            <a-select-option :value="30">已撤回</a-select-option>
           </a-select>
         </a-form-item>
         <a-form-item class="mb-0 md:col-span-3 xl:col-span-6">
@@ -144,7 +167,7 @@ onMounted(async () => {
         :data-source="tableData"
         :loading="loading"
         :pagination="pagination"
-        :scroll="{ x: 1180 }"
+        :scroll="{ x: 1280 }"
         row-key="id"
         @change="(p: any) => { pagination.current = p.current; pagination.pageSize = p.pageSize; loadData(searchParams); }"
       >

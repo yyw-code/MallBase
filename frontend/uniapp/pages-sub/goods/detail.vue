@@ -1196,6 +1196,11 @@ function onSpecChange(payload) {
 function buildShareTarget() {
   const config = appStore.siteConfig || {}
   const title = goods.value?.name || config.client_share_title || config.site_name || 'MallBase'
+  const text =
+    goods.value?.subtitle ||
+    htmlToShareText(currentDescriptionHtml.value) ||
+    config.client_share_desc ||
+    title
   const id = goodsId.value
   const path = appendDistributionParams(`/pages-sub/goods/detail?id=${id}`, {
     dist_page: '/pages-sub/goods/detail',
@@ -1209,7 +1214,24 @@ function buildShareTarget() {
     goods.value?.main_image ||
     config.client_share_cover ||
     ''
-  return { title, path, query, imageUrl }
+  return { title, text, path, query, imageUrl }
+}
+
+function htmlToShareText(html) {
+  const text = String(html || '')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  return text.length > 80 ? `${text.slice(0, 80)}...` : text
 }
 
 function onShare() {
@@ -1218,14 +1240,14 @@ function onShare() {
   // #endif
   // #ifdef H5
   const target = buildShareTarget()
-  const { title } = target
+  const { text, title } = target
   const url = typeof location !== 'undefined'
     ? `${location.origin}${location.pathname}#${target.path}`
     : ''
   const ua = ((typeof navigator !== 'undefined' && navigator.userAgent) || '').toLowerCase()
   const inWechat = ua.includes('micromessenger')
   if (!inWechat && typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
-    navigator.share({ title, text: title, url }).catch(() => {})
+    navigator.share({ title, text, url }).catch(() => {})
     return
   }
   uni.setClipboardData({

@@ -201,10 +201,15 @@ class DistributionCenterService extends BaseService
             ->bindByInviteCode($userId, $inviteCode, 'client', $attribution);
     }
 
-    public function applyDistributor(int $userId, string $realName, string $mobile, string $reason): int
+    public function applyDistributor(int $userId, string $realName, string $mobile, string $reason, string $proofImage = ''): int
     {
         return app()->make(DistributionEnrollmentService::class)
-            ->apply($userId, $realName, $mobile, $reason);
+            ->apply($userId, $realName, $mobile, $reason, $proofImage);
+    }
+
+    public function withdrawApply(int $userId): void
+    {
+        app()->make(DistributionEnrollmentService::class)->withdrawPendingApply($userId);
     }
 
     /**
@@ -225,6 +230,8 @@ class DistributionCenterService extends BaseService
             'dist_target_type' => $targetType,
             'dist_target_id' => $targetId,
         ];
+        $query = http_build_query($params, '', '&', PHP_QUERY_RFC3986);
+        $miniProgramPage = $this->miniProgramPage($page);
 
         return [
             'invite_code' => $inviteCode,
@@ -232,9 +239,51 @@ class DistributionCenterService extends BaseService
             'target_type' => $targetType,
             'target_id' => $targetId,
             'page' => $page,
-            'query' => http_build_query($params),
-            'path' => $page === '' ? '' : $page . (str_contains($page, '?') ? '&' : '?') . http_build_query($params),
+            'query' => $query,
+            'path' => $page === '' ? '' : $page . (str_contains($page, '?') ? '&' : '?') . $query,
+            'mini_program_page' => $miniProgramPage,
+            'mini_program_scene' => $this->miniProgramScene($inviteCode, $scene, $targetType, $targetId),
         ];
+    }
+
+    private function miniProgramPage(string $page): string
+    {
+        $path = trim(explode('?', $page, 2)[0]);
+        return ltrim($path, '/');
+    }
+
+    private function miniProgramScene(string $inviteCode, string $scene, string $targetType, int $targetId): string
+    {
+        $parts = [
+            $inviteCode,
+            $this->miniProgramSceneAlias($scene),
+        ];
+        if ($targetType !== '' || $targetId > 0) {
+            $parts[] = $this->miniProgramTargetAlias($targetType);
+            $parts[] = $targetId > 0 ? strtolower(base_convert((string) $targetId, 10, 36)) : '0';
+        }
+
+        return implode('.', $parts);
+    }
+
+    private function miniProgramSceneAlias(string $scene): string
+    {
+        return match ($scene) {
+            'poster' => 'p',
+            'manual' => 'm',
+            'share_link' => 'l',
+            default => mb_substr($scene, 0, 3),
+        };
+    }
+
+    private function miniProgramTargetAlias(string $targetType): string
+    {
+        return match ($targetType) {
+            'goods' => 'g',
+            'article' => 'a',
+            'page' => 'p',
+            default => mb_substr($targetType, 0, 4),
+        };
     }
 
     /**
@@ -254,6 +303,7 @@ class DistributionCenterService extends BaseService
 
     private function assertDistributor(int $userId): DistributionDistributor
     {
+        $this->assertDistributionEnabled();
         $account = $this->distributor($userId);
         if ($account === null || (int) $account->status !== DistributionDistributor::STATUS_ENABLED) {
             throw new BusinessException('暂未开通分销员资格');

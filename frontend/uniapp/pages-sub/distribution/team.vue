@@ -17,6 +17,7 @@ const page = ref(1);
 const total = ref(0);
 const loading = ref(false);
 const finished = ref(false);
+const featureClosed = ref(false);
 
 const totalText = computed(() => Number(total.value || 0));
 
@@ -28,7 +29,9 @@ onPullDownRefresh(async () => {
 });
 
 onReachBottom(() => {
-  if (!finished.value && !loading.value) fetchTeam(false);
+  if (!featureClosed.value && !finished.value && !loading.value) {
+    fetchTeam(false);
+  }
 });
 
 async function fetchTeam(reset) {
@@ -46,11 +49,13 @@ async function fetchTeam(reset) {
       limit: 20,
     });
     const rows = Array.isArray(data?.list) ? data.list : [];
+    featureClosed.value = false;
     total.value = Number(data?.total || rows.length || 0);
     list.value = reset ? rows : list.value.concat(rows);
     finished.value = list.value.length >= total.value || rows.length === 0;
     if (!finished.value) page.value += 1;
-  } catch {
+  } catch (error) {
+    featureClosed.value = isDistributionClosedError(error);
     if (reset) list.value = [];
     finished.value = true;
   } finally {
@@ -58,7 +63,12 @@ async function fetchTeam(reset) {
   }
 }
 
+function isDistributionClosedError(error) {
+  return String(error?.message || "").includes("分销功能未开启");
+}
+
 function switchLevel(level) {
+  if (featureClosed.value) return;
   if (activeLevel.value === level) return;
   activeLevel.value = level;
   fetchTeam(true);
@@ -86,7 +96,11 @@ function avatarText(item) {
   >
     <mb-navbar title="我的团队" bg-color="var(--color-bg, #ffffff)" />
 
-    <view class="tabs">
+    <view v-if="featureClosed" class="empty">
+      <text class="empty__title">分销功能未开启</text>
+    </view>
+
+    <view v-if="!featureClosed" class="tabs">
       <view
         v-for="item in levels"
         :key="item.key"
@@ -98,14 +112,14 @@ function avatarText(item) {
       </view>
     </view>
 
-    <view class="summary-card">
+    <view v-if="!featureClosed" class="summary-card">
       <text class="summary-card__label">{{
         activeLevel === 1 ? "一级团队人数" : "二级团队人数"
       }}</text>
       <text class="summary-card__value">{{ totalText }}</text>
     </view>
 
-    <view v-if="list.length" class="team-list">
+    <view v-if="!featureClosed && list.length" class="team-list">
       <view
         v-for="item in list"
         :key="item.id || item.user_id"
@@ -136,7 +150,7 @@ function avatarText(item) {
       </view>
     </view>
 
-    <view v-else class="empty">
+    <view v-else-if="!featureClosed" class="empty">
       <text class="empty__title">暂无团队成员</text>
     </view>
 

@@ -976,6 +976,7 @@ class DecorationService extends BaseService
     {
         $profileType = match ($type) {
             'customMenu' => 'serviceMenu',
+            'distribution', 'distributionCard' => 'distributionEntry',
             'points', 'pointsCard' => 'pointsEntry',
             default => $type,
         };
@@ -1102,6 +1103,15 @@ class DecorationService extends BaseService
             $props['show_view_button'] = ($props['show_view_button'] ?? true) !== false;
         }
 
+        if ($profileType === 'distributionEntry') {
+            $props['title'] = (string) ($props['title'] ?? '分销中心');
+            $props['show_commission'] = ($props['show_commission'] ?? true) !== false;
+            $props['show_team'] = ($props['show_team'] ?? true) !== false;
+            $props['show_invite'] = ($props['show_invite'] ?? true) !== false;
+            $props['show_withdraw_button'] = ($props['show_withdraw_button'] ?? true) !== false;
+            $props['show_records'] = ($props['show_records'] ?? true) !== false;
+        }
+
         return $props;
     }
 
@@ -1173,7 +1183,6 @@ class DecorationService extends BaseService
     {
         return [
             ['title' => '地址管理', 'label' => '地址管理', 'image' => 'static/decorate/profile-service-address.svg', 'path' => '/pages-sub/address/list'],
-            ['title' => '分销中心', 'label' => '分销中心', 'image' => '', 'imageRemoved' => true, 'image_removed' => true, 'path' => '/pages-sub/distribution/index'],
             ['title' => '系统设置', 'label' => '系统设置', 'image' => 'static/decorate/profile-service-settings.svg', 'path' => '/pages-sub/user/settings'],
             ['title' => '联系客服', 'label' => '联系客服', 'image' => 'static/decorate/profile-service-support.svg', 'path' => ''],
         ];
@@ -1321,6 +1330,9 @@ class DecorationService extends BaseService
             'orderEntry' => array_merge($base, ['paddingX' => 28, 'paddingY' => 28]),
             'orderShortcut' => array_merge($base, ['paddingX' => 28, 'paddingY' => 28]),
             'profileHeader' => array_merge($base, ['paddingX' => 28, 'paddingY' => 28, 'radius' => 0]),
+            'distribution' => array_merge($base, ['paddingX' => 28, 'paddingY' => 28]),
+            'distributionCard' => array_merge($base, ['paddingX' => 28, 'paddingY' => 28]),
+            'distributionEntry' => array_merge($base, ['paddingX' => 28, 'paddingY' => 28]),
             'points' => array_merge($base, ['paddingX' => 28, 'paddingY' => 28]),
             'pointsCard' => array_merge($base, ['paddingX' => 28, 'paddingY' => 28]),
             'pointsEntry' => array_merge($base, ['paddingX' => 28, 'paddingY' => 28]),
@@ -1346,6 +1358,21 @@ class DecorationService extends BaseService
             'show_discount' => true,
             'show_growth' => true,
             'show_progress' => true,
+        ]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function defaultProfileDistributionEntryProps(): array
+    {
+        return array_merge($this->defaultProfileStyleProps('distributionEntry'), [
+            'title' => '分销中心',
+            'show_commission' => true,
+            'show_team' => true,
+            'show_invite' => true,
+            'show_withdraw_button' => true,
+            'show_records' => true,
         ]);
     }
 
@@ -1738,6 +1765,7 @@ class DecorationService extends BaseService
                     ])],
                     ['id' => 'profile-wallet', 'type' => 'walletEntry', 'props' => array_merge($this->defaultProfileStyleProps('walletEntry'), ['title' => '我的余额', 'show_balance' => true, 'show_records' => true, 'show_view_button' => true])],
                     ['id' => 'profile-points', 'type' => 'pointsEntry', 'props' => array_merge($this->defaultProfileStyleProps('pointsEntry'), ['title' => '我的积分', 'show_records' => true, 'show_view_button' => true])],
+                    ['id' => 'profile-distribution', 'type' => 'distributionEntry', 'props' => $this->defaultProfileDistributionEntryProps()],
                     ['id' => 'profile-service', 'type' => 'serviceMenu', 'props' => array_merge($this->defaultProfileStyleProps('serviceMenu'), [
                         'title' => '我的服务',
                         'columns' => 4,

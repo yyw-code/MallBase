@@ -53,9 +53,11 @@ function getResponseMessage(body, fallback) {
   return body?.message || body?.msg || fallback
 }
 
-function rejectInvalidResponse(reject, context) {
+function rejectInvalidResponse(reject, context, showErrorToast = true) {
   console.error('[request:invalid-response]', context)
-  uni.showToast({ title: '接口响应异常', icon: 'none' })
+  if (showErrorToast) {
+    uni.showToast({ title: '接口响应异常', icon: 'none' })
+  }
   reject(new Error('接口响应异常'))
 }
 
@@ -123,7 +125,14 @@ function refreshAccessToken() {
 }
 
 function request(options, allowRefresh = true) {
-  const { url, method = 'GET', data, header = {} } = options
+  const {
+    url,
+    method = 'GET',
+    data,
+    header = {},
+    redirectOnUnauthorized = true,
+    showErrorToast = true,
+  } = options
   const requestUrl = `${config.baseUrl}${url}`
   const token = getToken()
   if (token) {
@@ -149,7 +158,7 @@ function request(options, allowRefresh = true) {
             method,
             statusCode: res.statusCode,
             data: summarizeResponseData(res.data)
-          })
+          }, showErrorToast)
           return
         }
 
@@ -165,10 +174,16 @@ function request(options, allowRefresh = true) {
               // 继续走统一登录态失效处理
             }
           }
-          reject(handleUnauthorized(getResponseMessage(body, '请重新登录')))
+          if (redirectOnUnauthorized) {
+            reject(handleUnauthorized(getResponseMessage(body, '请重新登录')))
+          } else {
+            reject(new Error(getResponseMessage(body, '请重新登录')))
+          }
         } else {
           const message = getResponseMessage(body, '请求失败')
-          uni.showToast({ title: message, icon: 'none' })
+          if (showErrorToast) {
+            uni.showToast({ title: message, icon: 'none' })
+          }
           reject(new Error(message))
         }
       },
@@ -179,7 +194,9 @@ function request(options, allowRefresh = true) {
           data,
           err
         })
-        uni.showToast({ title: '网络异常', icon: 'none' })
+        if (showErrorToast) {
+          uni.showToast({ title: '网络异常', icon: 'none' })
+        }
         reject(err)
       }
     })
@@ -188,6 +205,8 @@ function request(options, allowRefresh = true) {
 
 export const get = (url, params) => request({ url, method: 'GET', data: params })
 export const post = (url, data) => request({ url, method: 'POST', data })
+export const postSilent = (url, data) =>
+  request({ url, method: 'POST', data, redirectOnUnauthorized: false, showErrorToast: false })
 export const put = (url, data) => request({ url, method: 'PUT', data })
 export const del = (url, data) => request({ url, method: 'DELETE', data })
 

@@ -45,6 +45,9 @@ class DistributionAccountService extends BaseService
 
     private function doOpenDistributor(int $userId, int $levelId, ?int $adminId, string $source, string $remark): int
     {
+        if (!app()->make(DistributionConfigService::class)->isEnabled()) {
+            throw new BusinessException('分销功能未开启');
+        }
         $this->assertUserExists($userId);
         $this->assertLevelUsable($levelId);
 

@@ -75,14 +75,21 @@ class DistributionController extends BaseController
 
     public function apply()
     {
-        $data = $this->request->param(['real_name', 'mobile', 'reason']);
+        $data = $this->request->param(['real_name', 'mobile', 'reason', 'proof_image']);
         $id = $this->service()->applyDistributor(
             userId: $this->userId(),
             realName: (string) ($data['real_name'] ?? ''),
             mobile: (string) ($data['mobile'] ?? ''),
             reason: (string) ($data['reason'] ?? ''),
+            proofImage: (string) ($data['proof_image'] ?? ''),
         );
         return $this->success(['id' => $id], '提交成功');
+    }
+
+    public function withdrawApply()
+    {
+        $this->service()->withdrawApply($this->userId());
+        return $this->success(null, '撤回成功');
     }
 
     public function shareInfo()

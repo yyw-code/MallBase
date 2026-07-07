@@ -78,6 +78,14 @@ const buyerDisplayName = (order: OrderApi.OrderDetail) =>
 const buyerInitial = (order: OrderApi.OrderDetail) =>
   buyerDisplayName(order).slice(0, 1) || '买';
 
+const distributorDisplayName = (item: OrderApi.DistributionCommissionItem) =>
+  item.distributor_user?.nickname || `用户 ${item.distributor_user_id}`;
+
+const distributorContact = (item: OrderApi.DistributionCommissionItem) =>
+  item.distributor_user?.mobile || item.distributor_user?.email || '—';
+
+const relationLevelLabel = (level: number) => (level === 2 ? '二级' : '一级');
+
 const itemColumns = [
   { title: '商品', dataIndex: 'goods_name', ellipsis: true },
   { title: '规格', dataIndex: 'sku_spec', width: 140, ellipsis: true },
@@ -89,6 +97,22 @@ const itemColumns = [
   { title: '已发货', dataIndex: 'shipped_quantity', width: 80 },
   { title: '已退款', dataIndex: 'refunded_quantity', width: 80 },
   { title: '已退货', dataIndex: 'returned_quantity', width: 80 },
+];
+
+const commissionColumns = [
+  { title: '层级', dataIndex: 'relation_level', width: 80 },
+  {
+    title: '分销员',
+    dataIndex: 'distributor_user',
+    key: 'distributor_user',
+    width: 170,
+  },
+  { title: '计佣基数', dataIndex: 'base_amount', width: 100 },
+  { title: '比例', dataIndex: 'rate', width: 80 },
+  { title: '佣金', dataIndex: 'amount', width: 100 },
+  { title: '已扣回', dataIndex: 'recovered_amount', width: 100 },
+  { title: '状态', dataIndex: 'status_text', width: 100 },
+  { title: '结算时间', dataIndex: 'release_time', width: 160 },
 ];
 </script>
 
@@ -267,6 +291,62 @@ const itemColumns = [
               -> {{ detail.member_growth.after_growth }}
             </a-descriptions-item>
           </a-descriptions>
+        </template>
+
+        <template v-if="detail.distribution_commissions?.list?.length">
+          <a-divider orientation="left" plain>分销佣金</a-divider>
+          <a-descriptions
+            :column="2"
+            size="small"
+            bordered
+            class="mb-4"
+            :label-style="{ width: '130px' }"
+          >
+            <a-descriptions-item label="佣金合计">
+              ¥{{ detail.distribution_commissions.total_amount }}
+            </a-descriptions-item>
+            <a-descriptions-item label="计佣记录">
+              {{ detail.distribution_commissions.list.length }} 条
+            </a-descriptions-item>
+          </a-descriptions>
+          <a-table
+            :columns="commissionColumns"
+            :data-source="detail.distribution_commissions.list"
+            :pagination="false"
+            row-key="id"
+            size="small"
+            :scroll="{ x: 900 }"
+            class="mb-4"
+          >
+            <template #bodyCell="{ column, record }">
+              <template v-if="column.dataIndex === 'relation_level'">
+                {{ relationLevelLabel(record.relation_level) }}
+              </template>
+              <template v-else-if="column.key === 'distributor_user'">
+                <div>
+                  <div>{{ distributorDisplayName(record) }}</div>
+                  <div class="text-xs text-gray-500">
+                    {{ distributorContact(record) }}
+                  </div>
+                </div>
+              </template>
+              <template v-else-if="column.dataIndex === 'base_amount'">
+                ¥{{ record.base_amount }}
+              </template>
+              <template v-else-if="column.dataIndex === 'rate'">
+                {{ record.rate }}%
+              </template>
+              <template v-else-if="column.dataIndex === 'amount'">
+                ¥{{ record.amount }}
+              </template>
+              <template v-else-if="column.dataIndex === 'recovered_amount'">
+                ¥{{ record.recovered_amount }}
+              </template>
+              <template v-else-if="column.dataIndex === 'release_time'">
+                {{ record.release_time || '—' }}
+              </template>
+            </template>
+          </a-table>
         </template>
 
         <a-divider orientation="left" plain>订单商品</a-divider>
