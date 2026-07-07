@@ -57,7 +57,16 @@ const resultMeta = computed(() => {
 // 轮询配置：2s/次，最多 30 次（共 1min）
 const POLL_INTERVAL_MS = 2000
 const POLL_MAX_TIMES = 30
-const PAID_ORDER_STATUSES = [10, 20, 30, 40] // 已支付、已发货、已收货、已完成
+const ORDER_STATUS_PAID = 10
+const ORDER_STATUS_SHIPPED = 20
+const ORDER_STATUS_RECEIVED = 30
+const ORDER_STATUS_COMPLETED = 40
+const PAID_ORDER_STATUSES = [
+  ORDER_STATUS_PAID,
+  ORDER_STATUS_SHIPPED,
+  ORDER_STATUS_RECEIVED,
+  ORDER_STATUS_COMPLETED,
+] // 已支付、已发货、已收货、已完成
 
 let pollTimer = null
 let pollCount = 0
@@ -81,6 +90,10 @@ function normalizePayStatus(payStatus) {
     return 'pending'
   }
   return 'fail'
+}
+
+function isPaidOrderStatus(orderStatus) {
+  return orderStatus === ORDER_STATUS_PAID || PAID_ORDER_STATUSES.includes(orderStatus)
 }
 
 function applyPayResult(payResult) {
@@ -147,7 +160,7 @@ async function pollOrderStatus() {
       amount.value = detail?.pay_amount || detail?.total_amount || ''
     }
     const orderStatus = Number(detail?.status ?? 0)
-    if (PAID_ORDER_STATUSES.includes(orderStatus)) {
+    if (isPaidOrderStatus(orderStatus)) {
       status.value = 'success'
       message.value = ''
       clearPoll()

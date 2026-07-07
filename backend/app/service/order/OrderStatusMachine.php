@@ -68,10 +68,56 @@ class OrderStatusMachine extends BaseService
             throw new BusinessException('订单目标状态不合法');
         }
 
+        $orderId = (int) ($order->id ?? 0);
+        if ($orderId > 0) {
+            $this->transaction(function () use ($order, $orderId, $toStatus, $operatorType, $operatorId, $remark): void {
+                /** @var Order|null $lockedOrder */
+                $lockedOrder = $this->model()
+                    ->where('id', $orderId)
+                    ->whereNull('delete_time')
+                    ->lock(true)
+                    ->find();
+                if ($lockedOrder === null) {
+                    throw new BusinessException('订单不存在');
+                }
+
+                $this->transitLoadedOrder($lockedOrder, $toStatus, $operatorType, $operatorId, $remark);
+                $this->syncOrderSnapshot($order, $lockedOrder);
+            });
+            return;
+        }
+
+        $fromStatus = $this->resolvedFromStatus($order, $toStatus);
+        if ($fromStatus === null) {
+            return;
+        }
+
+        $this->transaction(function () use ($order, $fromStatus, $toStatus, $operatorType, $operatorId, $remark): void {
+            $this->persistTransit($order, $fromStatus, $toStatus, $operatorType, $operatorId, $remark);
+        });
+    }
+
+    private function transitLoadedOrder(
+        Order $order,
+        int $toStatus,
+        int $operatorType,
+        ?int $operatorId,
+        ?string $remark
+    ): void {
+        $fromStatus = $this->resolvedFromStatus($order, $toStatus);
+        if ($fromStatus === null) {
+            return;
+        }
+
+        $this->persistTransit($order, $fromStatus, $toStatus, $operatorType, $operatorId, $remark);
+    }
+
+    private function resolvedFromStatus(Order $order, int $toStatus): ?int
+    {
         $fromStatus = (int) ($order->status ?? 0);
         if ($fromStatus === $toStatus) {
             // 幂等保护：重复流转到同一状态不报错、不写日志
-            return;
+            return null;
         }
 
         if (!OrderStatus::canTransit($fromStatus, $toStatus)) {
@@ -82,55 +128,71 @@ class OrderStatusMachine extends BaseService
             ));
         }
 
+        return $fromStatus;
+    }
+
+    private function persistTransit(
+        Order $order,
+        int $fromStatus,
+        int $toStatus,
+        int $operatorType,
+        ?int $operatorId,
+        ?string $remark
+    ): void {
         /** @var OrderEventDispatcher $dispatcher */
         $dispatcher = app()->make(OrderEventDispatcher::class);
 
-        $this->transaction(function () use ($order, $fromStatus, $toStatus, $operatorType, $operatorId, $remark, $dispatcher): void {
-            // 1. 更新 status + 对应时间戳
-            $order->status = $toStatus;
-            $timestampColumn = self::STATUS_TIMESTAMP[$toStatus] ?? null;
-            if ($timestampColumn !== null) {
-                // 使用 date() 避免依赖框架 Helper，保持与 Model $autoWriteTimestamp 一致的 datetime 格式
-                $order->{$timestampColumn} = date('Y-m-d H:i:s');
-            }
-            $order->save();
+        // 1. 更新 status + 对应时间戳
+        $order->status = $toStatus;
+        $timestampColumn = self::STATUS_TIMESTAMP[$toStatus] ?? null;
+        if ($timestampColumn !== null) {
+            // 使用 date() 避免依赖框架 Helper，保持与 Model $autoWriteTimestamp 一致的 datetime 格式
+            $order->{$timestampColumn} = date('Y-m-d H:i:s');
+        }
+        $order->save();
 
-            // 2. 写入流转日志（append-only）
-            OrderLog::create([
-                'order_id'      => (int) $order->id,
-                'from_status'   => $fromStatus,
-                'to_status'     => $toStatus,
-                'operator_type' => $operatorType,
-                'operator_id'   => $operatorId,
-                'remark'        => $remark !== null ? mb_substr($remark, 0, 255) : null,
-                'ip'            => $this->currentIp(),
-            ]);
+        // 2. 写入流转日志（append-only）
+        OrderLog::create([
+            'order_id'      => (int) $order->id,
+            'from_status'   => $fromStatus,
+            'to_status'     => $toStatus,
+            'operator_type' => $operatorType,
+            'operator_id'   => $operatorId,
+            'remark'        => $remark !== null ? mb_substr($remark, 0, 255) : null,
+            'ip'            => $this->currentIp(),
+        ]);
 
-            if ($toStatus === OrderStatus::PAID) {
-                $dispatcher->dispatch(OrderEventContext::forOrder(
-                    OrderEvent::ORDER_PAID,
-                    $order,
-                    $fromStatus,
-                    $toStatus,
-                ));
-            }
-            if ($toStatus === OrderStatus::COMPLETED) {
-                $dispatcher->dispatch(OrderEventContext::forOrder(
-                    OrderEvent::ORDER_COMPLETED,
-                    $order,
-                    $fromStatus,
-                    $toStatus,
-                ));
-            }
-            if ($toStatus === OrderStatus::CLOSED) {
-                $dispatcher->dispatch(OrderEventContext::forOrder(
-                    OrderEvent::ORDER_CLOSED,
-                    $order,
-                    $fromStatus,
-                    $toStatus,
-                ));
-            }
-        });
+        if ($toStatus === OrderStatus::PAID) {
+            $dispatcher->dispatch(OrderEventContext::forOrder(
+                OrderEvent::ORDER_PAID,
+                $order,
+                $fromStatus,
+                $toStatus,
+            ));
+        }
+        if ($toStatus === OrderStatus::COMPLETED) {
+            $dispatcher->dispatch(OrderEventContext::forOrder(
+                OrderEvent::ORDER_COMPLETED,
+                $order,
+                $fromStatus,
+                $toStatus,
+            ));
+        }
+        if ($toStatus === OrderStatus::CLOSED) {
+            $dispatcher->dispatch(OrderEventContext::forOrder(
+                OrderEvent::ORDER_CLOSED,
+                $order,
+                $fromStatus,
+                $toStatus,
+            ));
+        }
+    }
+
+    private function syncOrderSnapshot(Order $target, Order $source): void
+    {
+        foreach (['status', 'paid_at', 'shipped_at', 'received_at', 'completed_at', 'closed_at'] as $field) {
+            $target->{$field} = $source->{$field} ?? null;
+        }
     }
 
     /**

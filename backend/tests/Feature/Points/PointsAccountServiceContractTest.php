@@ -22,6 +22,28 @@ final class PointsAccountServiceContractTest extends TestCase
     private ?App $app = null;
     private bool $dbReady = false;
 
+    public function testEnsurePointsCreatesAccountOnlyOnce(): void
+    {
+        $this->requireDbTables([
+            'user_points',
+        ]);
+
+        Db::startTrans();
+        try {
+            $service = $this->pointsService();
+            $userId = $this->testUserId();
+
+            $first = $service->ensurePoints($userId);
+            $second = $service->ensurePoints($userId);
+
+            $this->assertSame((int) $first->id, (int) $second->id);
+            $this->assertSame(1, (int) Db::name('user_points')->where('user_id', $userId)->count());
+            $this->assertSame(0, (int) Db::name('user_points')->where('user_id', $userId)->value('balance_points'));
+        } finally {
+            Db::rollback();
+        }
+    }
+
     public function testDeductForOrderAndReturnWhenOrderClosed(): void
     {
         $this->requireDbTables([

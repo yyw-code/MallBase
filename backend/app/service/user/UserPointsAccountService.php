@@ -19,6 +19,7 @@ use app\model\user\UserPointsLog;
 use app\service\marketing\PointsFeatureService;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
+use Throwable;
 
 /**
  * 用户积分账户服务
@@ -455,18 +456,7 @@ class UserPointsAccountService extends BaseService
             return $points;
         }
 
-        /** @var UserPoints $created */
-        $created = $this->model();
-        $created->save([
-            'user_id' => $userId,
-            'balance_points' => 0,
-            'frozen_points' => 0,
-            'debt_points' => 0,
-            'total_income_points' => 0,
-            'total_expense_points' => 0,
-        ]);
-
-        return $created;
+        return $this->createEmptyPointsAccount($userId, false);
     }
 
     private function lockedPoints(int $userId): UserPoints
@@ -477,18 +467,50 @@ class UserPointsAccountService extends BaseService
             return $points;
         }
 
+        return $this->createEmptyPointsAccount($userId, true);
+    }
+
+    private function createEmptyPointsAccount(int $userId, bool $lock): UserPoints
+    {
         /** @var UserPoints $created */
         $created = $this->model();
-        $created->save([
-            'user_id' => $userId,
-            'balance_points' => 0,
-            'frozen_points' => 0,
-            'debt_points' => 0,
-            'total_income_points' => 0,
-            'total_expense_points' => 0,
-        ]);
+        try {
+            $created->save([
+                'user_id' => $userId,
+                'balance_points' => 0,
+                'frozen_points' => 0,
+                'debt_points' => 0,
+                'total_income_points' => 0,
+                'total_expense_points' => 0,
+            ]);
 
-        return $created;
+            return $created;
+        } catch (Throwable $e) {
+            if (!$this->isDuplicateUserPointsAccount($e)) {
+                throw $e;
+            }
+
+            $query = $this->model()->where('user_id', $userId);
+            if ($lock) {
+                $query->lock(true);
+            }
+
+            /** @var UserPoints|null $points */
+            $points = $query->find();
+            if ($points !== null) {
+                return $points;
+            }
+
+            throw $e;
+        }
+    }
+
+    private function isDuplicateUserPointsAccount(Throwable $e): bool
+    {
+        $message = $e->getMessage();
+        return str_contains($message, '1062')
+            && str_contains($message, 'user_points')
+            && str_contains($message, 'uk_user_id');
     }
 
     private function changeAvailable(
