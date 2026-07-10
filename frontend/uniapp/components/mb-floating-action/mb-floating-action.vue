@@ -42,7 +42,6 @@
       @touchmove.stop.prevent="handleTouchMove"
       @touchend.stop="handleTouchEnd"
       @touchcancel.stop="handleTouchEnd"
-      @mousedown.stop.prevent="handleMouseStart"
     >
       <template v-if="isSingleMode && mainItem">
         <image
@@ -108,6 +107,7 @@ const touchState = ref({
 let dragFrame = 0
 let pendingDragPosition = null
 let positionSettleTimer = 0
+let activePointerId = null
 
 const config = computed(() => decorateStore.floatingConfig || {})
 
@@ -175,7 +175,7 @@ const rootStyle = computed(() => {
       ...style,
       left: '0px',
       top: '0px',
-      transform: `translate3d(${Math.round(dragPosition.value.x)}px, ${Math.round(dragPosition.value.y)}px, 0)`,
+      transform: `translate3d(${dragPosition.value.x}px, ${dragPosition.value.y}px, 0)`,
     }
   }
   const side = config.value.position === 'left-bottom' ? 'left' : 'right'
@@ -218,6 +218,7 @@ onShow(() => {
 onMounted(() => {
   syncCurrentPath()
   syncViewport()
+  addPointerStartListener()
   if (visible.value) syncPosition(true)
 })
 
@@ -231,12 +232,15 @@ function syncViewport() {
   const info = uni.getSystemInfoSync()
   const width = Number(info.windowWidth || info.screenWidth || 375)
   const height = Number(info.windowHeight || info.screenHeight || 667)
-  const safeBottom =
-    Number(info.safeAreaInsets?.bottom || 0) ||
-    Math.max(
+  let safeBottom = Number(info.safeAreaInsets?.bottom || 0)
+  // #ifndef H5
+  if (!safeBottom) {
+    safeBottom = Math.max(
       0,
       Number(info.screenHeight || height) - Number(info.safeArea?.bottom || height),
     )
+  }
+  // #endif
   viewport.value = { height, safeBottom, width }
 }
 
@@ -469,12 +473,14 @@ function getSystemPresetType(item) {
 }
 
 function handleTouchStart(event) {
+  if (activePointerId !== null) return
   const touch = event.touches?.[0]
   if (!touch) return
   startDrag(touch.clientX, touch.clientY)
 }
 
 function handleTouchMove(event) {
+  if (activePointerId !== null) return
   if (!dragging.value) return
   const touch = event.touches?.[0]
   if (!touch) return
@@ -482,31 +488,84 @@ function handleTouchMove(event) {
 }
 
 function handleTouchEnd() {
+  if (activePointerId !== null) return
   endDrag()
 }
 
-function handleMouseStart(event) {
-  if (event.button !== undefined && event.button !== 0) return
-  startDrag(event.clientX, event.clientY)
+function handlePointerStart(event) {
   if (typeof window === 'undefined') return
-  window.addEventListener('mousemove', handleMouseMove, { passive: false })
-  window.addEventListener('mouseup', handleMouseEnd)
+  if (activePointerId !== null || event.isPrimary === false) return
+  if (event.button !== undefined && event.button !== 0) return
+  const dragHandle =
+    event
+      .composedPath?.()
+      .find((node) => node?.matches?.('.mb-floating-action__main')) ||
+    event.target?.closest?.('.mb-floating-action__main')
+  if (!dragHandle) return
+  const pointerId = Number(event.pointerId)
+  const clientX = Number(event.clientX)
+  const clientY = Number(event.clientY)
+  if (
+    !Number.isFinite(pointerId) ||
+    !Number.isFinite(clientX) ||
+    !Number.isFinite(clientY)
+  ) {
+    return
+  }
+  event.preventDefault?.()
+  event.stopPropagation?.()
+  removePointerListeners()
+  activePointerId = pointerId
+  startDrag(clientX, clientY)
+  window.addEventListener('pointermove', handlePointerMove, {
+    capture: true,
+    passive: false,
+  })
+  window.addEventListener('pointerup', handlePointerEnd, true)
+  window.addEventListener('pointercancel', handlePointerEnd, true)
 }
 
-function handleMouseMove(event) {
+function addPointerStartListener() {
+  if (typeof window === 'undefined') return
+  window.addEventListener('pointerdown', handlePointerStart, {
+    capture: true,
+    passive: false,
+  })
+}
+
+function removePointerStartListener() {
+  if (typeof window === 'undefined') return
+  window.removeEventListener('pointerdown', handlePointerStart, true)
+}
+
+function handlePointerMove(event) {
+  if (activePointerId === null) return
+  if (Number(event.pointerId) !== activePointerId) return
   event.preventDefault?.()
+  event.stopPropagation?.()
   moveDrag(event.clientX, event.clientY)
 }
 
-function handleMouseEnd() {
-  removeMouseListeners()
+function handlePointerEnd(event) {
+  if (activePointerId === null) return
+  if (Number(event.pointerId) !== activePointerId) return
+  event.preventDefault?.()
+  event.stopPropagation?.()
+  const wasMoved = dragMoved.value
+  activePointerId = null
+  removePointerListeners()
   endDrag()
+  if (event.type === 'pointerup' && !wasMoved) {
+    ignoreNextTap.value = true
+    activateMainAction()
+  }
 }
 
-function removeMouseListeners() {
+function removePointerListeners() {
   if (typeof window === 'undefined') return
-  window.removeEventListener('mousemove', handleMouseMove)
-  window.removeEventListener('mouseup', handleMouseEnd)
+  window.removeEventListener('pointermove', handlePointerMove, true)
+  window.removeEventListener('pointerup', handlePointerEnd, true)
+  window.removeEventListener('pointercancel', handlePointerEnd, true)
 }
 
 function startDrag(clientX, clientY) {
@@ -543,7 +602,9 @@ function endDrag() {
 }
 
 onBeforeUnmount(() => {
-  removeMouseListeners()
+  removePointerStartListener()
+  removePointerListeners()
+  activePointerId = null
   cancelDragFrame()
   cancelPositionSettle()
 })
@@ -608,6 +669,10 @@ function handleMainTap() {
     ignoreNextTap.value = false
     return
   }
+  activateMainAction()
+}
+
+function activateMainAction() {
   if (isSingleMode.value) {
     handleItemTap(mainItem.value)
     return
@@ -664,6 +729,7 @@ async function handleItemTap(item) {
   overflow: hidden;
   border-radius: var(--mb-floating-radius);
   cursor: grab;
+  touch-action: none;
   user-select: none;
 }
 
@@ -716,6 +782,7 @@ async function handleItemTap(item) {
 .mb-floating-action__icon {
   width: 48%;
   height: 48%;
+  pointer-events: none;
 }
 
 .mb-floating-action__icon--preset {
