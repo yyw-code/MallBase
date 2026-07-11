@@ -5,10 +5,10 @@ import { getBasicConfig, getPayMethods } from "@/api/config";
 import { getDistributionSummary } from "@/api/distribution/distribution";
 import { getPointsInfo } from "@/api/points/points";
 import { getWalletInfo } from "@/api/user/wallet";
-import config from "@/config/index";
 import { useDecorateStore } from "@/store/decorate";
 import { useUserStore } from "@/store/user";
 import { openCustomerService } from "@/utils/customer-service";
+import { normalizeAssetPath } from "@/utils/decorate";
 
 const userStore = useUserStore();
 const decorateStore = useDecorateStore();
@@ -752,7 +752,7 @@ function textStyle(module, role) {
 }
 
 function moduleBackgroundImage(props) {
-  return normalizeProfileImageUrl(
+  return normalizeAssetPath(
     props.background_image || props.backgroundImage || "",
   );
 }
@@ -935,7 +935,7 @@ function profileIconText(item) {
 
 function getProfileEntryImage(item) {
   if (isProfileEntryImageRemoved(item)) return "";
-  return normalizeProfileImageUrl(
+  return normalizeAssetPath(
     item?.full_url ||
       item?.fullUrl ||
       item?.thumbUrl ||
@@ -950,27 +950,6 @@ function getProfileEntryImage(item) {
       item?.imageUrl ||
       "",
   );
-}
-
-function looksLikeProfileImageUrl(url) {
-  if (!url || typeof url !== "string") return false;
-  if (url.startsWith("/pages")) return false;
-  if (url.startsWith("/static") || url.startsWith("static/")) return true;
-  if (url.startsWith("/uploads") || url.startsWith("uploads/")) return true;
-  if (/^https?:\/\//.test(url)) return true;
-  if (/^(data:image|blob:)/.test(url)) return true;
-  return /\.(png|jpe?g|gif|webp|svg)(\?.*)?$/i.test(url);
-}
-
-function normalizeProfileImageUrl(url) {
-  if (url && typeof url === "object") {
-    return getProfileEntryImage(url);
-  }
-  if (!looksLikeProfileImageUrl(url)) return "";
-  if (/^(https?:|data:image|blob:)/.test(url)) return url;
-
-  const normalizedPath = url.startsWith("/") ? url : `/${url}`;
-  return config.baseUrl ? `${config.baseUrl}${normalizedPath}` : normalizedPath;
 }
 
 function goLogin() {

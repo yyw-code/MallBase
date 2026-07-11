@@ -298,9 +298,12 @@
 <script setup>
 import { reactive, watch } from "vue";
 import { getGoodsList } from "@/api/goods/goods";
-import config from "@/config/index";
 import { useDecorateStore } from "@/store/decorate";
-import { buildGoodsParams, openDecorateLink } from "@/utils/decorate";
+import {
+  buildGoodsParams,
+  normalizeAssetPath,
+  openDecorateLink,
+} from "@/utils/decorate";
 
 const props = defineProps({
   modules: {
@@ -650,7 +653,7 @@ function navItemWidth(module) {
 }
 
 function getImage(item) {
-  if (typeof item === "string") return normalizeImageUrl(item);
+  if (typeof item === "string") return normalizeAssetPath(item);
   if (!item || typeof item !== "object") return "";
 
   const candidates = [
@@ -899,26 +902,6 @@ function openTitleMore(module) {
 function openItem(item) {
   if (typeof item === "string") return;
   openRendererTarget(item);
-}
-
-function looksLikeImageUrl(url) {
-  if (!url || typeof url !== "string") return false;
-  if (url.startsWith("/pages")) return false;
-  if (url.startsWith("/static")) return true;
-  if (url.startsWith("/uploads")) return true;
-  if (url.startsWith("uploads/")) return true;
-  if (url.startsWith("static/")) return true;
-  if (/^https?:\/\//.test(url)) return true;
-  if (/^(data:image|blob:)/.test(url)) return true;
-  return /\.(png|jpe?g|gif|webp|svg)(\?.*)?$/i.test(url);
-}
-
-function normalizeImageUrl(url) {
-  if (!looksLikeImageUrl(url)) return "";
-  if (/^(https?:|data:image|blob:)/.test(url)) return url;
-
-  const normalizedPath = url.startsWith("/") ? url : `/${url}`;
-  return config.baseUrl ? `${config.baseUrl}${normalizedPath}` : normalizedPath;
 }
 
 function openSearch(module) {

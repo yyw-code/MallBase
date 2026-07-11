@@ -6,7 +6,7 @@
     "dev:h5": "UNI_INPUT_DIR=. uni",
     "dev:mp-weixin": "UNI_INPUT_DIR=. uni -p mp-weixin",
     "build:h5": "UNI_INPUT_DIR=. uni build",
-    "build:mp-weixin": "UNI_INPUT_DIR=. uni build -p mp-weixin"
+    "build:mp-weixin": "UNI_INPUT_DIR=. uni build -p mp-weixin && node scripts/verify-build-static.mjs"
   },
   "dependencies": {
     "@dcloudio/uni-app": "3.0.0-alpha-5000820260420001",
