@@ -1081,9 +1081,18 @@ final class ClientDecorationServiceContractTest extends TestCase
         ]);
         $modules = array_column($schema['components'], null, 'type');
 
-        $this->assertSame('static/decorate/decorate-banner-market.png', $modules['banner']['props']['items'][0]['image']);
-        $this->assertSame('static/decorate/decorate-nav-beauty.png', $modules['navGrid']['props']['items'][0]['image']);
-        $this->assertSame('static/decorate/decorate-cube-new.png', $modules['imageCube']['props']['items'][0]['image']);
+        $this->assertSame([
+            'url' => 'static/decorate/decorate-banner-market.png',
+            'full_url' => '/static/decorate/decorate-banner-market.png',
+        ], $modules['banner']['props']['items'][0]['image']);
+        $this->assertSame([
+            'url' => 'static/decorate/decorate-nav-beauty.png',
+            'full_url' => '/static/decorate/decorate-nav-beauty.png',
+        ], $modules['navGrid']['props']['items'][0]['image']);
+        $this->assertSame([
+            'url' => 'static/decorate/decorate-cube-new.png',
+            'full_url' => '/static/decorate/decorate-cube-new.png',
+        ], $modules['imageCube']['props']['items'][0]['image']);
     }
 
     public function testDecorationProfileKeepsLegacyPageAndModuleStyleAliases(): void

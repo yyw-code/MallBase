@@ -413,8 +413,22 @@ class AssetHydrator
     private function hydrateDecorationUploadValue(mixed $value, array $assetMap): mixed
     {
         $normalized = $this->normalizer->normalizeSingle($value);
-        if (!is_int($normalized)) {
+        if ($normalized === '') {
             return $value;
+        }
+
+        if (!is_int($normalized)) {
+            if (!$this->isDecorationImagePath($normalized)) {
+                return $value;
+            }
+
+            $fileInfo = is_array($value) ? $value : [];
+            $fileInfo['url'] = $normalized;
+            $fileInfo['full_url'] = str_starts_with($normalized, '//')
+                ? $normalized
+                : $this->fullUrl($normalized, $assetMap);
+
+            return $fileInfo;
         }
 
         $asset = $assetMap[$normalized] ?? [];
@@ -425,6 +439,29 @@ class AssetHydrator
         $fileInfo['asset_id'] = $normalized;
 
         return $fileInfo;
+    }
+
+    private function isDecorationImagePath(string $value): bool
+    {
+        $value = trim(str_replace('\\', '/', $value));
+        if ($value === '') {
+            return false;
+        }
+
+        if (preg_match('#^https?://#i', $value) === 1) {
+            return true;
+        }
+
+        $path = ltrim($value, '/');
+        if (str_starts_with($path, 'static/')) {
+            return str_starts_with($path, 'static/decorate/');
+        }
+
+        if (str_starts_with($path, 'uploads/')) {
+            return true;
+        }
+
+        return preg_match('~\.(?:avif|gif|jpe?g|png|svg|webp)(?:[?#].*)?$~i', $path) === 1;
     }
 
     /**

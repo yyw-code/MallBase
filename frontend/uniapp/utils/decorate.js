@@ -3,6 +3,7 @@ import {
   DEFAULT_FLOATING_CONFIG,
   DEFAULT_TABBAR_ITEMS,
 } from '@/config/decorate';
+import config from '@/config/index';
 
 const TABBAR_PAGES = DEFAULT_TABBAR_ITEMS.map((item) =>
   normalizePath(item.pagePath),
@@ -461,6 +462,23 @@ function normalizeTabbarAsset(values, fallback = '') {
   return normalizeAssetPath(fallback);
 }
 
+function resolveAssetOrigin() {
+  const apiBase = String(config.baseUrl || '').trim();
+
+  // #ifdef H5
+  if (typeof window !== 'undefined' && window?.location?.origin) {
+    try {
+      return new URL(apiBase || '/', window.location.origin).origin;
+    } catch {
+      return window.location.origin;
+    }
+  }
+  // #endif
+
+  const matched = apiBase.match(/^https?:\/\/[^/]+/i);
+  return matched?.[0] || '';
+}
+
 function getAssetRawValue(path) {
   if (path && typeof path === 'object') {
     return (
@@ -487,7 +505,12 @@ export function normalizeAssetPath(path) {
     return path;
   }
   if (path.includes(':')) return '';
-  if (/^(?:\/)?(?:static|upload)\//.test(path)) {
+  if (/^(?:\/)?(?:static\/decorate|uploads?)\//.test(path)) {
+    const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+    const origin = resolveAssetOrigin();
+    return origin ? `${origin}${normalizedPath}` : '';
+  }
+  if (/^(?:\/)?static\//.test(path)) {
     return path.startsWith('/') ? path : `/${path}`;
   }
   if (/^\/.+\.(?:avif|gif|jpe?g|png|svg|webp)(?:[?#].*)?$/i.test(path)) {
