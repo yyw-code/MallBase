@@ -125,7 +125,7 @@ cp deploy/docker/.example.env .env
 docker compose -f docker-compose.dev.yml up -d
 ```
 
-**⚠️ 安全红线**：手动 `cp` 模板后，如果你保留了根 `.env` 里的敏感占位符，`ensure-env` 会在首次运行时自动随机化 `DB_PASS` / `MYSQL_ROOT_PASSWORD`；但 `JWT_SECRET` 仍来自派生的 `backend/.env`，首次派生时也会自动生成。不要把占位符原样带到长期运行环境。
+**⚠️ 安全红线**：手动 `cp` 模板后，如果你保留了根 `.env` 里的敏感占位符，`ensure-env` 会在首次运行时自动随机化 `DB_PASS` / `MYSQL_ROOT_PASSWORD` / `JWT_SECRET`，并把同一个 `JWT_SECRET` 派生到 `backend/.env`。不要把占位符原样带到长期运行环境。
 
 **生成强随机值：**
 ```bash
@@ -153,6 +153,9 @@ openssl rand -hex 32
 - `REDIS_CACHE_DB`
 - `REDIS_PASSWORD`
 - `CACHE_DRIVER`
+- `JWT_SECRET`
+- `JWT_EXPIRE`
+- `JWT_REFRESH_EXPIRE`
 - `SWOOLE_HTTP_PORT`
 - `SITE_URL`
 

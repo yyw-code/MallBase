@@ -88,21 +88,21 @@ function onTap(e) {
 
   /* Types */
   &--primary {
-    background: $mb-color-primary;
-    color: $mb-color-text-inverse;
+    background: var(--color-primary, #0d50d5);
+    color: var(--color-text-inverse, #ffffff);
   }
   &--secondary {
-    background: #ffffff;
-    color: $mb-color-primary;
-    border: 1rpx solid $mb-color-primary;
+    background: var(--color-bg, #ffffff);
+    color: var(--color-primary, #0d50d5);
+    border: 1rpx solid var(--color-primary, #0d50d5);
   }
   &--ghost {
     background: transparent;
-    color: $mb-color-primary;
+    color: var(--color-primary, #0d50d5);
   }
   &--danger {
-    background: $mb-color-error;
-    color: $mb-color-text-inverse;
+    background: var(--color-error, #ba1a1a);
+    color: var(--color-text-inverse, #ffffff);
   }
 }
 

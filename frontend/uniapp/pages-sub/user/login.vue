@@ -1,12 +1,16 @@
 <template>
-  <view class="login-page">
+  <view
+    class="login-page"
+    :class="[`theme-${decorateStore.resolvedThemeMode}`]"
+    :style="decorateStore.themeStyle"
+  >
     <view class="nebula-bg" />
     <view class="blob blob--1" />
     <view class="blob blob--2" />
     <view class="blob blob--3" />
     <view class="stars" />
 
-    <mb-navbar title="" bgColor="transparent" textColor="#ffffff" />
+    <mb-navbar title="" bg-color="transparent" text-color="#ffffff" immersive />
 
     <view class="login-content">
       <view class="brand">
@@ -321,10 +325,13 @@
         </view>
       </view>
     </view>
-  </view>
+      <mb-copyright-footer />
+      <mb-floating-action />
+</view>
 </template>
 
 <script setup>
+import { useDecorateStore } from '@/store/decorate'
 import { computed, ref, onMounted } from 'vue'
 import { onLoad, onUnload } from '@dcloudio/uni-app'
 import { useAppStore } from '@/store/app'
@@ -344,6 +351,8 @@ import {
   wechatOfficialBindMobile
 } from '@/api/user/auth'
 import { getUploadedAssetValue, getUploadedPreviewUrl } from '@/api/upload'
+import { tryAutoBindDistributionInvite } from '@/utils/distribution-attribution'
+const decorateStore = useDecorateStore()
 
 const userStore = useUserStore()
 const appStore = useAppStore()
@@ -526,7 +535,9 @@ async function onLoginSuccess(data) {
     throw new Error('登录结果缺少令牌')
   }
   userStore.setToken(data.access_token, data.refresh_token)
+  await tryAutoBindDistributionInvite()
   await userStore.fetchUserInfo()
+  await decorateStore.fetchMyThemePreference({ force: true })
   if (redirectUrl.value) {
     const url = redirectUrl.value
     uni.redirectTo({
@@ -853,8 +864,9 @@ $glass-accent: #4fe3d7;
   position: relative;
   min-height: 100vh;
   display: flex;
+  flex-direction: column;
   background: #0b1a4d;
-  overflow: hidden;
+  overflow-x: hidden;
 
   /* #ifdef MP-WEIXIN */
   /* 小程序顶部胶囊会占空间，整页 column 居中以避免内容堆顶 */
@@ -933,10 +945,12 @@ $glass-accent: #4fe3d7;
 .login-content {
   width: 100%;
   max-width: 750rpx;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   position: relative;
   z-index: 1;
+  margin: 0 auto;
   padding: 24rpx 48rpx calc(48rpx + env(safe-area-inset-bottom));
 
   /* #ifdef MP-WEIXIN */
@@ -1031,7 +1045,7 @@ $glass-accent: #4fe3d7;
   max-width: 100%;
   font-size: 56rpx;
   font-weight: 700;
-  letter-spacing: -1rpx;
+  letter-spacing: 0;
   color: #ffffff;
   line-height: 1.15;
   word-break: break-word;
@@ -1049,6 +1063,7 @@ $glass-accent: #4fe3d7;
 // ---- Glass card ----
 .form-section {
   width: 100%;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   gap: 24rpx;

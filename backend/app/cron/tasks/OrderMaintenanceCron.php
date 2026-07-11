@@ -12,6 +12,9 @@ use Swoole\Timer;
 use think\facade\Cache;
 use Throwable;
 
+/**
+ * 订单域周期维护：处理订单超时关闭与自动确认收货。
+ */
 class OrderMaintenanceCron implements CronTaskInterface
 {
     private const LOCK_KEY = 'cron:order-maintenance:dispatch';

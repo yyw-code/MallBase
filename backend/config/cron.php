@@ -17,10 +17,12 @@ return [
      |--------------------------------------------------------------------------
      | 定时任务类
      |--------------------------------------------------------------------------
-     | 这里只放「任务类名」
+     | 按业务域拆分注册，避免所有周期维护集中到单个任务入口。
      */
 
     'tasks' => [
         app\cron\tasks\OrderMaintenanceCron::class,
+        app\cron\tasks\PointsMaintenanceCron::class,
+        app\cron\tasks\DistributionMaintenanceCron::class,
     ],
 ];

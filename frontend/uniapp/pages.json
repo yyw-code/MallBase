@@ -93,6 +93,17 @@
       ]
     },
     {
+      "root": "pages-sub/customer-service",
+      "pages": [
+        {
+          "path": "webview",
+          "style": {
+            "navigationStyle": "custom"
+          }
+        }
+      ]
+    },
+    {
       "root": "pages-sub/refund",
       "pages": [
         {
@@ -153,6 +164,12 @@
           "style": {
             "navigationStyle": "custom"
           }
+        },
+        {
+          "path": "about",
+          "style": {
+            "navigationStyle": "custom"
+          }
         }
       ]
     },
@@ -181,6 +198,100 @@
       ]
     },
     {
+      "root": "pages-sub/member",
+      "pages": [
+        {
+          "path": "index",
+          "style": {
+            "navigationStyle": "custom"
+          }
+        }
+      ]
+    },
+    {
+      "root": "pages-sub/points",
+      "pages": [
+        {
+          "path": "index",
+          "style": {
+            "navigationStyle": "custom"
+          }
+        },
+        {
+          "path": "records",
+          "style": {
+            "navigationStyle": "custom",
+            "enablePullDownRefresh": true
+          }
+        },
+        {
+          "path": "mall",
+          "style": {
+            "navigationStyle": "custom",
+            "enablePullDownRefresh": true
+          }
+        },
+        {
+          "path": "mall-detail",
+          "style": {
+            "navigationStyle": "custom"
+          }
+        },
+        {
+          "path": "exchange-confirm",
+          "style": {
+            "navigationStyle": "custom"
+          }
+        },
+        {
+          "path": "exchange-orders",
+          "style": {
+            "navigationStyle": "custom",
+            "enablePullDownRefresh": true
+          }
+        },
+        {
+          "path": "exchange-detail",
+          "style": {
+            "navigationStyle": "custom"
+          }
+        }
+      ]
+    },
+    {
+      "root": "pages-sub/distribution",
+      "pages": [
+        {
+          "path": "index",
+          "style": {
+            "navigationStyle": "custom",
+            "enablePullDownRefresh": true
+          }
+        },
+        {
+          "path": "records",
+          "style": {
+            "navigationStyle": "custom",
+            "enablePullDownRefresh": true
+          }
+        },
+        {
+          "path": "team",
+          "style": {
+            "navigationStyle": "custom",
+            "enablePullDownRefresh": true
+          }
+        },
+        {
+          "path": "withdraw",
+          "style": {
+            "navigationStyle": "custom",
+            "enablePullDownRefresh": true
+          }
+        }
+      ]
+    },
+    {
       "root": "pages-sub/address",
       "pages": [
         {
@@ -202,6 +313,24 @@
       "pages": [
         {
           "path": "index",
+          "style": {
+            "navigationStyle": "custom"
+          }
+        }
+      ]
+    },
+    {
+      "root": "pages-sub/article",
+      "pages": [
+        {
+          "path": "list",
+          "style": {
+            "navigationStyle": "custom",
+            "enablePullDownRefresh": true
+          }
+        },
+        {
+          "path": "detail",
           "style": {
             "navigationStyle": "custom"
           }

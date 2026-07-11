@@ -230,6 +230,7 @@ class AssetService extends BaseService
     {
         $code = match ($module) {
             'goods' => UploadAssetCategory::CODE_GOODS,
+            'article', 'content' => UploadAssetCategory::CODE_ARTICLE,
             'rich_text', 'editor' => UploadAssetCategory::CODE_RICH_TEXT,
             'review' => UploadAssetCategory::CODE_REVIEW,
             'avatar', 'user_avatar', 'wechat_avatar' => UploadAssetCategory::CODE_AVATAR,

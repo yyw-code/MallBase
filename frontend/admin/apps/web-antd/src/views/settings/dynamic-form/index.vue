@@ -6,6 +6,7 @@ import { useRoute } from 'vue-router';
 
 import { useAccess } from '@vben/access';
 import { JsonViewer } from '@vben/common-ui';
+import { IconifyIcon } from '@vben/icons';
 
 import { message, Spin } from 'ant-design-vue';
 
@@ -20,6 +21,7 @@ defineOptions({ name: 'SettingDynamicForm' });
 
 const props = withDefaults(
   defineProps<{
+    fieldOptionLoaders?: Record<string, FieldOptionLoader>;
     groupCode?: string;
     loadConfigApi?: (groupCode: string) => Promise<SettingApi.ConfigResponse>;
     saveAccessCode?: string;
@@ -29,12 +31,17 @@ const props = withDefaults(
     ) => Promise<unknown>;
   }>(),
   {
+    fieldOptionLoaders: undefined,
     groupCode: undefined,
     loadConfigApi: undefined,
     saveAccessCode: undefined,
     saveConfigApi: undefined,
   },
 );
+
+type FieldOptionLoader = (
+  item: SettingApi.SettingItem,
+) => Promise<SettingApi.OptionItem[]> | SettingApi.OptionItem[];
 
 const route = useRoute();
 const { hasAccessByCodes } = useAccess();
@@ -44,11 +51,40 @@ const groupInfo = ref<SettingApi.ConfigResponse['group']>();
 const settings = ref<SettingApi.SettingItem[]>([]);
 const formValues = ref<Record<string, any>>({});
 const formErrors = reactive<Record<string, string>>({});
+const fieldOptions = ref<Record<string, SettingApi.OptionItem[]>>({});
 
 type OptionListRow = {
   label: string;
   value: string;
 };
+
+type SettingSectionGroup = {
+  items: SettingApi.SettingItem[];
+  key: string;
+  label: string;
+};
+
+const DEFAULT_SECTION_LABEL = '基础配置';
+
+const COMMA_LIST_OPTION_CODES = new Set([
+  'mime_cert',
+  'mime_document',
+  'mime_image',
+  'mime_video',
+]);
+
+const isCommaListOptionField = (item: SettingApi.SettingItem): boolean =>
+  COMMA_LIST_OPTION_CODES.has(item.code);
+
+const isOptionListLikeField = (item: SettingApi.SettingItem): boolean =>
+  item.type === 'option_list' || isCommaListOptionField(item);
+
+const getOptionListColumnTitle = (item: SettingApi.SettingItem): string =>
+  isCommaListOptionField(item) ? '白名单值' : '选项名称';
+
+const getOptionListPlaceholder = (item: SettingApi.SettingItem): string =>
+  item.placeholder ||
+  (isCommaListOptionField(item) ? '请输入 MIME 或扩展名' : '请输入选项名称');
 
 // 选项卡模式
 const isTabMode = ref(false);
@@ -69,8 +105,34 @@ const toFullUrl = (path: string) => {
   return `${apiBaseUrl}${path}`;
 };
 
+const ROUTE_SETTING_GROUP_MAP: Record<string, string> = {
+  '/member/config': 'MemberConfig',
+  '/points/config': 'PointsConfig',
+};
+
 /** 从路由路径中提取 groupCode */
 const routeGroupCode = computed(() => {
+  const queryGroupCode = route.query.groupCode;
+  if (typeof queryGroupCode === 'string' && queryGroupCode) {
+    return queryGroupCode;
+  }
+
+  const metaGroupCode =
+    route.meta?.settingGroupCode || route.meta?.groupCode || '';
+  if (typeof metaGroupCode === 'string' && metaGroupCode) {
+    return metaGroupCode;
+  }
+
+  const routeName = typeof route.name === 'string' ? route.name : '';
+  if (routeName.startsWith('SettingGroup:')) {
+    return routeName.slice('SettingGroup:'.length);
+  }
+
+  const mappedGroupCode = ROUTE_SETTING_GROUP_MAP[route.path];
+  if (mappedGroupCode) {
+    return mappedGroupCode;
+  }
+
   const path = route.path;
   const segments = path.split('/').filter(Boolean);
   return segments[segments.length - 1] || '';
@@ -78,8 +140,16 @@ const routeGroupCode = computed(() => {
 
 const groupCode = computed(() => props.groupCode || routeGroupCode.value);
 
+const resolvedSaveAccessCode = computed(
+  () =>
+    props.saveAccessCode ||
+    (groupCode.value ? `SettingGroup:${groupCode.value}` : ''),
+);
+
 const canSave = computed(
-  () => !props.saveAccessCode || hasAccessByCodes([props.saveAccessCode]),
+  () =>
+    !resolvedSaveAccessCode.value ||
+    hasAccessByCodes([resolvedSaveAccessCode.value]),
 );
 
 /** 获取当前激活选项卡的设置项 */
@@ -92,13 +162,153 @@ const currentTabSettings = computed(() => {
   return activeTabConfig.value?.settings || [];
 });
 
+const visiblePageSettings = computed(() =>
+  pageSettings.value.filter((item) => isFieldVisible(item)),
+);
+
+const visibleCurrentTabSettings = computed(() =>
+  currentTabSettings.value.filter((item) => isFieldVisible(item)),
+);
+
+const visibleSettings = computed(() =>
+  settings.value.filter((item) => isFieldVisible(item)),
+);
+
+const settingCountText = computed(() => {
+  const visibleCount = visibleSettings.value.length;
+  const totalCount = settings.value.length;
+  if (visibleCount === totalCount) {
+    return `共 ${totalCount} 项配置`;
+  }
+  return `当前可见 ${visibleCount} 项 / 共 ${totalCount} 项`;
+});
+
+function getSettingSectionLabel(item: SettingApi.SettingItem): string {
+  return String(item.ui?.section || '').trim();
+}
+
+function groupSettingSections(
+  items: SettingApi.SettingItem[],
+): SettingSectionGroup[] {
+  if (!items.some((item) => getSettingSectionLabel(item) !== '')) {
+    return [{ items, key: 'default', label: '' }];
+  }
+
+  const groups: SettingSectionGroup[] = [];
+  const groupMap = new Map<string, SettingSectionGroup>();
+  for (const item of items) {
+    const label = getSettingSectionLabel(item) || DEFAULT_SECTION_LABEL;
+    const key = label;
+    let group = groupMap.get(key);
+    if (!group) {
+      group = { items: [], key, label };
+      groups.push(group);
+      groupMap.set(key, group);
+    }
+    group.items.push(item);
+  }
+  return groups;
+}
+
 /** 获取当前保存范围内的设置项 */
 const currentSaveSettings = computed(() => {
-  if (isTabMode.value) return currentTabSettings.value;
+  if (isTabMode.value) return visibleCurrentTabSettings.value;
   if (hasTabs.value)
-    return [...pageSettings.value, ...currentTabSettings.value];
-  return settings.value;
+    return [...visiblePageSettings.value, ...visibleCurrentTabSettings.value];
+  return visibleSettings.value;
 });
+
+function getUiComponent(item: SettingApi.SettingItem): string {
+  return item.ui?.component || '';
+}
+
+function getFieldLabel(item: SettingApi.SettingItem): string {
+  return item.ui?.label || item.name;
+}
+
+function getFieldRemark(item: SettingApi.SettingItem): string {
+  const remark = item.remark || '';
+  if (getUiComponent(item) !== 'money_yuan' || !remark) {
+    return remark;
+  }
+
+  return remark
+    .replace('单位：分。', '按元填写，保存时按分入库。')
+    .replace('单位：分；', '按元填写，保存时按分入库；')
+    .replace('；单位：分', '；按元填写，保存时按分入库')
+    .replace('10000 表示 100 元', '100.00 表示 100 元');
+}
+
+function getFieldPlaceholder(
+  item: SettingApi.SettingItem,
+  action: 'input' | 'select' = 'input',
+): string {
+  if (
+    (item.sensitive || item.ui?.sensitive || item.type === 'password') &&
+    item.has_value
+  ) {
+    return '已配置，留空保持不变';
+  }
+  if (item.ui?.placeholder) return item.ui.placeholder;
+  if (item.placeholder) return item.placeholder;
+  return `${action === 'select' ? '请选择' : '请输入'}${getFieldLabel(item)}`;
+}
+
+function normalizeConditionValue(value: unknown): string {
+  if (typeof value === 'boolean') return value ? '1' : '0';
+  if (value === undefined || value === null) return '';
+  return String(value).trim();
+}
+
+function isTruthyConditionValue(value: unknown): boolean {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value > 0;
+  return ['1', 'on', 'true', 'yes'].includes(
+    String(value ?? '')
+      .trim()
+      .toLowerCase(),
+  );
+}
+
+function isConditionMatched(condition: SettingApi.UiCondition): boolean {
+  const actual = formValues.value[condition.field];
+  const operator = condition.operator || 'equals';
+
+  switch (operator) {
+    case 'falsy': {
+      return !isTruthyConditionValue(actual);
+    }
+    case 'in': {
+      const expectedValues = Array.isArray(condition.value)
+        ? condition.value
+        : [];
+      return expectedValues
+        .map((value) => normalizeConditionValue(value))
+        .includes(normalizeConditionValue(actual));
+    }
+    case 'not_equals': {
+      return (
+        normalizeConditionValue(actual) !==
+        normalizeConditionValue(condition.value)
+      );
+    }
+    case 'truthy': {
+      return isTruthyConditionValue(actual);
+    }
+    default: {
+      return (
+        normalizeConditionValue(actual) ===
+        normalizeConditionValue(condition.value)
+      );
+    }
+  }
+}
+
+function isFieldVisible(item: SettingApi.SettingItem): boolean {
+  const conditions = item.ui?.visible_when || [];
+  if (conditions.length === 0) return true;
+  return conditions.every((condition) => isConditionMatched(condition));
+}
 
 /** 解析 JSON 字符串为对象（给 JsonViewer 用） */
 const getJsonObject = (code: string) => {
@@ -154,17 +364,17 @@ const validateFieldValue = (
       value === '' ||
       (Array.isArray(value) && value.length === 0))
   ) {
-    return `请填写「${item.name}」`;
+    return `请填写「${getFieldLabel(item)}」`;
   }
 
-  if (item.type === 'option_list') {
+  if (isOptionListLikeField(item)) {
     const rows = normalizeOptionListValue(value);
     const labels = new Set<string>();
     for (const row of rows) {
       const label = row.label.trim();
       if (!label) continue;
       if (labels.has(label)) {
-        return `「${item.name}」不能包含重复选项：${label}`;
+        return `「${getFieldLabel(item)}」不能包含重复选项：${label}`;
       }
       labels.add(label);
     }
@@ -175,7 +385,7 @@ const validateFieldValue = (
     try {
       JSON.parse(value);
     } catch {
-      return `「${item.name}」JSON 格式不正确`;
+      return `「${getFieldLabel(item)}」JSON 格式不正确`;
     }
   }
 
@@ -201,32 +411,42 @@ const applyRule = (
         try {
           JSON.parse(strVal);
         } catch {
-          return rule.message || `「${item.name}」JSON 格式不正确`;
+          return rule.message || `「${getFieldLabel(item)}」JSON 格式不正确`;
         }
       }
       break;
     }
     case 'max': {
       if (!isEmpty && Number(value) > Number(rule.value)) {
-        return rule.message || `「${item.name}」最大值为 ${rule.value}`;
+        return (
+          rule.message || `「${getFieldLabel(item)}」最大值为 ${rule.value}`
+        );
       }
       break;
     }
     case 'max_length': {
       if (!isEmpty && strVal.length > Number(rule.value)) {
-        return rule.message || `「${item.name}」最多输入 ${rule.value} 个字符`;
+        return (
+          rule.message ||
+          `「${getFieldLabel(item)}」最多输入 ${rule.value} 个字符`
+        );
       }
       break;
     }
     case 'min': {
       if (!isEmpty && Number(value) < Number(rule.value)) {
-        return rule.message || `「${item.name}」最小值为 ${rule.value}`;
+        return (
+          rule.message || `「${getFieldLabel(item)}」最小值为 ${rule.value}`
+        );
       }
       break;
     }
     case 'min_length': {
       if (!isEmpty && strVal.length < Number(rule.value)) {
-        return rule.message || `「${item.name}」最少输入 ${rule.value} 个字符`;
+        return (
+          rule.message ||
+          `「${getFieldLabel(item)}」最少输入 ${rule.value} 个字符`
+        );
       }
       break;
     }
@@ -235,14 +455,14 @@ const applyRule = (
         const flags = rule.flags || '';
         const reg = new RegExp(String(rule.value), flags);
         if (!reg.test(strVal)) {
-          return rule.message || `「${item.name}」格式不正确`;
+          return rule.message || `「${getFieldLabel(item)}」格式不正确`;
         }
       }
       break;
     }
     case 'required': {
       if (isEmpty) {
-        return rule.message || `请填写「${item.name}」`;
+        return rule.message || `请填写「${getFieldLabel(item)}」`;
       }
       break;
     }
@@ -250,7 +470,7 @@ const applyRule = (
       // 正则类规则：email / url / phone / idCard / integer / float / digits / chinese / english / alphaNum / ip
       const regex = REGEX_MAP[rule.type];
       if (regex && !isEmpty && !regex.test(strVal)) {
-        return rule.message || `「${item.name}」格式不正确`;
+        return rule.message || `「${getFieldLabel(item)}」格式不正确`;
       }
       break;
     }
@@ -298,10 +518,7 @@ const validateAll = (): boolean => {
 const buildSubmitData = (items: SettingApi.SettingItem[]) => {
   const submitData: Record<string, any> = {};
   for (const item of items) {
-    submitData[item.code] = serializeValue(
-      formValues.value[item.code],
-      item.type,
-    );
+    submitData[item.code] = serializeValue(formValues.value[item.code], item);
   }
   return submitData;
 };
@@ -369,9 +586,10 @@ const loadConfig = async () => {
 
     const values: Record<string, any> = {};
     for (const item of settings.value) {
-      values[item.code] = convertValue(item.value, item.type, item.full_url);
+      values[item.code] = convertValue(item.value, item, item.full_url);
     }
     formValues.value = values;
+    await loadFieldOptions(settings.value);
 
     // 清除验证错误
     for (const key of Object.keys(formErrors)) {
@@ -394,10 +612,27 @@ const saveConfig = (
     : saveSettingConfigApi(targetGroupCode, data);
 
 /** 根据类型转换值 */
-const convertValue = (value: string, type: string, fullUrl?: string) => {
+const convertValue = (
+  value: string,
+  item: SettingApi.SettingItem,
+  fullUrl?: string,
+) => {
   if (value === undefined || value === null) return undefined;
 
-  switch (type) {
+  if (isCommaListOptionField(item)) {
+    return normalizeOptionListValue(value);
+  }
+
+  if (getUiComponent(item) === 'remote_select') {
+    return String(value);
+  }
+
+  if (getUiComponent(item) === 'money_yuan') {
+    const cents = Number(value);
+    return Number.isNaN(cents) ? undefined : Number((cents / 100).toFixed(2));
+  }
+
+  switch (item.type) {
     case 'checkbox': {
       if (typeof value === 'string' && value.startsWith('[')) {
         try {
@@ -456,10 +691,26 @@ const convertValue = (value: string, type: string, fullUrl?: string) => {
 };
 
 /** 序列化值（提交给后端） */
-const serializeValue = (value: any, type: string): any => {
+const serializeValue = (value: any, item: SettingApi.SettingItem): any => {
   if (value === undefined || value === null) return '';
 
-  switch (type) {
+  if (isCommaListOptionField(item)) {
+    return normalizeOptionListValue(value)
+      .map((row) => row.label.trim())
+      .filter(Boolean)
+      .join(',');
+  }
+
+  if (getUiComponent(item) === 'money_yuan') {
+    const yuan = Number(value);
+    return Number.isNaN(yuan) ? '' : String(Math.round(yuan * 100));
+  }
+
+  if (getUiComponent(item) === 'remote_select') {
+    return String(value);
+  }
+
+  switch (item.type) {
     case 'checkbox': {
       if (Array.isArray(value)) {
         return JSON.stringify(value);
@@ -525,7 +776,7 @@ const normalizeOptionListValue = (value: any): OptionListRow[] => {
       }
     } catch {
       return value
-        .split(/\r?\n/)
+        .split(/[\n,]/)
         .map((label) => label.trim())
         .filter(Boolean)
         .map((label) => ({ label, value: generateOptionValue() }));
@@ -567,6 +818,34 @@ const parseOptions = (options: any) => {
     }
   }
   return options;
+};
+
+const getFieldOptions = (item: SettingApi.SettingItem) => {
+  const remoteOptions = fieldOptions.value[item.code];
+  if (remoteOptions) return remoteOptions;
+  return parseOptions(item.options);
+};
+
+const loadFieldOptions = async (items: SettingApi.SettingItem[]) => {
+  const loaders = props.fieldOptionLoaders || {};
+  const nextOptions: Record<string, SettingApi.OptionItem[]> = {};
+
+  await Promise.all(
+    items.map(async (item) => {
+      const loader =
+        loaders[item.code] ||
+        (item.ui?.option_source ? loaders[item.ui.option_source] : undefined);
+      if (!loader) return;
+      try {
+        nextOptions[item.code] = await loader(item);
+      } catch (error) {
+        console.error(`加载「${getFieldLabel(item)}」选项失败:`, error);
+        nextOptions[item.code] = [];
+      }
+    }),
+  );
+
+  fieldOptions.value = nextOptions;
 };
 
 /** 获取上传组件类型 */
@@ -711,20 +990,23 @@ const handleSave = async () => {
       }
       await saveConfig(
         activeTabConfig.value.code,
-        buildSubmitData(activeTabConfig.value.settings),
+        buildSubmitData(visibleCurrentTabSettings.value),
       );
     } else if (hasTabs.value) {
-      if (pageSettings.value.length > 0) {
-        await saveConfig(groupCode.value, buildSubmitData(pageSettings.value));
+      if (visiblePageSettings.value.length > 0) {
+        await saveConfig(
+          groupCode.value,
+          buildSubmitData(visiblePageSettings.value),
+        );
       }
       if (activeTabConfig.value) {
         await saveConfig(
           activeTabConfig.value.code,
-          buildSubmitData(activeTabConfig.value.settings),
+          buildSubmitData(visibleCurrentTabSettings.value),
         );
       }
     } else {
-      await saveConfig(groupCode.value, buildSubmitData(settings.value));
+      await saveConfig(groupCode.value, buildSubmitData(visibleSettings.value));
     }
     if (
       currentSaveSettings.value.some((item) => isUploadRelatedSetting(item))
@@ -753,6 +1035,18 @@ const handleSave = async () => {
   }
 };
 
+watch(
+  formValues,
+  () => {
+    for (const item of settings.value) {
+      if (!isFieldVisible(item)) {
+        delete formErrors[item.code];
+      }
+    }
+  },
+  { deep: true },
+);
+
 watch([() => route.path, () => props.groupCode], loadConfig);
 
 onMounted(loadConfig);
@@ -764,834 +1058,974 @@ onMounted(loadConfig);
       <!-- 页面头部 -->
       <div v-if="groupInfo" class="setting-header">
         <div class="header-content">
-          <div v-if="groupInfo.icon" class="header-icon">
-            <span :class="`i-${groupInfo.icon}`" class="text-2xl"></span>
+          <div class="header-icon">
+            <IconifyIcon
+              :icon="groupInfo.icon || 'lucide:settings-2'"
+              class="header-icon-svg"
+            />
           </div>
           <div class="header-text">
             <h2 class="header-title">{{ groupInfo.name }}</h2>
-            <p class="header-desc">共 {{ settings.length }} 项配置</p>
+            <p class="header-desc">{{ settingCountText }}</p>
           </div>
         </div>
       </div>
 
-      <!-- 选项卡导航（Tab 模式或 Page+Tabs 模式） -->
-      <div
-        v-if="(isTabMode || hasTabs) && tabs.length > 0"
-        class="setting-tabs"
-      >
-        <a-tabs v-model:active-key="activeTab" type="card" size="large">
-          <a-tab-pane v-for="tab in tabs" :key="tab.code" :tab="tab.name" />
-        </a-tabs>
-      </div>
+      <div v-if="visibleSettings.length > 0" class="setting-panel">
+        <!-- 选项卡导航（Tab 模式或 Page+Tabs 模式） -->
+        <div
+          v-if="(isTabMode || hasTabs) && tabs.length > 0"
+          class="setting-tabs"
+        >
+          <a-tabs v-model:active-key="activeTab">
+            <a-tab-pane v-for="tab in tabs" :key="tab.code" :tab="tab.name" />
+          </a-tabs>
+        </div>
 
-      <!-- Page 设置项区域（Page+Tabs 模式） -->
-      <div v-if="hasTabs && pageSettings.length > 0" class="setting-card">
-        <div class="form-grid">
+        <!-- Page 设置项区域（Page+Tabs 模式） -->
+        <div
+          v-if="hasTabs && visiblePageSettings.length > 0"
+          class="setting-card"
+        >
           <div
-            v-for="item in pageSettings"
-            :key="item.code"
-            :data-field-code="item.code"
-            class="form-item-wrapper"
-            :class="{
-              'has-error': getFieldError(item.code),
-              'full-row':
-                item.type === 'editor' ||
-                item.type === 'json' ||
-                item.type === 'option_list',
-            }"
+            v-for="section in groupSettingSections(visiblePageSettings)"
+            :key="section.key"
+            class="setting-section-group"
           >
-            <div class="form-label">
-              <span class="label-text">{{ item.name }}</span>
-              <span
-                v-if="item.rules?.some((r) => r.type === 'required')"
-                class="required-star"
-              >
-                *
-              </span>
+            <div v-if="section.label" class="setting-section-title">
+              {{ section.label }}
             </div>
-
-            <!-- input: 文本输入 -->
-            <a-input
-              v-if="item.type === 'input'"
-              v-model:value="formValues[item.code]"
-              :placeholder="item.placeholder || `请输入${item.name}`"
-              :status="getFieldError(item.code) ? 'error' : undefined"
-              @blur="handleFieldChange(item)"
-            />
-
-            <!-- password: 密码输入 -->
-            <a-input-password
-              v-else-if="item.type === 'password'"
-              v-model:value="formValues[item.code]"
-              :placeholder="item.placeholder || `请输入${item.name}`"
-              :status="getFieldError(item.code) ? 'error' : undefined"
-              @blur="handleFieldChange(item)"
-            />
-
-            <!-- textarea: 多行文本 -->
-            <a-textarea
-              v-else-if="item.type === 'textarea'"
-              v-model:value="formValues[item.code]"
-              :placeholder="item.placeholder || `请输入${item.name}`"
-              :rows="3"
-              :status="getFieldError(item.code) ? 'error' : undefined"
-              @blur="handleFieldChange(item)"
-            />
-
-            <!-- number: 数字输入 -->
-            <a-input-number
-              v-else-if="item.type === 'number'"
-              v-model:value="formValues[item.code]"
-              :placeholder="item.placeholder || `请输入${item.name}`"
-              :status="getFieldError(item.code) ? 'error' : undefined"
-              class="w-full"
-              @blur="handleFieldChange(item)"
-            />
-
-            <!-- switch: 开关 -->
-            <div v-else-if="item.type === 'switch'" class="switch-wrapper">
-              <a-switch v-model:checked="formValues[item.code]" />
-              <span class="switch-label">
-                {{ formValues[item.code] ? '已开启' : '已关闭' }}
-              </span>
-            </div>
-
-            <!-- select: 下拉选择 -->
-            <a-select
-              v-else-if="item.type === 'select'"
-              v-model:value="formValues[item.code]"
-              :placeholder="item.placeholder || `请选择${item.name}`"
-              :options="parseOptions(item.options)"
-              :status="getFieldError(item.code) ? 'error' : undefined"
-              class="w-full"
-              @change="handleFieldChange(item)"
-            />
-
-            <!-- radio: 单选框 -->
-            <a-radio-group
-              v-else-if="item.type === 'radio'"
-              v-model:value="formValues[item.code]"
-              :options="parseOptions(item.options)"
-              @change="handleFieldChange(item)"
-            />
-
-            <!-- checkbox: 多选框 -->
-            <a-checkbox-group
-              v-else-if="item.type === 'checkbox'"
-              v-model:value="formValues[item.code]"
-              :options="parseOptions(item.options)"
-              @change="handleFieldChange(item)"
-            />
-
-            <!-- image: 单图片上传 -->
-            <Upload
-              v-else-if="item.type === 'image'"
-              type="image"
-              :value="formValues[item.code]"
-              module="dynamic_form"
-              :related-id="item.id"
-              v-bind="getUploadConfigFromRules(item)"
-              @update:value="
-                (val: any) => {
-                  formValues[item.code] = val;
-                  delete formErrors[item.code];
-                }
-              "
-            />
-
-            <!-- images: 多图片上传 -->
-            <Upload
-              v-else-if="item.type === 'images'"
-              type="images"
-              :value="formValues[item.code]"
-              module="dynamic_form"
-              :related-id="item.id"
-              v-bind="getUploadConfigFromRules(item)"
-              @update:value="
-                (val: any) => {
-                  formValues[item.code] = val;
-                  delete formErrors[item.code];
-                }
-              "
-            />
-
-            <!-- file: 单文件上传（含 secure_upload 私有上传） -->
-            <Upload
-              v-else-if="item.type === 'file' || item.type === 'video'"
-              :type="getUploadType(item.type)"
-              :value="formValues[item.code]"
-              :related-id="item.id"
-              v-bind="resolveFileUploadProps(item)"
-              @update:value="
-                (val: any) => {
-                  formValues[item.code] = val;
-                  delete formErrors[item.code];
-                }
-              "
-            />
-
-            <!-- files: 多文件上传（含 secure_upload 私有上传） -->
-            <Upload
-              v-else-if="item.type === 'files' || item.type === 'videos'"
-              :type="getUploadType(item.type)"
-              :value="formValues[item.code]"
-              :related-id="item.id"
-              v-bind="resolveFileUploadProps(item)"
-              @update:value="
-                (val: any) => {
-                  formValues[item.code] = val;
-                  delete formErrors[item.code];
-                }
-              "
-            />
-
-            <!-- option_list: 选项列表 -->
-            <div v-else-if="item.type === 'option_list'" class="option-list">
-              <div class="option-list-header">
-                <span>选项名称</span>
-                <span>操作</span>
-              </div>
+            <div class="form-grid">
               <div
-                v-for="(row, index) in getOptionListRows(item.code)"
-                :key="row.value"
-                class="option-list-row"
+                v-for="item in section.items"
+                :key="item.code"
+                :data-field-code="item.code"
+                class="form-item-wrapper"
+                :class="{
+                  'has-error': getFieldError(item.code),
+                  'full-row':
+                    item.type === 'editor' ||
+                    item.type === 'json' ||
+                    isOptionListLikeField(item),
+                }"
               >
+                <div class="form-label">
+                  <span class="label-text">{{ getFieldLabel(item) }}</span>
+                  <span
+                    v-if="item.rules?.some((r) => r.type === 'required')"
+                    class="required-star"
+                  >
+                    *
+                  </span>
+                </div>
+
+                <!-- input: 文本输入 -->
                 <a-input
-                  v-model:value="row.label"
-                  :placeholder="item.placeholder || '请输入选项名称'"
+                  v-if="item.type === 'input'"
+                  v-model:value="formValues[item.code]"
+                  :placeholder="getFieldPlaceholder(item)"
                   :status="getFieldError(item.code) ? 'error' : undefined"
                   @blur="handleFieldChange(item)"
                 />
-                <a-button
-                  danger
-                  size="small"
-                  type="text"
-                  @click="removeOptionListRow(item, index)"
+
+                <!-- password: 密码输入 -->
+                <a-input-password
+                  v-else-if="item.type === 'password'"
+                  v-model:value="formValues[item.code]"
+                  :placeholder="getFieldPlaceholder(item)"
+                  :status="getFieldError(item.code) ? 'error' : undefined"
+                  @blur="handleFieldChange(item)"
+                />
+
+                <!-- textarea: 多行文本 -->
+                <a-textarea
+                  v-else-if="
+                    item.type === 'textarea' && !isOptionListLikeField(item)
+                  "
+                  v-model:value="formValues[item.code]"
+                  :placeholder="getFieldPlaceholder(item)"
+                  :rows="3"
+                  :status="getFieldError(item.code) ? 'error' : undefined"
+                  @blur="handleFieldChange(item)"
+                />
+
+                <a-select
+                  v-else-if="getUiComponent(item) === 'remote_select'"
+                  v-model:value="formValues[item.code]"
+                  :placeholder="getFieldPlaceholder(item, 'select')"
+                  :options="getFieldOptions(item)"
+                  :status="getFieldError(item.code) ? 'error' : undefined"
+                  class="w-full"
+                  option-filter-prop="label"
+                  show-search
+                  @change="handleFieldChange(item)"
+                />
+
+                <a-input-number
+                  v-else-if="getUiComponent(item) === 'money_yuan'"
+                  v-model:value="formValues[item.code]"
+                  addon-after="元"
+                  :min="0"
+                  :precision="2"
+                  :placeholder="getFieldPlaceholder(item)"
+                  :status="getFieldError(item.code) ? 'error' : undefined"
+                  class="w-full"
+                  @blur="handleFieldChange(item)"
+                />
+
+                <!-- number: 数字输入 -->
+                <a-input-number
+                  v-else-if="item.type === 'number'"
+                  v-model:value="formValues[item.code]"
+                  :placeholder="getFieldPlaceholder(item)"
+                  :status="getFieldError(item.code) ? 'error' : undefined"
+                  class="w-full"
+                  @blur="handleFieldChange(item)"
+                />
+
+                <!-- switch: 开关 -->
+                <div v-else-if="item.type === 'switch'" class="switch-wrapper">
+                  <a-switch v-model:checked="formValues[item.code]" />
+                  <span class="switch-label">
+                    {{ formValues[item.code] ? '已开启' : '已关闭' }}
+                  </span>
+                </div>
+
+                <!-- select: 下拉选择 -->
+                <a-select
+                  v-else-if="item.type === 'select'"
+                  v-model:value="formValues[item.code]"
+                  :placeholder="getFieldPlaceholder(item, 'select')"
+                  :options="getFieldOptions(item)"
+                  :status="getFieldError(item.code) ? 'error' : undefined"
+                  class="w-full"
+                  @change="handleFieldChange(item)"
+                />
+
+                <!-- radio: 单选框 -->
+                <a-radio-group
+                  v-else-if="item.type === 'radio'"
+                  v-model:value="formValues[item.code]"
+                  :options="getFieldOptions(item)"
+                  @change="handleFieldChange(item)"
+                />
+
+                <!-- checkbox: 多选框 -->
+                <a-checkbox-group
+                  v-else-if="item.type === 'checkbox'"
+                  v-model:value="formValues[item.code]"
+                  :options="getFieldOptions(item)"
+                  @change="handleFieldChange(item)"
+                />
+
+                <!-- image: 单图片上传 -->
+                <Upload
+                  v-else-if="item.type === 'image'"
+                  type="image"
+                  :value="formValues[item.code]"
+                  module="dynamic_form"
+                  :related-id="item.id"
+                  v-bind="getUploadConfigFromRules(item)"
+                  @update:value="
+                    (val: any) => {
+                      formValues[item.code] = val;
+                      delete formErrors[item.code];
+                    }
+                  "
+                />
+
+                <!-- images: 多图片上传 -->
+                <Upload
+                  v-else-if="item.type === 'images'"
+                  type="images"
+                  :value="formValues[item.code]"
+                  module="dynamic_form"
+                  :related-id="item.id"
+                  v-bind="getUploadConfigFromRules(item)"
+                  @update:value="
+                    (val: any) => {
+                      formValues[item.code] = val;
+                      delete formErrors[item.code];
+                    }
+                  "
+                />
+
+                <!-- file: 单文件上传（含 secure_upload 私有上传） -->
+                <Upload
+                  v-else-if="item.type === 'file' || item.type === 'video'"
+                  :type="getUploadType(item.type)"
+                  :value="formValues[item.code]"
+                  :related-id="item.id"
+                  v-bind="resolveFileUploadProps(item)"
+                  @update:value="
+                    (val: any) => {
+                      formValues[item.code] = val;
+                      delete formErrors[item.code];
+                    }
+                  "
+                />
+
+                <!-- files: 多文件上传（含 secure_upload 私有上传） -->
+                <Upload
+                  v-else-if="item.type === 'files' || item.type === 'videos'"
+                  :type="getUploadType(item.type)"
+                  :value="formValues[item.code]"
+                  :related-id="item.id"
+                  v-bind="resolveFileUploadProps(item)"
+                  @update:value="
+                    (val: any) => {
+                      formValues[item.code] = val;
+                      delete formErrors[item.code];
+                    }
+                  "
+                />
+
+                <!-- option_list: 选项列表 -->
+                <div
+                  v-else-if="isOptionListLikeField(item)"
+                  class="option-list"
                 >
-                  删除
-                </a-button>
-              </div>
-              <a-button
-                size="small"
-                type="dashed"
-                @click="addOptionListRow(item)"
-              >
-                新增选项
-              </a-button>
-            </div>
-
-            <!-- editor: HTML 编辑器 + 预览 -->
-            <template v-else-if="item.type === 'editor'">
-              <a-tabs type="card" size="small" class="editor-tabs">
-                <a-tab-pane key="edit" tab="编辑">
-                  <RichTextEditor
-                    :model-value="formValues[item.code]"
-                    module="dynamic_form"
-                    :placeholder="item.placeholder || '请输入内容'"
-                    :related-id="item.id"
-                    @update:model-value="
-                      (val: string) => {
-                        formValues[item.code] = val;
-                        delete formErrors[item.code];
-                      }
-                    "
-                    @blur="handleFieldChange(item)"
-                  />
-                </a-tab-pane>
-                <a-tab-pane key="preview" tab="预览">
-                  <div class="editor-preview">
-                    <!-- eslint-disable vue/no-v-html -->
-                    <div
-                      v-if="getEditorHtml(item.code)"
-                      v-html="getEditorHtml(item.code)"
-                    ></div>
-                    <!-- eslint-enable vue/no-v-html -->
-                    <span v-else class="text-gray-300">暂无内容</span>
+                  <div class="option-list-header">
+                    <span>{{ getOptionListColumnTitle(item) }}</span>
+                    <span>操作</span>
                   </div>
-                </a-tab-pane>
-              </a-tabs>
-            </template>
-
-            <!-- json: JSON 编辑器 + JsonViewer 预览 -->
-            <template v-else-if="item.type === 'json'">
-              <a-tabs type="card" size="small" class="editor-tabs">
-                <a-tab-pane key="edit" tab="编辑">
-                  <a-textarea
-                    v-model:value="formValues[item.code]"
-                    :placeholder="jsonPlaceholder"
-                    :rows="6"
-                    :status="getFieldError(item.code) ? 'error' : undefined"
-                    class="font-mono text-sm"
-                    @blur="handleFieldChange(item)"
-                  />
-                </a-tab-pane>
-                <a-tab-pane key="preview" tab="预览">
-                  <div class="json-preview">
-                    <JsonViewer
-                      :value="getJsonObject(item.code)"
-                      :expand-depth="3"
-                      :copyable="true"
-                      :boxed="true"
-                      theme="default-json-theme"
+                  <div
+                    v-for="(row, index) in getOptionListRows(item.code)"
+                    :key="row.value"
+                    class="option-list-row"
+                  >
+                    <a-input
+                      v-model:value="row.label"
+                      :placeholder="getOptionListPlaceholder(item)"
+                      :status="getFieldError(item.code) ? 'error' : undefined"
+                      @blur="handleFieldChange(item)"
                     />
+                    <a-button
+                      danger
+                      size="small"
+                      type="text"
+                      @click="removeOptionListRow(item, index)"
+                    >
+                      删除
+                    </a-button>
                   </div>
-                </a-tab-pane>
-              </a-tabs>
-            </template>
+                  <a-button
+                    size="small"
+                    type="dashed"
+                    @click="addOptionListRow(item)"
+                  >
+                    新增选项
+                  </a-button>
+                </div>
 
-            <!-- 验证错误提示 -->
-            <div v-if="getFieldError(item.code)" class="form-error">
-              {{ getFieldError(item.code) }}
-            </div>
+                <!-- editor: HTML 编辑器 + 预览 -->
+                <template v-else-if="item.type === 'editor'">
+                  <a-tabs type="card" size="small" class="editor-tabs">
+                    <a-tab-pane key="edit" tab="编辑">
+                      <RichTextEditor
+                        :model-value="formValues[item.code]"
+                        module="dynamic_form"
+                        :placeholder="item.placeholder || '请输入内容'"
+                        :related-id="item.id"
+                        @update:model-value="
+                          (val: string) => {
+                            formValues[item.code] = val;
+                            delete formErrors[item.code];
+                          }
+                        "
+                        @blur="handleFieldChange(item)"
+                      />
+                    </a-tab-pane>
+                    <a-tab-pane key="preview" tab="预览">
+                      <div class="editor-preview">
+                        <!-- eslint-disable vue/no-v-html -->
+                        <div
+                          v-if="getEditorHtml(item.code)"
+                          v-html="getEditorHtml(item.code)"
+                        ></div>
+                        <!-- eslint-enable vue/no-v-html -->
+                        <span v-else class="text-gray-300">暂无内容</span>
+                      </div>
+                    </a-tab-pane>
+                  </a-tabs>
+                </template>
 
-            <!-- 备注 -->
-            <div v-if="item.remark" class="form-remark">
-              {{ item.remark }}
+                <!-- json: JSON 编辑器 + JsonViewer 预览 -->
+                <template v-else-if="item.type === 'json'">
+                  <a-tabs type="card" size="small" class="editor-tabs">
+                    <a-tab-pane key="edit" tab="编辑">
+                      <a-textarea
+                        v-model:value="formValues[item.code]"
+                        :placeholder="jsonPlaceholder"
+                        :rows="6"
+                        :status="getFieldError(item.code) ? 'error' : undefined"
+                        class="font-mono text-sm"
+                        @blur="handleFieldChange(item)"
+                      />
+                    </a-tab-pane>
+                    <a-tab-pane key="preview" tab="预览">
+                      <div class="json-preview">
+                        <JsonViewer
+                          :value="getJsonObject(item.code)"
+                          :expand-depth="3"
+                          :copyable="true"
+                          :boxed="true"
+                          theme="default-json-theme"
+                        />
+                      </div>
+                    </a-tab-pane>
+                  </a-tabs>
+                </template>
+
+                <!-- 验证错误提示 -->
+                <div v-if="getFieldError(item.code)" class="form-error">
+                  {{ getFieldError(item.code) }}
+                </div>
+
+                <!-- 备注 -->
+                <div v-if="getFieldRemark(item)" class="form-remark">
+                  {{ getFieldRemark(item) }}
+                </div>
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      <!-- 分隔线（Page+Tabs 模式） -->
-      <div v-if="hasTabs && pageSettings.length > 0" class="tab-divider">
-        <span class="tab-divider-text">选项卡配置</span>
-      </div>
+        <!-- 分隔线（Page+Tabs 模式） -->
+        <div
+          v-if="hasTabs && visiblePageSettings.length > 0"
+          class="tab-divider"
+        >
+          <span class="tab-divider-text">选项卡配置</span>
+        </div>
 
-      <!-- 当前选项卡的设置项（Tab 模式或 Page+Tabs 模式） -->
-      <div v-if="isTabMode || hasTabs" class="setting-card">
-        <div class="form-grid">
+        <!-- 当前选项卡的设置项（Tab 模式或 Page+Tabs 模式） -->
+        <div v-if="isTabMode || hasTabs" class="setting-card">
           <div
-            v-for="item in currentTabSettings"
-            :key="item.code"
-            :data-field-code="item.code"
-            class="form-item-wrapper"
-            :class="{
-              'has-error': getFieldError(item.code),
-              'full-row':
-                item.type === 'editor' ||
-                item.type === 'json' ||
-                item.type === 'option_list',
-            }"
+            v-for="section in groupSettingSections(visibleCurrentTabSettings)"
+            :key="section.key"
+            class="setting-section-group"
           >
-            <div class="form-label">
-              <span class="label-text">{{ item.name }}</span>
-              <span
-                v-if="item.rules?.some((r) => r.type === 'required')"
-                class="required-star"
-              >
-                *
-              </span>
+            <div v-if="section.label" class="setting-section-title">
+              {{ section.label }}
             </div>
-
-            <!-- input: 文本输入 -->
-            <a-input
-              v-if="item.type === 'input'"
-              v-model:value="formValues[item.code]"
-              :placeholder="item.placeholder || `请输入${item.name}`"
-              :status="getFieldError(item.code) ? 'error' : undefined"
-              @blur="handleFieldChange(item)"
-            />
-
-            <!-- password: 密码输入 -->
-            <a-input-password
-              v-else-if="item.type === 'password'"
-              v-model:value="formValues[item.code]"
-              :placeholder="item.placeholder || `请输入${item.name}`"
-              :status="getFieldError(item.code) ? 'error' : undefined"
-              @blur="handleFieldChange(item)"
-            />
-
-            <!-- textarea: 多行文本 -->
-            <a-textarea
-              v-else-if="item.type === 'textarea'"
-              v-model:value="formValues[item.code]"
-              :placeholder="item.placeholder || `请输入${item.name}`"
-              :rows="3"
-              :status="getFieldError(item.code) ? 'error' : undefined"
-              @blur="handleFieldChange(item)"
-            />
-
-            <!-- number: 数字输入 -->
-            <a-input-number
-              v-else-if="item.type === 'number'"
-              v-model:value="formValues[item.code]"
-              :placeholder="item.placeholder || `请输入${item.name}`"
-              :status="getFieldError(item.code) ? 'error' : undefined"
-              class="w-full"
-              @blur="handleFieldChange(item)"
-            />
-
-            <!-- switch: 开关 -->
-            <div v-else-if="item.type === 'switch'" class="switch-wrapper">
-              <a-switch v-model:checked="formValues[item.code]" />
-              <span class="switch-label">
-                {{ formValues[item.code] ? '已开启' : '已关闭' }}
-              </span>
-            </div>
-
-            <!-- select: 下拉选择 -->
-            <a-select
-              v-else-if="item.type === 'select'"
-              v-model:value="formValues[item.code]"
-              :placeholder="item.placeholder || `请选择${item.name}`"
-              :options="parseOptions(item.options)"
-              :status="getFieldError(item.code) ? 'error' : undefined"
-              class="w-full"
-              @change="handleFieldChange(item)"
-            />
-
-            <!-- radio: 单选框 -->
-            <a-radio-group
-              v-else-if="item.type === 'radio'"
-              v-model:value="formValues[item.code]"
-              :options="parseOptions(item.options)"
-              @change="handleFieldChange(item)"
-            />
-
-            <!-- checkbox: 多选框 -->
-            <a-checkbox-group
-              v-else-if="item.type === 'checkbox'"
-              v-model:value="formValues[item.code]"
-              :options="parseOptions(item.options)"
-              @change="handleFieldChange(item)"
-            />
-
-            <!-- image: 单图片上传 -->
-            <Upload
-              v-else-if="item.type === 'image'"
-              type="image"
-              :value="formValues[item.code]"
-              module="dynamic_form"
-              :related-id="item.id"
-              v-bind="getUploadConfigFromRules(item)"
-              @update:value="
-                (val: any) => {
-                  formValues[item.code] = val;
-                  delete formErrors[item.code];
-                }
-              "
-            />
-
-            <!-- images: 多图片上传 -->
-            <Upload
-              v-else-if="item.type === 'images'"
-              type="images"
-              :value="formValues[item.code]"
-              module="dynamic_form"
-              :related-id="item.id"
-              v-bind="getUploadConfigFromRules(item)"
-              @update:value="
-                (val: any) => {
-                  formValues[item.code] = val;
-                  delete formErrors[item.code];
-                }
-              "
-            />
-
-            <!-- file: 单文件上传（含 secure_upload 私有上传） -->
-            <Upload
-              v-else-if="item.type === 'file' || item.type === 'video'"
-              :type="getUploadType(item.type)"
-              :value="formValues[item.code]"
-              :related-id="item.id"
-              v-bind="resolveFileUploadProps(item)"
-              @update:value="
-                (val: any) => {
-                  formValues[item.code] = val;
-                  delete formErrors[item.code];
-                }
-              "
-            />
-
-            <!-- files: 多文件上传（含 secure_upload 私有上传） -->
-            <Upload
-              v-else-if="item.type === 'files' || item.type === 'videos'"
-              :type="getUploadType(item.type)"
-              :value="formValues[item.code]"
-              :related-id="item.id"
-              v-bind="resolveFileUploadProps(item)"
-              @update:value="
-                (val: any) => {
-                  formValues[item.code] = val;
-                  delete formErrors[item.code];
-                }
-              "
-            />
-
-            <!-- option_list: 选项列表 -->
-            <div v-else-if="item.type === 'option_list'" class="option-list">
-              <div class="option-list-header">
-                <span>选项名称</span>
-                <span>操作</span>
-              </div>
+            <div class="form-grid">
               <div
-                v-for="(row, index) in getOptionListRows(item.code)"
-                :key="row.value"
-                class="option-list-row"
+                v-for="item in section.items"
+                :key="item.code"
+                :data-field-code="item.code"
+                class="form-item-wrapper"
+                :class="{
+                  'has-error': getFieldError(item.code),
+                  'full-row':
+                    item.type === 'editor' ||
+                    item.type === 'json' ||
+                    isOptionListLikeField(item),
+                }"
               >
+                <div class="form-label">
+                  <span class="label-text">{{ getFieldLabel(item) }}</span>
+                  <span
+                    v-if="item.rules?.some((r) => r.type === 'required')"
+                    class="required-star"
+                  >
+                    *
+                  </span>
+                </div>
+
+                <!-- input: 文本输入 -->
                 <a-input
-                  v-model:value="row.label"
-                  :placeholder="item.placeholder || '请输入选项名称'"
+                  v-if="item.type === 'input'"
+                  v-model:value="formValues[item.code]"
+                  :placeholder="getFieldPlaceholder(item)"
                   :status="getFieldError(item.code) ? 'error' : undefined"
                   @blur="handleFieldChange(item)"
                 />
-                <a-button
-                  danger
-                  size="small"
-                  type="text"
-                  @click="removeOptionListRow(item, index)"
+
+                <!-- password: 密码输入 -->
+                <a-input-password
+                  v-else-if="item.type === 'password'"
+                  v-model:value="formValues[item.code]"
+                  :placeholder="getFieldPlaceholder(item)"
+                  :status="getFieldError(item.code) ? 'error' : undefined"
+                  @blur="handleFieldChange(item)"
+                />
+
+                <!-- textarea: 多行文本 -->
+                <a-textarea
+                  v-else-if="
+                    item.type === 'textarea' && !isOptionListLikeField(item)
+                  "
+                  v-model:value="formValues[item.code]"
+                  :placeholder="getFieldPlaceholder(item)"
+                  :rows="3"
+                  :status="getFieldError(item.code) ? 'error' : undefined"
+                  @blur="handleFieldChange(item)"
+                />
+
+                <a-select
+                  v-else-if="getUiComponent(item) === 'remote_select'"
+                  v-model:value="formValues[item.code]"
+                  :placeholder="getFieldPlaceholder(item, 'select')"
+                  :options="getFieldOptions(item)"
+                  :status="getFieldError(item.code) ? 'error' : undefined"
+                  class="w-full"
+                  option-filter-prop="label"
+                  show-search
+                  @change="handleFieldChange(item)"
+                />
+
+                <a-input-number
+                  v-else-if="getUiComponent(item) === 'money_yuan'"
+                  v-model:value="formValues[item.code]"
+                  addon-after="元"
+                  :min="0"
+                  :precision="2"
+                  :placeholder="getFieldPlaceholder(item)"
+                  :status="getFieldError(item.code) ? 'error' : undefined"
+                  class="w-full"
+                  @blur="handleFieldChange(item)"
+                />
+
+                <!-- number: 数字输入 -->
+                <a-input-number
+                  v-else-if="item.type === 'number'"
+                  v-model:value="formValues[item.code]"
+                  :placeholder="getFieldPlaceholder(item)"
+                  :status="getFieldError(item.code) ? 'error' : undefined"
+                  class="w-full"
+                  @blur="handleFieldChange(item)"
+                />
+
+                <!-- switch: 开关 -->
+                <div v-else-if="item.type === 'switch'" class="switch-wrapper">
+                  <a-switch v-model:checked="formValues[item.code]" />
+                  <span class="switch-label">
+                    {{ formValues[item.code] ? '已开启' : '已关闭' }}
+                  </span>
+                </div>
+
+                <!-- select: 下拉选择 -->
+                <a-select
+                  v-else-if="item.type === 'select'"
+                  v-model:value="formValues[item.code]"
+                  :placeholder="getFieldPlaceholder(item, 'select')"
+                  :options="getFieldOptions(item)"
+                  :status="getFieldError(item.code) ? 'error' : undefined"
+                  class="w-full"
+                  @change="handleFieldChange(item)"
+                />
+
+                <!-- radio: 单选框 -->
+                <a-radio-group
+                  v-else-if="item.type === 'radio'"
+                  v-model:value="formValues[item.code]"
+                  :options="getFieldOptions(item)"
+                  @change="handleFieldChange(item)"
+                />
+
+                <!-- checkbox: 多选框 -->
+                <a-checkbox-group
+                  v-else-if="item.type === 'checkbox'"
+                  v-model:value="formValues[item.code]"
+                  :options="getFieldOptions(item)"
+                  @change="handleFieldChange(item)"
+                />
+
+                <!-- image: 单图片上传 -->
+                <Upload
+                  v-else-if="item.type === 'image'"
+                  type="image"
+                  :value="formValues[item.code]"
+                  module="dynamic_form"
+                  :related-id="item.id"
+                  v-bind="getUploadConfigFromRules(item)"
+                  @update:value="
+                    (val: any) => {
+                      formValues[item.code] = val;
+                      delete formErrors[item.code];
+                    }
+                  "
+                />
+
+                <!-- images: 多图片上传 -->
+                <Upload
+                  v-else-if="item.type === 'images'"
+                  type="images"
+                  :value="formValues[item.code]"
+                  module="dynamic_form"
+                  :related-id="item.id"
+                  v-bind="getUploadConfigFromRules(item)"
+                  @update:value="
+                    (val: any) => {
+                      formValues[item.code] = val;
+                      delete formErrors[item.code];
+                    }
+                  "
+                />
+
+                <!-- file: 单文件上传（含 secure_upload 私有上传） -->
+                <Upload
+                  v-else-if="item.type === 'file' || item.type === 'video'"
+                  :type="getUploadType(item.type)"
+                  :value="formValues[item.code]"
+                  :related-id="item.id"
+                  v-bind="resolveFileUploadProps(item)"
+                  @update:value="
+                    (val: any) => {
+                      formValues[item.code] = val;
+                      delete formErrors[item.code];
+                    }
+                  "
+                />
+
+                <!-- files: 多文件上传（含 secure_upload 私有上传） -->
+                <Upload
+                  v-else-if="item.type === 'files' || item.type === 'videos'"
+                  :type="getUploadType(item.type)"
+                  :value="formValues[item.code]"
+                  :related-id="item.id"
+                  v-bind="resolveFileUploadProps(item)"
+                  @update:value="
+                    (val: any) => {
+                      formValues[item.code] = val;
+                      delete formErrors[item.code];
+                    }
+                  "
+                />
+
+                <!-- option_list: 选项列表 -->
+                <div
+                  v-else-if="isOptionListLikeField(item)"
+                  class="option-list"
                 >
-                  删除
-                </a-button>
-              </div>
-              <a-button
-                size="small"
-                type="dashed"
-                @click="addOptionListRow(item)"
-              >
-                新增选项
-              </a-button>
-            </div>
-
-            <!-- editor: HTML 编辑器 + 预览 -->
-            <template v-else-if="item.type === 'editor'">
-              <a-tabs type="card" size="small" class="editor-tabs">
-                <a-tab-pane key="edit" tab="编辑">
-                  <RichTextEditor
-                    :model-value="formValues[item.code]"
-                    module="dynamic_form"
-                    :placeholder="item.placeholder || '请输入内容'"
-                    :related-id="item.id"
-                    @update:model-value="
-                      (val: string) => {
-                        formValues[item.code] = val;
-                        delete formErrors[item.code];
-                      }
-                    "
-                    @blur="handleFieldChange(item)"
-                  />
-                </a-tab-pane>
-                <a-tab-pane key="preview" tab="预览">
-                  <div class="editor-preview">
-                    <!-- eslint-disable vue/no-v-html -->
-                    <div
-                      v-if="getEditorHtml(item.code)"
-                      v-html="getEditorHtml(item.code)"
-                    ></div>
-                    <!-- eslint-enable vue/no-v-html -->
-                    <span v-else class="text-gray-300">暂无内容</span>
+                  <div class="option-list-header">
+                    <span>{{ getOptionListColumnTitle(item) }}</span>
+                    <span>操作</span>
                   </div>
-                </a-tab-pane>
-              </a-tabs>
-            </template>
-
-            <!-- json: JSON 编辑器 + JsonViewer 预览 -->
-            <template v-else-if="item.type === 'json'">
-              <a-tabs type="card" size="small" class="editor-tabs">
-                <a-tab-pane key="edit" tab="编辑">
-                  <a-textarea
-                    v-model:value="formValues[item.code]"
-                    :placeholder="jsonPlaceholder"
-                    :rows="6"
-                    :status="getFieldError(item.code) ? 'error' : undefined"
-                    class="font-mono text-sm"
-                    @blur="handleFieldChange(item)"
-                  />
-                </a-tab-pane>
-                <a-tab-pane key="preview" tab="预览">
-                  <div class="json-preview">
-                    <JsonViewer
-                      :value="getJsonObject(item.code)"
-                      :expand-depth="3"
-                      :copyable="true"
-                      :boxed="true"
-                      theme="default-json-theme"
+                  <div
+                    v-for="(row, index) in getOptionListRows(item.code)"
+                    :key="row.value"
+                    class="option-list-row"
+                  >
+                    <a-input
+                      v-model:value="row.label"
+                      :placeholder="getOptionListPlaceholder(item)"
+                      :status="getFieldError(item.code) ? 'error' : undefined"
+                      @blur="handleFieldChange(item)"
                     />
+                    <a-button
+                      danger
+                      size="small"
+                      type="text"
+                      @click="removeOptionListRow(item, index)"
+                    >
+                      删除
+                    </a-button>
                   </div>
-                </a-tab-pane>
-              </a-tabs>
-            </template>
+                  <a-button
+                    size="small"
+                    type="dashed"
+                    @click="addOptionListRow(item)"
+                  >
+                    新增选项
+                  </a-button>
+                </div>
 
-            <!-- 验证错误提示 -->
-            <div v-if="getFieldError(item.code)" class="form-error">
-              {{ getFieldError(item.code) }}
-            </div>
+                <!-- editor: HTML 编辑器 + 预览 -->
+                <template v-else-if="item.type === 'editor'">
+                  <a-tabs type="card" size="small" class="editor-tabs">
+                    <a-tab-pane key="edit" tab="编辑">
+                      <RichTextEditor
+                        :model-value="formValues[item.code]"
+                        module="dynamic_form"
+                        :placeholder="item.placeholder || '请输入内容'"
+                        :related-id="item.id"
+                        @update:model-value="
+                          (val: string) => {
+                            formValues[item.code] = val;
+                            delete formErrors[item.code];
+                          }
+                        "
+                        @blur="handleFieldChange(item)"
+                      />
+                    </a-tab-pane>
+                    <a-tab-pane key="preview" tab="预览">
+                      <div class="editor-preview">
+                        <!-- eslint-disable vue/no-v-html -->
+                        <div
+                          v-if="getEditorHtml(item.code)"
+                          v-html="getEditorHtml(item.code)"
+                        ></div>
+                        <!-- eslint-enable vue/no-v-html -->
+                        <span v-else class="text-gray-300">暂无内容</span>
+                      </div>
+                    </a-tab-pane>
+                  </a-tabs>
+                </template>
 
-            <!-- 备注 -->
-            <div v-if="item.remark" class="form-remark">
-              {{ item.remark }}
+                <!-- json: JSON 编辑器 + JsonViewer 预览 -->
+                <template v-else-if="item.type === 'json'">
+                  <a-tabs type="card" size="small" class="editor-tabs">
+                    <a-tab-pane key="edit" tab="编辑">
+                      <a-textarea
+                        v-model:value="formValues[item.code]"
+                        :placeholder="jsonPlaceholder"
+                        :rows="6"
+                        :status="getFieldError(item.code) ? 'error' : undefined"
+                        class="font-mono text-sm"
+                        @blur="handleFieldChange(item)"
+                      />
+                    </a-tab-pane>
+                    <a-tab-pane key="preview" tab="预览">
+                      <div class="json-preview">
+                        <JsonViewer
+                          :value="getJsonObject(item.code)"
+                          :expand-depth="3"
+                          :copyable="true"
+                          :boxed="true"
+                          theme="default-json-theme"
+                        />
+                      </div>
+                    </a-tab-pane>
+                  </a-tabs>
+                </template>
+
+                <!-- 验证错误提示 -->
+                <div v-if="getFieldError(item.code)" class="form-error">
+                  {{ getFieldError(item.code) }}
+                </div>
+
+                <!-- 备注 -->
+                <div v-if="getFieldRemark(item)" class="form-remark">
+                  {{ getFieldRemark(item) }}
+                </div>
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      <!-- 普通 Page 模式（无子分组时） -->
-      <div
-        v-if="!isTabMode && !hasTabs && settings.length > 0"
-        class="setting-card"
-      >
-        <div class="form-grid">
+        <!-- 普通 Page 模式（无子分组时） -->
+        <div v-if="!isTabMode && !hasTabs" class="setting-card">
           <div
-            v-for="item in settings"
-            :key="item.code"
-            :data-field-code="item.code"
-            class="form-item-wrapper"
-            :class="{
-              'has-error': getFieldError(item.code),
-              'full-row':
-                item.type === 'editor' ||
-                item.type === 'json' ||
-                item.type === 'option_list',
-            }"
+            v-for="section in groupSettingSections(visibleSettings)"
+            :key="section.key"
+            class="setting-section-group"
           >
-            <div class="form-label">
-              <span class="label-text">{{ item.name }}</span>
-              <span
-                v-if="item.rules?.some((r) => r.type === 'required')"
-                class="required-star"
-              >
-                *
-              </span>
+            <div v-if="section.label" class="setting-section-title">
+              {{ section.label }}
             </div>
-
-            <!-- input: 文本输入 -->
-            <a-input
-              v-if="item.type === 'input'"
-              v-model:value="formValues[item.code]"
-              :placeholder="item.placeholder || `请输入${item.name}`"
-              :status="getFieldError(item.code) ? 'error' : undefined"
-              @blur="handleFieldChange(item)"
-            />
-
-            <!-- password: 密码输入 -->
-            <a-input-password
-              v-else-if="item.type === 'password'"
-              v-model:value="formValues[item.code]"
-              :placeholder="item.placeholder || `请输入${item.name}`"
-              :status="getFieldError(item.code) ? 'error' : undefined"
-              @blur="handleFieldChange(item)"
-            />
-
-            <!-- textarea: 多行文本 -->
-            <a-textarea
-              v-else-if="item.type === 'textarea'"
-              v-model:value="formValues[item.code]"
-              :placeholder="item.placeholder || `请输入${item.name}`"
-              :rows="3"
-              :status="getFieldError(item.code) ? 'error' : undefined"
-              @blur="handleFieldChange(item)"
-            />
-
-            <!-- number: 数字输入 -->
-            <a-input-number
-              v-else-if="item.type === 'number'"
-              v-model:value="formValues[item.code]"
-              :placeholder="item.placeholder || `请输入${item.name}`"
-              :status="getFieldError(item.code) ? 'error' : undefined"
-              class="w-full"
-              @blur="handleFieldChange(item)"
-            />
-
-            <!-- switch: 开关 -->
-            <div v-else-if="item.type === 'switch'" class="switch-wrapper">
-              <a-switch v-model:checked="formValues[item.code]" />
-              <span class="switch-label">
-                {{ formValues[item.code] ? '已开启' : '已关闭' }}
-              </span>
-            </div>
-
-            <!-- select: 下拉选择 -->
-            <a-select
-              v-else-if="item.type === 'select'"
-              v-model:value="formValues[item.code]"
-              :placeholder="item.placeholder || `请选择${item.name}`"
-              :options="parseOptions(item.options)"
-              :status="getFieldError(item.code) ? 'error' : undefined"
-              class="w-full"
-              @change="handleFieldChange(item)"
-            />
-
-            <!-- radio: 单选框 -->
-            <a-radio-group
-              v-else-if="item.type === 'radio'"
-              v-model:value="formValues[item.code]"
-              :options="parseOptions(item.options)"
-              @change="handleFieldChange(item)"
-            />
-
-            <!-- checkbox: 多选框 -->
-            <a-checkbox-group
-              v-else-if="item.type === 'checkbox'"
-              v-model:value="formValues[item.code]"
-              :options="parseOptions(item.options)"
-              @change="handleFieldChange(item)"
-            />
-
-            <!-- image: 单图片上传 -->
-            <Upload
-              v-else-if="item.type === 'image'"
-              type="image"
-              :value="formValues[item.code]"
-              module="dynamic_form"
-              :related-id="item.id"
-              v-bind="getUploadConfigFromRules(item)"
-              @update:value="
-                (val: any) => {
-                  formValues[item.code] = val;
-                  delete formErrors[item.code];
-                }
-              "
-            />
-
-            <!-- images: 多图片上传 -->
-            <Upload
-              v-else-if="item.type === 'images'"
-              type="images"
-              :value="formValues[item.code]"
-              module="dynamic_form"
-              :related-id="item.id"
-              v-bind="getUploadConfigFromRules(item)"
-              @update:value="
-                (val: any) => {
-                  formValues[item.code] = val;
-                  delete formErrors[item.code];
-                }
-              "
-            />
-
-            <!-- file: 单文件上传（含 secure_upload 私有上传） -->
-            <Upload
-              v-else-if="item.type === 'file' || item.type === 'video'"
-              :type="getUploadType(item.type)"
-              :value="formValues[item.code]"
-              :related-id="item.id"
-              v-bind="resolveFileUploadProps(item)"
-              @update:value="
-                (val: any) => {
-                  formValues[item.code] = val;
-                  delete formErrors[item.code];
-                }
-              "
-            />
-
-            <!-- files: 多文件上传（含 secure_upload 私有上传） -->
-            <Upload
-              v-else-if="item.type === 'files' || item.type === 'videos'"
-              :type="getUploadType(item.type)"
-              :value="formValues[item.code]"
-              :related-id="item.id"
-              v-bind="resolveFileUploadProps(item)"
-              @update:value="
-                (val: any) => {
-                  formValues[item.code] = val;
-                  delete formErrors[item.code];
-                }
-              "
-            />
-
-            <!-- option_list: 选项列表 -->
-            <div v-else-if="item.type === 'option_list'" class="option-list">
-              <div class="option-list-header">
-                <span>选项名称</span>
-                <span>操作</span>
-              </div>
+            <div class="form-grid">
               <div
-                v-for="(row, index) in getOptionListRows(item.code)"
-                :key="row.value"
-                class="option-list-row"
+                v-for="item in section.items"
+                :key="item.code"
+                :data-field-code="item.code"
+                class="form-item-wrapper"
+                :class="{
+                  'has-error': getFieldError(item.code),
+                  'full-row':
+                    item.type === 'editor' ||
+                    item.type === 'json' ||
+                    isOptionListLikeField(item),
+                }"
               >
+                <div class="form-label">
+                  <span class="label-text">{{ getFieldLabel(item) }}</span>
+                  <span
+                    v-if="item.rules?.some((r) => r.type === 'required')"
+                    class="required-star"
+                  >
+                    *
+                  </span>
+                </div>
+
+                <!-- input: 文本输入 -->
                 <a-input
-                  v-model:value="row.label"
-                  :placeholder="item.placeholder || '请输入选项名称'"
+                  v-if="item.type === 'input'"
+                  v-model:value="formValues[item.code]"
+                  :placeholder="getFieldPlaceholder(item)"
                   :status="getFieldError(item.code) ? 'error' : undefined"
                   @blur="handleFieldChange(item)"
                 />
-                <a-button
-                  danger
-                  size="small"
-                  type="text"
-                  @click="removeOptionListRow(item, index)"
+
+                <!-- password: 密码输入 -->
+                <a-input-password
+                  v-else-if="item.type === 'password'"
+                  v-model:value="formValues[item.code]"
+                  :placeholder="getFieldPlaceholder(item)"
+                  :status="getFieldError(item.code) ? 'error' : undefined"
+                  @blur="handleFieldChange(item)"
+                />
+
+                <!-- textarea: 多行文本 -->
+                <a-textarea
+                  v-else-if="
+                    item.type === 'textarea' && !isOptionListLikeField(item)
+                  "
+                  v-model:value="formValues[item.code]"
+                  :placeholder="getFieldPlaceholder(item)"
+                  :rows="3"
+                  :status="getFieldError(item.code) ? 'error' : undefined"
+                  @blur="handleFieldChange(item)"
+                />
+
+                <a-select
+                  v-else-if="getUiComponent(item) === 'remote_select'"
+                  v-model:value="formValues[item.code]"
+                  :placeholder="getFieldPlaceholder(item, 'select')"
+                  :options="getFieldOptions(item)"
+                  :status="getFieldError(item.code) ? 'error' : undefined"
+                  class="w-full"
+                  option-filter-prop="label"
+                  show-search
+                  @change="handleFieldChange(item)"
+                />
+
+                <a-input-number
+                  v-else-if="getUiComponent(item) === 'money_yuan'"
+                  v-model:value="formValues[item.code]"
+                  addon-after="元"
+                  :min="0"
+                  :precision="2"
+                  :placeholder="getFieldPlaceholder(item)"
+                  :status="getFieldError(item.code) ? 'error' : undefined"
+                  class="w-full"
+                  @blur="handleFieldChange(item)"
+                />
+
+                <!-- number: 数字输入 -->
+                <a-input-number
+                  v-else-if="item.type === 'number'"
+                  v-model:value="formValues[item.code]"
+                  :placeholder="getFieldPlaceholder(item)"
+                  :status="getFieldError(item.code) ? 'error' : undefined"
+                  class="w-full"
+                  @blur="handleFieldChange(item)"
+                />
+
+                <!-- switch: 开关 -->
+                <div v-else-if="item.type === 'switch'" class="switch-wrapper">
+                  <a-switch v-model:checked="formValues[item.code]" />
+                  <span class="switch-label">
+                    {{ formValues[item.code] ? '已开启' : '已关闭' }}
+                  </span>
+                </div>
+
+                <!-- select: 下拉选择 -->
+                <a-select
+                  v-else-if="item.type === 'select'"
+                  v-model:value="formValues[item.code]"
+                  :placeholder="getFieldPlaceholder(item, 'select')"
+                  :options="getFieldOptions(item)"
+                  :status="getFieldError(item.code) ? 'error' : undefined"
+                  class="w-full"
+                  @change="handleFieldChange(item)"
+                />
+
+                <!-- radio: 单选框 -->
+                <a-radio-group
+                  v-else-if="item.type === 'radio'"
+                  v-model:value="formValues[item.code]"
+                  :options="getFieldOptions(item)"
+                  @change="handleFieldChange(item)"
+                />
+
+                <!-- checkbox: 多选框 -->
+                <a-checkbox-group
+                  v-else-if="item.type === 'checkbox'"
+                  v-model:value="formValues[item.code]"
+                  :options="getFieldOptions(item)"
+                  @change="handleFieldChange(item)"
+                />
+
+                <!-- image: 单图片上传 -->
+                <Upload
+                  v-else-if="item.type === 'image'"
+                  type="image"
+                  :value="formValues[item.code]"
+                  module="dynamic_form"
+                  :related-id="item.id"
+                  v-bind="getUploadConfigFromRules(item)"
+                  @update:value="
+                    (val: any) => {
+                      formValues[item.code] = val;
+                      delete formErrors[item.code];
+                    }
+                  "
+                />
+
+                <!-- images: 多图片上传 -->
+                <Upload
+                  v-else-if="item.type === 'images'"
+                  type="images"
+                  :value="formValues[item.code]"
+                  module="dynamic_form"
+                  :related-id="item.id"
+                  v-bind="getUploadConfigFromRules(item)"
+                  @update:value="
+                    (val: any) => {
+                      formValues[item.code] = val;
+                      delete formErrors[item.code];
+                    }
+                  "
+                />
+
+                <!-- file: 单文件上传（含 secure_upload 私有上传） -->
+                <Upload
+                  v-else-if="item.type === 'file' || item.type === 'video'"
+                  :type="getUploadType(item.type)"
+                  :value="formValues[item.code]"
+                  :related-id="item.id"
+                  v-bind="resolveFileUploadProps(item)"
+                  @update:value="
+                    (val: any) => {
+                      formValues[item.code] = val;
+                      delete formErrors[item.code];
+                    }
+                  "
+                />
+
+                <!-- files: 多文件上传（含 secure_upload 私有上传） -->
+                <Upload
+                  v-else-if="item.type === 'files' || item.type === 'videos'"
+                  :type="getUploadType(item.type)"
+                  :value="formValues[item.code]"
+                  :related-id="item.id"
+                  v-bind="resolveFileUploadProps(item)"
+                  @update:value="
+                    (val: any) => {
+                      formValues[item.code] = val;
+                      delete formErrors[item.code];
+                    }
+                  "
+                />
+
+                <!-- option_list: 选项列表 -->
+                <div
+                  v-else-if="isOptionListLikeField(item)"
+                  class="option-list"
                 >
-                  删除
-                </a-button>
-              </div>
-              <a-button
-                size="small"
-                type="dashed"
-                @click="addOptionListRow(item)"
-              >
-                新增选项
-              </a-button>
-            </div>
-
-            <!-- editor: HTML 编辑器 + 预览 -->
-            <template v-else-if="item.type === 'editor'">
-              <a-tabs type="card" size="small" class="editor-tabs">
-                <a-tab-pane key="edit" tab="编辑">
-                  <RichTextEditor
-                    :model-value="formValues[item.code]"
-                    module="dynamic_form"
-                    :placeholder="item.placeholder || '请输入内容'"
-                    :related-id="item.id"
-                    @update:model-value="
-                      (val: string) => {
-                        formValues[item.code] = val;
-                        delete formErrors[item.code];
-                      }
-                    "
-                    @blur="handleFieldChange(item)"
-                  />
-                </a-tab-pane>
-                <a-tab-pane key="preview" tab="预览">
-                  <div class="editor-preview">
-                    <!-- eslint-disable vue/no-v-html -->
-                    <div
-                      v-if="getEditorHtml(item.code)"
-                      v-html="getEditorHtml(item.code)"
-                    ></div>
-                    <!-- eslint-enable vue/no-v-html -->
-                    <span v-else class="text-gray-300">暂无内容</span>
+                  <div class="option-list-header">
+                    <span>{{ getOptionListColumnTitle(item) }}</span>
+                    <span>操作</span>
                   </div>
-                </a-tab-pane>
-              </a-tabs>
-            </template>
-
-            <!-- json: JSON 编辑器 + JsonViewer 预览 -->
-            <template v-else-if="item.type === 'json'">
-              <a-tabs type="card" size="small" class="editor-tabs">
-                <a-tab-pane key="edit" tab="编辑">
-                  <a-textarea
-                    v-model:value="formValues[item.code]"
-                    :placeholder="jsonPlaceholder"
-                    :rows="6"
-                    :status="getFieldError(item.code) ? 'error' : undefined"
-                    class="font-mono text-sm"
-                    @blur="handleFieldChange(item)"
-                  />
-                </a-tab-pane>
-                <a-tab-pane key="preview" tab="预览">
-                  <div class="json-preview">
-                    <JsonViewer
-                      :value="getJsonObject(item.code)"
-                      :expand-depth="3"
-                      :copyable="true"
-                      :boxed="true"
-                      theme="default-json-theme"
+                  <div
+                    v-for="(row, index) in getOptionListRows(item.code)"
+                    :key="row.value"
+                    class="option-list-row"
+                  >
+                    <a-input
+                      v-model:value="row.label"
+                      :placeholder="getOptionListPlaceholder(item)"
+                      :status="getFieldError(item.code) ? 'error' : undefined"
+                      @blur="handleFieldChange(item)"
                     />
+                    <a-button
+                      danger
+                      size="small"
+                      type="text"
+                      @click="removeOptionListRow(item, index)"
+                    >
+                      删除
+                    </a-button>
                   </div>
-                </a-tab-pane>
-              </a-tabs>
-            </template>
+                  <a-button
+                    size="small"
+                    type="dashed"
+                    @click="addOptionListRow(item)"
+                  >
+                    新增选项
+                  </a-button>
+                </div>
 
-            <!-- 验证错误提示 -->
-            <div v-if="getFieldError(item.code)" class="form-error">
-              {{ getFieldError(item.code) }}
-            </div>
+                <!-- editor: HTML 编辑器 + 预览 -->
+                <template v-else-if="item.type === 'editor'">
+                  <a-tabs type="card" size="small" class="editor-tabs">
+                    <a-tab-pane key="edit" tab="编辑">
+                      <RichTextEditor
+                        :model-value="formValues[item.code]"
+                        module="dynamic_form"
+                        :placeholder="item.placeholder || '请输入内容'"
+                        :related-id="item.id"
+                        @update:model-value="
+                          (val: string) => {
+                            formValues[item.code] = val;
+                            delete formErrors[item.code];
+                          }
+                        "
+                        @blur="handleFieldChange(item)"
+                      />
+                    </a-tab-pane>
+                    <a-tab-pane key="preview" tab="预览">
+                      <div class="editor-preview">
+                        <!-- eslint-disable vue/no-v-html -->
+                        <div
+                          v-if="getEditorHtml(item.code)"
+                          v-html="getEditorHtml(item.code)"
+                        ></div>
+                        <!-- eslint-enable vue/no-v-html -->
+                        <span v-else class="text-gray-300">暂无内容</span>
+                      </div>
+                    </a-tab-pane>
+                  </a-tabs>
+                </template>
 
-            <!-- 备注 -->
-            <div v-if="item.remark" class="form-remark">
-              {{ item.remark }}
+                <!-- json: JSON 编辑器 + JsonViewer 预览 -->
+                <template v-else-if="item.type === 'json'">
+                  <a-tabs type="card" size="small" class="editor-tabs">
+                    <a-tab-pane key="edit" tab="编辑">
+                      <a-textarea
+                        v-model:value="formValues[item.code]"
+                        :placeholder="jsonPlaceholder"
+                        :rows="6"
+                        :status="getFieldError(item.code) ? 'error' : undefined"
+                        class="font-mono text-sm"
+                        @blur="handleFieldChange(item)"
+                      />
+                    </a-tab-pane>
+                    <a-tab-pane key="preview" tab="预览">
+                      <div class="json-preview">
+                        <JsonViewer
+                          :value="getJsonObject(item.code)"
+                          :expand-depth="3"
+                          :copyable="true"
+                          :boxed="true"
+                          theme="default-json-theme"
+                        />
+                      </div>
+                    </a-tab-pane>
+                  </a-tabs>
+                </template>
+
+                <!-- 验证错误提示 -->
+                <div v-if="getFieldError(item.code)" class="form-error">
+                  {{ getFieldError(item.code) }}
+                </div>
+
+                <!-- 备注 -->
+                <div v-if="getFieldRemark(item)" class="form-remark">
+                  {{ getFieldRemark(item) }}
+                </div>
+              </div>
             </div>
+          </div>
+        </div>
+
+        <!-- 底部保存栏 -->
+        <div v-if="canSave" class="save-bar">
+          <div class="save-bar-inner">
+            <span class="save-tip">修改后请点击保存</span>
+            <a-button
+              type="primary"
+              size="large"
+              :loading="saving"
+              @click="handleSave"
+            >
+              <template #icon>
+                <span class="i-ant-design:save-outlined mr-1"></span>
+              </template>
+              保存设置
+            </a-button>
           </div>
         </div>
       </div>
@@ -1601,24 +2035,6 @@ onMounted(loadConfig);
         <span class="i-ant-design:inbox-outlined text-5xl text-gray-300"></span>
         <p class="mt-3 text-gray-400">暂无配置项</p>
       </div>
-
-      <!-- 底部保存栏 -->
-      <div v-if="settings.length > 0 && canSave" class="save-bar">
-        <div class="save-bar-inner">
-          <span class="save-tip">修改后请点击保存</span>
-          <a-button
-            type="primary"
-            size="large"
-            :loading="saving"
-            @click="handleSave"
-          >
-            <template #icon>
-              <span class="i-ant-design:save-outlined mr-1"></span>
-            </template>
-            保存设置
-          </a-button>
-        </div>
-      </div>
     </Spin>
   </div>
 </template>
@@ -1626,45 +2042,54 @@ onMounted(loadConfig);
 <style lang="css" scoped>
 .setting-form-page {
   min-height: 100%;
-  padding: 24px;
+  box-sizing: border-box;
+  overflow-x: hidden;
+  padding: 20px;
   background: hsl(var(--background-deep));
 }
 
 .setting-header {
-  margin-bottom: 24px;
-  padding: 24px 28px;
+  margin-bottom: 16px;
+  padding: 18px 20px;
   background: hsl(var(--card));
-  border-radius: 12px;
-  box-shadow: 0 1px 4px rgb(0 0 0 / 5%);
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
 }
 
 .header-content {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
 }
 
 .header-icon {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 48px;
-  height: 48px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-radius: 12px;
-  color: #fff;
+  width: 40px;
+  height: 40px;
+  background: hsl(var(--primary) / 0.12);
+  border: 1px solid hsl(var(--primary) / 0.2);
+  border-radius: 8px;
+  color: hsl(var(--primary));
   flex-shrink: 0;
+}
+
+.header-icon-svg {
+  width: 22px;
+  height: 22px;
 }
 
 .header-title {
   margin: 0;
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 600;
+  line-height: 1.4;
   color: hsl(var(--foreground));
 }
 
 .header-desc {
-  margin: 4px 0 0;
+  margin: 2px 0 0;
   font-size: 13px;
   color: hsl(var(--muted-foreground));
 }
@@ -1683,22 +2108,106 @@ onMounted(loadConfig);
   color: hsl(var(--foreground));
 }
 
-.setting-card {
-  padding: 24px;
+.setting-panel {
+  min-width: 0;
   background: hsl(var(--card));
-  border-radius: 12px;
-  box-shadow: 0 1px 4px rgb(0 0 0 / 5%);
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+}
+
+.setting-card {
+  min-width: 0;
+  overflow-x: hidden;
+  padding: 20px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+}
+
+.setting-section-group {
+  min-width: 0;
+}
+
+.setting-section-group + .setting-section-group {
+  margin-top: 22px;
+  padding-top: 20px;
+  border-top: 1px solid hsl(var(--border));
+}
+
+.setting-section-title {
+  margin-bottom: 14px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: hsl(var(--foreground));
+}
+
+.setting-tabs {
+  padding: 16px 20px 0;
+  overflow: hidden;
+  background: transparent;
+  border: 0;
+}
+
+.setting-tabs :deep(.ant-tabs-nav) {
+  margin: 0;
+}
+
+.setting-tabs :deep(.ant-tabs-nav::before) {
+  border-bottom-color: hsl(var(--border));
+}
+
+.setting-tabs :deep(.ant-tabs-nav-wrap) {
+  overflow-x: auto;
+}
+
+.setting-tabs :deep(.ant-tabs-tab) {
+  padding: 12px 0 !important;
+  margin: 0 !important;
+  color: hsl(var(--foreground) / 0.88);
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  transition: color 0.16s ease;
+}
+
+.setting-tabs :deep(.ant-tabs-tab + .ant-tabs-tab) {
+  margin-left: 32px !important;
+}
+
+.setting-tabs :deep(.ant-tabs-tab:hover) {
+  color: hsl(var(--primary));
+}
+
+.setting-tabs :deep(.ant-tabs-tab-btn) {
+  color: inherit;
+  font-weight: 400;
+}
+
+.setting-tabs :deep(.ant-tabs-tab-active) {
+  color: hsl(var(--primary));
+}
+
+.setting-tabs :deep(.ant-tabs-ink-bar) {
+  height: 2px;
+  background: hsl(var(--primary));
+  border-radius: 0;
+}
+
+.setting-tabs :deep(.ant-tabs-tab-active .ant-tabs-tab-btn) {
+  color: hsl(var(--primary));
+  font-weight: 400;
 }
 
 .form-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
-  gap: 24px;
+  grid-template-columns: repeat(auto-fit, minmax(min(520px, 100%), 1fr));
+  gap: 18px 28px;
 }
 
 .media-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
   gap: 24px;
 }
 
@@ -1716,38 +2225,63 @@ onMounted(loadConfig);
 .form-item-wrapper,
 .media-item-wrapper,
 .advanced-item-wrapper {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+  display: grid;
+  grid-template-columns: 132px minmax(0, 1fr);
+  gap: 6px 16px;
+  align-items: flex-start;
+  min-width: 0;
+  padding-bottom: 16px;
+  border-bottom: 1px solid hsl(var(--border) / 0.65);
+}
+
+.form-item-wrapper > :not(.form-label),
+.media-item-wrapper > :not(.form-label),
+.advanced-item-wrapper > :not(.form-label) {
+  grid-column: 2;
+  min-width: 0;
 }
 
 .form-label {
   display: flex;
   align-items: center;
-  gap: 2px;
+  justify-content: flex-end;
+  gap: 4px;
+  min-height: 32px;
   font-size: 14px;
   font-weight: 500;
+  line-height: 1.4;
   color: hsl(var(--foreground));
+  text-align: right;
+}
+
+.label-text {
+  min-width: 0;
+  overflow-wrap: break-word;
+  word-break: normal;
 }
 
 .required-star {
-  color: #ff4d4f;
+  color: hsl(var(--destructive));
   margin-left: 2px;
 }
 
 .form-remark {
   font-size: 12px;
   color: hsl(var(--muted-foreground));
-  line-height: 1.5;
-  margin-top: 2px;
+  line-height: 1.6;
+  margin-top: 0;
 }
 
 /* 验证错误样式 */
 .form-error {
   font-size: 12px;
-  color: #ff4d4f;
+  color: hsl(var(--destructive));
   line-height: 1.5;
-  margin-top: 2px;
+  margin-top: 0;
+}
+
+.has-error .form-label {
+  color: hsl(var(--destructive));
 }
 
 .has-error :deep(.ant-input),
@@ -1755,7 +2289,7 @@ onMounted(loadConfig);
 .has-error :deep(.ant-input-number),
 .has-error :deep(.ant-select-selector),
 .has-error :deep(.ant-picker) {
-  border-color: #ff4d4f !important;
+  border-color: hsl(var(--destructive)) !important;
 }
 
 .switch-wrapper {
@@ -1776,8 +2310,8 @@ onMounted(loadConfig);
   gap: 10px;
   padding: 12px;
   border: 1px solid hsl(var(--border));
-  border-radius: 8px;
-  background: hsl(var(--popover));
+  border-radius: 6px;
+  background: hsl(var(--muted) / 0.28);
 }
 
 .option-list-header {
@@ -1798,14 +2332,28 @@ onMounted(loadConfig);
 }
 
 .editor-tabs {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
   border: 1px solid hsl(var(--border));
   border-radius: 8px;
-  overflow: hidden;
+  background: hsl(var(--card));
+}
+
+.editor-tabs :deep(.ant-tabs-nav) {
+  margin-bottom: 0;
+  padding: 0 12px;
+  background: hsl(var(--muted) / 0.22);
+}
+
+.editor-tabs :deep(.rich-text-editor__toolbar) {
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
 .editor-preview {
   min-height: 160px;
-  padding: 12px 16px;
+  padding: 14px 16px;
   background: hsl(var(--popover));
   border-radius: 0 0 8px 8px;
   font-size: 14px;
@@ -1820,7 +2368,7 @@ onMounted(loadConfig);
 
 .json-preview {
   min-height: 120px;
-  padding: 12px 16px;
+  padding: 14px 16px;
   background: hsl(var(--popover));
   border-radius: 0 0 8px 8px;
 }
@@ -1831,18 +2379,21 @@ onMounted(loadConfig);
   align-items: center;
   justify-content: center;
   padding: 80px 0;
+  color: hsl(var(--muted-foreground));
 }
 
 .save-bar {
   position: sticky;
   bottom: 0;
   z-index: 10;
-  margin-top: 24px;
-  padding: 16px 24px;
-  background: hsl(var(--card));
+  margin-top: 0;
+  padding: 12px 16px;
+  background: hsl(var(--card) / 0.96);
+  border: 0;
   border-top: 1px solid hsl(var(--border));
-  border-radius: 12px;
-  box-shadow: 0 -2px 8px rgb(0 0 0 / 6%);
+  border-radius: 0 0 8px 8px;
+  box-shadow: none;
+  backdrop-filter: blur(8px);
 }
 
 .save-bar-inner {
@@ -1857,6 +2408,15 @@ onMounted(loadConfig);
   color: hsl(var(--muted-foreground));
 }
 
+.form-item-wrapper :deep(.ant-checkbox-group),
+.form-item-wrapper :deep(.ant-radio-group) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  min-height: 32px;
+  align-items: center;
+}
+
 /* 闪烁高亮动画 */
 @keyframes field-flash {
   0%,
@@ -1864,7 +2424,7 @@ onMounted(loadConfig);
     background-color: transparent;
   }
   50% {
-    background-color: rgb(255 77 79 / 8%);
+    background-color: hsl(var(--destructive) / 0.08);
   }
 }
 
@@ -1875,7 +2435,7 @@ onMounted(loadConfig);
 
 .tab-divider {
   position: relative;
-  margin: 32px 0 24px;
+  margin: 4px 20px 0;
   text-align: center;
 }
 
@@ -1892,21 +2452,60 @@ onMounted(loadConfig);
 .tab-divider-text {
   position: relative;
   display: inline-block;
-  padding: 0 16px;
-  font-size: 14px;
+  padding: 0 12px;
+  font-size: 13px;
   font-weight: 600;
   color: hsl(var(--muted-foreground));
-  background: hsl(var(--background-deep));
+  background: hsl(var(--card));
 }
 
 @media (width <= 768px) {
   .setting-form-page {
+    padding: 12px;
+  }
+
+  .setting-header,
+  .setting-card {
     padding: 16px;
+  }
+
+  .header-icon {
+    width: 36px;
+    height: 36px;
   }
 
   .form-grid,
   .media-grid {
     grid-template-columns: 1fr;
+  }
+
+  .form-item-wrapper,
+  .media-item-wrapper,
+  .advanced-item-wrapper {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .form-item-wrapper > :not(.form-label),
+  .media-item-wrapper > :not(.form-label),
+  .advanced-item-wrapper > :not(.form-label) {
+    grid-column: 1;
+  }
+
+  .form-label {
+    justify-content: flex-start;
+    min-height: auto;
+    text-align: left;
+  }
+
+  .save-bar-inner {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .save-bar :deep(.ant-btn) {
+    width: 100%;
   }
 }
 </style>

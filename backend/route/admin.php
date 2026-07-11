@@ -77,7 +77,8 @@ Route::group('admin', function () {
 
             return response(file_get_contents($filePath), 200, [
                 'Content-Type'  => $mimeType,
-                'Cache-Control' => 'public, max-age=31536000, immutable',
+                // 不启用一年强缓存，避免构建产物或静态文件同名更新后浏览器继续使用旧文件。
+                // 'Cache-Control' => 'public, max-age=31536000, immutable',
             ]);
         }
 

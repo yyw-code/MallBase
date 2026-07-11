@@ -1,5 +1,9 @@
 <template>
-  <view class="goods-comments">
+  <view
+    class="goods-comments"
+    :class="[`theme-${decorateStore.resolvedThemeMode}`]"
+    :style="decorateStore.themeStyle"
+  >
     <mb-navbar title="全部评价" />
 
     <view v-if="goodsTitle" class="goods-comments__goods-row">
@@ -116,14 +120,18 @@
           <text class="goods-comments__state-text">没有更多评价</text>
         </view>
       </block>
+      <mb-copyright-footer />
     </scroll-view>
-  </view>
+      <mb-floating-action />
+</view>
 </template>
 
 <script setup>
+import { useDecorateStore } from '@/store/decorate'
 import { ref, computed } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { getReviewList } from '@/api/goods/review'
+const decorateStore = useDecorateStore()
 
 const PAGE_SIZE = 10
 
@@ -252,17 +260,17 @@ function formatTime(input) {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
-  background: $mb-color-bg-secondary;
+  background: var(--color-bg-secondary, #faf8ff);
 }
 
 .goods-comments__goods-row {
   padding: $mb-spacing-md $mb-spacing-page;
-  background: $mb-color-bg;
+  background: var(--color-bg, #ffffff);
 }
 
 .goods-comments__goods-name {
   font-size: $mb-font-md;
-  color: $mb-color-text;
+  color: var(--color-text, #191b23);
   font-weight: 600;
   line-height: 1.4;
 }
@@ -273,7 +281,7 @@ function formatTime(input) {
 
 .goods-comments__summary-text {
   font-size: $mb-font-sm;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
 }
 
 .goods-comments__scroll {
@@ -289,13 +297,13 @@ function formatTime(input) {
 
 .goods-comments__state-text {
   font-size: $mb-font-sm;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
 }
 
 .goods-comments__item {
   margin: $mb-spacing-sm $mb-spacing-page;
   padding: $mb-spacing-lg;
-  background: $mb-color-bg;
+  background: var(--color-bg, #ffffff);
   border-radius: $mb-radius-lg;
 }
 
@@ -309,7 +317,7 @@ function formatTime(input) {
   width: 80rpx;
   height: 80rpx;
   border-radius: 50%;
-  background: $mb-color-primary;
+  background: var(--color-primary, #0d50d5);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -343,7 +351,7 @@ function formatTime(input) {
 .goods-comments__user-name {
   font-size: $mb-font-md;
   font-weight: 600;
-  color: $mb-color-text;
+  color: var(--color-text, #191b23);
 }
 
 .goods-comments__star-row {
@@ -353,26 +361,26 @@ function formatTime(input) {
 
 .goods-comments__star {
   font-size: 22rpx;
-  color: $mb-color-border-light;
+  color: var(--color-border, #c3c5d7);
   line-height: 1;
 }
 
 .goods-comments__star--active {
-  color: $mb-color-star;
+  color: var(--color-warning, #f0ad4e);
 }
 
 .goods-comments__meta {
   display: block;
   margin-top: 8rpx;
   font-size: 22rpx;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
 }
 
 .goods-comments__content {
   display: block;
   margin-top: $mb-spacing-md;
   font-size: $mb-font-md;
-  color: $mb-color-text-secondary;
+  color: var(--color-text-secondary, #434654);
   line-height: 1.5;
 }
 
@@ -387,14 +395,14 @@ function formatTime(input) {
   width: 168rpx;
   height: 168rpx;
   border-radius: $mb-radius-md;
-  background: $mb-color-bg-secondary;
+  background: var(--color-bg-secondary, #faf8ff);
 }
 
 .goods-comments__append {
   margin-top: $mb-spacing-md;
   padding: $mb-spacing-md;
   border-radius: $mb-radius-md;
-  background: $mb-color-bg-secondary;
+  background: var(--color-bg-secondary, #faf8ff);
 }
 
 .goods-comments__append-header {
@@ -406,19 +414,19 @@ function formatTime(input) {
 .goods-comments__append-label {
   font-size: $mb-font-sm;
   font-weight: 700;
-  color: $mb-color-text-title;
+  color: var(--color-text-title, #191b23);
 }
 
 .goods-comments__append-time {
   font-size: $mb-font-xs;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
 }
 
 .goods-comments__append-content {
   display: block;
   margin-top: $mb-spacing-sm;
   font-size: $mb-font-sm;
-  color: $mb-color-text-secondary;
+  color: var(--color-text-secondary, #434654);
   line-height: 1.6;
   word-break: break-word;
 }
@@ -427,18 +435,18 @@ function formatTime(input) {
   margin-top: $mb-spacing-md;
   padding: $mb-spacing-md;
   border-radius: $mb-radius-md;
-  background: $mb-color-bg-surface;
+  background: var(--color-bg-surface, #f3f3fe);
 }
 
 .goods-comments__reply-prefix {
   font-size: $mb-font-sm;
   font-weight: 700;
-  color: $mb-color-primary;
+  color: var(--color-primary, #0d50d5);
 }
 
 .goods-comments__reply-text {
   font-size: $mb-font-sm;
-  color: $mb-color-text-secondary;
+  color: var(--color-text-secondary, #434654);
   line-height: 1.5;
 }
 </style>

@@ -48,6 +48,7 @@
 
 ### 2.4 通用
 
+- `extension-slots`
 - `docs-linking`
 - `open-source-wording`
 - `preview-branch-boundary`

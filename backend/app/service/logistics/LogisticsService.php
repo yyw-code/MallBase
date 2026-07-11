@@ -164,6 +164,9 @@ class LogisticsService extends BaseService
         if ($order === null) {
             throw new BusinessException('订单不存在');
         }
+        if ((string) ($order->delivery_type ?? Order::DELIVERY_TYPE_PHYSICAL) === Order::DELIVERY_TYPE_VIRTUAL) {
+            return $this->virtualOrderResponse($order);
+        }
 
         $shipment = $this->shipmentSnapshot($order);
         if ($shipment['tracking_no'] === '' || ($shipment['company_code'] === '' && $shipment['company_name'] === '')) {
@@ -234,20 +237,52 @@ class LogisticsService extends BaseService
     private function emptyOrderResponse(Order $order, array $shipment, string $message): array
     {
         return [
-            'available'     => false,
-            'status'        => $message,
-            'state'         => 'none',
-            'platform'      => $shipment['platform'],
-            'company'       => $shipment['company_name'],
-            'company_code'  => $shipment['company_code'],
-            'tracking_no'   => $shipment['tracking_no'],
-            'receiver'      => $this->receiverOf($order),
-            'tracks'        => [],
-            'latest_desc'   => '',
-            'latest_time'   => null,
-            'cached'        => false,
-            'last_query_at' => null,
-            'next_query_at' => null,
+            'available'          => false,
+            'delivery_type'      => (string) ($order->delivery_type ?? Order::DELIVERY_TYPE_PHYSICAL),
+            'delivery_type_text' => Order::deliveryTypeLabel((string) ($order->delivery_type ?? Order::DELIVERY_TYPE_PHYSICAL)),
+            'delivery_note'      => (string) ($order->delivery_note ?? ''),
+            'status'             => $message,
+            'state'              => 'none',
+            'platform'           => $shipment['platform'],
+            'company'            => $shipment['company_name'],
+            'company_code'       => $shipment['company_code'],
+            'tracking_no'        => $shipment['tracking_no'],
+            'receiver'           => $this->receiverOf($order),
+            'tracks'             => [],
+            'latest_desc'        => '',
+            'latest_time'        => null,
+            'cached'             => false,
+            'last_query_at'      => null,
+            'next_query_at'      => null,
+            'query_error'        => '',
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function virtualOrderResponse(Order $order): array
+    {
+        $note = trim((string) ($order->delivery_note ?? ''));
+        return [
+            'available'          => true,
+            'delivery_type'      => Order::DELIVERY_TYPE_VIRTUAL,
+            'delivery_type_text' => Order::deliveryTypeLabel(Order::DELIVERY_TYPE_VIRTUAL),
+            'delivery_note'      => $note,
+            'status'             => Order::deliveryTypeLabel(Order::DELIVERY_TYPE_VIRTUAL),
+            'state'              => 'virtual',
+            'platform'           => '',
+            'company'            => '虚拟发货',
+            'company_code'       => '',
+            'tracking_no'        => '',
+            'receiver'           => $this->receiverOf($order),
+            'tracks'             => [],
+            'latest_desc'        => $note !== '' ? $note : '虚拟商品已发货',
+            'latest_time'        => ($this->datetimeToString($order->shipped_at ?? null) ?: null),
+            'cached'             => false,
+            'last_query_at'      => null,
+            'next_query_at'      => null,
+            'query_error'        => '',
         ];
     }
 
@@ -434,21 +469,24 @@ class LogisticsService extends BaseService
         $lastError = $queryError !== '' ? $queryError : (string) ($track->last_error ?? '');
 
         return [
-            'available'     => true,
-            'status'        => (string) ($track->status_text ?: '待查询'),
-            'state'         => (string) ($track->state ?: 'pending'),
-            'platform'      => (string) ($track->provider ?: $shipment['platform']),
-            'company'       => (string) ($track->company_name ?: $shipment['company_name']),
-            'company_code'  => (string) ($track->company_code ?: $shipment['company_code']),
-            'tracking_no'   => (string) ($track->tracking_no ?: $shipment['tracking_no']),
-            'receiver'      => $this->receiverOf($order),
-            'tracks'        => $tracks,
-            'latest_desc'   => (string) ($track->latest_desc ?? ''),
-            'latest_time'   => $this->datetimeToString($track->latest_time ?? null),
-            'cached'        => $lastQueryAt !== '' && ($nextQueryAt === '' || strtotime($nextQueryAt) > time()),
-            'last_query_at' => $lastQueryAt !== '' ? $lastQueryAt : null,
-            'next_query_at' => $nextQueryAt !== '' ? $nextQueryAt : null,
-            'query_error'   => $this->formatQueryError((string) ($track->provider ?: $shipment['platform']), $lastError),
+            'available'          => true,
+            'delivery_type'      => (string) ($order->delivery_type ?? Order::DELIVERY_TYPE_PHYSICAL),
+            'delivery_type_text' => Order::deliveryTypeLabel((string) ($order->delivery_type ?? Order::DELIVERY_TYPE_PHYSICAL)),
+            'delivery_note'      => (string) ($order->delivery_note ?? ''),
+            'status'             => (string) ($track->status_text ?: '待查询'),
+            'state'              => (string) ($track->state ?: 'pending'),
+            'platform'           => (string) ($track->provider ?: $shipment['platform']),
+            'company'            => (string) ($track->company_name ?: $shipment['company_name']),
+            'company_code'       => (string) ($track->company_code ?: $shipment['company_code']),
+            'tracking_no'        => (string) ($track->tracking_no ?: $shipment['tracking_no']),
+            'receiver'           => $this->receiverOf($order),
+            'tracks'             => $tracks,
+            'latest_desc'        => (string) ($track->latest_desc ?? ''),
+            'latest_time'        => $this->datetimeToString($track->latest_time ?? null),
+            'cached'             => $lastQueryAt !== '' && ($nextQueryAt === '' || strtotime($nextQueryAt) > time()),
+            'last_query_at'      => $lastQueryAt !== '' ? $lastQueryAt : null,
+            'next_query_at'      => $nextQueryAt !== '' ? $nextQueryAt : null,
+            'query_error'        => $this->formatQueryError((string) ($track->provider ?: $shipment['platform']), $lastError),
         ];
     }
 

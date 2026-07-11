@@ -1,5 +1,9 @@
 <template>
-  <view class="addr-edit">
+  <view
+    class="addr-edit"
+    :class="[`theme-${decorateStore.resolvedThemeMode}`]"
+    :style="decorateStore.themeStyle"
+  >
     <mb-navbar :title="isEdit ? '编辑地址' : '新增地址'" />
 
     <view v-if="pageLoading" class="addr-edit__loading">
@@ -126,6 +130,8 @@
       <view class="addr-edit__spacer" />
     </view>
 
+    <mb-copyright-footer />
+
     <!-- 底部操作 -->
     <view v-if="!pageLoading" class="addr-edit__footer">
       <mb-button
@@ -195,10 +201,12 @@
         </scroll-view>
       </view>
     </view>
-  </view>
+      <mb-floating-action />
+</view>
 </template>
 
 <script setup>
+import { useDecorateStore } from '@/store/decorate'
 import { ref, computed, reactive, nextTick } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import {
@@ -208,6 +216,7 @@ import {
   deleteAddress,
 } from '@/api/user/address'
 import { getRegionChildren } from '@/api/region'
+const decorateStore = useDecorateStore()
 
 const levelLabels = ['请选择省份', '请选择城市', '请选择区县', '请选择街道']
 
@@ -686,7 +695,7 @@ function confirmDelete() {
 </script>
 
 <style lang="scss" scoped>
-.addr-edit { min-height: 100vh; background: $mb-color-bg-secondary; }
+.addr-edit { min-height: 100vh; background: var(--color-bg-secondary, #faf8ff); }
 .addr-edit__loading { padding: $mb-spacing-lg; }
 .addr-edit__body { padding: 0 $mb-spacing-page; }
 
@@ -694,19 +703,19 @@ function confirmDelete() {
 .addr-edit__section-header { padding: $mb-spacing-xl 0 $mb-spacing-lg; }
 .addr-edit__section-title {
   display: block; font-size: $mb-font-xxl; font-weight: 800;
-  color: $mb-color-text-title; letter-spacing: 0;
+  color: var(--color-text-title, #191b23); letter-spacing: 0;
 }
 .addr-edit__section-desc {
   display: block; margin-top: $mb-spacing-xs; font-size: $mb-font-sm;
-  color: $mb-color-text-tertiary; letter-spacing: 0;
+  color: var(--color-text-tertiary, #737686); letter-spacing: 0;
 }
 
 // Smart parser
 .smart-parse {
-  background: $mb-color-bg;
+  background: var(--color-bg, #ffffff);
   border-radius: $mb-radius-lg;
   padding: $mb-spacing-lg;
-  border: 1rpx solid rgba($mb-color-primary, 0.14);
+  border: 1rpx solid var(--color-primary-border, rgba(13, 80, 213, 0.14));
   margin-bottom: $mb-spacing-lg;
 }
 
@@ -722,7 +731,7 @@ function confirmDelete() {
   width: 58rpx;
   height: 58rpx;
   border-radius: 18rpx;
-  background: rgba($mb-color-primary, 0.08);
+  background: var(--color-primary-soft, rgba(13, 80, 213, 0.08));
   position: relative;
 }
 
@@ -736,7 +745,7 @@ function confirmDelete() {
     left: 50%;
     top: 50%;
     border-radius: 999rpx;
-    background: $mb-color-primary;
+    background: var(--color-primary, #0d50d5);
     transform: translate(-50%, -50%);
   }
 
@@ -784,7 +793,7 @@ function confirmDelete() {
   display: block;
   font-size: $mb-font-lg;
   font-weight: 700;
-  color: $mb-color-text-title;
+  color: var(--color-text-title, #191b23);
   letter-spacing: 0;
 }
 
@@ -792,7 +801,7 @@ function confirmDelete() {
   display: block;
   margin-top: 4rpx;
   font-size: $mb-font-sm;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
   line-height: 1.4;
 }
 
@@ -802,14 +811,14 @@ function confirmDelete() {
   box-sizing: border-box;
   padding: $mb-spacing-md;
   border-radius: $mb-radius-md;
-  background: $mb-color-bg-secondary;
-  color: $mb-color-text;
+  background: var(--color-bg-secondary, #faf8ff);
+  color: var(--color-text, #191b23);
   font-size: $mb-font-md;
   line-height: 1.5;
 }
 
 .smart-parse__placeholder {
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
 }
 
 .smart-parse__button {
@@ -818,25 +827,25 @@ function confirmDelete() {
 
 // Form group
 .form-group {
-  background: $mb-color-bg; border-radius: $mb-radius-lg;
+  background: var(--color-bg, #ffffff); border-radius: $mb-radius-lg;
   padding: $mb-spacing-sm $mb-spacing-lg $mb-spacing-md;
-  border: 1rpx solid $mb-color-border;
+  border: 1rpx solid var(--color-border, #e0e4e8);
 }
 .form-field { padding-top: $mb-spacing-md; }
 .form-field__label {
-  display: block; font-size: $mb-font-sm; color: $mb-color-text-tertiary;
+  display: block; font-size: $mb-font-sm; color: var(--color-text-tertiary, #737686);
   margin-bottom: $mb-spacing-xs; letter-spacing: 0;
 }
 .form-field__row { display: flex; align-items: center; min-height: 72rpx; }
 .form-field__row--tap { cursor: pointer; }
-.form-field__input { flex: 1; font-size: $mb-font-md; color: $mb-color-text; min-height: 48rpx; }
-.form-placeholder { color: $mb-color-text-tertiary; }
+.form-field__input { flex: 1; font-size: $mb-font-md; color: var(--color-text, #191b23); min-height: 48rpx; }
+.form-placeholder { color: var(--color-text-tertiary, #737686); }
 .form-field__value {
-  flex: 1; font-size: $mb-font-md; color: $mb-color-text;
+  flex: 1; font-size: $mb-font-md; color: var(--color-text, #191b23);
   overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
 }
-.form-field__placeholder-text { flex: 1; font-size: $mb-font-md; color: $mb-color-text-tertiary; }
-.form-field__line { height: 1rpx; background: $mb-color-divider; margin-top: $mb-spacing-sm; }
+.form-field__placeholder-text { flex: 1; font-size: $mb-font-md; color: var(--color-text-tertiary, #737686); }
+.form-field__line { height: 1rpx; background: var(--color-divider, #f0f2f5); margin-top: $mb-spacing-sm; }
 .form-field:last-child .form-field__line { display: none; }
 
 // Field icons (pure CSS)
@@ -848,12 +857,12 @@ function confirmDelete() {
 .form-field__icon--user {
   &::before {
     content: ''; position: absolute; width: 16rpx; height: 16rpx;
-    border: 3rpx solid $mb-color-text-tertiary; border-radius: 50%;
+    border: 3rpx solid var(--color-text-tertiary, #737686); border-radius: 50%;
     top: 5rpx; left: 50%; transform: translateX(-50%);
   }
   &::after {
     content: ''; position: absolute; width: 24rpx; height: 12rpx;
-    border: 3rpx solid $mb-color-text-tertiary; border-top: 0;
+    border: 3rpx solid var(--color-text-tertiary, #737686); border-top: 0;
     border-radius: 0 0 16rpx 16rpx;
     left: 50%; bottom: 5rpx; transform: translateX(-50%);
   }
@@ -861,33 +870,33 @@ function confirmDelete() {
 .form-field__icon--phone {
   &::before {
     content: ''; position: absolute; width: 16rpx; height: 26rpx;
-    border: 3rpx solid $mb-color-text-tertiary; border-radius: 4rpx;
+    border: 3rpx solid var(--color-text-tertiary, #737686); border-radius: 4rpx;
     top: 50%; left: 50%; transform: translate(-50%, -50%);
   }
   &::after {
     content: ''; position: absolute; width: 6rpx; height: 2rpx;
-    background: $mb-color-text-tertiary; border-radius: 1rpx;
+    background: var(--color-text-tertiary, #737686); border-radius: 1rpx;
     bottom: 9rpx; left: 50%; transform: translateX(-50%);
   }
 }
 .form-field__icon--arrow::before {
   content: ''; position: absolute; width: 12rpx; height: 12rpx;
-  border-right: 3rpx solid $mb-color-text-tertiary;
-  border-bottom: 3rpx solid $mb-color-text-tertiary;
+  border-right: 3rpx solid var(--color-text-tertiary, #737686);
+  border-bottom: 3rpx solid var(--color-text-tertiary, #737686);
   transform: rotate(-45deg); top: 50%; left: 50%;
   margin-top: -6rpx; margin-left: -8rpx;
 }
 .form-field__icon--home {
   &::before {
     content: ''; position: absolute; width: 22rpx; height: 18rpx;
-    border: 3rpx solid $mb-color-text-tertiary; border-top: 0;
+    border: 3rpx solid var(--color-text-tertiary, #737686); border-top: 0;
     border-radius: 0 0 4rpx 4rpx;
     left: 50%; bottom: 6rpx; transform: translateX(-50%);
   }
   &::after {
     content: ''; position: absolute; width: 18rpx; height: 18rpx;
-    border-left: 3rpx solid $mb-color-text-tertiary;
-    border-top: 3rpx solid $mb-color-text-tertiary;
+    border-left: 3rpx solid var(--color-text-tertiary, #737686);
+    border-top: 3rpx solid var(--color-text-tertiary, #737686);
     top: 7rpx; left: 50%; transform: translateX(-50%) rotate(45deg);
   }
 }
@@ -895,25 +904,25 @@ function confirmDelete() {
 // Default address toggle
 .default-toggle {
   display: flex; align-items: center; justify-content: space-between;
-  background: $mb-color-bg; border-radius: $mb-radius-lg;
+  background: var(--color-bg, #ffffff); border-radius: $mb-radius-lg;
   padding: $mb-spacing-lg; margin-top: $mb-spacing-lg;
-  border: 1rpx solid $mb-color-border;
+  border: 1rpx solid var(--color-border, #e0e4e8);
 }
 .default-toggle__left { flex: 1; min-width: 0; }
-.default-toggle__title { display: block; font-size: $mb-font-md; font-weight: 600; color: $mb-color-text-title; }
-.default-toggle__desc { display: block; margin-top: 4rpx; font-size: $mb-font-sm; color: $mb-color-text-tertiary; }
+.default-toggle__title { display: block; font-size: $mb-font-md; font-weight: 600; color: var(--color-text-title, #191b23); }
+.default-toggle__desc { display: block; margin-top: 4rpx; font-size: $mb-font-sm; color: var(--color-text-tertiary, #737686); }
 
 // Switch
 .form-switch {
   flex-shrink: 0; width: 88rpx; height: 48rpx; border-radius: $mb-radius-full;
-  background: $mb-color-border; position: relative;
+  background: var(--color-border, #e0e4e8); position: relative;
   transition: background 0.2s; margin-left: $mb-spacing-md;
 }
-.form-switch--on { background: $mb-color-primary; }
+.form-switch--on { background: var(--color-primary, #0d50d5); }
 .form-switch__thumb {
   position: absolute; top: 4rpx; left: 4rpx; width: 40rpx; height: 40rpx;
-  border-radius: 50%; background: $mb-color-bg;
-  border: 1rpx solid $mb-color-border;
+  border-radius: 50%; background: var(--color-bg, #ffffff);
+  border: 1rpx solid var(--color-border, #e0e4e8);
   transition: transform 0.2s;
   .form-switch--on & { transform: translateX(40rpx); }
 }
@@ -922,7 +931,7 @@ function confirmDelete() {
 .addr-edit__spacer { height: 200rpx; }
 .addr-edit__footer {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 100;
-  background: $mb-color-bg; display: flex; gap: $mb-spacing-md;
+  background: var(--color-bg, #ffffff); display: flex; gap: $mb-spacing-md;
   padding: $mb-spacing-md $mb-spacing-page;
   padding-bottom: calc(#{$mb-spacing-md} + env(safe-area-inset-bottom));
   box-shadow: $mb-shadow-bar;
@@ -941,7 +950,7 @@ function confirmDelete() {
   background: rgba(0, 0, 0, 0.45); display: flex; align-items: flex-end;
 }
 .region-panel {
-  width: 100%; max-height: 70vh; background: $mb-color-bg;
+  width: 100%; max-height: 70vh; background: var(--color-bg, #ffffff);
   border-radius: $mb-radius-lg $mb-radius-lg 0 0;
   display: flex; flex-direction: column;
   transform: translateY(100%); transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
@@ -951,10 +960,10 @@ function confirmDelete() {
   display: flex; align-items: center; justify-content: space-between;
   padding: $mb-spacing-lg; flex-shrink: 0;
 }
-.region-panel__title { font-size: $mb-font-lg; font-weight: 700; color: $mb-color-text-title; }
+.region-panel__title { font-size: $mb-font-lg; font-weight: 700; color: var(--color-text-title, #191b23); }
 .region-panel__close {
   width: 56rpx; height: 56rpx; border-radius: 50%;
-  background: $mb-color-bg-secondary;
+  background: var(--color-bg-secondary, #faf8ff);
   display: flex; align-items: center; justify-content: center;
 }
 .region-panel__close-icon {
@@ -971,7 +980,7 @@ function confirmDelete() {
     width: 24rpx;
     height: 3rpx;
     border-radius: 999rpx;
-    background: $mb-color-text-tertiary;
+    background: var(--color-text-tertiary, #737686);
   }
 
   &::before {
@@ -986,34 +995,34 @@ function confirmDelete() {
 // Region tabs
 .region-tabs {
   display: flex; gap: $mb-spacing-lg; padding: 0 $mb-spacing-lg $mb-spacing-md;
-  border-bottom: 1rpx solid $mb-color-divider; flex-shrink: 0;
+  border-bottom: 1rpx solid var(--color-divider, #f0f2f5); flex-shrink: 0;
 }
 .region-tab { padding-bottom: $mb-spacing-sm; position: relative; }
 .region-tab--active::after {
   content: ''; position: absolute; bottom: 0; left: 0; right: 0;
-  height: 4rpx; background: $mb-color-primary; border-radius: 2rpx;
+  height: 4rpx; background: var(--color-primary, #0d50d5); border-radius: 2rpx;
 }
 .region-tab__text {
-  font-size: $mb-font-md; color: $mb-color-text-secondary; white-space: nowrap;
-  .region-tab--active & { color: $mb-color-primary; font-weight: 600; }
+  font-size: $mb-font-md; color: var(--color-text-secondary, #434654); white-space: nowrap;
+  .region-tab--active & { color: var(--color-primary, #0d50d5); font-weight: 600; }
 }
 
 // Region list
 .region-list { flex: 1; max-height: 50vh; padding: $mb-spacing-sm 0; }
 .region-list__loading, .region-list__empty { padding: $mb-spacing-xl 0; text-align: center; }
-.region-list__loading-text, .region-list__empty-text { font-size: $mb-font-md; color: $mb-color-text-tertiary; }
+.region-list__loading-text, .region-list__empty-text { font-size: $mb-font-md; color: var(--color-text-tertiary, #737686); }
 .region-item {
   display: flex; align-items: center; justify-content: space-between;
   padding: $mb-spacing-md $mb-spacing-lg;
-  &:active { background: $mb-color-bg-secondary; }
+  &:active { background: var(--color-bg-secondary, #faf8ff); }
 }
-.region-item--selected .region-item__text { color: $mb-color-primary; font-weight: 600; }
-.region-item__text { font-size: $mb-font-md; color: $mb-color-text; }
+.region-item--selected .region-item__text { color: var(--color-primary, #0d50d5); font-weight: 600; }
+.region-item__text { font-size: $mb-font-md; color: var(--color-text, #191b23); }
 .region-item__check {
   width: 22rpx;
   height: 12rpx;
-  border-left: 4rpx solid $mb-color-primary;
-  border-bottom: 4rpx solid $mb-color-primary;
+  border-left: 4rpx solid var(--color-primary, #0d50d5);
+  border-bottom: 4rpx solid var(--color-primary, #0d50d5);
   transform: rotate(-45deg);
 }
 </style>

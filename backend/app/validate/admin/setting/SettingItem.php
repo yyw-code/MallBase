@@ -12,6 +12,10 @@ use think\Validate;
  */
 class SettingItem extends Validate
 {
+    private const UI_COMPONENTS = ['money_yuan', 'remote_select'];
+
+    private const UI_OPTION_SOURCES = ['distribution_level'];
+
     /**
      * 验证规则
      */
@@ -23,6 +27,7 @@ class SettingItem extends Validate
         'type|表单类型' => 'in:input,textarea,number,password,switch,radio,checkbox,select,image,images,file,files,video,videos,editor,json,option_list',
         'options|选项' => 'checkOptions',
         'rules|验证规则' => 'checkRules',
+        'ui|动态表单配置' => 'checkUi',
         'placeholder|输入提示' => 'max:255',
         'remark|备注说明' => 'max:255',
         'sort|排序' => 'number|between:0,9999',
@@ -32,8 +37,34 @@ class SettingItem extends Validate
      * 验证场景
      */
     protected $scene = [
-        'create' => ['group_id', 'name', 'code', 'value', 'type', 'options', 'rules', 'placeholder', 'remark', 'sort'],
-        'update' => ['name', 'code', 'value', 'type', 'options', 'rules', 'placeholder', 'remark', 'sort'],
+        'create' => [
+            'group_id',
+            'name',
+            'code',
+            'value',
+            'type',
+            'options',
+            'rules',
+            'ui',
+            'placeholder',
+            'remark',
+            'sort',
+        ],
+        'update' => [
+            'name',
+            'code',
+            'value',
+            'type',
+            'options',
+            'rules',
+            'ui',
+            'placeholder',
+            'remark',
+            'sort',
+        ],
+        'uiUpdate' => [
+            'ui',
+        ],
     ];
 
     /**
@@ -184,6 +215,109 @@ class SettingItem extends Validate
             // message 字段如果存在，不能超过 255 字符
             if (isset($rule['message']) && mb_strlen($rule['message']) > 255) {
                 return "第" . ($index + 1) . "条规则的提示信息不能超过255个字符";
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * 验证 ui 字段（后台动态表单元数据）
+     *
+     * @param mixed $value
+     * @return bool|string
+     */
+    protected function checkUi($value)
+    {
+        if (empty($value)) {
+            return true;
+        }
+
+        if (is_string($value)) {
+            $decoded = json_decode($value, true);
+            if (json_last_error() !== JSON_ERROR_NONE) {
+                return '动态表单配置必须是有效的JSON格式';
+            }
+            $value = $decoded;
+        }
+
+        if (!is_array($value)) {
+            return '动态表单配置必须是对象格式';
+        }
+
+        $component = (string)($value['component'] ?? '');
+        if (
+            $component !== ''
+            && !in_array($component, self::UI_COMPONENTS, true)
+        ) {
+            return '输入组件不合法';
+        }
+
+        $optionSource = (string)($value['option_source'] ?? '');
+        if (
+            $optionSource !== ''
+            && !in_array($optionSource, self::UI_OPTION_SOURCES, true)
+        ) {
+            return '远程选项来源不合法';
+        }
+
+        $sectionCode = (string)($value['section_code'] ?? '');
+        if (
+            $sectionCode !== ''
+            && !preg_match('/^[A-Za-z][A-Za-z0-9_-]*$/', $sectionCode)
+        ) {
+            return '页内分组编码不合法';
+        }
+
+        $conditions = $value['visible_when'] ?? [];
+        if ($conditions === null || $conditions === '') {
+            return true;
+        }
+
+        if (!is_array($conditions)) {
+            return '显示条件必须是数组格式';
+        }
+
+        foreach ($conditions as $index => $condition) {
+            if (!is_array($condition)) {
+                return "第" . ($index + 1) . "条显示条件格式不正确";
+            }
+
+            $field = (string)($condition['field'] ?? '');
+            if (
+                $field === ''
+                || !preg_match('/^[a-zA-Z][a-zA-Z0-9_]*$/', $field)
+            ) {
+                return "第" . ($index + 1) . "条显示条件的依赖字段不合法";
+            }
+
+            $operator = (string)($condition['operator'] ?? 'equals');
+            if (
+                !in_array(
+                    $operator,
+                    ['equals', 'falsy', 'in', 'not_equals', 'truthy'],
+                    true
+                )
+            ) {
+                return "第" . ($index + 1) . "条显示条件的判断方式不合法";
+            }
+
+            if (
+                in_array($operator, ['equals', 'not_equals'], true)
+                && !array_key_exists('value', $condition)
+            ) {
+                return "第" . ($index + 1) . "条显示条件缺少匹配值";
+            }
+
+            if (
+                $operator === 'in'
+                && (
+                    !isset($condition['value'])
+                    || !is_array($condition['value'])
+                    || empty($condition['value'])
+                )
+            ) {
+                return "第" . ($index + 1) . "条显示条件的匹配值必须是非空数组";
             }
         }
 

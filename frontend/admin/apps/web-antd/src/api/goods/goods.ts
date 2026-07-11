@@ -2,6 +2,34 @@ import { requestClient } from '#/api/request';
 
 export namespace GoodsApi {
   export type MediaValue = number | string;
+  export type GoodsPointsRewardMode =
+    | 'disabled'
+    | 'fixed'
+    | 'global'
+    | 'inherit'
+    | 'ratio'
+    | 'sku'
+    | 'sku_fixed'
+    | 'sku_ratio';
+  export type SkuPointsRewardMode = 'disabled' | 'fixed' | 'inherit' | 'ratio';
+  export type MemberBenefitMode =
+    | 'disabled'
+    | 'global'
+    | 'level_discount'
+    | 'sku_price';
+  export type DistributionCommissionMode =
+    | 'disabled'
+    | 'fixed'
+    | 'global'
+    | 'rate'
+    | 'sku'
+    | 'sku_fixed'
+    | 'sku_rate';
+  export type SkuDistributionCommissionMode =
+    | 'disabled'
+    | 'fixed'
+    | 'inherit'
+    | 'rate';
 
   export interface SpecMetaValueItem {
     value: string;
@@ -29,6 +57,7 @@ export namespace GoodsApi {
     main_video?: MediaValue;
     main_video_full_url?: string;
     description?: string;
+    sku_detail_enabled?: 0 | 1;
     price: number;
     market_price?: number;
     stock: number;
@@ -38,6 +67,15 @@ export namespace GoodsApi {
     is_recommend: number;
     is_new: number;
     is_hot: number;
+    points_reward_mode?: GoodsPointsRewardMode;
+    points_reward_ratio?: number;
+    points_reward_fixed?: number;
+    member_benefit_mode?: MemberBenefitMode;
+    distribution_commission_mode?: DistributionCommissionMode;
+    distribution_first_rate?: number | string;
+    distribution_second_rate?: number | string;
+    distribution_first_fixed_amount?: number | string;
+    distribution_second_fixed_amount?: number | string;
     sort: number;
     status: number;
     create_time: string;
@@ -78,8 +116,18 @@ export namespace GoodsApi {
     sku_code?: string;
     image?: MediaValue;
     image_full_url?: string;
+    description?: string;
     weight?: number;
     volume?: number;
+    points_reward_mode?: SkuPointsRewardMode;
+    points_reward_ratio?: number;
+    points_reward_fixed?: number;
+    member_price?: null | number | string;
+    distribution_commission_mode?: SkuDistributionCommissionMode;
+    distribution_first_rate?: number | string;
+    distribution_second_rate?: number | string;
+    distribution_first_fixed_amount?: number | string;
+    distribution_second_fixed_amount?: number | string;
     status: number;
   }
 
@@ -126,6 +174,7 @@ export namespace GoodsApi {
     main_video?: MediaValue;
     spec_meta?: SpecMetaItem[];
     description?: string;
+    sku_detail_enabled?: 0 | 1;
     price?: number;
     market_price?: number;
     stock?: number;
@@ -134,6 +183,15 @@ export namespace GoodsApi {
     is_recommend?: number;
     is_new?: number;
     is_hot?: number;
+    points_reward_mode?: GoodsPointsRewardMode;
+    points_reward_ratio?: number;
+    points_reward_fixed?: number;
+    member_benefit_mode?: MemberBenefitMode;
+    distribution_commission_mode?: DistributionCommissionMode;
+    distribution_first_rate?: number | string;
+    distribution_second_rate?: number | string;
+    distribution_first_fixed_amount?: number | string;
+    distribution_second_fixed_amount?: number | string;
     sort?: number;
     status?: number;
     images?: MediaValue[];
@@ -150,8 +208,18 @@ export namespace GoodsApi {
     stock: number;
     sku_code?: string;
     image?: MediaValue;
+    description?: string;
     weight?: number;
     volume?: number;
+    points_reward_mode?: SkuPointsRewardMode;
+    points_reward_ratio?: number;
+    points_reward_fixed?: number;
+    member_price?: null | number | string;
+    distribution_commission_mode?: SkuDistributionCommissionMode;
+    distribution_first_rate?: number | string;
+    distribution_second_rate?: number | string;
+    distribution_first_fixed_amount?: number | string;
+    distribution_second_fixed_amount?: number | string;
     status?: number;
   }
 
@@ -167,6 +235,7 @@ export namespace GoodsApi {
     main_video?: MediaValue;
     spec_meta?: SpecMetaItem[];
     description?: string;
+    sku_detail_enabled?: 0 | 1;
     price?: number;
     market_price?: number;
     stock?: number;
@@ -175,6 +244,15 @@ export namespace GoodsApi {
     is_recommend?: number;
     is_new?: number;
     is_hot?: number;
+    points_reward_mode?: GoodsPointsRewardMode;
+    points_reward_ratio?: number;
+    points_reward_fixed?: number;
+    member_benefit_mode?: MemberBenefitMode;
+    distribution_commission_mode?: DistributionCommissionMode;
+    distribution_first_rate?: number | string;
+    distribution_second_rate?: number | string;
+    distribution_first_fixed_amount?: number | string;
+    distribution_second_fixed_amount?: number | string;
     sort?: number;
     status?: number;
     images?: MediaValue[];

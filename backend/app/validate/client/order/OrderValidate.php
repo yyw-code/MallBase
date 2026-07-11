@@ -26,7 +26,9 @@ class OrderValidate extends Validate
         'address_id'      => 'require|integer|min:1',
         'buyer_remark'    => 'max:255',
         'idempotency_key' => 'max:64',
-        'pay_method'      => 'require|integer|in:1,2,3',
+        'use_points'      => 'in:0,1,true,false',
+        'points_used'     => 'integer|egt:0',
+        'pay_method'      => 'require|integer|in:1,3',
         'scene'           => 'in:mini,offi,h5',
         'reason'          => 'max:255',
     ];
@@ -41,6 +43,8 @@ class OrderValidate extends Validate
         'address_id.require' => '请选择收货地址',
         'address_id.min'     => '收货地址不合法',
         'buyer_remark.max'   => '买家备注最长 255 字',
+        'points_used.integer' => '使用积分必须是整数',
+        'points_used.egt'     => '使用积分不能小于 0',
         'pay_method.require' => '请选择支付方式',
         'pay_method.in'      => '支付方式不合法',
         'scene.in'           => '支付场景不合法（仅支持 mini/offi/h5）',
@@ -48,8 +52,8 @@ class OrderValidate extends Validate
     ];
 
     protected $scene = [
-        'create'  => ['source', 'cart_ids', 'items', 'address_id', 'buyer_remark', 'idempotency_key'],
-        'preview' => ['source', 'cart_ids', 'items', 'address_id'],
+        'create'  => ['source', 'cart_ids', 'items', 'address_id', 'buyer_remark', 'idempotency_key', 'use_points', 'points_used'],
+        'preview' => ['source', 'cart_ids', 'items', 'address_id', 'use_points', 'points_used'],
         'pay'     => ['pay_method', 'scene'],
         'cancel'  => ['reason'],
     ];

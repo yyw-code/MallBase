@@ -115,7 +115,7 @@ CREATE TABLE `mb_goods` (
   `images` json DEFAULT NULL COMMENT '商品轮播图素材ID数组 JSON',
   `spec_type` tinyint(1) NOT NULL DEFAULT 1 COMMENT '规格类型（1单规格，2多规格）',
   `spec_meta` json DEFAULT NULL COMMENT '规格设计器元数据 JSON',
-  `description` text DEFAULT NULL COMMENT '商品详情（富文本）',
+  `sku_detail_enabled` tinyint(1) NOT NULL DEFAULT 0 COMMENT '是否启用规格独立详情（0否，1是）',
   `price` decimal(10,2) NOT NULL DEFAULT 0.00 COMMENT '最低价格（SKU最小价格）',
   `market_price` decimal(10,2) DEFAULT NULL COMMENT '市场价（划线价）',
   `stock` int(11) unsigned NOT NULL DEFAULT 0 COMMENT '总库存（所有SKU库存之和）',
@@ -125,6 +125,10 @@ CREATE TABLE `mb_goods` (
   `is_recommend` tinyint(1) DEFAULT 0 COMMENT '是否推荐（0否，1是）',
   `is_new` tinyint(1) DEFAULT 0 COMMENT '是否新品（0否，1是）',
   `is_hot` tinyint(1) DEFAULT 0 COMMENT '是否热卖（0否，1是）',
+  `points_reward_mode` varchar(16) NOT NULL DEFAULT 'global' COMMENT '积分赠送模式（global默认全局 disabled关闭 ratio按金额 fixed固定 sku规格单独配置）',
+  `points_reward_ratio` int(10) unsigned NOT NULL DEFAULT 0 COMMENT '积分赠送比例：每消费 1 元赠送积分',
+  `points_reward_fixed` int(10) unsigned NOT NULL DEFAULT 0 COMMENT '固定赠送积分：每件赠送积分',
+  `member_benefit_mode` varchar(16) NOT NULL DEFAULT 'global' COMMENT '会员权益模式（global默认全局 disabled关闭 level_discount等级折扣 sku_price规格会员价）',
   `sort` int(11) DEFAULT 0 COMMENT '排序（数字越小越靠前）',
   `status` tinyint(1) DEFAULT 1 COMMENT '状态（0禁用，1启用）',
   `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
@@ -141,7 +145,21 @@ CREATE TABLE `mb_goods` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='商品主表（SPU）';
 
 -- -----------------------------
--- 七、商品SKU表
+-- 七、商品详情表
+-- -----------------------------
+DROP TABLE IF EXISTS `mb_goods_detail`;
+CREATE TABLE `mb_goods_detail` (
+  `id` int(11) unsigned NOT NULL AUTO_INCREMENT COMMENT '详情ID',
+  `goods_id` int(11) unsigned NOT NULL COMMENT '商品ID',
+  `description` mediumtext DEFAULT NULL COMMENT '商品详情（富文本）',
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_goods_id` (`goods_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='商品详情表';
+
+-- -----------------------------
+-- 八、商品SKU表
 -- -----------------------------
 DROP TABLE IF EXISTS `mb_goods_sku`;
 CREATE TABLE `mb_goods_sku` (
@@ -156,6 +174,10 @@ CREATE TABLE `mb_goods_sku` (
   `image` bigint(20) unsigned DEFAULT NULL COMMENT 'SKU图片素材ID',
   `weight` decimal(10,2) DEFAULT NULL COMMENT '重量（克）',
   `volume` decimal(10,2) DEFAULT NULL COMMENT '体积（立方厘米）',
+  `points_reward_mode` varchar(16) NOT NULL DEFAULT 'inherit' COMMENT '积分赠送模式（inherit默认全局 disabled关闭 ratio按金额 fixed固定；仅商品为sku模式时生效）',
+  `points_reward_ratio` int(10) unsigned NOT NULL DEFAULT 0 COMMENT '积分赠送比例：每消费 1 元赠送积分',
+  `points_reward_fixed` int(10) unsigned NOT NULL DEFAULT 0 COMMENT '固定赠送积分：每件赠送积分',
+  `member_price` decimal(10,2) DEFAULT NULL COMMENT '会员价（仅商品会员权益为sku_price时生效）',
   `status` tinyint(1) DEFAULT 1 COMMENT '状态（0禁用，1启用）',
   `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
@@ -165,7 +187,23 @@ CREATE TABLE `mb_goods_sku` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='商品SKU表';
 
 -- -----------------------------
--- 八、商品标签表
+-- 九、商品SKU详情表
+-- -----------------------------
+DROP TABLE IF EXISTS `mb_goods_sku_detail`;
+CREATE TABLE `mb_goods_sku_detail` (
+  `id` int(11) unsigned NOT NULL AUTO_INCREMENT COMMENT 'SKU详情ID',
+  `goods_id` int(11) unsigned NOT NULL COMMENT '商品ID',
+  `sku_id` int(11) unsigned NOT NULL COMMENT 'SKU ID',
+  `description` mediumtext DEFAULT NULL COMMENT 'SKU独立详情（富文本）',
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_sku_id` (`sku_id`),
+  KEY `idx_goods_id` (`goods_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='商品SKU详情表';
+
+-- -----------------------------
+-- 十、商品标签表
 -- -----------------------------
 DROP TABLE IF EXISTS `mb_goods_tag`;
 CREATE TABLE `mb_goods_tag` (
@@ -183,7 +221,7 @@ CREATE TABLE `mb_goods_tag` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='商品标签表';
 
 -- -----------------------------
--- 九、商品-标签关联表
+-- 十一、商品-标签关联表
 -- -----------------------------
 DROP TABLE IF EXISTS `mb_goods_tag_relation`;
 CREATE TABLE `mb_goods_tag_relation` (
@@ -198,7 +236,7 @@ CREATE TABLE `mb_goods_tag_relation` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='商品标签关联表';
 
 -- -----------------------------
--- 十、商品评论表
+-- 十二、商品评论表
 -- -----------------------------
 DROP TABLE IF EXISTS `mb_goods_comment`;
 CREATE TABLE `mb_goods_comment` (

@@ -11,4 +11,14 @@ test.describe('WebAntd Auth Login', () => {
     await authLogin(page);
     await expect(page).not.toHaveURL(/\/auth\/login/);
   });
+
+  test('should ignore login page redirect after login', async ({ page }) => {
+    await page.goto(
+      `/auth/login?e2e=1&redirect=${encodeURIComponent('/auth/login?e2e=1')}`,
+    );
+
+    await authLogin(page);
+
+    await expect(page).not.toHaveURL(/\/auth\/login/);
+  });
 });

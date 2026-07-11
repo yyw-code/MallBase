@@ -69,7 +69,6 @@ const inputComponent = h(Input);
 
     <Card class="mb-5" title="Tailwind CSS">
       <div class="flex items-center gap-5 text-3xl">
-        <span class="icon-[ant-design--alipay-circle-outlined]"></span>
         <span class="icon-[ant-design--account-book-filled]"></span>
         <span class="icon-[ant-design--container-outlined]"></span>
         <span class="icon-[svg-spinners--wind-toy]"></span>

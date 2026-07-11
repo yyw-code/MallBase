@@ -51,6 +51,15 @@ input:focus{border-color:var(--primary);box-shadow:0 0 0 4px rgba(15,118,110,.12
 .entry-msg{margin-top:18px;text-align:left}
 .checkbox-group{display:flex;align-items:center;gap:8px;margin-top:12px;font-size:14px}
 .checkbox-group input{width:16px;height:16px}
+.agreement-panel{margin-top:18px;padding:18px;border:1px solid var(--border);border-radius:16px;background:#fbfdff}
+.agreement-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:12px}
+.agreement-title{font-size:15px;font-weight:800;color:var(--text)}
+.agreement-desc{margin-top:4px;font-size:12px;line-height:1.7;color:var(--text-secondary)}
+.agreement-frame{width:100%;height:460px;border:1px solid var(--border);border-radius:14px;background:#fff}
+.agreement-loading,.agreement-error{padding:14px;border-radius:12px;font-size:13px;line-height:1.7}
+.agreement-loading{background:#fff;color:var(--text-secondary);border:1px dashed var(--border-strong)}
+.agreement-error{background:#fef2f2;color:var(--danger);border:1px solid #fecaca}
+.btn-small{padding:8px 12px;border-radius:10px;font-size:12px;white-space:nowrap}
 .advanced-panel{margin-top:18px;padding:18px;border:1px solid var(--border);border-radius:16px;background:#fbfdff}
 .advanced-title{font-size:14px;font-weight:800;color:var(--text);margin-bottom:4px}
 .advanced-desc{font-size:12px;line-height:1.7;color:var(--text-secondary);margin-bottom:10px}
@@ -153,12 +162,13 @@ input:focus{border-color:var(--primary);box-shadow:0 0 0 4px rgba(15,118,110,.12
   .done-title{font-size:34px}
   .form-row{grid-template-columns:1fr}
   .command-box{flex-direction:column}
+  .agreement-head{flex-direction:column}
   .btn-copy{width:100%}
   .info-row .value{text-align:left}
 }
 body.complete-mode .header{display:none}
 body.complete-mode #installedCard,
-body.complete-mode #step5{background:transparent;border:none;box-shadow:none;padding:0}
+body.complete-mode #step6{background:transparent;border:none;box-shadow:none;padding:0}
 body.complete-mode .container{max-width:1220px}
 </style>
 </head>
@@ -260,20 +270,46 @@ body.complete-mode .container{max-width:1220px}
       <div class="step" id="s3"></div>
       <div class="step" id="s4"></div>
       <div class="step" id="s5"></div>
+      <div class="step" id="s6"></div>
     </div>
 
     <div class="card" id="step1">
-      <h2>1. 环境检测</h2>
-      <ul class="check-list" id="envList"></ul>
-      <div class="msg" id="envMsg"></div>
+      <h2>1. 安装协议</h2>
+      <div class="agreement-panel" id="agreementPanel">
+        <div class="agreement-head">
+          <div>
+            <div class="agreement-title" id="agreementTitle">MallBase 安装协议</div>
+            <div class="agreement-desc" id="agreementDesc">请阅读平台提供的安装协议，确认后再继续安装。</div>
+          </div>
+          <button type="button" class="btn btn-outline btn-small" id="agreementRetry" onclick="loadInstallAgreement()">刷新协议</button>
+        </div>
+        <div class="agreement-loading" id="agreementLoading">正在加载安装协议…</div>
+        <iframe class="agreement-frame" id="agreementFrame" title="MallBase 安装协议" sandbox="" referrerpolicy="no-referrer" hidden></iframe>
+        <div class="agreement-error" id="agreementError" hidden></div>
+        <div class="checkbox-group" id="agreementCheckGroup" hidden>
+          <input type="checkbox" id="install_agreement_accept">
+          <label for="install_agreement_accept">我已阅读并同意安装协议</label>
+        </div>
+      </div>
+      <div class="msg" id="agreementMsg"></div>
       <div class="actions">
         <span></span>
-        <button class="btn btn-primary" id="envNext" disabled onclick="goStep(2)">下一步</button>
+        <button class="btn btn-primary" id="agreementNext" disabled onclick="handleAgreementNext()">下一步</button>
       </div>
     </div>
 
     <div class="card" id="step2" hidden>
-      <h2>2. 数据库配置</h2>
+      <h2>2. 环境检测</h2>
+      <ul class="check-list" id="envList"></ul>
+      <div class="msg" id="envMsg"></div>
+      <div class="actions">
+        <button class="btn btn-outline" onclick="goStep(1)">上一步</button>
+        <button class="btn btn-primary" id="envNext" disabled onclick="goStep(3)">下一步</button>
+      </div>
+    </div>
+
+    <div class="card" id="step3" hidden>
+      <h2>3. 数据库配置</h2>
       <div class="form-row">
         <div class="form-group">
           <label>主机地址</label>
@@ -308,13 +344,13 @@ body.complete-mode .container{max-width:1220px}
       <button class="btn btn-test" onclick="testDb()">校验数据库</button>
       <div class="msg" id="dbMsg"></div>
       <div class="actions">
-        <button class="btn btn-outline" onclick="goStep(1)">上一步</button>
+        <button class="btn btn-outline" onclick="goStep(2)">上一步</button>
         <button class="btn btn-primary" id="dbNext" disabled onclick="handleDbNext()">下一步</button>
       </div>
     </div>
 
-    <div class="card" id="step3" hidden>
-      <h2>3. Redis 配置</h2>
+    <div class="card" id="step4" hidden>
+      <h2>4. Redis 配置</h2>
       <div class="form-row">
         <div class="form-group">
           <label>主机地址</label>
@@ -345,13 +381,13 @@ body.complete-mode .container{max-width:1220px}
       <button class="btn btn-test" onclick="testRedis()">测试连接</button>
       <div class="msg" id="redisMsg"></div>
       <div class="actions">
-        <button class="btn btn-outline" onclick="goStep(2)">上一步</button>
+        <button class="btn btn-outline" onclick="goStep(3)">上一步</button>
         <button class="btn btn-primary" id="redisNext" disabled onclick="handleRedisNext()">下一步</button>
       </div>
     </div>
 
-    <div class="card" id="step4" hidden>
-      <h2>4. 管理员账号</h2>
+    <div class="card" id="step5" hidden>
+      <h2>5. 管理员账号</h2>
       <div class="form-group">
         <label>用户名</label>
         <input type="text" id="admin_user" value="admin">
@@ -387,13 +423,13 @@ body.complete-mode .container{max-width:1220px}
       </div>
       <div class="msg" id="adminMsg"></div>
       <div class="actions">
-        <button class="btn btn-outline" onclick="goStep(3)">上一步</button>
+        <button class="btn btn-outline" onclick="goStep(4)">上一步</button>
         <button class="btn btn-primary" id="installBtn" onclick="doInstall()">开始安装</button>
       </div>
     </div>
 
-    <div class="card" id="step5" hidden>
-      <h2 id="installStateTitle">5. 正在安装</h2>
+    <div class="card" id="step6" hidden>
+      <h2 id="installStateTitle">6. 正在安装</h2>
       <p class="done-text" id="installStateText">正在按顺序执行安装步骤，进度会实时展示在下方。</p>
       <div class="msg" id="installMsg"></div>
 
@@ -500,7 +536,13 @@ let installRunning = false;
 let watchersAttached = false;
 let installMeta = null;
 let installStatus = null;
+let envCheckPassed = false;
 let lastInstallOptions = { cron_enable: false, swoole_queue_enable: false };
+const agreementState = {
+  enabled: true,
+  available: false,
+  accepted: false,
+};
 const installStepOrder = [
   { step: 'db_test', title: '校验并准备数据库' },
   { step: 'redis_test', title: '校验 Redis 连接' },
@@ -525,7 +567,7 @@ const validationState = {
 function goStep(n) {
   document.getElementById('step' + currentStep).hidden = true;
   document.getElementById('step' + n).hidden = false;
-  for (let i = 1; i <= 5; i++) {
+  for (let i = 1; i <= 6; i++) {
     const el = document.getElementById('s' + i);
     el.className = 'step' + (i < n ? ' done' : i === n ? ' active' : '');
   }
@@ -557,6 +599,145 @@ function hideMsg(id) {
   const el = document.getElementById(id);
   el.textContent = '';
   el.className = 'msg';
+}
+
+function agreementBlockMessage() {
+  if (!agreementState.enabled) {
+    return '';
+  }
+
+  if (!agreementState.available) {
+    return '安装协议未加载成功，请刷新协议后再继续。';
+  }
+
+  if (!agreementState.accepted) {
+    return '请先阅读并同意安装协议。';
+  }
+
+  return '';
+}
+
+function updateEnvNextState() {
+  const btn = document.getElementById('envNext');
+  if (btn) {
+    btn.disabled = !envCheckPassed;
+  }
+}
+
+function updateAgreementNextState() {
+  const btn = document.getElementById('agreementNext');
+  if (btn) {
+    btn.disabled = agreementBlockMessage() !== '';
+  }
+}
+
+function buildAgreementDocument(content) {
+  return '<!DOCTYPE html><html lang="zh-CN"><head>'
+    + '<meta charset="UTF-8">'
+    + '<meta name="viewport" content="width=device-width, initial-scale=1.0">'
+    + '<base target="_blank">'
+    + '<style>'
+    + 'body{margin:0;padding:18px;font-family:"PingFang SC","Microsoft YaHei","Helvetica Neue",sans-serif;color:#111;line-height:1.8;font-size:14px;background:#fff}'
+    + 'h1,h2,h3{margin:0 0 12px;color:#111;line-height:1.45}'
+    + 'h2{font-size:18px;margin-top:20px}'
+    + 'h2:first-child{margin-top:0}'
+    + 'p{margin:0 0 12px}'
+    + 'a{color:#185dbe;text-decoration:none}'
+    + 'ul,ol{padding-left:22px}'
+    + '</style></head><body>'
+    + String(content || '')
+    + '</body></html>';
+}
+
+function resetAgreementUi() {
+  agreementState.enabled = true;
+  agreementState.available = false;
+  agreementState.accepted = false;
+  document.getElementById('agreementPanel').hidden = false;
+  document.getElementById('agreementLoading').hidden = false;
+  document.getElementById('agreementFrame').hidden = true;
+  document.getElementById('agreementError').hidden = true;
+  document.getElementById('agreementError').textContent = '';
+  document.getElementById('agreementCheckGroup').hidden = true;
+  document.getElementById('install_agreement_accept').checked = false;
+  hideMsg('agreementMsg');
+  updateAgreementNextState();
+}
+
+function renderAgreementUnavailable(message) {
+  agreementState.enabled = true;
+  agreementState.available = false;
+  agreementState.accepted = false;
+  document.getElementById('agreementPanel').hidden = false;
+  document.getElementById('agreementLoading').hidden = true;
+  document.getElementById('agreementFrame').hidden = true;
+  document.getElementById('agreementCheckGroup').hidden = true;
+  document.getElementById('install_agreement_accept').checked = false;
+  const error = document.getElementById('agreementError');
+  error.textContent = message || '安装协议加载失败，请检查服务器网络后点击刷新协议。';
+  error.hidden = false;
+  showMsg('agreementMsg', '安装协议未加载成功，请刷新协议后再继续。', false);
+  updateAgreementNextState();
+}
+
+async function loadInstallAgreement() {
+  resetAgreementUi();
+
+  try {
+    const r = await api('/agreement');
+    const data = r.data && typeof r.data === 'object' ? r.data : null;
+    if (data && data.installed === true) {
+      return;
+    }
+
+    if (r.code !== 200 || !data) {
+      renderAgreementUnavailable(r.message || '安装协议加载失败，请刷新后重试。');
+      return;
+    }
+
+    if (data.enabled === false) {
+      agreementState.enabled = false;
+      agreementState.available = true;
+      agreementState.accepted = false;
+      document.getElementById('agreementPanel').hidden = true;
+      updateAgreementNextState();
+      return;
+    }
+
+    if (data.available === false || !data.content) {
+      renderAgreementUnavailable('安装协议暂时无法加载，请检查服务器网络后点击刷新协议。');
+      return;
+    }
+
+    agreementState.enabled = true;
+    agreementState.available = true;
+    agreementState.accepted = false;
+    document.getElementById('agreementTitle').textContent = data.title || 'MallBase 安装协议';
+    document.getElementById('agreementDesc').textContent = '请阅读平台提供的安装协议，确认后再继续安装。';
+    document.getElementById('agreementLoading').hidden = true;
+    document.getElementById('agreementError').hidden = true;
+    const frame = document.getElementById('agreementFrame');
+    frame.srcdoc = buildAgreementDocument(data.content);
+    frame.hidden = false;
+    document.getElementById('agreementCheckGroup').hidden = false;
+    document.getElementById('install_agreement_accept').checked = false;
+    hideMsg('agreementMsg');
+    updateAgreementNextState();
+  } catch (e) {
+    renderAgreementUnavailable(e.message || '安装协议加载失败，请刷新后重试。');
+  }
+}
+
+function handleAgreementNext() {
+  const message = agreementBlockMessage();
+  if (message) {
+    showMsg('agreementMsg', message, false);
+    updateAgreementNextState();
+    return;
+  }
+
+  hideMsg('agreementMsg');
+  goStep(2);
 }
 
 function setText(id, value) {
@@ -733,6 +914,7 @@ function showWizard() {
   document.getElementById('installedCard').hidden = true;
   document.getElementById('wizardContainer').hidden = false;
   attachValidationWatchers();
+  loadInstallAgreement();
   loadFormDefaults().finally(() => {
     checkEnv();
   });
@@ -805,6 +987,11 @@ function attachValidationWatchers() {
   ['redis_db'].forEach((id) => {
     document.getElementById(id).addEventListener('input', () => invalidateValidation('redis'));
   });
+  document.getElementById('install_agreement_accept').addEventListener('change', (event) => {
+    agreementState.accepted = event.target.checked;
+    hideMsg('agreementMsg');
+    updateAgreementNextState();
+  });
 }
 
 async function bootstrap() {
@@ -873,12 +1060,15 @@ async function loadFormDefaults() {
 }
 
 async function checkEnv() {
+  envCheckPassed = false;
+  updateEnvNextState();
   const r = await api('/check');
   if (r.data && r.data.installed === true) {
     return;
   }
   if (r.code !== 200 || !r.data || typeof r.data !== 'object') {
     showMsg('envMsg', r.message || '环境检测失败，请刷新页面后重试。', false);
+    updateEnvNextState();
     return;
   }
   const list = document.getElementById('envList');
@@ -893,11 +1083,12 @@ async function checkEnv() {
     list.appendChild(li);
   });
   if (r.data.pass) {
-    document.getElementById('envNext').disabled = false;
+    envCheckPassed = true;
+    updateEnvNextState();
   } else {
     showMsg('envMsg', '环境检测未通过，请安装缺失扩展或修复目录权限后刷新页面重试。', false);
+    updateEnvNextState();
   }
-  goStep(1);
 }
 
 async function testDb() {
@@ -963,14 +1154,14 @@ async function ensureRedisValidated() {
 async function handleDbNext() {
   const ok = await ensureDbValidated();
   if (ok) {
-    goStep(3);
+    goStep(4);
   }
 }
 
 async function handleRedisNext() {
   const ok = await ensureRedisValidated();
   if (ok) {
-    goStep(4);
+    goStep(5);
   }
 }
 
@@ -1011,7 +1202,7 @@ function buildInstallPayload() {
 function resetInstallUI() {
   installCompleted = false;
   document.body.classList.remove('complete-mode');
-  document.getElementById('installStateTitle').textContent = '5. 正在安装';
+  document.getElementById('installStateTitle').textContent = '6. 正在安装';
   document.getElementById('installStateText').textContent = '正在按顺序执行安装步骤，进度会实时展示在下方。';
   document.getElementById('installStateTitle').hidden = false;
   document.getElementById('installStateText').hidden = false;
@@ -1107,7 +1298,7 @@ function finishInstallSuccess(message) {
   installCompleted = true;
   installRunning = false;
   document.body.classList.add('complete-mode');
-  document.getElementById('installStateTitle').textContent = '5. 安装完成';
+  document.getElementById('installStateTitle').textContent = '6. 安装完成';
   document.getElementById('installStateText').textContent = message || '所有关键步骤都已完成。可以先尝试进入系统；如入口检测提示运行态未刷新，再按下方命令重启 Swoole。';
   document.getElementById('installStateTitle').hidden = true;
   document.getElementById('installStateText').hidden = true;
@@ -1127,7 +1318,7 @@ function finishInstallSuccess(message) {
 function finishInstallFailure(message) {
   installRunning = false;
   document.body.classList.remove('complete-mode');
-  document.getElementById('installStateTitle').textContent = '5. 安装未完成';
+  document.getElementById('installStateTitle').textContent = '6. 安装未完成';
   document.getElementById('installStateText').textContent = '请根据失败步骤修正配置后重新执行安装。';
   document.getElementById('installStateTitle').hidden = false;
   document.getElementById('installStateText').hidden = false;
@@ -1198,6 +1389,13 @@ async function consumeInstallStream(response) {
 }
 
 async function doInstall() {
+  const agreementError = agreementBlockMessage();
+  if (agreementError) {
+    showMsg('agreementMsg', agreementError, false);
+    goStep(1);
+    return;
+  }
+
   const adminError = validateAdminFields();
   if (adminError) {
     showMsg('adminMsg', adminError, false);
@@ -1207,12 +1405,12 @@ async function doInstall() {
   hideMsg('adminMsg');
 
   if (!await ensureDbValidated()) {
-    goStep(2);
+    goStep(3);
     return;
   }
 
   if (!await ensureRedisValidated()) {
-    goStep(3);
+    goStep(4);
     return;
   }
 
@@ -1228,7 +1426,7 @@ async function doInstall() {
     swoole_queue_enable: body.swoole_queue_enable === 1,
   };
 
-  goStep(5);
+  goStep(6);
   resetInstallUI();
 
   try {
@@ -1373,11 +1571,13 @@ async function enterEntry(target, messageId = 'installMsg') {
 
 async function retryInstall() {
   resetValidationState();
+  hideMsg('agreementMsg');
   hideMsg('adminMsg');
   hideMsg('envMsg');
   document.getElementById('installBtn').disabled = false;
   document.getElementById('installBtn').textContent = '开始安装';
   resetInstallUI();
+  goStep(2);
   await checkEnv();
 }
 

@@ -52,6 +52,7 @@ class AdminService extends BaseService
             'admin_id' => $admin->id,
             'username' => $admin->username,
             'nickname' => $admin->nickname,
+            'guard'    => JwtCacheService::GUARD_ADMIN,
         ]);
 
         // 存储 refresh_token 到 Redis
@@ -59,7 +60,8 @@ class AdminService extends BaseService
         $jwtCacheService->storeRefreshToken(
             $token['refresh_token'],
             $admin->id,
-            $jwtService->getRefreshExpire()
+            $jwtService->getRefreshExpire(),
+            JwtCacheService::GUARD_ADMIN
         );
 
         return $token;
@@ -422,7 +424,7 @@ class AdminService extends BaseService
     {
         // 撤销 refresh_token
         $jwtCacheService = app()->make(JwtCacheService::class);
-        $jwtCacheService->revokeRefreshToken($adminId);
+        $jwtCacheService->revokeRefreshToken($adminId, JwtCacheService::GUARD_ADMIN);
 
         // 清除该用户的权限缓存
         $this->clearUserPermissionCache($adminId);
@@ -448,6 +450,10 @@ class AdminService extends BaseService
             throw new BusinessException('刷新令牌类型错误');
         }
 
+        if (isset($payload->guard) && $payload->guard !== JwtCacheService::GUARD_ADMIN) {
+            throw new BusinessException('刷新令牌身份域错误');
+        }
+
         // 验证用户是否存在且启用
         $admin = $this->model()
             ->where('id', $payload->admin_id)
@@ -460,25 +466,27 @@ class AdminService extends BaseService
 
         // 验证 refresh_token 是否在 Redis 中（防止已登出的 token 被复用）
         $jwtCacheService = app()->make(JwtCacheService::class);
-        if (!$jwtCacheService->verifyRefreshToken($refreshToken, $admin->id)) {
+        if (!$jwtCacheService->verifyRefreshToken($refreshToken, $admin->id, JwtCacheService::GUARD_ADMIN)) {
             throw new BusinessException('刷新令牌已失效');
         }
 
         // 撤销旧的 refresh_token
-        $jwtCacheService->revokeRefreshToken($admin->id);
+        $jwtCacheService->revokeRefreshToken($admin->id, JwtCacheService::GUARD_ADMIN);
 
         // 生成新的 token 对
         $token = $jwtService->encode([
             'admin_id' => $admin->id,
             'username' => $admin->username,
             'nickname' => $admin->nickname,
+            'guard'    => JwtCacheService::GUARD_ADMIN,
         ]);
 
         // 存储新的 refresh_token 到 Redis
         $jwtCacheService->storeRefreshToken(
             $token['refresh_token'],
             $admin->id,
-            $jwtService->getRefreshExpire()
+            $jwtService->getRefreshExpire(),
+            JwtCacheService::GUARD_ADMIN
         );
 
         return $token;

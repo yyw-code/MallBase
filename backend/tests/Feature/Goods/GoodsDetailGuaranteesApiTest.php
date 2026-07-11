@@ -28,5 +28,14 @@ final class GoodsDetailGuaranteesApiTest extends TestCase
         $this->assertIsArray($response['data']['guarantees'] ?? null);
         $this->assertNotEmpty($response['data']['guarantees']);
         $this->assertArrayHasKey('title', $response['data']['guarantees'][0]);
+        $this->assertArrayHasKey('points_reward_preview_enabled', $response['data']);
+        $this->assertArrayHasKey('member_growth_preview_enabled', $response['data']);
+
+        $sku = $response['data']['skus'][0] ?? null;
+        $this->assertIsArray($sku);
+        $this->assertArrayHasKey('points_reward_preview_points', $sku);
+        $this->assertArrayHasKey('points_reward_preview_text', $sku);
+        $this->assertArrayHasKey('member_growth_preview_value', $sku);
+        $this->assertArrayHasKey('member_growth_preview_text', $sku);
     }
 }

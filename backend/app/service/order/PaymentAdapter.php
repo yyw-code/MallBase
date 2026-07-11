@@ -11,7 +11,7 @@ use app\service\order\dto\RefundPaymentContext;
  *
  * 设计动机：
  *  - 售后审核通过后的资金结算抽象到该接口，业务层（RefundOrderAdminService）
- *    仅依赖契约，不感知具体渠道细节（微信/支付宝/银行卡）
+ *    仅依赖契约，不感知具体渠道细节（微信/余额/银行卡）
  *  - 真实渠道实现必须使用稳定 out_refund_no 保证幂等
  *
  * 幂等语义：

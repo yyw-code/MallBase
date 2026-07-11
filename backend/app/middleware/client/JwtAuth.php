@@ -6,6 +6,7 @@ namespace app\middleware\client;
 
 use Closure;
 use mall_base\exception\AuthException;
+use mall_base\service\JwtCacheService;
 use mall_base\service\JwtService;
 use think\Request;
 use think\Response;
@@ -55,10 +56,16 @@ class JwtAuth
             throw new AuthException('Token 类型无效');
         }
 
+        if (isset($decoded->data->guard) && $decoded->data->guard !== JwtCacheService::GUARD_CLIENT) {
+            throw new AuthException('Token 身份域无效');
+        }
+
         // 将用户信息存入请求对象
         $request->user_id = $decoded->data->user_id ?? null;
         $request->account = $decoded->data->account ?? null;
         $request->register_type = $decoded->data->register_type ?? null;
+        $request->client_type = $decoded->data->client_type ?? null;
+        $request->sid = $decoded->data->sid ?? null;
         $request->token = $token;
 
         return $next($request);

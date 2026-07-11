@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace app\controller\client\user;
 
 use app\service\client\SmsAuthService;
+use app\service\client\UserThemePreferenceService;
 use app\service\client\UserService;
 use app\service\client\WechatAppFactory;
 use app\service\client\WechatService;
@@ -37,7 +38,7 @@ class UserController extends BaseController
             return $this->error('请输入密码');
         }
 
-        $result = $this->service()->login($data['account'], $data['password']);
+        $result = $this->service()->login($data['account'], $data['password'], $this->clientType());
         return $this->success($result, '登录成功');
     }
 
@@ -55,7 +56,7 @@ class UserController extends BaseController
             return $this->error('请输入密码');
         }
 
-        $result = $this->service()->loginByUsername($data['username'], $data['password']);
+        $result = $this->service()->loginByUsername($data['username'], $data['password'], $this->clientType());
         return $this->success($result, '登录成功');
     }
 
@@ -73,8 +74,23 @@ class UserController extends BaseController
             return $this->error('请输入验证码');
         }
 
-        $result = $this->service()->loginBySms($data['mobile'], $data['code']);
+        $result = $this->service()->loginBySms($data['mobile'], $data['code'], $this->clientType());
         return $this->success($result, '登录成功');
+    }
+
+    /**
+     * 刷新 Token
+     */
+    public function refreshToken()
+    {
+        $refreshToken = (string) $this->request->param('refresh_token', '');
+
+        if ($refreshToken === '') {
+            return $this->error('刷新令牌不能为空');
+        }
+
+        $result = $this->service()->refreshToken($refreshToken);
+        return $this->success($result, '刷新成功');
     }
 
     /**
@@ -111,7 +127,7 @@ class UserController extends BaseController
             return $this->error('未登录');
         }
 
-        $this->service()->logout((int) $userId);
+        $this->service()->logout((int) $userId, $this->request->sid ?? null);
         return $this->success(null, '登出成功');
     }
 
@@ -294,6 +310,29 @@ class UserController extends BaseController
         return $this->success(null, '修改成功');
     }
 
+    public function getMyTheme()
+    {
+        $userId = $this->request->user_id ?? null;
+        if (empty($userId)) {
+            return $this->error('未登录');
+        }
+
+        $result = app()->make(UserThemePreferenceService::class)->getCurrent((int) $userId);
+        return $this->success($result, '获取成功');
+    }
+
+    public function saveMyTheme()
+    {
+        $userId = $this->request->user_id ?? null;
+        if (empty($userId)) {
+            return $this->error('未登录');
+        }
+
+        $data = $this->request->param(['theme_mode', 'theme_id']);
+        $result = app()->make(UserThemePreferenceService::class)->saveCurrent((int) $userId, $data);
+        return $this->success($result, '保存成功');
+    }
+
     /**
      * 微信小程序登录
      */
@@ -458,5 +497,12 @@ class UserController extends BaseController
         }
 
         return $successMessage;
+    }
+
+    private function clientType(): string
+    {
+        $clientType = (string) $this->request->header('X-MallBase-Client', 'uniapp');
+
+        return $clientType !== '' ? $clientType : 'uniapp';
     }
 }

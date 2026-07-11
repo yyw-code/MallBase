@@ -8,6 +8,7 @@ use app\model\auth\Permission;
 use app\model\setting\RuleType;
 use app\model\setting\Setting;
 use app\model\setting\SettingGroup;
+use app\model\setting\SettingSection;
 use app\service\cache\SettingCacheService;
 use app\service\upload\AssetHydrator;
 use app\validate\admin\setting\SettingValueValidate;
@@ -22,6 +23,218 @@ use think\facade\Log;
  */
 class SettingService extends BaseService
 {
+    private const HIDDEN_SETTING_CODES = [
+        'client_home_banners',
+        'client_theme_admin_mode',
+        'client_theme_admin_theme_id',
+        'client_theme_user_select_enabled',
+        'invite_reward_bind_daily_limit',
+        'invite_reward_bind_total_limit',
+    ];
+
+    private const UI_COMPONENTS = [
+        'money_yuan' => [
+            'label' => '金额输入',
+            'description' => '元输入，分保存',
+        ],
+        'remote_select' => [
+            'label' => '远程下拉',
+            'description' => '从系统数据源选择',
+        ],
+    ];
+
+    private const UI_OPTION_SOURCES = [
+        'distribution_level' => [
+            'label' => '分销等级',
+            'description' => '分销模块等级列表',
+        ],
+    ];
+
+    private const SETTING_UI_META = [
+        'SystemCopyright' => [
+            'copyright_company' => [
+                'visible_when' => [
+                    ['field' => 'copyright_enabled', 'operator' => 'truthy'],
+                ],
+            ],
+            'copyright_company_url' => [
+                'visible_when' => [
+                    ['field' => 'copyright_enabled', 'operator' => 'truthy'],
+                ],
+            ],
+            'copyright_date' => [
+                'visible_when' => [
+                    ['field' => 'copyright_enabled', 'operator' => 'truthy'],
+                ],
+            ],
+            'copyright_icp' => [
+                'visible_when' => [
+                    ['field' => 'copyright_enabled', 'operator' => 'truthy'],
+                ],
+            ],
+            'copyright_icp_url' => [
+                'visible_when' => [
+                    ['field' => 'copyright_enabled', 'operator' => 'truthy'],
+                ],
+            ],
+            'copyright_psb' => [
+                'visible_when' => [
+                    ['field' => 'copyright_enabled', 'operator' => 'truthy'],
+                ],
+            ],
+            'copyright_psb_url' => [
+                'visible_when' => [
+                    ['field' => 'copyright_enabled', 'operator' => 'truthy'],
+                ],
+            ],
+        ],
+        'PointsConfig' => [
+            'points_reward_enabled' => [
+                'visible_when' => [
+                    ['field' => 'points_enabled', 'operator' => 'truthy'],
+                ],
+            ],
+            'points_reward_freeze_days' => [
+                'visible_when' => [
+                    ['field' => 'points_enabled', 'operator' => 'truthy'],
+                    ['field' => 'points_reward_enabled', 'operator' => 'truthy'],
+                ],
+            ],
+            'points_deduction_enabled' => [
+                'visible_when' => [
+                    ['field' => 'points_enabled', 'operator' => 'truthy'],
+                ],
+            ],
+            'points_deduction_points_per_yuan' => [
+                'visible_when' => [
+                    ['field' => 'points_enabled', 'operator' => 'truthy'],
+                    ['field' => 'points_deduction_enabled', 'operator' => 'truthy'],
+                ],
+            ],
+            'points_deduction_max_percent' => [
+                'visible_when' => [
+                    ['field' => 'points_enabled', 'operator' => 'truthy'],
+                    ['field' => 'points_deduction_enabled', 'operator' => 'truthy'],
+                ],
+            ],
+        ],
+        'MemberConfig' => [
+            'member_growth_points_per_yuan' => [
+                'visible_when' => [
+                    ['field' => 'member_enabled', 'operator' => 'truthy'],
+                ],
+            ],
+        ],
+        'DistributionConfig' => [
+            'distribution_enabled' => [
+                'section_code' => 'basic',
+            ],
+            'distributor_open_mode' => [
+                'section_code' => 'opening',
+                'visible_when' => [
+                    ['field' => 'distribution_enabled', 'operator' => 'truthy'],
+                ],
+            ],
+            'auto_open_level_id' => [
+                'section_code' => 'opening',
+                'component' => 'remote_select',
+                'option_source' => 'distribution_level',
+                'label' => '默认分销等级',
+                'placeholder' => '请选择默认分销等级',
+                'visible_when' => [
+                    ['field' => 'distribution_enabled', 'operator' => 'truthy'],
+                    [
+                        'field' => 'distributor_open_mode',
+                        'operator' => 'in',
+                        'value' => ['apply', 'everyone', 'amount'],
+                    ],
+                ],
+            ],
+            'second_level_enabled' => [
+                'section_code' => 'commission',
+                'visible_when' => [
+                    ['field' => 'distribution_enabled', 'operator' => 'truthy'],
+                ],
+            ],
+            'self_purchase_enabled' => [
+                'section_code' => 'commission',
+                'visible_when' => [
+                    ['field' => 'distribution_enabled', 'operator' => 'truthy'],
+                ],
+            ],
+            'relation_valid_days' => [
+                'section_code' => 'settlement',
+                'visible_when' => [
+                    ['field' => 'distribution_enabled', 'operator' => 'truthy'],
+                ],
+            ],
+            'settlement_days' => [
+                'section_code' => 'settlement',
+                'visible_when' => [
+                    ['field' => 'distribution_enabled', 'operator' => 'truthy'],
+                ],
+            ],
+            'min_withdraw_cents' => [
+                'section_code' => 'withdraw',
+                'component' => 'money_yuan',
+                'label' => '最低提现金额(元)',
+                'visible_when' => [
+                    ['field' => 'distribution_enabled', 'operator' => 'truthy'],
+                ],
+            ],
+            'global_first_rate' => [
+                'section_code' => 'commission',
+                'visible_when' => [
+                    ['field' => 'distribution_enabled', 'operator' => 'truthy'],
+                ],
+            ],
+            'global_second_rate' => [
+                'section_code' => 'commission',
+                'visible_when' => [
+                    ['field' => 'distribution_enabled', 'operator' => 'truthy'],
+                    ['field' => 'second_level_enabled', 'operator' => 'truthy'],
+                ],
+            ],
+            'amount_open_threshold_cents' => [
+                'section_code' => 'opening',
+                'component' => 'money_yuan',
+                'label' => '满额开通门槛(元)',
+                'visible_when' => [
+                    ['field' => 'distribution_enabled', 'operator' => 'truthy'],
+                    ['field' => 'distributor_open_mode', 'operator' => 'equals', 'value' => 'amount'],
+                ],
+            ],
+            'invite_reward_enabled' => [
+                'section_code' => 'invite',
+                'visible_when' => [
+                    ['field' => 'distribution_enabled', 'operator' => 'truthy'],
+                ],
+            ],
+            'invite_reward_trigger' => [
+                'section_code' => 'invite',
+                'visible_when' => [
+                    ['field' => 'distribution_enabled', 'operator' => 'truthy'],
+                    ['field' => 'invite_reward_enabled', 'operator' => 'truthy'],
+                ],
+            ],
+            'invite_reward_amount_cents' => [
+                'section_code' => 'invite',
+                'component' => 'money_yuan',
+                'label' => '固定邀请奖励金额(元)',
+                'visible_when' => [
+                    ['field' => 'distribution_enabled', 'operator' => 'truthy'],
+                    ['field' => 'invite_reward_enabled', 'operator' => 'truthy'],
+                ],
+            ],
+            'attribution_enabled' => [
+                'section_code' => 'settlement',
+                'visible_when' => [
+                    ['field' => 'distribution_enabled', 'operator' => 'truthy'],
+                ],
+            ],
+        ],
+    ];
+
     /**
      * 权限 code 前缀
      */
@@ -205,6 +418,9 @@ class SettingService extends BaseService
         if (!$group) {
             throw new BusinessException('分组不存在');
         }
+        if ((int)($group->is_system ?? 0) === 1) {
+            throw new BusinessException('系统内置分组不允许修改基础信息');
+        }
 
         // 检查编码是否重复
         if (!empty($data['code']) && $data['code'] !== $group->code) {
@@ -303,6 +519,9 @@ class SettingService extends BaseService
         if (!$group) {
             throw new BusinessException('分组不存在');
         }
+        if ((int)($group->is_system ?? 0) === 1) {
+            throw new BusinessException('系统内置分组不允许删除');
+        }
 
         return $this->transaction(function () use ($id, $group) {
             // 收集所有需要删除的分组ID（包含子分组）
@@ -317,6 +536,9 @@ class SettingService extends BaseService
 
             // 删除所有分组下的设置项
             $this->model(Setting::class)->whereIn('group_id', $groupIds)->delete();
+
+            // 删除所有分组下的页内分组
+            $this->model(SettingSection::class)->whereIn('group_id', $groupIds)->delete();
 
             // 删除所有子分组和当前分组
             $this->model()->whereIn('id', $groupIds)->delete();
@@ -375,6 +597,9 @@ class SettingService extends BaseService
         if (!$group) {
             throw new BusinessException('分组不存在');
         }
+        if ((int)($group->is_system ?? 0) === 1) {
+            throw new BusinessException('系统内置分组不允许修改状态');
+        }
 
         $group->save(['status' => $status]);
 
@@ -428,6 +653,132 @@ class SettingService extends BaseService
         }
 
         return $group->toArray();
+    }
+
+    // ==================== 页内分组管理 ====================
+
+    /**
+     * 获取设置分组下的页内分组列表。
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function getSectionList(int $groupId): array
+    {
+        $group = $this->model()->find($groupId);
+        if (!$group) {
+            throw new BusinessException('分组不存在');
+        }
+
+        return $this->model(SettingSection::class)
+            ->where('group_id', $groupId)
+            ->order('sort', 'asc')
+            ->order('id', 'asc')
+            ->select()
+            ->toArray();
+    }
+
+    /**
+     * 创建页内分组。
+     */
+    public function createSection(array $data): int
+    {
+        $groupId = (int)($data['group_id'] ?? 0);
+        $group = $this->model()->find($groupId);
+        if (!$group) {
+            throw new BusinessException('分组不存在');
+        }
+        if ($group->display_type !== SettingGroup::DISPLAY_TYPE_PAGE) {
+            throw new BusinessException('只有页面类型分组可以管理页内分组');
+        }
+
+        $code = trim((string)($data['code'] ?? ''));
+        if ($this->model(SettingSection::class)->where('group_id', $groupId)->where('code', $code)->find()) {
+            throw new BusinessException('页内分组编码已存在');
+        }
+
+        $section = $this->model(SettingSection::class);
+        $section->save([
+            'group_id' => $groupId,
+            'name' => trim((string)$data['name']),
+            'code' => $code,
+            'sort' => (int)($data['sort'] ?? 0),
+            'is_system' => 0,
+        ]);
+
+        $this->cacheService->clearGroup($group->code);
+
+        return (int)$section->id;
+    }
+
+    /**
+     * 更新页内分组。
+     */
+    public function updateSection(int $id, array $data): bool
+    {
+        $section = $this->model(SettingSection::class)->find($id);
+        if (!$section) {
+            throw new BusinessException('页内分组不存在');
+        }
+
+        $group = $this->model()->find($section->group_id);
+        if (!$group) {
+            throw new BusinessException('分组不存在');
+        }
+
+        $updateData = [
+            'name' => trim((string)($data['name'] ?? $section->name)),
+            'sort' => (int)($data['sort'] ?? $section->sort),
+        ];
+
+        if ((int)$section->is_system !== 1) {
+            $code = trim((string)($data['code'] ?? $section->code));
+            if ($code !== $section->code && $this->model(SettingSection::class)
+                ->where('group_id', $section->group_id)
+                ->where('code', $code)
+                ->find()) {
+                throw new BusinessException('页内分组编码已存在');
+            }
+            $updateData['code'] = $code;
+        } elseif (isset($data['code']) && trim((string)$data['code']) !== $section->code) {
+            throw new BusinessException('系统内置页内分组编码不允许修改');
+        }
+
+        $section->save($updateData);
+        $this->cacheService->clearGroup($group->code);
+
+        return true;
+    }
+
+    /**
+     * 删除页内分组。
+     */
+    public function deleteSection(int $id): bool
+    {
+        $section = $this->model(SettingSection::class)->find($id);
+        if (!$section) {
+            throw new BusinessException('页内分组不存在');
+        }
+        if ((int)$section->is_system === 1) {
+            throw new BusinessException('系统内置页内分组不允许删除');
+        }
+
+        $group = $this->model()->find($section->group_id);
+        if (!$group) {
+            throw new BusinessException('分组不存在');
+        }
+
+        $used = $this->model(Setting::class)
+            ->where('group_id', $section->group_id)
+            ->whereRaw("JSON_UNQUOTE(JSON_EXTRACT(`ui`, '$.section_code')) = ?", [$section->code])
+            ->find();
+        if ($used) {
+            throw new BusinessException('页内分组已被设置项使用，不能删除');
+        }
+
+        $section->delete();
+        $this->cacheService->clearGroup($group->code);
+
+        return true;
     }
 
     // ==================== 权限同步 ====================
@@ -982,7 +1333,7 @@ class SettingService extends BaseService
      * 获取表单配置（表单类型选项 + 按 type 索引的验证规则类型）
      * 合并了表单类型和验证规则，前端一次获取全部配置
      *
-     * @return array{type_options: array, rule_types: array}
+     * @return array{type_options: array, rule_types: array, ui_components: array, option_sources: array, warnings: array}
      */
     public function getFormConfig(): array
     {
@@ -1061,8 +1412,52 @@ class SettingService extends BaseService
         return [
             'type_options' => $typeOptions,
             'rule_types' => $ruleTypes,
+            'ui_components' => $this->getUiComponentOptions(),
+            'option_sources' => $this->getUiOptionSourceOptions(),
             'warnings' => array_values(array_unique($formWarnings)),
         ];
+    }
+
+    /**
+     * @return array<int, array{label: string, value: string, description?: string}>
+     */
+    private function getUiComponentOptions(): array
+    {
+        $options = [
+            [
+                'label' => '默认组件',
+                'value' => '',
+                'description' => '按表单类型自动渲染',
+            ],
+        ];
+
+        foreach (self::UI_COMPONENTS as $value => $item) {
+            $options[] = [
+                'label' => $item['label'],
+                'value' => $value,
+                'description' => $item['description'],
+            ];
+        }
+
+        return $options;
+    }
+
+    /**
+     * @return array<int, array{label: string, value: string, description?: string}>
+     */
+    private function getUiOptionSourceOptions(): array
+    {
+        $options = [];
+
+        foreach (self::UI_OPTION_SOURCES as $value => $item) {
+            $options[] = [
+                'label' => $item['label'],
+                'value' => $value,
+                'description' => $item['description'],
+            ];
+        }
+
+        return $options;
     }
 
     // ==================== 设置项管理 ====================
@@ -1092,6 +1487,9 @@ class SettingService extends BaseService
             ->select()
             ->toArray();
         $list = app()->make(AssetHydrator::class)->hydrateSettings($list);
+        $list = $this->filterVisibleSettings($list);
+        $list = $this->attachResolvedUiMetaToSettingList($list);
+        $list = $this->maskSensitiveSettings($list);
 
         return compact('total', 'list');
     }
@@ -1130,6 +1528,11 @@ class SettingService extends BaseService
         }
 
         $rulesProcessResult = $this->normalizeAndClampRules($data['rules'] ?? null);
+        $ui = $this->normalizeSettingUi(
+            $data['ui'] ?? null,
+            (int)$data['group_id'],
+            (string)$data['code']
+        );
 
         $setting = $this->model(Setting::class);
         $setting->save([
@@ -1140,6 +1543,7 @@ class SettingService extends BaseService
             'type' => $data['type'] ?? Setting::TYPE_INPUT,
             'options' => $data['options'] ?? null,
             'rules' => $rulesProcessResult['rules'],
+            'ui' => $ui,
             'placeholder' => $data['placeholder'] ?? '',
             'remark' => $data['remark'] ?? '',
             'sort' => $data['sort'] ?? 0,
@@ -1172,6 +1576,42 @@ class SettingService extends BaseService
             throw new BusinessException('设置项不存在');
         }
 
+        if ((int)($setting->is_system ?? 0) === 1) {
+            $unexpectedKeys = array_diff(array_keys($data), ['ui']);
+            if (!empty($unexpectedKeys)) {
+                throw new BusinessException('系统内置设置项只允许调整页内分组');
+            }
+
+            $ui = $this->normalizeSystemSettingUi(
+                $data['ui'] ?? null,
+                (int)$setting->group_id,
+                (string)$setting->code
+            );
+            $currentUi = is_array($setting->ui) ? $setting->ui : [];
+            if ($ui === null) {
+                unset($currentUi['section_code'], $currentUi['section']);
+            } else {
+                unset($currentUi['section']);
+                $currentUi['section_code'] = $ui['section_code'];
+            }
+            $setting->save(['ui' => empty($currentUi) ? null : $currentUi]);
+            $this->clearSettingGroupCaches($setting);
+
+            return [
+                'updated' => true,
+                'warnings' => [],
+            ];
+        }
+
+        $effectiveSetting = array_replace($setting->toArray(), $data);
+        if (
+            array_key_exists('value', $data)
+            && $this->isSensitiveSetting($effectiveSetting)
+            && $this->isBlankSensitiveValue($data['value'])
+        ) {
+            unset($data['value']);
+        }
+
         // 记录原始 group_id，用于判断是否跨分组移动
         $originalGroupId = $setting->group_id;
 
@@ -1196,6 +1636,13 @@ class SettingService extends BaseService
 
         $rulesProcessResult = $this->normalizeAndClampRules($data['rules'] ?? null);
         $data['rules'] = $rulesProcessResult['rules'];
+        if (array_key_exists('ui', $data)) {
+            $data['ui'] = $this->normalizeSettingUi(
+                $data['ui'],
+                (int)$targetGroupId,
+                (string)($data['code'] ?? $setting->code)
+            );
+        }
 
         $setting->save($data);
 
@@ -1252,6 +1699,244 @@ class SettingService extends BaseService
             'updated' => true,
             'warnings' => $rulesProcessResult['warnings'],
         ];
+    }
+
+    /**
+     * 归一化设置项后台交互元数据。
+     *
+     * @param mixed $ui
+     * @return array<string, mixed>|null
+     */
+    protected function normalizeSettingUi(mixed $ui, int $groupId, string $currentCode): ?array
+    {
+        if ($ui === null || $ui === '' || $ui === []) {
+            return null;
+        }
+
+        if (is_string($ui)) {
+            $decoded = json_decode($ui, true);
+            $ui = json_last_error() === JSON_ERROR_NONE ? $decoded : null;
+        }
+
+        if (!is_array($ui)) {
+            return null;
+        }
+
+        $result = [];
+        $component = trim((string)($ui['component'] ?? ''));
+        if ($component !== '') {
+            if (!array_key_exists($component, self::UI_COMPONENTS)) {
+                throw new BusinessException('输入组件不合法');
+            }
+            $result['component'] = $component;
+        }
+
+        $sectionCode = trim((string)($ui['section_code'] ?? ''));
+        if ($sectionCode !== '') {
+            if (!preg_match('/^[A-Za-z][A-Za-z0-9_-]*$/', $sectionCode)) {
+                throw new BusinessException('页内分组编码不合法');
+            }
+            if (!$this->model(SettingSection::class)->where('group_id', $groupId)->where('code', $sectionCode)->find()) {
+                throw new BusinessException('页内分组不存在');
+            }
+            $result['section_code'] = mb_substr($sectionCode, 0, 64);
+        }
+
+        if ($component === 'remote_select') {
+            $optionSource = trim((string)($ui['option_source'] ?? ''));
+            if ($optionSource === '') {
+                throw new BusinessException('远程下拉必须选择选项来源');
+            }
+            if (!array_key_exists($optionSource, self::UI_OPTION_SOURCES)) {
+                throw new BusinessException('远程选项来源不合法');
+            }
+            $result['option_source'] = $optionSource;
+        }
+
+        $conditions = $ui['visible_when'] ?? [];
+        if (is_array($conditions) && !empty($conditions)) {
+            $result['visible_when'] = $this->normalizeUiConditions(
+                $conditions,
+                $groupId,
+                $currentCode
+            );
+        }
+
+        return empty($result) ? null : $result;
+    }
+
+    /**
+     * 系统内置设置项只允许保存页内分组归属。
+     */
+    protected function normalizeSystemSettingUi(mixed $ui, int $groupId, string $currentCode): ?array
+    {
+        $normalized = $this->normalizeSettingUi($ui, $groupId, $currentCode);
+        if ($normalized === null) {
+            return null;
+        }
+
+        $result = [];
+        if (!empty($normalized['section_code'])) {
+            $result['section_code'] = $normalized['section_code'];
+        }
+
+        return empty($result) ? null : $result;
+    }
+
+    /**
+     * 清理设置项所属分组相关缓存。
+     */
+    protected function clearSettingGroupCaches(Setting $setting): void
+    {
+        $this->cacheService->clearSettingValue($setting->code);
+
+        $group = $this->model()->find($setting->group_id);
+        if (!$group) {
+            return;
+        }
+
+        $this->cacheService->clearGroup($group->code);
+        if ($group->parent_id > 0) {
+            $parentGroup = $this->model()->find($group->parent_id);
+            if ($parentGroup && $parentGroup->display_type === SettingGroup::DISPLAY_TYPE_TAB) {
+                $this->cacheService->clearGroup($parentGroup->code);
+            }
+        }
+    }
+
+    /**
+     * @param array<int, mixed> $conditions
+     * @return array<int, array<string, mixed>>
+     */
+    protected function normalizeUiConditions(
+        array $conditions,
+        int $groupId,
+        string $currentCode
+    ): array
+    {
+        $result = [];
+
+        foreach ($conditions as $index => $condition) {
+            if (!is_array($condition)) {
+                throw new BusinessException(
+                    '第' . ($index + 1) . '条显示条件格式不正确'
+                );
+            }
+
+            $field = trim((string)($condition['field'] ?? ''));
+            if ($field === '') {
+                throw new BusinessException(
+                    '第' . ($index + 1) . '条显示条件缺少依赖字段'
+                );
+            }
+            if ($field === $currentCode) {
+                throw new BusinessException('显示条件不能依赖当前设置项自身');
+            }
+
+            /** @var Setting|null $dependency */
+            $dependency = $this->model(Setting::class)
+                ->where('group_id', $groupId)
+                ->where('code', $field)
+                ->find();
+            if ($dependency === null) {
+                throw new BusinessException('显示条件依赖字段不存在或不在同一分组');
+            }
+
+            $operator = trim((string)($condition['operator'] ?? 'equals'));
+            $dependencyType = (string)$dependency->type;
+
+            if ($dependencyType === Setting::TYPE_SWITCH) {
+                if (!in_array($operator, ['truthy', 'falsy'], true)) {
+                    throw new BusinessException('开关字段只能配置开启/关闭显示条件');
+                }
+                $result[] = [
+                    'field' => $field,
+                    'operator' => $operator,
+                ];
+                continue;
+            }
+
+            if (!in_array($dependencyType, [Setting::TYPE_SELECT, Setting::TYPE_RADIO], true)) {
+                throw new BusinessException('显示条件只能依赖同组的开关、单选或下拉字段');
+            }
+
+            if (!in_array($operator, ['equals', 'not_equals', 'in'], true)) {
+                throw new BusinessException('选择类字段的显示条件判断方式不合法');
+            }
+
+            $allowedValues = $this->getSettingOptionValues($dependency);
+            if (empty($allowedValues)) {
+                throw new BusinessException('依赖字段没有可用选项');
+            }
+
+            $value = $condition['value'] ?? null;
+            if ($operator === 'in') {
+                $values = is_array($value) ? $value : [];
+                $values = array_values(array_unique(array_map(
+                    fn ($item) => trim((string)$item),
+                    $values
+                )));
+                $values = array_values(array_filter(
+                    $values,
+                    fn (string $item): bool => $item !== ''
+                ));
+                if (empty($values)) {
+                    throw new BusinessException('显示条件匹配值不能为空');
+                }
+                foreach ($values as $item) {
+                    if (!in_array($item, $allowedValues, true)) {
+                        throw new BusinessException('显示条件匹配值不在依赖字段选项中');
+                    }
+                }
+                $result[] = [
+                    'field' => $field,
+                    'operator' => 'in',
+                    'value' => $values,
+                ];
+                continue;
+            }
+
+            $value = trim((string)$value);
+            if ($value === '' || !in_array($value, $allowedValues, true)) {
+                throw new BusinessException('显示条件匹配值不在依赖字段选项中');
+            }
+
+            $result[] = [
+                'field' => $field,
+                'operator' => $operator,
+                'value' => $value,
+            ];
+        }
+
+        return $result;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    protected function getSettingOptionValues(Setting $setting): array
+    {
+        $options = $setting->options;
+        if (is_string($options)) {
+            $decoded = json_decode($options, true);
+            $options = json_last_error() === JSON_ERROR_NONE ? $decoded : [];
+        }
+        if (!is_array($options)) {
+            return [];
+        }
+
+        $values = [];
+        foreach ($options as $option) {
+            if (!is_array($option) || !array_key_exists('value', $option)) {
+                continue;
+            }
+            $value = trim((string)$option['value']);
+            if ($value !== '') {
+                $values[] = $value;
+            }
+        }
+
+        return array_values(array_unique($values));
     }
 
     /**
@@ -1345,6 +2030,9 @@ class SettingService extends BaseService
         if (!$setting) {
             throw new BusinessException('设置项不存在');
         }
+        if ((int)($setting->is_system ?? 0) === 1) {
+            throw new BusinessException('系统内置设置项不允许删除');
+        }
 
         $code = $setting->code;
         $groupId = $setting->group_id;
@@ -1433,6 +2121,9 @@ class SettingService extends BaseService
                         ->toArray();
                 });
                 $settings = app()->make(AssetHydrator::class)->hydrateSettings($settings);
+                $settings = $this->filterVisibleSettings($settings);
+                $settings = $this->applyUiMetaToSettings($settings, (string) $child['code']);
+                $settings = $this->maskSensitiveSettings($settings);
                 // 返回扁平化的 TabConfigItem 格式：code, icon, id, name, settings
                 $tabs[] = [
                     'code' => $child['code'],
@@ -1468,6 +2159,9 @@ class SettingService extends BaseService
                 ->toArray();
         });
         $settings = app()->make(AssetHydrator::class)->hydrateSettings($settings);
+        $settings = $this->filterVisibleSettings($settings);
+        $settings = $this->applyUiMetaToSettings($settings, $groupCode);
+        $settings = $this->maskSensitiveSettings($settings);
 
         // 检查是否有 tab 类型的子分组
         $tabChildren = $this->model()
@@ -1490,6 +2184,9 @@ class SettingService extends BaseService
                         ->toArray();
                 });
                 $childSettings = app()->make(AssetHydrator::class)->hydrateSettings($childSettings);
+                $childSettings = $this->filterVisibleSettings($childSettings);
+                $childSettings = $this->applyUiMetaToSettings($childSettings, (string) $child['code']);
+                $childSettings = $this->maskSensitiveSettings($childSettings);
                 $tabs[] = [
                     'code' => $child['code'],
                     'icon' => $child['icon'] ?? null,
@@ -1516,29 +2213,357 @@ class SettingService extends BaseService
     }
 
     /**
+     * @param array<int, array<string, mixed>> $settings
+     * @return array<int, array<string, mixed>>
+     */
+    private function filterVisibleSettings(array $settings): array
+    {
+        return array_values(array_filter(
+            $settings,
+            fn (array $setting): bool => !in_array((string) ($setting['code'] ?? ''), self::HIDDEN_SETTING_CODES, true),
+        ));
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $settings
+     * @return array<int, array<string, mixed>>
+     */
+    private function applyUiMetaToSettings(array $settings, string $groupCode): array
+    {
+        $groupId = (int)($settings[0]['group_id'] ?? 0);
+        $sectionMap = $this->getSectionMapByGroupId($groupId);
+        foreach ($settings as &$setting) {
+            $setting = $this->applyUiMetaToSetting($setting, $groupCode);
+            $setting = $this->attachSectionLabelToSetting($setting, $sectionMap);
+        }
+        unset($setting);
+
+        return $settings;
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $settings
+     * @return array<int, array<string, mixed>>
+     */
+    private function attachResolvedUiMetaToSettingList(array $settings): array
+    {
+        $groupIds = array_values(array_unique(array_filter(array_map(
+            fn (array $setting): int => (int)($setting['group_id'] ?? 0),
+            $settings
+        ))));
+        if (empty($groupIds)) {
+            return $settings;
+        }
+
+        $groups = $this->model()
+            ->whereIn('id', $groupIds)
+            ->select()
+            ->toArray();
+        $groupCodeMap = [];
+        foreach ($groups as $group) {
+            $groupCodeMap[(int)$group['id']] = (string)$group['code'];
+        }
+        $sectionMaps = $this->getSectionMapsByGroupIds($groupIds);
+
+        foreach ($settings as &$setting) {
+            $groupId = (int)($setting['group_id'] ?? 0);
+            $groupCode = $groupCodeMap[$groupId] ?? '';
+            if ($groupCode !== '') {
+                $resolvedSetting = $this->applyUiMetaToSetting($setting, $groupCode);
+                $resolvedSetting = $this->attachSectionLabelToSetting($resolvedSetting, $sectionMaps[$groupId] ?? []);
+                $setting['resolved_ui'] = $resolvedSetting['ui'] ?? null;
+            }
+        }
+        unset($setting);
+
+        return $settings;
+    }
+
+    /**
+     * @param array<int, int> $groupIds
+     * @return array<int, array<string, string>>
+     */
+    private function getSectionMapsByGroupIds(array $groupIds): array
+    {
+        $groupIds = array_values(array_unique(array_filter(array_map('intval', $groupIds))));
+        if (empty($groupIds)) {
+            return [];
+        }
+
+        $sections = $this->model(SettingSection::class)
+            ->whereIn('group_id', $groupIds)
+            ->order('sort', 'asc')
+            ->select()
+            ->toArray();
+
+        $maps = [];
+        foreach ($sections as $section) {
+            $groupId = (int)($section['group_id'] ?? 0);
+            $code = (string)($section['code'] ?? '');
+            if ($groupId <= 0 || $code === '') {
+                continue;
+            }
+            $maps[$groupId][$code] = (string)($section['name'] ?? $code);
+        }
+
+        return $maps;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function getSectionMapByGroupId(int $groupId): array
+    {
+        return $this->getSectionMapsByGroupIds([$groupId])[$groupId] ?? [];
+    }
+
+    /**
+     * @param array<string, mixed> $setting
+     * @param array<string, string> $sectionMap
+     * @return array<string, mixed>
+     */
+    private function attachSectionLabelToSetting(array $setting, array $sectionMap): array
+    {
+        if (!isset($setting['ui']) || !is_array($setting['ui'])) {
+            return $setting;
+        }
+
+        $sectionCode = (string)($setting['ui']['section_code'] ?? '');
+        if ($sectionCode !== '') {
+            $setting['ui']['section'] = $sectionMap[$sectionCode] ?? $sectionCode;
+        }
+
+        return $setting;
+    }
+
+    /**
+     * @param array<string, mixed> $setting
+     * @return array<string, mixed>
+     */
+    private function applyUiMetaToSetting(array $setting, string $groupCode): array
+    {
+        $code = (string)($setting['code'] ?? '');
+        $uiMeta = self::SETTING_UI_META[$groupCode][$code] ?? null;
+        $settingUi = $setting['ui'] ?? null;
+        if ($this->hasSettingUiMeta($settingUi)) {
+            if ($uiMeta !== null && is_array($settingUi)) {
+                $setting['ui'] = array_replace_recursive($uiMeta, $settingUi);
+            }
+            return $setting;
+        }
+
+        if ($uiMeta !== null) {
+            $setting['ui'] = $uiMeta;
+        }
+
+        return $setting;
+    }
+
+    private function hasSettingUiMeta(mixed $ui): bool
+    {
+        if (is_array($ui)) {
+            return !empty($ui);
+        }
+
+        if (is_string($ui)) {
+            return trim($ui) !== '';
+        }
+
+        return false;
+    }
+
+    /**
      * 获取分组配置值（key-value 对，供其他服务调用）
      * 支持 page 和 tab 两种模式
      */
     public function getGroupValues(string $groupCode): array
     {
-        $config = $this->getGroupConfig($groupCode);
+        $group = $this->model()->where('code', $groupCode)->find();
+        if (!$group) {
+            throw new BusinessException('分组不存在');
+        }
+
+        if ($group->status !== 1) {
+            throw new BusinessException('分组已禁用');
+        }
+
         $values = [];
 
-        if ($config['display_type'] === SettingGroup::DISPLAY_TYPE_TAB) {
-            // tab 模式：从所有子分组的设置项中收集值
-            foreach ($config['tabs'] as $tab) {
-                foreach ($tab['settings'] as $setting) {
-                    $values[$setting['code']] = $setting['value'];
-                }
+        if ($group->display_type === SettingGroup::DISPLAY_TYPE_TAB) {
+            $childGroups = $this->model()
+                ->where('parent_id', $group->id)
+                ->where('status', 1)
+                ->select();
+
+            foreach ($childGroups as $childGroup) {
+                $values = array_replace($values, $this->getRawValuesByGroupId((int) $childGroup->id));
             }
-        } else {
-            // page 模式：直接从当前分组设置项中收集值
-            foreach ($config['settings'] as $setting) {
-                $values[$setting['code']] = $setting['value'];
+
+            return $values;
+        }
+
+        if ($group->display_type === SettingGroup::DISPLAY_TYPE_CATEGORY) {
+            return [];
+        }
+
+        return $this->getRawValuesByGroupId((int) $group->id);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function getRawValuesByGroupId(int $groupId): array
+    {
+        $settings = $this->model(Setting::class)
+            ->where('group_id', $groupId)
+            ->select();
+
+        $values = [];
+        foreach ($settings as $setting) {
+            $values[(string) $setting->code] = $setting->value;
+        }
+
+        return $values;
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $settings
+     * @return array<int, array<string, mixed>>
+     */
+    private function maskSensitiveSettings(array $settings): array
+    {
+        return array_map(fn (array $setting): array => $this->maskSensitiveSetting($setting), $settings);
+    }
+
+    /**
+     * @param array<string, mixed> $setting
+     * @return array<string, mixed>
+     */
+    private function maskSensitiveSetting(array $setting): array
+    {
+        if (!$this->isSensitiveSetting($setting)) {
+            return $setting;
+        }
+
+        $setting['has_value'] = !$this->isBlankSensitiveValue($setting['value'] ?? null);
+        $setting['value'] = '';
+        $setting['sensitive'] = true;
+
+        $ui = $setting['ui'] ?? [];
+        if (is_string($ui)) {
+            $decoded = json_decode($ui, true);
+            $ui = is_array($decoded) ? $decoded : [];
+        }
+        if (!is_array($ui)) {
+            $ui = [];
+        }
+        $ui['sensitive'] = true;
+        $setting['ui'] = $ui;
+
+        return $setting;
+    }
+
+    private function isSensitiveSetting(mixed $setting): bool
+    {
+        if ($setting instanceof Setting) {
+            $setting = $setting->toArray();
+        }
+
+        if (!is_array($setting)) {
+            return false;
+        }
+
+        if ((string)($setting['type'] ?? '') === Setting::TYPE_PASSWORD) {
+            return true;
+        }
+
+        $ui = $setting['ui'] ?? null;
+        if (is_string($ui)) {
+            $decoded = json_decode($ui, true);
+            $ui = is_array($decoded) ? $decoded : null;
+        }
+
+        if (!is_array($ui)) {
+            return false;
+        }
+
+        return in_array($ui['sensitive'] ?? false, [true, 1, '1', 'true'], true);
+    }
+
+    private function isBlankSensitiveValue(mixed $value): bool
+    {
+        return $value === null || (is_string($value) && trim($value) === '');
+    }
+
+    /**
+     * @param array<string, mixed> $config
+     * @param array<string, mixed> $values
+     * @return array<string, mixed>
+     */
+    private function fillSensitiveValuesForValidation(array $config, array $values): array
+    {
+        foreach ($this->collectSensitiveSettingsFromConfig($config) as $setting) {
+            $code = (string)($setting['code'] ?? '');
+            if ($code === '') {
+                continue;
+            }
+
+            if (array_key_exists($code, $values) && !$this->isBlankSensitiveValue($values[$code])) {
+                continue;
+            }
+
+            $storedValue = $this->getStoredSettingValue($setting);
+            if (!$this->isBlankSensitiveValue($storedValue)) {
+                $values[$code] = $storedValue;
             }
         }
 
         return $values;
+    }
+
+    /**
+     * @param array<string, mixed> $config
+     * @return array<int, array<string, mixed>>
+     */
+    private function collectSensitiveSettingsFromConfig(array $config): array
+    {
+        $settings = [];
+        if (($config['display_type'] ?? '') === SettingGroup::DISPLAY_TYPE_TAB) {
+            foreach ($config['tabs'] ?? [] as $tab) {
+                foreach (($tab['settings'] ?? []) as $setting) {
+                    if (is_array($setting) && $this->isSensitiveSetting($setting)) {
+                        $settings[] = $setting;
+                    }
+                }
+            }
+
+            return $settings;
+        }
+
+        foreach ($config['settings'] ?? [] as $setting) {
+            if (is_array($setting) && $this->isSensitiveSetting($setting)) {
+                $settings[] = $setting;
+            }
+        }
+
+        return $settings;
+    }
+
+    /**
+     * @param array<string, mixed> $setting
+     */
+    private function getStoredSettingValue(array $setting): mixed
+    {
+        $id = (int)($setting['id'] ?? 0);
+        if ($id > 0) {
+            return $this->model(Setting::class)
+                ->where('id', $id)
+                ->value('value');
+        }
+
+        return $this->model(Setting::class)
+            ->where('code', (string)($setting['code'] ?? ''))
+            ->value('value');
     }
 
     /**
@@ -1568,7 +2593,10 @@ class SettingService extends BaseService
 
                 foreach ($settings as $setting) {
                     if (array_key_exists($setting->code, $values)) {
-                        $updatedCodes[] = $this->saveSettingValue($setting, $values[$setting->code]);
+                        $updatedCode = $this->saveSettingValue($setting, $values[$setting->code]);
+                        if ($updatedCode !== null) {
+                            $updatedCodes[] = $updatedCode;
+                        }
                     }
                 }
 
@@ -1583,7 +2611,10 @@ class SettingService extends BaseService
 
             foreach ($settings as $setting) {
                 if (array_key_exists($setting->code, $values)) {
-                    $updatedCodes[] = $this->saveSettingValue($setting, $values[$setting->code]);
+                    $updatedCode = $this->saveSettingValue($setting, $values[$setting->code]);
+                    if ($updatedCode !== null) {
+                        $updatedCodes[] = $updatedCode;
+                    }
                 }
             }
         }
@@ -1594,8 +2625,12 @@ class SettingService extends BaseService
         return true;
     }
 
-    private function saveSettingValue(Setting $setting, mixed $value): string
+    private function saveSettingValue(Setting $setting, mixed $value): ?string
     {
+        if ($this->isSensitiveSetting($setting) && $this->isBlankSensitiveValue($value)) {
+            return null;
+        }
+
         if ((string)$setting->type === Setting::TYPE_OPTION_LIST) {
             $value = $this->normalizeOptionListValue($value);
         }
@@ -1656,10 +2691,12 @@ class SettingService extends BaseService
     public function saveGroupValuesWithValidation(string $groupCode, array $values): bool
     {
         $config = $this->getGroupConfig($groupCode);
-        $allSettings = $this->collectSettingsForValidation($config);
+        $valuesForValidation = $this->fillSensitiveValuesForValidation($config, $values);
+        $effectiveValues = array_replace($this->collectValuesFromConfig($config), $valuesForValidation);
+        $allSettings = $this->collectSettingsForValidation($config, $effectiveValues);
 
         $validate = new SettingValueValidate();
-        $errors = $validate->validateGroupValues($allSettings, $values);
+        $errors = $validate->validateGroupValues($allSettings, $effectiveValues);
         if (!empty($errors)) {
             $firstError = is_array($errors) ? (string)reset($errors) : '';
             throw new BusinessException($firstError !== '' ? $firstError : '配置验证失败');
@@ -1670,20 +2707,129 @@ class SettingService extends BaseService
 
     /**
      * 从分组配置中提取需要校验的设置项
+     *
+     * @param array<string, mixed> $config
+     * @param array<string, mixed> $values
+     * @return array<int, array<string, mixed>>
      */
-    protected function collectSettingsForValidation(array $config): array
+    protected function collectSettingsForValidation(array $config, array $values = []): array
     {
         if (($config['display_type'] ?? '') === SettingGroup::DISPLAY_TYPE_TAB) {
             $allSettings = [];
             foreach ($config['tabs'] ?? [] as $tab) {
                 foreach (($tab['settings'] ?? []) as $setting) {
-                    $allSettings[] = $setting;
+                    if ($this->isSettingVisibleForValues($setting, $values)) {
+                        $allSettings[] = $setting;
+                    }
                 }
             }
             return $allSettings;
         }
 
-        return $config['settings'] ?? [];
+        return array_values(array_filter(
+            $config['settings'] ?? [],
+            fn (array $setting): bool => $this->isSettingVisibleForValues($setting, $values),
+        ));
+    }
+
+    /**
+     * @param array<string, mixed> $config
+     * @return array<string, mixed>
+     */
+    protected function collectValuesFromConfig(array $config): array
+    {
+        $values = [];
+
+        if (($config['display_type'] ?? '') === SettingGroup::DISPLAY_TYPE_TAB) {
+            foreach ($config['tabs'] ?? [] as $tab) {
+                foreach (($tab['settings'] ?? []) as $setting) {
+                    if (is_array($setting) && isset($setting['code'])) {
+                        $values[(string) $setting['code']] = $setting['value'] ?? null;
+                    }
+                }
+            }
+
+            return $values;
+        }
+
+        foreach ($config['settings'] ?? [] as $setting) {
+            if (is_array($setting) && isset($setting['code'])) {
+                $values[(string) $setting['code']] = $setting['value'] ?? null;
+            }
+        }
+
+        return $values;
+    }
+
+    /**
+     * @param array<string, mixed> $setting
+     * @param array<string, mixed> $values
+     */
+    protected function isSettingVisibleForValues(array $setting, array $values): bool
+    {
+        $conditions = $setting['ui']['visible_when'] ?? [];
+        if (!is_array($conditions) || empty($conditions)) {
+            return true;
+        }
+
+        foreach ($conditions as $condition) {
+            if (!is_array($condition) || !$this->matchesUiCondition($condition, $values)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * @param array<string, mixed> $condition
+     * @param array<string, mixed> $values
+     */
+    protected function matchesUiCondition(array $condition, array $values): bool
+    {
+        $field = (string) ($condition['field'] ?? '');
+        if ($field === '') {
+            return true;
+        }
+
+        $operator = (string) ($condition['operator'] ?? 'equals');
+        $actual = $values[$field] ?? null;
+        $expected = $condition['value'] ?? null;
+
+        return match ($operator) {
+            'truthy' => $this->uiTruthy($actual),
+            'falsy' => !$this->uiTruthy($actual),
+            'not_equals' => $this->normalizeUiCompareValue($actual) !== $this->normalizeUiCompareValue($expected),
+            'in' => is_array($expected)
+                && in_array($this->normalizeUiCompareValue($actual), array_map(fn ($item) => $this->normalizeUiCompareValue($item), $expected), true),
+            default => $this->normalizeUiCompareValue($actual) === $this->normalizeUiCompareValue($expected),
+        };
+    }
+
+    private function uiTruthy(mixed $value): bool
+    {
+        if (is_bool($value)) {
+            return $value;
+        }
+
+        if (is_int($value) || is_float($value)) {
+            return $value > 0;
+        }
+
+        return in_array(strtolower(trim((string) $value)), ['1', 'true', 'on', 'yes'], true);
+    }
+
+    private function normalizeUiCompareValue(mixed $value): string
+    {
+        if (is_bool($value)) {
+            return $value ? '1' : '0';
+        }
+
+        if ($value === null) {
+            return '';
+        }
+
+        return trim((string) $value);
     }
 
 }

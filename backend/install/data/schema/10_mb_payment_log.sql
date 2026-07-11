@@ -19,7 +19,7 @@ CREATE TABLE `mb_payment_log` (
   `order_sn` varchar(32) NOT NULL COMMENT '订单号（冗余 mb_order.sn 便于检索）',
   `out_trade_no` varchar(32) NOT NULL COMMENT '商户单号（sn + 6 位随机后缀）',
   `transaction_id` varchar(64) DEFAULT NULL COMMENT '微信交易流水号（回调成功后填）',
-  `pay_method` tinyint(1) unsigned NOT NULL COMMENT '支付方式（1微信 2支付宝 3余额）',
+  `pay_method` tinyint(1) unsigned NOT NULL COMMENT '支付方式（1微信 3余额）',
   `scene` tinyint(1) unsigned NOT NULL DEFAULT 0 COMMENT '支付场景（0无 1小程序 2公众号 3H5）',
   `event_type` varchar(16) NOT NULL COMMENT '事件类型（PREPAY/PAID/CLOSED/SUPERSEDED）',
   `trade_state` varchar(16) DEFAULT NULL COMMENT '微信侧交易状态（SUCCESS/REFUND/NOTPAY/CLOSED/USERPAYING/PAYERROR）',

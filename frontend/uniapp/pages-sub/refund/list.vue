@@ -1,8 +1,10 @@
 <script setup>
+import { useDecorateStore } from '@/store/decorate'
 import { ref } from 'vue'
 import { onLoad, onPullDownRefresh, onReachBottom } from '@dcloudio/uni-app'
 import { getRefundList } from '@/api/order/refund'
 import config from '@/config/index'
+const decorateStore = useDecorateStore()
 
 const STATUS_CONFIG = {
   0: { label: '待审核', color: '#0d50d5', bg: 'rgba(13, 80, 213, 0.08)' },
@@ -161,7 +163,11 @@ function goDetail(id) {
 </script>
 
 <template>
-  <view class="page">
+  <view
+    class="page"
+    :class="[`theme-${decorateStore.resolvedThemeMode}`]"
+    :style="decorateStore.themeStyle"
+  >
     <mb-navbar title="售后订单" />
 
     <view v-if="list.length > 0" class="list">
@@ -249,7 +255,9 @@ function goDetail(id) {
       icon=""
       text="暂无售后订单"
     />
-  </view>
+      <mb-copyright-footer />
+      <mb-floating-action />
+</view>
 </template>
 
 <style lang="scss" scoped>
@@ -266,7 +274,7 @@ function goDetail(id) {
 }
 
 .refund-card {
-  background: $mb-color-bg;
+  background: var(--color-bg, #ffffff);
   border-radius: 16rpx;
   padding: 18rpx;
   border: 1rpx solid rgba(25, 27, 35, 0.06);
@@ -294,13 +302,13 @@ function goDetail(id) {
 .refund-card__label {
   flex-shrink: 0;
   font-size: $mb-font-xs;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
 }
 
 .refund-card__sn {
   min-width: 0;
   font-size: $mb-font-xs;
-  color: $mb-color-text-secondary;
+  color: var(--color-text-secondary, #434654);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -331,7 +339,7 @@ function goDetail(id) {
 .refund-card__order-no,
 .refund-card__order-status {
   font-size: $mb-font-xs;
-  color: $mb-color-text-secondary;
+  color: var(--color-text-secondary, #434654);
 }
 
 .refund-card__order-no {
@@ -344,7 +352,7 @@ function goDetail(id) {
 
 .refund-card__order-status {
   flex-shrink: 0;
-  color: $mb-color-primary;
+  color: var(--color-primary, #0d50d5);
   font-weight: 600;
 }
 
@@ -387,7 +395,7 @@ function goDetail(id) {
 .refund-card__name {
   font-size: 27rpx;
   font-weight: 600;
-  color: $mb-color-text-title;
+  color: var(--color-text-title, #191b23);
   line-height: 1.38;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -397,7 +405,7 @@ function goDetail(id) {
 
 .refund-card__spec {
   font-size: $mb-font-xs;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -413,7 +421,7 @@ function goDetail(id) {
     border-radius: 999rpx;
     background: rgba(25, 27, 35, 0.04);
     font-size: $mb-font-xs;
-    color: $mb-color-text-secondary;
+    color: var(--color-text-secondary, #434654);
   }
 }
 
@@ -440,12 +448,12 @@ function goDetail(id) {
 
 .refund-card__summary-label {
   font-size: $mb-font-xs;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
 }
 
 .refund-card__summary-value {
   font-size: $mb-font-sm;
-  color: $mb-color-text-title;
+  color: var(--color-text-title, #191b23);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -454,7 +462,7 @@ function goDetail(id) {
 .refund-card__amount {
   font-size: 34rpx;
   font-weight: 800;
-  color: $mb-color-primary;
+  color: var(--color-primary, #0d50d5);
 }
 
 .refund-card__footer {
@@ -469,7 +477,7 @@ function goDetail(id) {
   min-width: 0;
   flex: 1;
   font-size: $mb-font-xs;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -479,7 +487,7 @@ function goDetail(id) {
   flex-shrink: 0;
   font-size: $mb-font-sm;
   font-weight: 600;
-  color: $mb-color-primary;
+  color: var(--color-primary, #0d50d5);
 }
 
 .load-state {
@@ -490,7 +498,7 @@ function goDetail(id) {
 
 .load-state__text {
   font-size: $mb-font-sm;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
   padding: 0 $mb-spacing-md;
 }
 
@@ -503,6 +511,6 @@ function goDetail(id) {
 .load-state__line {
   flex: 1;
   height: 1rpx;
-  background: $mb-color-border;
+  background: var(--color-border, #e0e4e8);
 }
 </style>

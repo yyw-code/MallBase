@@ -3,19 +3,22 @@ import type { SettingApi } from '#/api/setting';
 
 import { h, onMounted, ref } from 'vue';
 
+import { useAccess } from '@vben/access';
 import { IconifyIcon } from '@vben/icons';
 
 import { message, Modal, Switch } from 'ant-design-vue';
 
 import {
+  changeSettingGroupStatusApi,
   deleteSettingGroupApi,
   getSettingGroupTreeApi,
-  updateSettingGroupApi,
 } from '#/api/setting';
 
 import GroupModal from './group-modal.vue';
 
 defineOptions({ name: 'SettingGroup' });
+
+const { hasAccessByCodes } = useAccess();
 
 /* ---------------- 数据加载 ---------------- */
 
@@ -50,14 +53,24 @@ const resetSearch = () => {
 
 const groupModalVisible = ref(false);
 const editingGroup = ref<null | SettingApi.SettingGroup>(null);
+const groupModalMode = ref<'create' | 'detail' | 'edit'>('create');
 
 const handleCreate = () => {
   editingGroup.value = null;
+  groupModalMode.value = 'create';
+  groupModalVisible.value = true;
+};
+
+const handleDetail = (record: SettingApi.SettingGroup) => {
+  editingGroup.value = record;
+  groupModalMode.value = 'detail';
   groupModalVisible.value = true;
 };
 
 const handleEdit = (record: SettingApi.SettingGroup) => {
+  if (record.is_system === 1) return;
   editingGroup.value = record;
+  groupModalMode.value = 'edit';
   groupModalVisible.value = true;
 };
 
@@ -95,27 +108,32 @@ const columns = [
     dataIndex: 'display_type',
     width: 100,
   },
+  { title: '来源', dataIndex: 'is_system', width: 100 },
   { title: '排序', dataIndex: 'sort', width: 80 },
   {
     title: '状态',
     dataIndex: 'status',
     width: 100,
-    customRender: ({ record }: any) =>
-      h(Switch, {
+    customRender: ({ record }: any) => {
+      if (!hasAccessByCodes(['SettingGroupChangeStatus'])) {
+        return record.status === 1 ? '启用' : '禁用';
+      }
+
+      return h(Switch, {
         checked: record.status === 1,
+        disabled: record.is_system === 1,
         'checked-children': '启用',
         'un-checked-children': '禁用',
         onChange: async (checked: any) => {
-          await updateSettingGroupApi(record.id, {
-            status: checked ? 1 : 0,
-          });
+          await changeSettingGroupStatusApi(record.id, checked ? 1 : 0);
           message.success('更新成功');
           loadData();
         },
-      }),
+      });
+    },
   },
   { title: '创建时间', dataIndex: 'create_time', width: 180 },
-  { title: '操作', key: 'action', width: 160, fixed: 'right' },
+  { title: '操作', key: 'action', width: 220, fixed: 'right' },
 ];
 
 /* ---------------- 初始化 ---------------- */
@@ -130,8 +148,16 @@ onMounted(() => {
     <div class="mb-3 flex items-center justify-between gap-4">
       <h2 class="m-0 text-lg font-semibold">设置分组</h2>
       <div class="flex flex-wrap justify-end gap-2">
-        <a-button type="primary" @click="handleCreate"> 新增分组 </a-button>
-        <a-button @click="loadData"> 刷新 </a-button>
+        <a-button
+          type="primary"
+          @click="handleCreate"
+          v-access:code="'SettingGroupCreate'"
+        >
+          新增分组
+        </a-button>
+        <a-button @click="loadData" v-access:code="'SettingGroupTree'">
+          刷新
+        </a-button>
       </div>
     </div>
 
@@ -166,84 +192,107 @@ onMounted(() => {
           </div>
         </a-form-item>
       </a-form>
+    </div>
 
-      <!-- 树形表格 -->
-      <div class="overflow-hidden rounded-lg border bg-[hsl(var(--card))]">
-        <a-table
-          :columns="columns"
-          :data-source="tableData"
-          :loading="loading"
-          :pagination="false"
-          :default-expand-all-rows="true"
-          row-key="id"
-          :scroll="{ x: 1100 }"
-        >
-          <template #bodyCell="{ column, record }">
-            <template v-if="column.dataIndex === 'name'">
-              <div class="flex items-center gap-1">
-                <IconifyIcon
-                  v-if="record.icon"
-                  :icon="record.icon"
-                  class="text-base"
-                />
-                <span>{{ record.name }}</span>
-              </div>
-            </template>
-
-            <template v-if="column.dataIndex === 'display_type'">
-              <a-tag
-                :color="
-                  record.display_type === 'category'
-                    ? 'orange'
-                    : record.display_type === 'tab'
-                      ? 'blue'
-                      : 'green'
-                "
-              >
-                {{
-                  record.display_type === 'category'
-                    ? '目录'
-                    : record.display_type === 'tab'
-                      ? '选项卡'
-                      : '页面'
-                }}
-              </a-tag>
-            </template>
-
-            <template v-if="column.dataIndex === 'icon'">
+    <!-- 树形表格 -->
+    <div class="overflow-hidden rounded-lg border bg-[hsl(var(--card))]">
+      <a-table
+        :columns="columns"
+        :data-source="tableData"
+        :loading="loading"
+        :pagination="false"
+        :default-expand-all-rows="true"
+        row-key="id"
+        :scroll="{ x: 1100 }"
+      >
+        <template #bodyCell="{ column, record }">
+          <template v-if="column.dataIndex === 'name'">
+            <div class="flex items-center gap-1">
               <IconifyIcon
                 v-if="record.icon"
                 :icon="record.icon"
-                class="text-lg"
+                class="text-base"
               />
-              <span v-else class="text-gray-300">-</span>
-            </template>
-
-            <template v-if="column.key === 'action'">
-              <a-space>
-                <a-button type="link" size="small" @click="handleEdit(record)">
-                  编辑
-                </a-button>
-                <a-button
-                  type="link"
-                  danger
-                  size="small"
-                  @click="handleDelete(record)"
-                >
-                  删除
-                </a-button>
-              </a-space>
-            </template>
+              <span>{{ record.name }}</span>
+            </div>
           </template>
-        </a-table>
-      </div>
 
-      <!-- 分组弹窗 -->
-      <GroupModal
-        v-model:visible="groupModalVisible"
-        :edit-data="editingGroup"
-        @success="onModalSuccess"
-      />
+          <template v-if="column.dataIndex === 'display_type'">
+            <a-tag
+              :color="
+                record.display_type === 'category'
+                  ? 'orange'
+                  : record.display_type === 'tab'
+                    ? 'blue'
+                    : 'green'
+              "
+            >
+              {{
+                record.display_type === 'category'
+                  ? '目录'
+                  : record.display_type === 'tab'
+                    ? '选项卡'
+                    : '页面'
+              }}
+            </a-tag>
+          </template>
+
+          <template v-if="column.dataIndex === 'is_system'">
+            <a-tag :color="record.is_system === 1 ? 'blue' : 'default'">
+              {{ record.is_system === 1 ? '系统内置' : '用户添加' }}
+            </a-tag>
+          </template>
+
+          <template v-if="column.dataIndex === 'icon'">
+            <IconifyIcon
+              v-if="record.icon"
+              :icon="record.icon"
+              class="text-lg"
+            />
+            <span v-else class="text-gray-300">-</span>
+          </template>
+
+          <template v-if="column.key === 'action'">
+            <a-space>
+              <a-button
+                type="link"
+                size="small"
+                @click="handleDetail(record)"
+                v-access:code="'SettingGroupInfo'"
+              >
+                详情
+              </a-button>
+              <a-button
+                type="link"
+                size="small"
+                :disabled="record.is_system === 1"
+                @click="handleEdit(record)"
+                v-access:code="'SettingGroupUpdate'"
+              >
+                编辑
+              </a-button>
+              <a-button
+                type="link"
+                danger
+                size="small"
+                :disabled="record.is_system === 1"
+                @click="handleDelete(record)"
+                v-access:code="'SettingGroupDelete'"
+              >
+                删除
+              </a-button>
+            </a-space>
+          </template>
+        </template>
+      </a-table>
     </div>
+
+    <!-- 分组弹窗 -->
+    <GroupModal
+      v-model:visible="groupModalVisible"
+      :edit-data="editingGroup"
+      :mode="groupModalMode"
+      @success="onModalSuccess"
+    />
   </div>
 </template>

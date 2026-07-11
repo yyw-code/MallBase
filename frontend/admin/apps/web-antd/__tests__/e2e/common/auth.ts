@@ -28,19 +28,18 @@ export async function authLogin(page: Page) {
       return {};
     }
 
-    expect(response.ok()).toBeTruthy();
-
     const body = await response.json();
+    if ((response.status() === 429 || body?.code === 429) && attempt < 2) {
+      await page.waitForTimeout(1200);
+      continue;
+    }
+
+    expect(response.ok()).toBeTruthy();
     if (body?.code === 200) {
       const token = body?.data?.access_token;
       return {
         accessToken: typeof token === 'string' ? token : undefined,
       };
-    }
-
-    if (body?.code === 429 && attempt < 2) {
-      await page.waitForTimeout(1200);
-      continue;
     }
 
     expect(body?.code).toBe(200);

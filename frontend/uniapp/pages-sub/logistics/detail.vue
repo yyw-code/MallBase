@@ -1,7 +1,9 @@
 <script setup>
+import { useDecorateStore } from '@/store/decorate'
 import { ref, computed } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { getLogisticsDetail } from '@/api/order/logistics'
+const decorateStore = useDecorateStore()
 
 // ---------- state ----------
 const orderId = ref('')
@@ -36,9 +38,11 @@ const receiver = computed(() => logistics.value?.receiver || {})
 const tracks = computed(() => logistics.value?.tracks || [])
 const queryError = computed(() => logistics.value?.query_error || '')
 const isAvailable = computed(() => logistics.value && logistics.value.available !== false)
+const isVirtualDelivery = computed(() => logistics.value?.delivery_type === 'virtual' || logistics.value?.state === 'virtual')
 const hasTracks = computed(() => tracks.value.length > 0)
 const emptyText = computed(() => errorText.value || logistics.value?.status || '暂无物流信息')
 const trackEmptyText = computed(() => queryError.value || '暂无物流轨迹')
+const latestDesc = computed(() => logistics.value?.latest_desc || logistics.value?.delivery_note || '虚拟商品已发货')
 
 const maskedPhone = computed(() => {
   const phone = receiver.value?.phone_masked || receiver.value?.phone || ''
@@ -61,7 +65,11 @@ function copyTrackingNo() {
 </script>
 
 <template>
-  <view class="page">
+  <view
+    class="page"
+    :class="[`theme-${decorateStore.resolvedThemeMode}`]"
+    :style="decorateStore.themeStyle"
+  >
     <mb-navbar title="物流详情" />
 
     <!-- Loading -->
@@ -83,14 +91,18 @@ function copyTrackingNo() {
         <text class="status-header__status">{{ statusText }}</text>
         <view class="status-header__info">
           <view class="status-header__info-item">
-            <text class="status-header__info-label">快递公司</text>
+            <text class="status-header__info-label">{{ isVirtualDelivery ? '发货方式' : '快递公司' }}</text>
             <text class="status-header__info-value">{{ company }}</text>
           </view>
-          <view class="status-header__info-item">
+          <view v-if="isVirtualDelivery" class="status-header__info-item">
+            <text class="status-header__info-label">发货说明</text>
+            <text class="status-header__info-value status-header__info-value--wrap">{{ latestDesc }}</text>
+          </view>
+          <view v-else class="status-header__info-item">
             <text class="status-header__info-label">运单号</text>
             <view class="status-header__info-row">
               <text class="status-header__info-value">{{ trackingNo }}</text>
-              <view class="copy-btn" @tap="copyTrackingNo">
+              <view v-if="trackingNo" class="copy-btn" @tap="copyTrackingNo">
                 <text class="copy-btn__text">复制</text>
               </view>
             </view>
@@ -112,8 +124,12 @@ function copyTrackingNo() {
 
       <!-- Timeline section -->
       <view class="section">
-        <text class="section__title">物流轨迹</text>
-        <view v-if="hasTracks" class="timeline">
+        <text class="section__title">{{ isVirtualDelivery ? '发货说明' : '物流轨迹' }}</text>
+        <view v-if="isVirtualDelivery" class="virtual-note">
+          <text class="virtual-note__text">{{ latestDesc }}</text>
+          <text v-if="logistics.latest_time" class="virtual-note__time">{{ logistics.latest_time }}</text>
+        </view>
+        <view v-else-if="hasTracks" class="timeline">
           <view
             v-for="(track, index) in tracks"
             :key="index"
@@ -143,6 +159,7 @@ function copyTrackingNo() {
       </view>
 
       <!-- Bottom spacer -->
+      <mb-copyright-footer />
       <view class="bottom-spacer" />
     </template>
 
@@ -153,13 +170,14 @@ function copyTrackingNo() {
       action-text="重新加载"
       @action="fetchLogistics"
     />
-  </view>
+      <mb-floating-action />
+</view>
 </template>
 
 <style lang="scss" scoped>
 .page {
   min-height: 100vh;
-  background: $mb-color-bg-secondary;
+  background: var(--color-bg-secondary, #faf8ff);
 }
 
 // ---- Loading ----
@@ -182,7 +200,7 @@ function copyTrackingNo() {
 .status-header__label {
   display: block;
   font-size: $mb-font-sm;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
   margin-bottom: $mb-spacing-xs;
 }
 
@@ -190,7 +208,7 @@ function copyTrackingNo() {
   display: block;
   font-size: $mb-font-xxl;
   font-weight: 700;
-  color: $mb-color-primary;
+  color: var(--color-primary, #0d50d5);
   margin-bottom: $mb-spacing-lg;
 }
 
@@ -208,7 +226,7 @@ function copyTrackingNo() {
 
 .status-header__info-label {
   font-size: $mb-font-sm;
-  color: $mb-color-text-secondary;
+  color: var(--color-text-secondary, #434654);
   flex-shrink: 0;
 }
 
@@ -222,14 +240,20 @@ function copyTrackingNo() {
 
 .status-header__info-value {
   font-size: $mb-font-sm;
-  color: $mb-color-text;
+  color: var(--color-text, #191b23);
   font-weight: 500;
+}
+
+.status-header__info-value--wrap {
+  flex: 1;
+  line-height: 1.45;
+  white-space: normal;
 }
 
 .copy-btn {
   flex-shrink: 0;
   padding: 4rpx 16rpx;
-  border: 1rpx solid $mb-color-primary;
+  border: 1rpx solid var(--color-primary, #0d50d5);
   border-radius: $mb-radius-sm;
 
   &:active {
@@ -239,16 +263,35 @@ function copyTrackingNo() {
 
 .copy-btn__text {
   font-size: $mb-font-xs;
-  color: $mb-color-primary;
+  color: var(--color-primary, #0d50d5);
+}
+
+.virtual-note {
+  padding: 32rpx $mb-spacing-page;
+}
+
+.virtual-note__text {
+  display: block;
+  color: var(--color-text, #191b23);
+  font-size: $mb-font-md;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.virtual-note__time {
+  display: block;
+  margin-top: $mb-spacing-sm;
+  color: var(--color-text-tertiary, #737686);
+  font-size: $mb-font-sm;
 }
 
 // ---- Card base ----
 .card {
-  background: $mb-color-bg;
+  background: var(--color-bg, #ffffff);
   border-radius: $mb-radius-lg;
   padding: $mb-spacing-lg;
   margin: 0 $mb-spacing-md $mb-spacing-md;
-  border: 1rpx solid $mb-color-border;
+  border: 1rpx solid var(--color-border, #e0e4e8);
 }
 
 // ---- Address card ----
@@ -279,17 +322,17 @@ function copyTrackingNo() {
 .address-card__name {
   font-size: $mb-font-lg;
   font-weight: 600;
-  color: $mb-color-text-title;
+  color: var(--color-text-title, #191b23);
 }
 
 .address-card__phone {
   font-size: $mb-font-sm;
-  color: $mb-color-text-secondary;
+  color: var(--color-text-secondary, #434654);
 }
 
 .address-card__detail {
   font-size: $mb-font-md;
-  color: $mb-color-text-secondary;
+  color: var(--color-text-secondary, #434654);
   line-height: 1.5;
 }
 
@@ -303,7 +346,7 @@ function copyTrackingNo() {
   display: block;
   font-size: $mb-font-md;
   font-weight: 600;
-  color: $mb-color-text-title;
+  color: var(--color-text-title, #191b23);
   margin-bottom: $mb-spacing-lg;
 }
 
@@ -339,14 +382,14 @@ function copyTrackingNo() {
   width: 12rpx;
   height: 12rpx;
   border-radius: 50%;
-  background: $mb-color-border;
+  background: var(--color-border, #e0e4e8);
   flex-shrink: 0;
 
   &--active {
     width: 16rpx;
     height: 16rpx;
-    background: $mb-color-primary;
-    border: 6rpx solid rgba($mb-color-primary, 0.12);
+    background: var(--color-primary, #0d50d5);
+    border: 6rpx solid var(--color-primary-soft, rgba(13, 80, 213, 0.12));
     box-sizing: content-box;
   }
 }
@@ -354,7 +397,7 @@ function copyTrackingNo() {
 .timeline__line {
   width: 2rpx;
   flex: 1;
-  background: $mb-color-divider;
+  background: var(--color-divider, #f0f2f5);
   margin-top: 8rpx;
 }
 
@@ -368,11 +411,11 @@ function copyTrackingNo() {
 .timeline__text {
   display: block;
   font-size: $mb-font-md;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
   line-height: 1.5;
 
   &--active {
-    color: $mb-color-text;
+    color: var(--color-text, #191b23);
     font-weight: 600;
   }
 }
@@ -380,7 +423,7 @@ function copyTrackingNo() {
 .timeline__time {
   display: block;
   font-size: $mb-font-sm;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
   margin-top: 8rpx;
 }
 

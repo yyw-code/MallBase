@@ -10,6 +10,14 @@ use app\model\setting\Setting;
  */
 class AssetHydrator
 {
+    private const DECORATION_UPLOAD_FIELDS = [
+        'background_image',
+        'icon',
+        'icon_image',
+        'image',
+        'selected_icon',
+    ];
+
     public function __construct(
         private readonly AssetResolver $resolver,
         private readonly AssetIdNormalizer $normalizer,
@@ -84,6 +92,9 @@ class AssetHydrator
         }
         foreach ((array) ($goods['skus'] ?? []) as $sku) {
             $ids[] = $this->normalizer->normalizeSingle($sku['image'] ?? '');
+            foreach ($this->extractAssetIdsFromHtml((string) ($sku['description'] ?? '')) as $id) {
+                $ids[] = $id;
+            }
         }
         foreach ($this->extractAssetIdsFromHtml((string) ($goods['description'] ?? '')) as $id) {
             $ids[] = $id;
@@ -114,6 +125,9 @@ class AssetHydrator
         if (is_array($goods['skus'] ?? null)) {
             foreach ($goods['skus'] as &$sku) {
                 $sku['image_full_url'] = $this->fullUrl($sku['image'] ?? '', $assetMap);
+                if (isset($sku['description']) && is_string($sku['description'])) {
+                    $sku['description'] = $this->hydrateRichText($sku['description'], $assetMap);
+                }
             }
             unset($sku);
         }
@@ -123,6 +137,37 @@ class AssetHydrator
         }
 
         return $goods;
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $list
+     * @return array<int, array<string, mixed>>
+     */
+    public function hydrateArticleList(array $list): array
+    {
+        return $this->hydrateFields($list, [
+            'cover' => 'cover_full_url',
+        ]);
+    }
+
+    /**
+     * @param array<string, mixed> $article
+     * @return array<string, mixed>
+     */
+    public function hydrateArticleDetail(array $article): array
+    {
+        $ids = [$this->normalizer->normalizeSingle($article['cover'] ?? '')];
+        foreach ($this->extractAssetIdsFromHtml((string) ($article['content'] ?? '')) as $id) {
+            $ids[] = $id;
+        }
+
+        $assetMap = $this->resolver->resolve($this->normalizer->collectAssetIds($ids));
+        $article['cover_full_url'] = $this->fullUrl($article['cover'] ?? '', $assetMap);
+        if (isset($article['content']) && is_string($article['content'])) {
+            $article['content'] = $this->hydrateRichText($article['content'], $assetMap);
+        }
+
+        return $article;
     }
 
     /**
@@ -237,6 +282,22 @@ class AssetHydrator
     }
 
     /**
+     * 装修配置图片字段回显。
+     *
+     * @param array<string, mixed> $schema
+     * @return array<string, mixed>
+     */
+    public function hydrateDecorationSchema(array $schema): array
+    {
+        $ids = [];
+        $this->collectDecorationAssetIds($schema, $ids);
+
+        $assetMap = $this->resolver->resolve($this->normalizer->collectAssetIds($ids));
+
+        return $this->hydrateDecorationAssetValues($schema, $assetMap);
+    }
+
+    /**
      * @param mixed $images
      * @param array<int, array<string, mixed>> $assetMap
      * @return array<int, array{url:int|string, full_url:string}>
@@ -303,6 +364,67 @@ class AssetHydrator
 
         preg_match_all('/\bdata-asset-id=["\']?(\d+)["\']?/i', $html, $matches);
         return array_values(array_unique(array_map('intval', $matches[1] ?? [])));
+    }
+
+    /**
+     * @param array<mixed> $value
+     * @param array<int, mixed> $ids
+     */
+    private function collectDecorationAssetIds(array $value, array &$ids): void
+    {
+        foreach ($value as $key => $item) {
+            if (is_string($key) && in_array($key, self::DECORATION_UPLOAD_FIELDS, true)) {
+                $normalized = $this->normalizer->normalizeSingle($item);
+                if (is_int($normalized)) {
+                    $ids[] = $normalized;
+                }
+            }
+
+            if (is_array($item)) {
+                $this->collectDecorationAssetIds($item, $ids);
+            }
+        }
+    }
+
+    /**
+     * @param array<mixed> $value
+     * @param array<int, array<string, mixed>> $assetMap
+     * @return array<mixed>
+     */
+    private function hydrateDecorationAssetValues(array $value, array $assetMap): array
+    {
+        foreach ($value as $key => $item) {
+            if (is_string($key) && in_array($key, self::DECORATION_UPLOAD_FIELDS, true)) {
+                $value[$key] = $this->hydrateDecorationUploadValue($item, $assetMap);
+                continue;
+            }
+
+            if (is_array($item)) {
+                $value[$key] = $this->hydrateDecorationAssetValues($item, $assetMap);
+            }
+        }
+
+        return $value;
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $assetMap
+     */
+    private function hydrateDecorationUploadValue(mixed $value, array $assetMap): mixed
+    {
+        $normalized = $this->normalizer->normalizeSingle($value);
+        if (!is_int($normalized)) {
+            return $value;
+        }
+
+        $asset = $assetMap[$normalized] ?? [];
+        $fileInfo = is_array($value) ? $value : [];
+        $fileInfo['url'] = (string) $normalized;
+        $fileInfo['full_url'] = (string) ($asset['full_url'] ?? '');
+        $fileInfo['name'] = (string) ($fileInfo['name'] ?? $asset['name'] ?? ('素材' . $normalized));
+        $fileInfo['asset_id'] = $normalized;
+
+        return $fileInfo;
     }
 
     /**

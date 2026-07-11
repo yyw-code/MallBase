@@ -6,7 +6,7 @@ namespace app\common\enum;
 /**
  * 支付场景枚举
  *
- * 与支付方式 {@see PayMethod} 正交：PayMethod 表达「走哪个渠道（微信/支付宝）」，
+ * 与支付方式 {@see PayMethod} 正交：PayMethod 表达「走哪个渠道（微信/余额）」，
  * PayScene 表达「在哪种宿主里发起（小程序/公众号/外部 H5）」。
  *
  * 三种场景对应微信支付 V3 的 trade_type：

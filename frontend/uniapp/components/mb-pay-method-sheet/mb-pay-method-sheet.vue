@@ -123,14 +123,12 @@ function onConfirm() {
 
 function iconClass(icon) {
   if (icon === 'wechat') return 'mb-pay__icon--wechat'
-  if (icon === 'alipay') return 'mb-pay__icon--alipay'
   if (icon === 'wallet' || icon === 'balance') return 'mb-pay__icon--wallet'
   return 'mb-pay__icon--default'
 }
 
 function iconGlyph(icon) {
   if (icon === 'wechat') return '微'
-  if (icon === 'alipay') return '支'
   if (icon === 'wallet' || icon === 'balance') return '¥'
   return '￥'
 }
@@ -140,7 +138,6 @@ function methodDesc(method) {
   if (method.balance_amount !== undefined) return `可用余额 ¥${formatPrice(method.balance_amount || 0)}`
   if (method.desc) return method.desc
   if (method.icon === 'wechat') return '微信安全支付'
-  if (method.icon === 'alipay') return '支付宝支付'
   return ''
 }
 
@@ -239,7 +236,7 @@ function firstEnabled(list) {
 }
 
 .mb-pay__row--active {
-  background: rgba(13, 80, 213, 0.04);
+  background: var(--color-primary-softer, rgba(13, 80, 213, 0.04));
 }
 
 .mb-pay__row--disabled {
@@ -260,12 +257,8 @@ function firstEnabled(list) {
   background: #07c160;
 }
 
-.mb-pay__icon--alipay {
-  background: #1677ff;
-}
-
 .mb-pay__icon--wallet {
-  background: #f0ad4e;
+  background: var(--color-warning, #f0ad4e);
 }
 
 .mb-pay__icon--default {

@@ -28,7 +28,7 @@ class ConfigService extends BaseService
      * 完整组直接输出的 group code 白名单
      */
     private const PUBLIC_GROUPS = [
-        'ClientConfig',     // client_site_name / client_logo / client_launch_image / client_home_banners / client_share_* / client_agreement / client_privacy
+        'ClientConfig',     // client_site_name / client_logo / client_launch_image / client_share_* / client_goods_* / client_search_* / client_*_content
         'SystemCopyright',  // copyright_* （后台与 Client 共用版权）
     ];
 
@@ -51,6 +51,13 @@ class ConfigService extends BaseService
     ];
 
     /**
+     * ClientConfig 内部客服接入字段只允许后台和服务端读取，不随公开启动配置返回。
+     */
+    private const CLIENT_CONFIG_PRIVATE_PREFIXES = [
+        'customer_service_',
+    ];
+
+    /**
      * 获取客户端基础配置
      *
      * @return array<string, mixed>
@@ -60,6 +67,8 @@ class ConfigService extends BaseService
         /** @var SystemSettingService $settingsService */
         $settingsService = app()->make(SystemSettingService::class);
         $merged = $settingsService->getSystemSettingGroups(self::PUBLIC_GROUPS);
+        unset($merged['client_home_banners']);
+        $merged = $this->removePrivateClientConfigFields($merged);
 
         // SystemBasic 组走字段级白名单
         foreach (self::SYSTEM_BASIC_PUBLIC_FIELDS as $code) {
@@ -90,12 +99,34 @@ class ConfigService extends BaseService
             }
         }
 
+        $merged['points_enabled'] = $this->settingEnabled('points_enabled', true) ? 1 : 0;
+        $merged['member_enabled'] = $this->settingEnabled('member_enabled', false) ? 1 : 0;
+        $merged['distribution_enabled'] = $this->settingEnabled('distribution_enabled', true) ? 1 : 0;
+
         // 版权 {year} 占位替换
         if (!empty($merged['copyright_date']) && is_string($merged['copyright_date'])) {
             $merged['copyright_date'] = str_replace('{year}', (string) date('Y'), $merged['copyright_date']);
         }
 
         return $merged;
+    }
+
+    /**
+     * @param array<string, mixed> $config
+     * @return array<string, mixed>
+     */
+    private function removePrivateClientConfigFields(array $config): array
+    {
+        foreach (array_keys($config) as $code) {
+            foreach (self::CLIENT_CONFIG_PRIVATE_PREFIXES as $prefix) {
+                if (str_starts_with((string) $code, $prefix)) {
+                    unset($config[$code]);
+                    continue 2;
+                }
+            }
+        }
+
+        return $config;
     }
 
     /**
@@ -141,14 +172,13 @@ class ConfigService extends BaseService
                 'icon' => 'wechat',
             ];
         }
-        if ((string) getSystemSetting('payment_alipay_enabled', '0') === '1') {
-            $list[] = [
-                'code' => PayMethod::ALIPAY,
-                'name' => '支付宝',
-                'icon' => 'alipay',
-            ];
-        }
         return $list;
+    }
+
+    private function settingEnabled(string $code, bool $default): bool
+    {
+        $value = (string) getSystemSetting($code, $default ? '1' : '0');
+        return in_array($value, ['1', 'true', 'on'], true);
     }
 
 }

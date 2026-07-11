@@ -103,7 +103,7 @@ export const useAccessStore = defineStore('core-access', {
   },
   persist: {
     // 持久化
-    pick: ['accessToken', 'accessCodes', 'isLockScreen'],
+    pick: ['accessToken', 'refreshToken', 'accessCodes', 'isLockScreen'],
   },
   state: (): AccessState => ({
     accessCodes: [],

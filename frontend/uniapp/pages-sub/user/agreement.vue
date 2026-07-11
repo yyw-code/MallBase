@@ -1,5 +1,9 @@
 <template>
-  <view class="page">
+  <view
+    class="page"
+    :class="[`theme-${decorateStore.resolvedThemeMode}`]"
+    :style="decorateStore.themeStyle"
+  >
     <mb-navbar :title="title" />
     <scroll-view class="content" scroll-y>
       <rich-text v-if="htmlContent" :nodes="htmlContent" />
@@ -7,38 +11,64 @@
         <text class="empty-title">{{ title }}</text>
         <text class="empty-desc">相关内容暂未配置，请在后台客户端配置中完善。</text>
       </view>
+      <mb-copyright-footer />
     </scroll-view>
-  </view>
+      <mb-floating-action />
+</view>
 </template>
 
 <script setup>
+import { useDecorateStore } from '@/store/decorate'
 import { computed, ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { useAppStore } from '@/store/app'
+const decorateStore = useDecorateStore()
 
 const appStore = useAppStore()
 const type = ref('service')
 
+const contentMap = {
+  about: {
+    title: '关于我们',
+    field: 'client_about_content',
+  },
+  after_sale: {
+    title: '售后政策',
+    field: 'client_after_sale_policy',
+  },
+  privacy: {
+    title: '隐私政策',
+    field: 'client_privacy',
+  },
+  rules: {
+    title: '平台规则',
+    field: 'client_platform_rules',
+  },
+  service: {
+    title: '用户协议',
+    field: 'client_agreement',
+  },
+}
+
 onLoad((query) => {
-  type.value = query?.type === 'privacy' ? 'privacy' : 'service'
+  type.value = contentMap[query?.type] ? query.type : 'service'
   if (!appStore.siteConfig) {
     appStore.fetchBasicConfig()
   }
 })
 
-const title = computed(() => (type.value === 'privacy' ? '隐私权政策' : '服务协议'))
+const title = computed(() => contentMap[type.value]?.title || '用户协议')
 const htmlContent = computed(() => {
   const config = appStore.siteConfig || {}
-  return type.value === 'privacy'
-    ? (config.client_privacy || '')
-    : (config.client_agreement || '')
+  const field = contentMap[type.value]?.field || 'client_agreement'
+  return config[field] || ''
 })
 </script>
 
 <style lang="scss" scoped>
 .page {
   min-height: 100vh;
-  background: $mb-color-bg;
+  background: var(--color-bg, #ffffff);
 }
 
 .content {
@@ -47,7 +77,7 @@ const htmlContent = computed(() => {
   padding: 32rpx $mb-spacing-page 80rpx;
   font-size: $mb-font-md;
   line-height: 1.8;
-  color: $mb-color-text;
+  color: var(--color-text, #191b23);
 }
 
 .empty {
@@ -63,11 +93,11 @@ const htmlContent = computed(() => {
 .empty-title {
   font-size: $mb-font-xl;
   font-weight: 600;
-  color: $mb-color-text;
+  color: var(--color-text, #191b23);
 }
 
 .empty-desc {
   font-size: $mb-font-sm;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
 }
 </style>

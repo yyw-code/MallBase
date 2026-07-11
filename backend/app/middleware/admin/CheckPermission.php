@@ -77,6 +77,14 @@ class CheckPermission
                 return (string) $option['_permission'];
             }
 
+            if (!empty($option['_permission_param'])) {
+                $permissionParam = (string) $option['_permission_param'];
+                $permissionValue = (string) $request->route($permissionParam, '');
+                if ($permissionValue !== '') {
+                    return (string) ($option['_permission_prefix'] ?? '') . $permissionValue;
+                }
+            }
+
             return $route->getName();
         }
 

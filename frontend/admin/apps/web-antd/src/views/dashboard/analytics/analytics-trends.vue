@@ -21,8 +21,9 @@ function render() {
   renderEcharts({
     grid: {
       bottom: 0,
-      containLabel: true,
       left: '1%',
+      outerBoundsContain: 'axisLabel',
+      outerBoundsMode: 'same',
       right: '1%',
       top: '8%',
     },

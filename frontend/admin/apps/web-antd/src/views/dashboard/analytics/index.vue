@@ -4,7 +4,7 @@ import type { TabOption } from '@vben/types';
 
 import type { AnalyticsApi } from '#/api/analytics';
 
-import { computed, onMounted, ref } from 'vue';
+import { computed, markRaw, onMounted, ref } from 'vue';
 
 import { useAccess } from '@vben/access';
 import {
@@ -40,7 +40,16 @@ const monthlyOrders = ref<AnalyticsApi.MonthlyOrders>();
 const health = ref<AnalyticsApi.Health>();
 const orderChannels = ref<AnalyticsApi.PieItem[]>();
 const salesStructure = ref<AnalyticsApi.PieItem[]>();
+const loading = ref(true);
 const { hasAccessByCodes } = useAccess();
+
+const defaultOverviewIcon = markRaw(SvgCardIcon);
+const overviewIconMap: Record<string, AnalysisOverviewItem['icon']> = {
+  gmv: defaultOverviewIcon,
+  orders: markRaw(SvgCakeIcon),
+  users: markRaw(SvgDownloadIcon),
+  refunds: markRaw(SvgBellIcon),
+};
 
 const hasCards = computed(() => overviewItems.value.length > 0);
 const hasTrend = computed(() => Boolean(trend.value));
@@ -89,16 +98,8 @@ function isPermissionDenied(error: unknown): boolean {
 function buildOverviewItems(
   cards: AnalyticsApi.Card[],
 ): AnalysisOverviewItem[] {
-  const iconMap: Record<string, any> = {
-    gmv: SvgCardIcon,
-    orders: SvgCakeIcon,
-    users: SvgDownloadIcon,
-    refunds: SvgBellIcon,
-    default: SvgCardIcon,
-  };
-
   return cards.map((item) => ({
-    icon: iconMap[item.key] ?? iconMap.default,
+    icon: overviewIconMap[item.key] ?? defaultOverviewIcon,
     title: item.title,
     totalTitle: item.total_title,
     totalValue: item.total_value,
@@ -107,6 +108,7 @@ function buildOverviewItems(
 }
 
 async function loadData() {
+  loading.value = true;
   const loaders: Array<{
     code: string;
     key: string;
@@ -144,63 +146,67 @@ async function loadData() {
     },
   ].filter((loader) => hasAccessByCodes([loader.code]));
 
-  const result = await Promise.allSettled(
-    loaders.map((loader) => loader.request()),
-  );
+  try {
+    const result = await Promise.allSettled(
+      loaders.map((loader) => loader.request()),
+    );
 
-  result.forEach((entry, index) => {
-    const loader = loaders[index];
-    if (!loader) {
-      return;
-    }
-
-    if (entry.status === 'rejected') {
-      if (!isPermissionDenied(entry.reason)) {
-        console.error(
-          `加载${loader.key}失败:`,
-          entry.reason?.response?.data?.message ||
-            entry.reason?.message ||
-            entry.reason,
-        );
+    result.forEach((entry, index) => {
+      const loader = loaders[index];
+      if (!loader) {
+        return;
       }
-      return;
-    }
 
-    const data = entry.value;
-    switch (loader.key) {
-      case 'cards': {
-        overviewItems.value = buildOverviewItems(data || []);
-
-        break;
+      if (entry.status === 'rejected') {
+        if (!isPermissionDenied(entry.reason)) {
+          console.error(
+            `加载${loader.key}失败:`,
+            entry.reason?.response?.data?.message ||
+              entry.reason?.message ||
+              entry.reason,
+          );
+        }
+        return;
       }
-      case 'health': {
-        health.value = data;
 
-        break;
-      }
-      case 'monthlyOrders': {
-        monthlyOrders.value = data;
+      const data = entry.value;
+      switch (loader.key) {
+        case 'cards': {
+          overviewItems.value = buildOverviewItems(data || []);
 
-        break;
-      }
-      case 'orderChannels': {
-        orderChannels.value = data;
+          break;
+        }
+        case 'health': {
+          health.value = data;
 
-        break;
-      }
-      case 'salesStructure': {
-        salesStructure.value = data;
+          break;
+        }
+        case 'monthlyOrders': {
+          monthlyOrders.value = data;
 
-        break;
-      }
-      case 'trend': {
-        trend.value = data;
+          break;
+        }
+        case 'orderChannels': {
+          orderChannels.value = data;
 
-        break;
+          break;
+        }
+        case 'salesStructure': {
+          salesStructure.value = data;
+
+          break;
+        }
+        case 'trend': {
+          trend.value = data;
+
+          break;
+        }
+        // No default
       }
-      // No default
-    }
-  });
+    });
+  } finally {
+    loading.value = false;
+  }
 
   // 不再走聚合接口兜底，保证每个区块权限完全可控
 }
@@ -212,44 +218,49 @@ onMounted(() => {
 
 <template>
   <div class="p-5">
-    <div v-if="hasCards" class="mb-6">
-      <AnalysisOverview :items="overviewItems" />
-    </div>
-    <div v-else-if="!hasAnyAnalyticsBlock">
-      <a-empty description="暂无可访问的统计数据" />
-    </div>
+    <header class="mb-5">
+      <h1 class="text-xl font-semibold text-[hsl(var(--foreground))]">
+        数据分析
+      </h1>
+      <p class="mt-1 text-sm text-[hsl(var(--muted-foreground))]">
+        汇总交易、订单与商品数据，快速了解商城运营状态。
+      </p>
+    </header>
 
-    <AnalysisChartsTabs v-if="chartTabs.length > 0" :tabs="chartTabs">
-      <template #trends>
-        <AnalyticsTrends :data="trend" />
-      </template>
-      <template #visits>
-        <AnalyticsVisits :data="monthlyOrders" />
-      </template>
-    </AnalysisChartsTabs>
+    <a-spin :spinning="loading">
+      <div v-if="hasCards" class="mb-6">
+        <AnalysisOverview :items="overviewItems" />
+      </div>
+      <div
+        v-else-if="!hasAnyAnalyticsBlock && !loading"
+        class="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-5 py-12 shadow-sm"
+      >
+        <a-empty description="暂无可访问的统计数据" />
+      </div>
 
-    <div class="mt-5 w-full lg:flex lg:space-x-4">
-      <AnalysisChartCard
-        v-if="hasHealth"
-        class="mt-5 lg:mt-0 lg:w-1/3"
-        title="运营健康度"
+      <AnalysisChartsTabs v-if="chartTabs.length > 0" :tabs="chartTabs">
+        <template #trends>
+          <AnalyticsTrends :data="trend" />
+        </template>
+        <template #visits>
+          <AnalyticsVisits :data="monthlyOrders" />
+        </template>
+      </AnalysisChartsTabs>
+
+      <div
+        v-if="hasHealth || hasOrderChannels || hasSalesStructure"
+        class="mt-5 grid w-full grid-cols-[repeat(auto-fit,minmax(min(100%,260px),1fr))] gap-4"
       >
-        <AnalyticsVisitsData :data="health" />
-      </AnalysisChartCard>
-      <AnalysisChartCard
-        v-if="hasOrderChannels"
-        class="mt-5 lg:mt-0 lg:w-1/3"
-        title="订单来源"
-      >
-        <AnalyticsVisitsSource :data="orderChannels" />
-      </AnalysisChartCard>
-      <AnalysisChartCard
-        v-if="hasSalesStructure"
-        class="mt-5 lg:mt-0 lg:w-1/3"
-        title="商品结构"
-      >
-        <AnalyticsVisitsSales :data="salesStructure" />
-      </AnalysisChartCard>
-    </div>
+        <AnalysisChartCard v-if="hasHealth" title="运营健康度">
+          <AnalyticsVisitsData :data="health" />
+        </AnalysisChartCard>
+        <AnalysisChartCard v-if="hasOrderChannels" title="订单来源">
+          <AnalyticsVisitsSource :data="orderChannels" />
+        </AnalysisChartCard>
+        <AnalysisChartCard v-if="hasSalesStructure" title="商品结构">
+          <AnalyticsVisitsSales :data="salesStructure" />
+        </AnalysisChartCard>
+      </div>
+    </a-spin>
   </div>
 </template>

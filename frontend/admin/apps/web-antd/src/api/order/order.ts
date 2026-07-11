@@ -47,6 +47,39 @@ export namespace OrderApi {
     status?: null | number;
   }
 
+  export interface DistributionCommissionItem {
+    amount: string;
+    attribution_scene?: string;
+    attribution_target_id?: number;
+    attribution_target_type?: string;
+    base_amount: string;
+    buyer_user_id: number;
+    create_time: string;
+    distributor_user?: BuyerInfo | null;
+    distributor_user_id: number;
+    goods_id: number;
+    id: number;
+    order_id: number;
+    order_item_id: number;
+    order_sn: string;
+    rate: string;
+    recovered_amount: string;
+    relation_id: number;
+    relation_level: number;
+    release_time?: string;
+    rule_id: number;
+    rule_type: string;
+    settled_at?: string;
+    sku_id: number;
+    status: number;
+    status_text: string;
+  }
+
+  export interface DistributionCommissionSummary {
+    list: DistributionCommissionItem[];
+    total_amount: string;
+  }
+
   /** 订单主记录（含聚合字段） */
   export interface OrderRecord {
     id: number;
@@ -72,6 +105,9 @@ export namespace OrderApi {
     logistics_company?: string;
     logistics_company_code?: string;
     logistics_sn?: string;
+    delivery_type?: 'physical' | 'virtual';
+    delivery_type_text?: string;
+    delivery_note?: null | string;
     buyer_remark?: string;
     admin_remark?: string;
     paid_at?: null | string;
@@ -86,6 +122,37 @@ export namespace OrderApi {
     buyer?: BuyerInfo;
     /** 实时聚合，非落库字段 */
     after_sale_tag_text?: string;
+    points_deduction?: null | {
+      discount_amount: string;
+      returned_points: number;
+      status: string;
+      used_points: number;
+    };
+    points_reward?: null | {
+      debt_points: number;
+      frozen_points: number;
+      recovered_points: number;
+      release_time: string;
+      released_at?: null | string;
+      released_points: number;
+      reward_points: number;
+      status: string;
+    };
+    member_discount?: null | {
+      discount_amount: string;
+      level_id: number;
+      level_name: string;
+    };
+    member_growth?: null | {
+      after_growth: number;
+      after_level_id: number;
+      before_growth: number;
+      before_level_id: number;
+      change_growth: number;
+      create_time: string;
+      remark?: string;
+    };
+    distribution_commissions?: DistributionCommissionSummary;
   }
 
   /** 详情响应（在 OrderRecord 基础上附带 logs） */
@@ -110,8 +177,10 @@ export namespace OrderApi {
 
   /** 发货参数 */
   export interface ShipParams {
+    delivery_note?: string;
+    delivery_type: 'physical' | 'virtual';
     logistics_platform: string;
-    logistics_company_id: number;
+    logistics_company_id?: number;
     logistics_company_code: string;
     logistics_company: string;
     logistics_sn: string;

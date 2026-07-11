@@ -47,6 +47,39 @@ final class InstallProgressContractTest extends TestCase
         $this->assertStringContainsString('function fillHostValue(inputId, validationType, value)', $installPage);
     }
 
+    public function testInstallPageRequiresPlatformAgreementBeforeContinuing(): void
+    {
+        $root = dirname(__DIR__, 3);
+        $installPage = (string) file_get_contents($root . '/public/install/index.html');
+        $installService = (string) file_get_contents($root . '/app/service/install/InstallService.php');
+        $installController = (string) file_get_contents($root . '/app/controller/install/InstallController.php');
+        $installRoute = (string) file_get_contents($root . '/route/install.php');
+
+        $this->assertStringContainsString("Route::get('agreement', 'agreement');", $installRoute);
+        $this->assertStringContainsString('public function agreement(): Response', $installController);
+        $this->assertStringContainsString('getInstallAgreement()', $installController);
+
+        $this->assertStringContainsString("private const PLATFORM_BASE_URL = 'https://platform.gosowong.cn';", $installService);
+        $this->assertStringContainsString("private const PLATFORM_APP_CODE = 'mallbase';", $installService);
+        $this->assertStringContainsString("'/api/v1/install/agreement?'", $installService);
+        $this->assertStringContainsString("http_build_query(['app_code' => self::PLATFORM_APP_CODE])", $installService);
+
+        $this->assertStringContainsString('id="agreementPanel"', $installPage);
+        $this->assertStringContainsString('id="install_agreement_accept"', $installPage);
+        $this->assertStringContainsString('<h2>1. 安装协议</h2>', $installPage);
+        $this->assertStringContainsString('<h2>2. 环境检测</h2>', $installPage);
+        $this->assertStringContainsString('id="agreementNext"', $installPage);
+        $this->assertStringContainsString('id="envNext"', $installPage);
+        $this->assertStringContainsString('sandbox=""', $installPage);
+        $this->assertStringContainsString("const r = await api('/agreement');", $installPage);
+        $this->assertStringContainsString('function agreementBlockMessage()', $installPage);
+        $this->assertStringContainsString('function handleAgreementNext()', $installPage);
+        $this->assertStringContainsString('frame.srcdoc = buildAgreementDocument(data.content);', $installPage);
+        $this->assertStringContainsString("btn.disabled = agreementBlockMessage() !== '';", $installPage);
+        $this->assertStringContainsString('btn.disabled = !envCheckPassed;', $installPage);
+        $this->assertStringContainsString('<h2 id="installStateTitle">6. 正在安装</h2>', $installPage);
+    }
+
     public function testDemoStaticCopyMessageUsesExistingInsteadOfSkippedForInstalledFiles(): void
     {
         $installService = (string) file_get_contents(dirname(__DIR__, 3) . '/app/service/install/InstallService.php');

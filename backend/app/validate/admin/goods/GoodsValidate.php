@@ -28,7 +28,12 @@ class GoodsValidate extends Validate
         'spec_meta' => 'checkSpecMeta',
         'unit' => 'max:20',
         'sort' => 'integer|egt:0',
-        'description' => 'max:2000',
+        'description' => 'max:16000',
+        'sku_detail_enabled' => 'in:0,1',
+        'points_reward_mode' => 'in:inherit,global,disabled,ratio,fixed,sku',
+        'points_reward_ratio' => 'integer|egt:0',
+        'points_reward_fixed' => 'integer|egt:0',
+        'member_benefit_mode' => 'in:global,disabled,level_discount,sku_price',
         'status' => 'in:0,1',
         'is_on_sale' => 'in:0,1',
         'is_recommend' => 'in:0,1',
@@ -63,7 +68,14 @@ class GoodsValidate extends Validate
         'unit.max' => '单位最多20个字符',
         'sort.integer' => '排序必须是整数',
         'sort.egt' => '排序必须大于等于0',
-        'description.max' => '商品描述最多2000个字符',
+        'description.max' => '商品描述最多16000个字符',
+        'sku_detail_enabled.in' => '规格独立详情开关必须是0或1',
+        'points_reward_mode.in' => '积分赠送模式不合法',
+        'points_reward_ratio.integer' => '积分赠送比例必须是整数',
+        'points_reward_ratio.egt' => '积分赠送比例不能小于0',
+        'points_reward_fixed.integer' => '固定赠送积分必须是整数',
+        'points_reward_fixed.egt' => '固定赠送积分不能小于0',
+        'member_benefit_mode.in' => '会员权益模式不合法',
         'status.in' => '状态必须是0或1',
         'is_on_sale.in' => '是否上架必须是0或1',
         'is_recommend.in' => '是否推荐必须是0或1',
@@ -78,14 +90,16 @@ class GoodsValidate extends Validate
         'create' => [
             'name', 'subtitle', 'category_id', 'brand_id', 'freight_template_id',
             'price', 'market_price', 'stock', 'main_image', 'main_video', 'spec_type', 'spec_meta',
-            'unit', 'sort', 'description',
+            'unit', 'sort', 'description', 'sku_detail_enabled',
+            'points_reward_mode', 'points_reward_ratio', 'points_reward_fixed', 'member_benefit_mode',
             'status', 'is_on_sale', 'is_recommend', 'is_new', 'is_hot',
             'images', 'skus', 'tag_ids',
         ],
         'update' => [
             'name', 'subtitle', 'category_id', 'brand_id', 'freight_template_id',
             'price', 'market_price', 'stock', 'main_image', 'main_video', 'spec_type', 'spec_meta',
-            'unit', 'sort', 'description',
+            'unit', 'sort', 'description', 'sku_detail_enabled',
+            'points_reward_mode', 'points_reward_ratio', 'points_reward_fixed', 'member_benefit_mode',
             'status', 'is_on_sale', 'is_recommend', 'is_new', 'is_hot',
             'images', 'skus', 'tag_ids',
         ],
@@ -128,6 +142,24 @@ class GoodsValidate extends Validate
             if (isset($sku['weight']) && $sku['weight'] !== ''
                 && (!is_numeric($sku['weight']) || $sku['weight'] < 0)) {
                 return "SKU第" . ($index + 1) . "项重量必须大于等于0";
+            }
+
+            $mode = (string) ($sku['points_reward_mode'] ?? 'inherit');
+            if (!in_array($mode, ['inherit', 'disabled', 'ratio', 'fixed'], true)) {
+                return "SKU第" . ($index + 1) . "项积分赠送模式不合法";
+            }
+            if (isset($sku['points_reward_ratio']) && (!is_numeric($sku['points_reward_ratio']) || $sku['points_reward_ratio'] < 0)) {
+                return "SKU第" . ($index + 1) . "项积分赠送比例不能小于0";
+            }
+            if (isset($sku['points_reward_fixed']) && (!is_numeric($sku['points_reward_fixed']) || $sku['points_reward_fixed'] < 0)) {
+                return "SKU第" . ($index + 1) . "项固定赠送积分不能小于0";
+            }
+            if (isset($sku['member_price']) && $sku['member_price'] !== ''
+                && (!is_numeric($sku['member_price']) || $sku['member_price'] < 0)) {
+                return "SKU第" . ($index + 1) . "项会员价不能小于0";
+            }
+            if (isset($sku['description']) && mb_strlen((string) $sku['description']) > 16000) {
+                return "SKU第" . ($index + 1) . "项详情最多16000个字符";
             }
         }
 

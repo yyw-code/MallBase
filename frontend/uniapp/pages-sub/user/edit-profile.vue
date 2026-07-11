@@ -1,10 +1,13 @@
 <template>
-  <view class="page">
+  <view
+    class="page"
+    :class="[`theme-${decorateStore.resolvedThemeMode}`]"
+    :style="decorateStore.themeStyle"
+  >
     <mb-navbar title="编辑资料" />
 
-    <view class="page-content">
-      <!-- Avatar -->
-      <view class="avatar-section">
+    <scroll-view class="content" scroll-y>
+      <view class="profile-card">
         <view class="avatar-wrapper" @tap="chooseAvatarFallback">
           <image v-if="avatarPreview" class="avatar" :src="avatarPreview" mode="aspectFill" />
           <view v-else class="avatar avatar--placeholder">
@@ -24,18 +27,21 @@
           ></button>
           <!-- #endif -->
         </view>
-        <text class="avatar-hint">{{ avatarUploading ? '头像上传中...' : '点击头像更换' }}</text>
+        <view class="profile-card__body">
+          <text class="profile-card__title">{{ form.nickname || '完善资料' }}</text>
+          <text class="profile-card__desc">
+            {{ avatarUploading ? '头像上传中...' : '点击头像更换展示形象' }}
+          </text>
+        </view>
       </view>
 
-      <!-- Form -->
       <view class="form-section">
-        <!-- Nickname -->
-        <view class="form-group">
+        <view class="form-item">
           <text class="form-label">昵称</text>
-          <view class="input-pill">
+          <view class="input-capsule">
             <input
               v-model="form.nickname"
-              class="pill-input"
+              class="form-input"
               type="text"
               maxlength="20"
               placeholder="请输入昵称"
@@ -44,8 +50,7 @@
           </view>
         </view>
 
-        <!-- Gender -->
-        <view class="form-group">
+        <view class="form-item">
           <text class="form-label">性别</text>
           <view class="gender-row">
             <view
@@ -60,12 +65,11 @@
           </view>
         </view>
 
-        <!-- Birthday -->
-        <view class="form-group">
+        <view class="form-item">
           <text class="form-label">生日</text>
           <picker mode="date" :value="form.birthday" :end="today" @change="onBirthdayChange">
-            <view class="input-pill input-pill--picker">
-              <text :class="['pill-value', { 'pill-value--empty': !form.birthday }]">
+            <view class="input-capsule input-capsule--picker">
+              <text :class="['capsule-value', { 'capsule-value--empty': !form.birthday }]">
                 {{ form.birthday || '请选择生日' }}
               </text>
               <view class="picker-arrow" />
@@ -73,13 +77,12 @@
           </picker>
         </view>
 
-        <!-- Bio -->
-        <view class="form-group">
+        <view class="form-item">
           <view class="label-row">
             <text class="form-label">个性签名</text>
             <text class="char-count">{{ form.bio.length }}/100</text>
           </view>
-          <view class="textarea-wrapper">
+          <view class="textarea-card">
             <textarea
               v-model="form.bio"
               class="bio-textarea"
@@ -92,20 +95,25 @@
         </view>
       </view>
 
-      <!-- Save button -->
       <view class="primary-btn" :class="{ 'primary-btn--loading': loading }" @tap="handleSave">
-        <text class="primary-btn-text">{{ loading ? '保存中...' : '保 存' }}</text>
+        <text class="primary-btn-text">{{ loading ? '保存中...' : '保存资料' }}</text>
       </view>
-    </view>
-  </view>
+
+      <mb-copyright-footer />
+      <view class="bottom-spacer" />
+    </scroll-view>
+      <mb-floating-action />
+</view>
 </template>
 
 <script setup>
+import { useDecorateStore } from '@/store/decorate'
 import { ref, reactive, computed } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { useUserStore } from '@/store/user'
 import { updateMyInfo } from '@/api/user/user'
 import { getUploadedAssetValue, getUploadedPreviewUrl, uploadImage } from '@/api/upload'
+const decorateStore = useDecorateStore()
 
 const userStore = useUserStore()
 
@@ -246,34 +254,36 @@ async function handleSave() {
 <style lang="scss" scoped>
 .page {
   min-height: 100vh;
-  background: #ffffff;
+  background: var(--color-bg-secondary, #faf8ff);
 }
 
-.page-content {
-  padding: 0 48rpx;
-  padding-bottom: 120rpx;
+.content {
+  box-sizing: border-box;
+  height: calc(100vh - 96rpx);
+  padding: $mb-spacing-md $mb-spacing-page 0;
 }
 
-// ---- Avatar ----
-.avatar-section {
+.profile-card {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  padding-top: 48rpx;
-  margin-bottom: 48rpx;
+  gap: 28rpx;
+  padding: 32rpx;
+  background: var(--color-bg, #ffffff);
+  border: 1rpx solid var(--color-divider, #f0f2f5);
+  border-radius: $mb-radius-lg;
 }
 
 .avatar-wrapper {
   position: relative;
-  margin-bottom: 16rpx;
+  flex-shrink: 0;
 }
 
 .avatar-picker-button {
   position: absolute;
   left: 0;
   top: 0;
-  width: 160rpx;
-  height: 160rpx;
+  width: 132rpx;
+  height: 132rpx;
   padding: 0;
   margin: 0;
   border-radius: $mb-radius-full;
@@ -286,13 +296,13 @@ async function handleSave() {
 }
 
 .avatar {
-  width: 160rpx;
-  height: 160rpx;
+  width: 132rpx;
+  height: 132rpx;
   border-radius: $mb-radius-full;
 }
 
 .avatar--placeholder {
-  background: $mb-color-bg-secondary;
+  background: var(--color-primary-softer, rgba(13, 80, 213, 0.05));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -300,68 +310,91 @@ async function handleSave() {
 
 .avatar-icon {
   position: relative;
-  width: 56rpx;
-  height: 64rpx;
+  width: 48rpx;
+  height: 56rpx;
 }
 
 .avatar-icon__head {
-  width: 32rpx;
-  height: 32rpx;
-  border-radius: $mb-radius-full;
-  background: $mb-color-border;
   position: absolute;
   top: 0;
   left: 50%;
+  width: 30rpx;
+  height: 30rpx;
+  border-radius: $mb-radius-full;
+  background: var(--color-primary-on-page, var(--color-primary, #0d50d5));
   transform: translateX(-50%);
 }
 
 .avatar-icon__body {
-  width: 48rpx;
-  height: 28rpx;
-  border-radius: $mb-radius-lg $mb-radius-lg 0 0;
-  background: $mb-color-border;
   position: absolute;
   bottom: 0;
   left: 50%;
+  width: 44rpx;
+  height: 26rpx;
+  border-radius: 22rpx 22rpx 0 0;
+  background: var(--color-primary-on-page, var(--color-primary, #0d50d5));
   transform: translateX(-50%);
 }
 
 .avatar-badge {
   position: absolute;
-  right: 0;
-  bottom: 0;
-  width: 48rpx;
-  height: 48rpx;
+  right: -2rpx;
+  bottom: -2rpx;
+  width: 44rpx;
+  height: 44rpx;
   border-radius: $mb-radius-full;
-  background: $mb-color-text;
+  background: var(--color-primary, #0d50d5);
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 4rpx solid #ffffff;
+  border: 4rpx solid var(--color-bg, #ffffff);
 }
 
 .avatar-badge-text {
   font-size: 22rpx;
-  color: #ffffff;
-  font-weight: 500;
+  font-weight: 600;
+  color: var(--color-text-on-primary, #ffffff);
 }
 
-.avatar-hint {
-  font-size: 24rpx;
-  color: $mb-color-text-tertiary;
+.profile-card__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10rpx;
 }
 
-// ---- Form ----
+.profile-card__title {
+  overflow: hidden;
+  font-size: $mb-font-xl;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--color-text-title-on-bg, var(--color-text-title, #191b23));
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-card__desc {
+  font-size: $mb-font-sm;
+  line-height: 1.5;
+  color: var(--color-text-secondary-on-bg, var(--color-text-secondary, #434654));
+}
+
 .form-section {
   display: flex;
   flex-direction: column;
-  gap: 36rpx;
+  gap: 30rpx;
+  margin-top: $mb-spacing-lg;
+  padding: 30rpx;
+  background: var(--color-bg, #ffffff);
+  border: 1rpx solid var(--color-divider, #f0f2f5);
+  border-radius: $mb-radius-lg;
 }
 
-.form-group {
+.form-item {
   display: flex;
   flex-direction: column;
-  gap: 16rpx;
+  gap: 14rpx;
 }
 
 .label-row {
@@ -371,140 +404,120 @@ async function handleSave() {
 }
 
 .form-label {
-  font-size: 26rpx;
-  font-weight: 500;
-  color: $mb-color-text-secondary;
-  padding-left: 8rpx;
+  padding-left: 4rpx;
+  font-size: $mb-font-md;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--color-text-on-bg, var(--color-text, #191b23));
 }
 
 .char-count {
-  font-size: 22rpx;
-  color: $mb-color-text-tertiary;
-  padding-right: 8rpx;
+  padding-right: 4rpx;
+  font-size: $mb-font-sm;
+  line-height: 1.4;
+  color: var(--color-text-tertiary-on-bg, var(--color-text-tertiary, #737686));
 }
 
-.input-pill {
+.input-capsule {
   display: flex;
   align-items: center;
-  height: 100rpx;
-  border-radius: $mb-radius-sm;
-  background: $mb-color-bg-secondary;
-  border: 1rpx solid $mb-color-border;
-  padding: 0 32rpx;
-  transition:
-    border-color 0.2s,
-    background-color 0.2s;
-
-  &:focus-within {
-    border-color: rgba(13, 80, 213, 0.3);
-    background: $mb-color-bg;
-  }
+  min-height: 104rpx;
+  padding: 0 30rpx;
+  background: var(--color-bg, #ffffff);
+  border: 1rpx solid var(--color-divider, #f0f2f5);
+  border-radius: $mb-radius-full;
+  box-shadow: inset 0 0 0 1rpx var(--color-bg-secondary, #faf8ff);
 }
 
-.input-pill--picker {
+.input-capsule--picker {
   justify-content: space-between;
 }
 
-.pill-input {
+.form-input {
   flex: 1;
-  font-size: 30rpx;
-  color: $mb-color-text;
-  height: 100%;
+  min-width: 0;
+  height: 104rpx;
+  font-size: $mb-font-md;
+  color: var(--color-text-on-bg, var(--color-text, #191b23));
 }
 
-.pill-value {
-  font-size: 30rpx;
-  color: $mb-color-text;
+.capsule-value {
+  font-size: $mb-font-md;
+  color: var(--color-text-on-bg, var(--color-text, #191b23));
 }
 
-.pill-value--empty {
-  color: $mb-color-border-light;
+.capsule-value--empty,
+.placeholder {
+  color: var(--color-text-tertiary-on-bg, var(--color-text-tertiary, #737686));
 }
 
 .picker-arrow {
   width: 16rpx;
   height: 16rpx;
-  border-right: 3rpx solid $mb-color-text-tertiary;
-  border-bottom: 3rpx solid $mb-color-text-tertiary;
+  border-right: 3rpx solid var(--color-text-tertiary-on-bg, var(--color-text-tertiary, #737686));
+  border-bottom: 3rpx solid var(--color-text-tertiary-on-bg, var(--color-text-tertiary, #737686));
   transform: rotate(-45deg);
   flex-shrink: 0;
 }
 
-.placeholder {
-  color: $mb-color-border-light;
-}
-
-// ---- Gender ----
 .gender-row {
   display: flex;
-  gap: 20rpx;
+  gap: 16rpx;
 }
 
 .gender-chip {
   flex: 1;
-  height: 80rpx;
-  border-radius: $mb-radius-sm;
-  background: $mb-color-bg-secondary;
-  border: 1rpx solid $mb-color-border;
+  height: 88rpx;
+  border-radius: $mb-radius-full;
+  background: var(--color-bg-secondary, #faf8ff);
+  border: 1rpx solid var(--color-divider, #f0f2f5);
   display: flex;
   align-items: center;
   justify-content: center;
-  transition:
-    background-color 0.2s,
-    color 0.2s;
 }
 
 .gender-chip--active {
-  background: rgba($mb-color-primary, 0.08);
-  border-color: rgba($mb-color-primary, 0.3);
+  background: var(--color-primary-softer, rgba(13, 80, 213, 0.05));
+  border-color: var(--color-primary-border, rgba(13, 80, 213, 0.24));
 }
 
 .gender-chip-text {
-  font-size: 28rpx;
-  color: $mb-color-text-secondary;
+  font-size: $mb-font-md;
+  line-height: 1.4;
+  color: var(--color-text-secondary-on-bg, var(--color-text-secondary, #434654));
 }
 
 .gender-chip--active .gender-chip-text {
-  color: $mb-color-primary;
-  font-weight: 500;
+  color: var(--color-primary-on-bg, var(--color-primary, #0d50d5));
+  font-weight: 600;
 }
 
-// ---- Textarea ----
-.textarea-wrapper {
-  background: $mb-color-bg-secondary;
-  border-radius: $mb-radius-sm;
-  border: 1rpx solid $mb-color-border;
-  padding: 24rpx 32rpx;
-  transition:
-    border-color 0.2s,
-    background-color 0.2s;
-
-  &:focus-within {
-    border-color: rgba(13, 80, 213, 0.3);
-    background: $mb-color-bg;
-  }
+.textarea-card {
+  min-height: 192rpx;
+  padding: 26rpx 30rpx;
+  background: var(--color-bg, #ffffff);
+  border: 1rpx solid var(--color-divider, #f0f2f5);
+  border-radius: 36rpx;
+  box-shadow: inset 0 0 0 1rpx var(--color-bg-secondary, #faf8ff);
 }
 
 .bio-textarea {
   width: 100%;
-  height: 160rpx;
-  font-size: 28rpx;
-  color: $mb-color-text;
+  height: 150rpx;
+  font-size: $mb-font-md;
   line-height: 1.6;
+  color: var(--color-text-on-bg, var(--color-text, #191b23));
 }
 
-// ---- Button ----
 .primary-btn {
-  height: 100rpx;
-  border-radius: $mb-radius-sm;
-  background: $mb-color-primary;
+  height: 104rpx;
+  margin-top: $mb-spacing-xl;
+  border-radius: $mb-radius-full;
+  background: var(--color-primary, #0d50d5);
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-top: 48rpx;
-  transition:
-    opacity 0.15s,
-    transform 0.15s;
+  transition: opacity 0.15s, transform 0.15s;
 
   &:active {
     opacity: 0.85;
@@ -513,14 +526,18 @@ async function handleSave() {
 }
 
 .primary-btn--loading {
-  opacity: 0.7;
+  opacity: 0.65;
   pointer-events: none;
 }
 
 .primary-btn-text {
-  font-size: 32rpx;
+  font-size: $mb-font-lg;
   font-weight: 600;
-  color: #ffffff;
-  letter-spacing: 0;
+  line-height: 1.3;
+  color: var(--color-text-on-primary, #ffffff);
+}
+
+.bottom-spacer {
+  height: calc(120rpx + env(safe-area-inset-bottom));
 }
 </style>

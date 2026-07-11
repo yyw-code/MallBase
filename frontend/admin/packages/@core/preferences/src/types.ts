@@ -113,6 +113,10 @@ interface CopyrightPreferences {
   icp: string;
   /** 备案号链接 */
   icpLink: string;
+  /** 公安备案号 */
+  psb?: string;
+  /** 公安备案号链接 */
+  psbLink?: string;
   /** 设置面板是否显示*/
   settingShow?: boolean;
 }

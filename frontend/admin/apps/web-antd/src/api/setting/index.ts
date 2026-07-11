@@ -32,6 +32,7 @@ export namespace SettingApi {
     description?: string;
     sort: number;
     status: number;
+    is_system: number;
     permission_parent_code?: string;
     permission_path?: string;
     permission_component?: string;
@@ -39,6 +40,18 @@ export namespace SettingApi {
     create_time?: string;
     update_time?: string;
     children?: SettingGroup[];
+  }
+
+  /** 设置页内分组 */
+  export interface SettingSection {
+    id: number;
+    group_id: number;
+    name: string;
+    code: string;
+    sort: number;
+    is_system: number;
+    create_time?: string;
+    update_time?: string;
   }
 
   /** 表单类型选项 */
@@ -80,12 +93,32 @@ export namespace SettingApi {
   /** 验证规则类型映射（按表单类型分组，key 为表单类型如 input/number 等） */
   export type RuleTypesMap = Record<string, RuleTypeItem[]>;
 
+  export type UiComponentValue = 'money_yuan' | 'remote_select';
+
+  export type UiOptionSourceValue = 'distribution_level';
+
+  export interface UiComponentOption {
+    description?: string;
+    label: string;
+    value: '' | UiComponentValue;
+  }
+
+  export interface UiOptionSourceOption {
+    description?: string;
+    label: string;
+    value: UiOptionSourceValue;
+  }
+
   /** 表单配置响应（/setting/form/config） */
   export interface FormConfigResponse {
     /** 表单类型下拉选项 */
     type_options: TypeOption[];
     /** 验证规则类型（按表单类型分组） */
     rule_types: RuleTypesMap;
+    /** 动态表单输入组件选项 */
+    ui_components?: UiComponentOption[];
+    /** 远程下拉可用数据源 */
+    option_sources?: UiOptionSourceOption[];
     /** 表单配置级告警 */
     warnings?: string[];
   }
@@ -105,6 +138,23 @@ export namespace SettingApi {
     flags?: string;
   }
 
+  export interface UiCondition {
+    field: string;
+    operator?: 'equals' | 'falsy' | 'in' | 'not_equals' | 'truthy';
+    value?: Array<boolean | number | string> | boolean | number | string;
+  }
+
+  export interface SettingItemUi {
+    component?: UiComponentValue;
+    label?: string;
+    option_source?: UiOptionSourceValue;
+    placeholder?: string;
+    sensitive?: boolean;
+    section?: string;
+    section_code?: string;
+    visible_when?: UiCondition[];
+  }
+
   /** 设置项 */
   export interface SettingItem {
     id: number;
@@ -120,9 +170,18 @@ export namespace SettingApi {
     placeholder?: string;
     remark?: string;
     sort: number;
+    is_system: number;
     is_required: number;
     /** 后端返回的验证规则列表 */
     rules?: ValidationRule[];
+    /** 敏感配置是否已有值，敏感字段不回传明文 */
+    has_value?: boolean;
+    /** 是否敏感配置 */
+    sensitive?: boolean;
+    /** 设置项已保存的动态表单交互元数据 */
+    ui?: null | SettingItemUi;
+    /** 合并代码默认值后的动态表单交互元数据，仅用于列表展示 */
+    resolved_ui?: null | SettingItemUi;
   }
 
   /** 选项项 */
@@ -161,6 +220,19 @@ export namespace SettingApi {
     display_type?: 'category' | 'page' | 'tab';
   }
 
+  /** 创建页内分组参数 */
+  export interface CreateSectionParams {
+    group_id: number;
+    name: string;
+    code: string;
+    sort?: number;
+  }
+
+  /** 更新页内分组参数 */
+  export interface UpdateSectionParams extends Partial<CreateSectionParams> {
+    id: number;
+  }
+
   /** 更新分组参数 */
   export interface UpdateGroupParams extends Partial<CreateGroupParams> {
     id: number;
@@ -180,6 +252,8 @@ export namespace SettingApi {
     is_required?: number;
     /** 验证规则列表 */
     rules?: null | ValidationRule[];
+    /** 后台动态表单交互元数据 */
+    ui?: null | SettingItemUi;
   }
 
   /** 更新设置项参数 */
@@ -281,10 +355,54 @@ export async function updateSettingGroupApi(
 }
 
 /**
+ * 修改分组状态
+ */
+export async function changeSettingGroupStatusApi(id: number, status: number) {
+  return requestClient.put(`/setting/group/changeStatus/${id}`, { status });
+}
+
+/**
  * 删除分组
  */
 export async function deleteSettingGroupApi(id: number) {
   return requestClient.delete(`/setting/group/delete/${id}`);
+}
+
+// ==================== 页内分组 API ====================
+
+/**
+ * 获取设置分组下的页内分组
+ */
+export async function getSettingSectionListApi(groupId: number) {
+  return requestClient.get<SettingApi.SettingSection[]>(
+    `/setting/section/list/${groupId}`,
+  );
+}
+
+/**
+ * 创建页内分组
+ */
+export async function createSettingSectionApi(
+  data: SettingApi.CreateSectionParams,
+) {
+  return requestClient.post<{ id: number }>('/setting/section/create', data);
+}
+
+/**
+ * 更新页内分组
+ */
+export async function updateSettingSectionApi(
+  id: number,
+  data: Omit<SettingApi.UpdateSectionParams, 'id'>,
+) {
+  return requestClient.put(`/setting/section/update/${id}`, data);
+}
+
+/**
+ * 删除页内分组
+ */
+export async function deleteSettingSectionApi(id: number) {
+  return requestClient.delete(`/setting/section/delete/${id}`);
 }
 
 // ==================== 表单配置 API ====================

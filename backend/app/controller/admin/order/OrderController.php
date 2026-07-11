@@ -81,6 +81,8 @@ class OrderController extends BaseController
             throw new BusinessException('管理员身份无效');
         }
         $data = $this->request->param([
+            'delivery_type',
+            'delivery_note',
             'logistics_platform',
             'logistics_company_id',
             'logistics_company_code',
@@ -96,6 +98,8 @@ class OrderController extends BaseController
             logisticsCompany: (string) ($data['logistics_company'] ?? ''),
             logisticsSn: (string) ($data['logistics_sn'] ?? ''),
             adminId: $adminId,
+            deliveryType: (string) ($data['delivery_type'] ?? ''),
+            deliveryNote: (string) ($data['delivery_note'] ?? ''),
         );
         return $this->success(null, $message);
     }

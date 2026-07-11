@@ -58,6 +58,8 @@ final class LogisticsServiceContractTest extends TestCase
         $this->assertStringContainsString('/client/api/logistics/detail/${orderId}', $api);
         $this->assertStringContainsString('phone_masked', $page);
         $this->assertStringContainsString('query_error', $page);
+        $this->assertStringContainsString('isVirtualDelivery', $page);
+        $this->assertStringContainsString('delivery_note', $page);
         $this->assertStringContainsString('mb-empty-state', $page);
         $this->assertStringNotContainsString('MOCK_DATA', $page);
         $this->assertStringNotContainsString('mapInfo', $page);
@@ -86,6 +88,54 @@ final class LogisticsServiceContractTest extends TestCase
         $options = $method->invoke(new LogisticsService(), $order);
 
         $this->assertSame(['phone' => '17693447942'], $options);
+    }
+
+    public function testVirtualOrderLogisticsResponseIsRenderable(): void
+    {
+        $order = new class([
+            'delivery_type' => Order::DELIVERY_TYPE_VIRTUAL,
+            'delivery_note' => '兑换码已发送到站内信',
+            'receiver_name' => 'Codex Test',
+            'receiver_phone' => '13800000000',
+            'receiver_province' => '测试省',
+            'receiver_city' => '测试市',
+            'receiver_district' => '测试区',
+            'receiver_address' => '测试地址',
+            'shipped_at' => '2026-07-05 10:00:00',
+        ]) extends Order {
+            protected function getOptions(): array
+            {
+                return [
+                    'pk' => 'id',
+                    'schema' => [
+                        'delivery_type' => 'string',
+                        'delivery_note' => 'string',
+                        'receiver_name' => 'string',
+                        'receiver_phone' => 'string',
+                        'receiver_province' => 'string',
+                        'receiver_city' => 'string',
+                        'receiver_district' => 'string',
+                        'receiver_address' => 'string',
+                        'shipped_at' => 'string',
+                    ],
+                ];
+            }
+        };
+
+        $method = new ReflectionMethod(LogisticsService::class, 'virtualOrderResponse');
+        $method->setAccessible(true);
+        $response = $method->invoke(new LogisticsService(), $order);
+
+        $this->assertTrue($response['available']);
+        $this->assertSame(Order::DELIVERY_TYPE_VIRTUAL, $response['delivery_type']);
+        $this->assertSame('虚拟发货', $response['delivery_type_text']);
+        $this->assertSame('虚拟发货', $response['status']);
+        $this->assertSame('兑换码已发送到站内信', $response['delivery_note']);
+        $this->assertSame('兑换码已发送到站内信', $response['latest_desc']);
+        $this->assertSame('virtual', $response['state']);
+        $this->assertSame([], $response['tracks']);
+        $this->assertSame('', $response['tracking_no']);
+        $this->assertSame('138****0000', $response['receiver']['phone_masked']);
     }
 
     public function testInstallSchemaContainsLogisticsModuleTables(): void

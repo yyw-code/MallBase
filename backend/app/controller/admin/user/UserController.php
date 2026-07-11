@@ -39,6 +39,11 @@ class UserController extends BaseController
         return $this->success($this->service()->stats($where), '获取成功');
     }
 
+    public function memberLevelOptions()
+    {
+        return $this->success($this->service()->memberLevelOptions(), '获取成功');
+    }
+
     public function export()
     {
         $where = $this->request->param(['keyword', 'status', 'register_type', 'group_ids', 'tag_ids']);
@@ -154,5 +159,21 @@ class UserController extends BaseController
 
         $this->service()->resetPassword((int) $id, $data['password']);
         return $this->success(null, '重置成功');
+    }
+
+    public function setMember($id)
+    {
+        if (empty($id)) {
+            return $this->error('ID不能为空');
+        }
+
+        $data = $this->request->param(['level_id', 'locked', 'lock_until', 'remark']);
+        $result = $this->service()->setMemberLevel(
+            (int) $id,
+            $data,
+            (int) ($this->request->admin_id ?? 0)
+        );
+
+        return $this->success($result, '设置成功');
     }
 }

@@ -1,8 +1,10 @@
 <script setup>
+import { useDecorateStore } from '@/store/decorate'
 import { ref, computed } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { applyRefundBatch, getRefundReasonOptions } from '@/api/order/refund'
 import { getOrderDetail } from '@/api/order/order'
+const decorateStore = useDecorateStore()
 
 const orderId = ref('')
 const selectedItemInputs = ref([])
@@ -346,7 +348,11 @@ function redirectAfterSubmit(result) {
 </script>
 
 <template>
-  <view class="page">
+  <view
+    class="page"
+    :class="[`theme-${decorateStore.resolvedThemeMode}`]"
+    :style="decorateStore.themeStyle"
+  >
     <mb-navbar :title="refundType === 1 ? '申请退货退款' : '申请退款'" />
 
     <!-- Product info card -->
@@ -480,6 +486,7 @@ function redirectAfterSubmit(result) {
       </view>
     </view>
 
+    <mb-copyright-footer />
     <view class="bottom-spacer" />
     <view class="submit-bar">
       <view class="submit-bar__amount">
@@ -503,7 +510,8 @@ function redirectAfterSubmit(result) {
         </text>
       </view>
     </view>
-  </view>
+      <mb-floating-action />
+</view>
 </template>
 
 <style lang="scss" scoped>
@@ -516,7 +524,7 @@ function redirectAfterSubmit(result) {
 // ---- Product card ----
 .product-card {
   margin-top: 18rpx;
-  background: $mb-color-bg;
+  background: var(--color-bg, #ffffff);
   border-radius: 16rpx;
   border: 1rpx solid rgba(25, 27, 35, 0.06);
   overflow: hidden;
@@ -535,13 +543,13 @@ function redirectAfterSubmit(result) {
 .product-card__title {
   font-size: 30rpx;
   font-weight: 700;
-  color: $mb-color-text-title;
+  color: var(--color-text-title, #191b23);
 }
 
 .product-card__summary {
   flex-shrink: 0;
   font-size: 24rpx;
-  color: $mb-color-text-secondary;
+  color: var(--color-text-secondary, #434654);
 }
 
 .product-card__item {
@@ -584,7 +592,7 @@ function redirectAfterSubmit(result) {
     top: 10rpx;
     height: 4rpx;
     border-radius: $mb-radius-full;
-    background: $mb-color-primary;
+    background: var(--color-primary, #0d50d5);
     opacity: 0.32;
   }
 }
@@ -600,7 +608,7 @@ function redirectAfterSubmit(result) {
 .product-card__name {
   font-size: 28rpx;
   font-weight: 600;
-  color: $mb-color-text-title;
+  color: var(--color-text-title, #191b23);
   line-height: 1.36;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -617,7 +625,7 @@ function redirectAfterSubmit(result) {
   border-radius: 8rpx;
   background: #f4f6fa;
   font-size: 22rpx;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
   white-space: nowrap;
   text-overflow: ellipsis;
 }
@@ -632,7 +640,7 @@ function redirectAfterSubmit(result) {
 .product-card__price {
   font-size: 26rpx;
   font-weight: 700;
-  color: $mb-color-text-title;
+  color: var(--color-text-title, #191b23);
 }
 
 .product-card__qty {
@@ -640,13 +648,13 @@ function redirectAfterSubmit(result) {
   border-radius: $mb-radius-full;
   background: #f4f6fa;
   font-size: 22rpx;
-  color: $mb-color-text-secondary;
+  color: var(--color-text-secondary, #434654);
 }
 
 // ---- Form section ----
 .form-section {
   margin-top: 18rpx;
-  background: $mb-color-bg;
+  background: var(--color-bg, #ffffff);
   border: 1rpx solid rgba(25, 27, 35, 0.06);
   border-radius: 16rpx;
   padding: 0 24rpx;
@@ -659,7 +667,7 @@ function redirectAfterSubmit(result) {
 .form-section__title {
   font-size: 30rpx;
   font-weight: 700;
-  color: $mb-color-text-title;
+  color: var(--color-text-title, #191b23);
 }
 
 .form-item {
@@ -682,7 +690,7 @@ function redirectAfterSubmit(result) {
 .form-item__label {
   font-size: 28rpx;
   font-weight: 700;
-  color: $mb-color-text-title;
+  color: var(--color-text-title, #191b23);
   flex-shrink: 0;
   margin-bottom: 0;
 }
@@ -702,19 +710,19 @@ function redirectAfterSubmit(result) {
 
 .form-item__value {
   font-size: 28rpx;
-  color: $mb-color-text;
+  color: var(--color-text, #191b23);
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
 
 .form-item__value--placeholder {
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
 }
 
 .form-item__arrow {
   font-size: 34rpx;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
   font-weight: 300;
 }
 
@@ -733,7 +741,7 @@ function redirectAfterSubmit(result) {
 .readonly-box__value {
   font-size: 28rpx;
   font-weight: 700;
-  color: $mb-color-text-title;
+  color: var(--color-text-title, #191b23);
 }
 
 .readonly-box__hint {
@@ -742,7 +750,7 @@ function redirectAfterSubmit(result) {
   white-space: nowrap;
   text-overflow: ellipsis;
   font-size: 22rpx;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
 }
 
 // ---- Option buttons ----
@@ -776,11 +784,11 @@ function redirectAfterSubmit(result) {
 .option-grid__text {
   font-size: 26rpx;
   font-weight: 600;
-  color: $mb-color-text-secondary;
+  color: var(--color-text-secondary, #434654);
 }
 
 .option-grid__item--active .option-grid__text {
-  color: $mb-color-primary;
+  color: var(--color-primary, #0d50d5);
 }
 
 // ---- Textarea ----
@@ -794,7 +802,7 @@ function redirectAfterSubmit(result) {
   height: 176rpx;
   padding: 20rpx 20rpx 44rpx;
   font-size: 26rpx;
-  color: $mb-color-text;
+  color: var(--color-text, #191b23);
   background: #f7f9fc;
   border-radius: 14rpx;
   line-height: 1.6;
@@ -806,7 +814,7 @@ function redirectAfterSubmit(result) {
   right: 20rpx;
   bottom: 14rpx;
   font-size: 22rpx;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
 }
 
 // ---- Image grid ----
@@ -845,7 +853,7 @@ function redirectAfterSubmit(result) {
 
 .image-grid__remove-text {
   font-size: $mb-font-xs;
-  color: $mb-color-text-inverse;
+  color: var(--color-text-inverse, #ffffff);
 }
 
 .image-grid__add {
@@ -856,12 +864,12 @@ function redirectAfterSubmit(result) {
   justify-content: center;
   background: #f7f9fc;
   border-radius: 14rpx;
-  border: 2rpx dashed $mb-color-border;
+  border: 2rpx dashed var(--color-border, #e0e4e8);
 }
 
 .image-grid__add-icon {
   font-size: 48rpx;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
   font-weight: 300;
   line-height: 1;
 }
@@ -895,7 +903,7 @@ function redirectAfterSubmit(result) {
 .submit-bar__label {
   display: block;
   font-size: 22rpx;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
 }
 
 .submit-bar__value-wrap {
@@ -908,7 +916,7 @@ function redirectAfterSubmit(result) {
   margin-right: 3rpx;
   font-size: 24rpx;
   font-weight: 700;
-  color: $mb-color-primary;
+  color: var(--color-primary, #0d50d5);
 }
 
 .submit-bar__value {
@@ -916,7 +924,7 @@ function redirectAfterSubmit(result) {
   font-size: 38rpx;
   font-weight: 800;
   line-height: 1.1;
-  color: $mb-color-primary;
+  color: var(--color-primary, #0d50d5);
   white-space: nowrap;
   text-overflow: ellipsis;
 }
@@ -924,14 +932,14 @@ function redirectAfterSubmit(result) {
 .submit-bar__value--pending {
   font-size: 24rpx;
   font-weight: 600;
-  color: $mb-color-text-secondary;
+  color: var(--color-text-secondary, #434654);
 }
 
 .submit-bar__hint {
   display: block;
   margin-top: 2rpx;
   font-size: 20rpx;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
 }
 
 .submit-btn {
@@ -941,7 +949,7 @@ function redirectAfterSubmit(result) {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: $mb-color-primary;
+  background: var(--color-primary, #0d50d5);
   border-radius: $mb-radius-full;
   transition: opacity 0.15s;
 
@@ -958,6 +966,6 @@ function redirectAfterSubmit(result) {
 .submit-btn__text {
   font-size: 28rpx;
   font-weight: 600;
-  color: $mb-color-text-inverse;
+  color: var(--color-text-inverse, #ffffff);
 }
 </style>

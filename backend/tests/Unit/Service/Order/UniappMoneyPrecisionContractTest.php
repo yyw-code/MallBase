@@ -60,18 +60,22 @@ final class UniappMoneyPrecisionContractTest extends TestCase
     public function testBackendOrderMoneyUsesBcmathAndFreightUsesCentPrecision(): void
     {
         $orderServiceSource = file_get_contents(__DIR__ . '/../../../../../backend/app/service/client/order/OrderService.php');
+        $orderPriceContextSource = file_get_contents(__DIR__ . '/../../../../../backend/app/extension/order/OrderPriceContext.php');
         $freightSource = file_get_contents(__DIR__ . '/../../../../../backend/app/service/FreightCalculatorService.php');
         $prepaySource = file_get_contents(__DIR__ . '/../../../../../backend/app/service/client/payment/PrepayService.php');
         $cartServiceSource = file_get_contents(__DIR__ . '/../../../../../backend/app/service/client/order/CartService.php');
 
         $this->assertIsString($orderServiceSource);
+        $this->assertIsString($orderPriceContextSource);
         $this->assertIsString($freightSource);
         $this->assertIsString($prepaySource);
         $this->assertIsString($cartServiceSource);
 
         $this->assertStringContainsString('bcmul($item[\'unit_price\'], (string) $item[\'quantity\'], 2)', $orderServiceSource);
         $this->assertStringContainsString('bcadd($total, $sub, 2)', $orderServiceSource);
-        $this->assertStringContainsString('bcsub(bcadd($total, $freight, 2), $discount, 2)', $orderServiceSource);
+        $this->assertStringContainsString('bcsub(bcadd($this->totalAmount, $this->freightAmount, 2), $this->discountAmount, 2)', $orderPriceContextSource);
+        $this->assertStringContainsString('bcmul((string) ($item[\'unit_price\'] ?? \'0.00\'), (string) $quantity, 2)', $orderPriceContextSource);
+        $this->assertStringContainsString('decimalToCents(string $amount): int', $orderPriceContextSource);
         $this->assertStringContainsString('decimalToCents(max(0.0, $firstFee))', $freightSource);
         $this->assertStringContainsString('decimalToUnits(max(0.0, $totalCount), 3)', $freightSource);
         $this->assertStringContainsString('intdiv($extraUnits + $continueUnits - 1, $continueUnits)', $freightSource);

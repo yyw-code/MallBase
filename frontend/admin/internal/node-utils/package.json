@@ -15,16 +15,17 @@
     "stub": "pnpm unbuild --stub"
   },
   "files": [
-    "dist"
+    "dist",
+    "runtime"
   ],
-  "main": "./dist/index.mjs",
-  "module": "./dist/index.mjs",
+  "main": "./runtime/index.mjs",
+  "module": "./runtime/index.mjs",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./src/index.ts",
-      "import": "./dist/index.mjs",
-      "default": "./dist/index.mjs"
+      "import": "./runtime/index.mjs",
+      "default": "./runtime/index.mjs"
     }
   },
   "dependencies": {

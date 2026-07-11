@@ -1,7 +1,9 @@
 <script setup>
+import { useDecorateStore } from '@/store/decorate'
 import { computed, ref } from 'vue'
 import { onLoad, onPullDownRefresh, onReachBottom } from '@dcloudio/uni-app'
 import { getWalletLogs } from '@/api/user/wallet'
+const decorateStore = useDecorateStore()
 
 const tabs = [
   { key: '', label: '全部' },
@@ -137,8 +139,12 @@ function formatAmount(value) {
 </script>
 
 <template>
-  <view class="page">
-    <mb-navbar title="余额明细" bg-color="#ffffff" />
+  <view
+    class="page"
+    :class="[`theme-${decorateStore.resolvedThemeMode}`]"
+    :style="decorateStore.themeStyle"
+  >
+    <mb-navbar title="余额明细" bg-color="var(--color-bg, #ffffff)" />
 
     <view class="tabs">
       <view
@@ -226,22 +232,24 @@ function formatAmount(value) {
         </view>
       </view>
     </view>
-  </view>
+      <mb-copyright-footer />
+      <mb-floating-action />
+</view>
 </template>
 
 <style lang="scss" scoped>
 .page {
   min-height: 100vh;
   padding: 0 $mb-spacing-page 56rpx;
-  background: $mb-color-bg-secondary;
+  background: var(--color-bg-secondary, #faf8ff);
 }
 
 .tabs {
   display: flex;
   margin-top: $mb-spacing-md;
   padding: 6rpx;
-  background: $mb-color-bg;
-  border: 1rpx solid $mb-color-divider;
+  background: var(--color-bg, #ffffff);
+  border: 1rpx solid var(--color-divider, #f0f2f5);
   border-radius: $mb-radius-md;
 }
 
@@ -255,17 +263,17 @@ function formatAmount(value) {
 }
 
 .tab--active {
-  background: $mb-color-primary;
+  background: var(--color-primary, #0d50d5);
 }
 
 .tab__text {
   font-size: $mb-font-sm;
-  color: $mb-color-text-secondary;
+  color: var(--color-text-secondary, #434654);
   font-weight: 600;
 }
 
 .tab--active .tab__text {
-  color: $mb-color-text-inverse;
+  color: var(--color-text-inverse, #ffffff);
 }
 
 .filter-row {
@@ -278,24 +286,24 @@ function formatAmount(value) {
   height: 56rpx;
   padding: 0 24rpx;
   border-radius: $mb-radius-full;
-  background: $mb-color-bg;
-  border: 1rpx solid $mb-color-divider;
+  background: var(--color-bg, #ffffff);
+  border: 1rpx solid var(--color-divider, #f0f2f5);
   display: flex;
   align-items: center;
 }
 
 .filter-chip--active {
-  background: rgba($mb-color-primary, 0.08);
-  border-color: rgba($mb-color-primary, 0.3);
+  background: var(--color-primary-soft, rgba(13, 80, 213, 0.08));
+  border-color: var(--color-primary-border, rgba(13, 80, 213, 0.3));
 }
 
 .filter-chip__text {
   font-size: $mb-font-sm;
-  color: $mb-color-text-secondary;
+  color: var(--color-text-secondary, #434654);
 }
 
 .filter-chip--active .filter-chip__text {
-  color: $mb-color-primary;
+  color: var(--color-primary, #0d50d5);
   font-weight: 600;
 }
 
@@ -311,13 +319,13 @@ function formatAmount(value) {
   display: block;
   margin-bottom: $mb-spacing-sm;
   font-size: $mb-font-sm;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
 }
 
 .record-card {
   overflow: hidden;
-  background: $mb-color-bg;
-  border: 1rpx solid $mb-color-divider;
+  background: var(--color-bg, #ffffff);
+  border: 1rpx solid var(--color-divider, #f0f2f5);
   border-radius: $mb-radius-lg;
 }
 
@@ -327,7 +335,7 @@ function formatAmount(value) {
   padding: 26rpx $mb-spacing-lg;
 
   & + & {
-    border-top: 1rpx solid $mb-color-divider;
+    border-top: 1rpx solid var(--color-divider, #f0f2f5);
   }
 }
 
@@ -335,7 +343,7 @@ function formatAmount(value) {
   width: 64rpx;
   height: 64rpx;
   border-radius: $mb-radius-md;
-  background: rgba($mb-color-warning, 0.12);
+  background: var(--color-warning-soft, rgba(240, 173, 78, 0.12));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -343,7 +351,7 @@ function formatAmount(value) {
 }
 
 .record-row__icon--income {
-  background: rgba($mb-color-success, 0.1);
+  background: var(--color-success-soft, rgba(52, 199, 89, 0.1));
 }
 
 .record-row__icon-text {
@@ -353,7 +361,7 @@ function formatAmount(value) {
 }
 
 .record-row__icon--income .record-row__icon-text {
-  color: $mb-color-success;
+  color: var(--color-success, #34c759);
 }
 
 .record-row__main {
@@ -366,7 +374,7 @@ function formatAmount(value) {
 
 .record-row__title {
   font-size: $mb-font-md;
-  color: $mb-color-text-title;
+  color: var(--color-text-title, #191b23);
   font-weight: 600;
 }
 
@@ -376,7 +384,7 @@ function formatAmount(value) {
 .empty__desc,
 .empty-filter__label {
   font-size: $mb-font-sm;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
 }
 
 .record-row__right {
@@ -388,12 +396,12 @@ function formatAmount(value) {
 
 .record-row__amount {
   font-size: $mb-font-md;
-  color: $mb-color-text-title;
+  color: var(--color-text-title, #191b23);
   font-weight: 700;
 }
 
 .record-row__amount--income {
-  color: $mb-color-success;
+  color: var(--color-success, #34c759);
 }
 
 .load-state {
@@ -414,8 +422,8 @@ function formatAmount(value) {
   width: 116rpx;
   height: 116rpx;
   border-radius: $mb-radius-lg;
-  background: $mb-color-bg;
-  border: 1rpx solid $mb-color-divider;
+  background: var(--color-bg, #ffffff);
+  border: 1rpx solid var(--color-divider, #f0f2f5);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -423,14 +431,14 @@ function formatAmount(value) {
 
 .empty__wallet-icon {
   font-size: 52rpx;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
   font-weight: 700;
 }
 
 .empty__title {
   margin-top: 24rpx;
   font-size: $mb-font-lg;
-  color: $mb-color-text-title;
+  color: var(--color-text-title, #191b23);
   font-weight: 600;
 }
 
@@ -442,8 +450,8 @@ function formatAmount(value) {
   width: 100%;
   margin-top: 44rpx;
   padding: $mb-spacing-lg;
-  background: $mb-color-bg;
-  border: 1rpx solid $mb-color-divider;
+  background: var(--color-bg, #ffffff);
+  border: 1rpx solid var(--color-divider, #f0f2f5);
   border-radius: $mb-radius-lg;
 }
 
@@ -456,7 +464,7 @@ function formatAmount(value) {
 
 .empty-filter__value {
   font-size: $mb-font-sm;
-  color: $mb-color-text-title;
+  color: var(--color-text-title, #191b23);
   font-weight: 600;
 }
 
@@ -476,11 +484,11 @@ function formatAmount(value) {
 }
 
 .empty-filter__btn--ghost {
-  background: $mb-color-bg-surface;
+  background: var(--color-bg-surface, #f3f3fe);
 }
 
 .empty-filter__btn--primary {
-  background: $mb-color-primary;
+  background: var(--color-primary, #0d50d5);
 }
 
 .empty-filter__btn-text {
@@ -489,10 +497,10 @@ function formatAmount(value) {
 }
 
 .empty-filter__btn-text--ghost {
-  color: $mb-color-text-secondary;
+  color: var(--color-text-secondary, #434654);
 }
 
 .empty-filter__btn-text--primary {
-  color: $mb-color-text-inverse;
+  color: var(--color-text-inverse, #ffffff);
 }
 </style>

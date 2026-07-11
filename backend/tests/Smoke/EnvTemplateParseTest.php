@@ -49,6 +49,8 @@ final class EnvTemplateParseTest extends TestCase
             'SWOOLE_WORKER_NUM',
             'APP_DEBUG',
             'JWT_SECRET',
+            'JWT_EXPIRE',
+            'JWT_REFRESH_EXPIRE',
             'MYSQL_PORT',
             'MYSQL_ROOT_PASSWORD',
             'REDIS_HOST_PORT',
@@ -107,6 +109,10 @@ final class EnvTemplateParseTest extends TestCase
             $this->assertSame($rootParsed['REDIS_PORT'] ?? null, $backendParsed['REDIS_PORT'] ?? null);
             $this->assertSame($rootParsed['REDIS_CACHE_DB'] ?? null, $backendParsed['REDIS_CACHE_DB'] ?? null);
             $this->assertSame($rootParsed['CACHE_DRIVER'] ?? null, $backendParsed['CACHE_DRIVER'] ?? null);
+            $this->assertNotSame('please-change-or-leave-for-random', $rootParsed['JWT_SECRET'] ?? null);
+            $this->assertSame($rootParsed['JWT_SECRET'] ?? null, $backendParsed['JWT_SECRET'] ?? null);
+            $this->assertSame($rootParsed['JWT_EXPIRE'] ?? null, $backendParsed['JWT_EXPIRE'] ?? null);
+            $this->assertSame($rootParsed['JWT_REFRESH_EXPIRE'] ?? null, $backendParsed['JWT_REFRESH_EXPIRE'] ?? null);
             $this->assertArrayNotHasKey('REDIS_HOST_PORT', $backendParsed);
             $this->assertArrayNotHasKey('CRON_ENABLE', $rootParsed);
             $this->assertArrayNotHasKey('SWOOLE_QUEUE_ENABLE', $rootParsed);
@@ -165,6 +171,7 @@ final class EnvTemplateParseTest extends TestCase
             $this->assertSame('16379', $rootParsed['REDIS_HOST_PORT'] ?? null);
             $this->assertSame('6379', $rootParsed['REDIS_PORT'] ?? null);
             $this->assertSame('6379', $backendParsed['REDIS_PORT'] ?? null);
+            $this->assertSame($rootParsed['JWT_SECRET'] ?? null, $backendParsed['JWT_SECRET'] ?? null);
             $this->assertArrayNotHasKey('REDIS_HOST_PORT', $backendParsed);
         } finally {
             $this->removeDirectory($root);

@@ -55,12 +55,43 @@ class InstallService extends BaseService
         'static/client/logo.png',
         'static/client/launch.png',
         'static/client/share-cover.png',
+        'static/decorate/decorate-banner-market.png',
+        'static/decorate/decorate-banner-member.png',
+        'static/decorate/decorate-banner-home.png',
+        'static/decorate/decorate-nav-digital.png',
+        'static/decorate/decorate-nav-beauty.png',
+        'static/decorate/decorate-nav-fashion.png',
+        'static/decorate/decorate-nav-home.png',
+        'static/decorate/decorate-nav-food.png',
+        'static/decorate/decorate-nav-sport.png',
+        'static/decorate/decorate-cube-new.png',
+        'static/decorate/decorate-cube-picks.png',
+        'static/decorate/decorate-cube-member.png',
+        'static/decorate/decorate-cube-sale.png',
+        'static/decorate/decorate-entry-category.png',
+        'static/decorate/profile-order-pay.svg',
+        'static/decorate/profile-order-ship.svg',
+        'static/decorate/profile-order-receive.svg',
+        'static/decorate/profile-order-refund.svg',
+        'static/decorate/profile-service-address.svg',
+        'static/decorate/profile-service-settings.svg',
+        'static/decorate/profile-service-support.svg',
+        'static/decorate/floating/service.png',
+        'static/decorate/floating/cart.png',
+        'static/decorate/floating/home.png',
+        'static/decorate/floating/collapse-left.png',
+        'static/decorate/floating/collapse-right.png',
     ];
 
     /**
      * 默认管理员头像路径（超管创建时使用）
      */
     private const DEFAULT_AVATAR_PATH = '/static/admin/logo.png';
+
+    private const PLATFORM_BASE_URL = 'https://platform.gosowong.cn';
+    private const PLATFORM_APP_CODE = 'mallbase';
+    private const PLATFORM_CONNECT_TIMEOUT_MS = 2000;
+    private const PLATFORM_TIMEOUT_MS = 5000;
 
     protected string $modelClass = BaseModel::class;
 
@@ -126,6 +157,43 @@ class InstallService extends BaseService
         ];
     }
 
+    public function getInstallAgreement(): array
+    {
+        $response = $this->fetchPlatformInstallAgreement();
+        if (($response['success'] ?? false) !== true) {
+            return $this->unavailableInstallAgreement((string) ($response['message'] ?? 'request_failed'));
+        }
+
+        $data = is_array($response['data'] ?? null) ? $response['data'] : [];
+        $enabled = $this->platformBoolean($data['enabled'] ?? true, true);
+        $title = trim((string) ($data['title'] ?? 'MallBase 安装协议')) ?: 'MallBase 安装协议';
+        $content = trim((string) ($data['content'] ?? ''));
+
+        if (!$enabled) {
+            return [
+                'app_code' => self::PLATFORM_APP_CODE,
+                'enabled'  => false,
+                'available' => true,
+                'title'    => $title,
+                'content'  => '',
+                'source'   => 'platform',
+            ];
+        }
+
+        if ($content === '') {
+            return $this->unavailableInstallAgreement('empty_content');
+        }
+
+        return [
+            'app_code' => self::PLATFORM_APP_CODE,
+            'enabled'  => true,
+            'available' => true,
+            'title'    => $title,
+            'content'  => $content,
+            'source'   => 'platform',
+        ];
+    }
+
     public function getInstallPageMeta(): array
     {
         $envValues = $this->readEnvFile();
@@ -165,6 +233,92 @@ class InstallService extends BaseService
         $text = strtolower(trim((string) $value));
 
         return in_array($text, ['1', 'true', 'on', 'yes'], true) ? 'true' : 'false';
+    }
+
+    private function unavailableInstallAgreement(string $reason): array
+    {
+        return [
+            'app_code' => self::PLATFORM_APP_CODE,
+            'enabled'  => true,
+            'available' => false,
+            'title'    => 'MallBase 安装协议',
+            'content'  => '',
+            'source'   => 'platform',
+            'error'    => $reason !== '' ? $reason : 'request_failed',
+        ];
+    }
+
+    /**
+     * @return array{success: bool, data?: array<string, mixed>, message?: string}
+     */
+    private function fetchPlatformInstallAgreement(): array
+    {
+        if (!function_exists('curl_init')) {
+            return ['success' => false, 'message' => 'curl_missing'];
+        }
+
+        $url = rtrim(self::PLATFORM_BASE_URL, '/')
+            . '/api/v1/install/agreement?'
+            . http_build_query(['app_code' => self::PLATFORM_APP_CODE]);
+
+        $ch = curl_init($url);
+        if ($ch === false) {
+            return ['success' => false, 'message' => 'curl_init_failed'];
+        }
+
+        curl_setopt_array($ch, [
+            CURLOPT_HTTPGET => true,
+            CURLOPT_HTTPHEADER => ['Accept: application/json'],
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_CONNECTTIMEOUT_MS => self::PLATFORM_CONNECT_TIMEOUT_MS,
+            CURLOPT_TIMEOUT_MS => self::PLATFORM_TIMEOUT_MS,
+        ]);
+
+        $raw = curl_exec($ch);
+        $curlError = curl_error($ch);
+        $status = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+        curl_close($ch);
+
+        if (!is_string($raw)) {
+            return ['success' => false, 'message' => $curlError !== '' ? $curlError : 'request_failed'];
+        }
+
+        if ($status < 200 || $status >= 300) {
+            return ['success' => false, 'message' => 'http_' . $status];
+        }
+
+        $decoded = json_decode($raw, true);
+        if (!is_array($decoded)) {
+            return ['success' => false, 'message' => 'invalid_json'];
+        }
+
+        if (!is_array($decoded['data'] ?? null)) {
+            return ['success' => false, 'message' => 'invalid_payload'];
+        }
+
+        return ['success' => true, 'data' => $decoded['data']];
+    }
+
+    private function platformBoolean(mixed $value, bool $default): bool
+    {
+        if (is_bool($value)) {
+            return $value;
+        }
+
+        $text = strtolower(trim((string) $value));
+        if ($text === '') {
+            return $default;
+        }
+
+        if (in_array($text, ['1', 'true', 'on', 'yes', 'enabled'], true)) {
+            return true;
+        }
+
+        if (in_array($text, ['0', 'false', 'off', 'no', 'disabled'], true)) {
+            return false;
+        }
+
+        return $default;
     }
 
     public function checkEnvironment(): array
@@ -739,10 +893,13 @@ class InstallService extends BaseService
                 'CRON_ENABLE'            => $cronEnable ? 'true' : 'false',
                 'SWOOLE_QUEUE_ENABLE'    => $swooleQueueEnable ? 'true' : 'false',
                 'JWT_SECRET'             => $jwtSecret,
+                'JWT_EXPIRE'             => (string) env('JWT_EXPIRE', 7200),
+                'JWT_REFRESH_EXPIRE'     => (string) env('JWT_REFRESH_EXPIRE', 2592000),
                 'INSTALL_RUNTIME_MARKER' => $runtimeMarker,
                 'SITE_URL'               => $siteUrl,
             ];
             $this->writeEnvFile($envData);
+            $this->writeProjectRootEnvFile($envData);
             $this->applyRuntimeConfig($envData);
         } catch (\Throwable $e) {
             $emit('write_env', 'error', '写入配置文件失败：' . $e->getMessage());
@@ -1119,6 +1276,66 @@ class InstallService extends BaseService
     }
 
     /**
+     * 本地安装时同步根目录 .env；容器内不可写或无项目根模板时静默跳过。
+     *
+     * @param array<string, string> $envData
+     */
+    private function writeProjectRootEnvFile(array $envData): void
+    {
+        $backendRoot = rtrim(app()->getRootPath(), DIRECTORY_SEPARATOR);
+        $projectRoot = dirname($backendRoot);
+        $envPath = $projectRoot . DIRECTORY_SEPARATOR . '.env';
+        $templatePath = $projectRoot . DIRECTORY_SEPARATOR . 'deploy' . DIRECTORY_SEPARATOR . 'docker' . DIRECTORY_SEPARATOR . '.example.env';
+
+        if (!is_file($templatePath)) {
+            return;
+        }
+        if (is_file($envPath) && !is_writable($envPath)) {
+            return;
+        }
+        if (!is_file($envPath) && !is_writable($projectRoot)) {
+            return;
+        }
+
+        $baseContent = is_file($envPath)
+            ? (string) file_get_contents($envPath)
+            : (string) file_get_contents($templatePath);
+
+        $rootKeys = [
+            'DB_HOST',
+            'DB_PORT',
+            'DB_NAME',
+            'DB_USER',
+            'DB_PASS',
+            'REDIS_HOST',
+            'REDIS_PORT',
+            'REDIS_CACHE_DB',
+            'REDIS_PASSWORD',
+            'CACHE_DRIVER',
+            'JWT_SECRET',
+            'JWT_EXPIRE',
+            'JWT_REFRESH_EXPIRE',
+            'SITE_URL',
+        ];
+
+        foreach ($rootKeys as $key) {
+            if (!array_key_exists($key, $envData)) {
+                continue;
+            }
+
+            $quoted = $this->formatEnvValue($envData[$key]);
+            $pattern = '/^' . preg_quote($key, '/') . '\s*=.*$/m';
+            if (preg_match($pattern, $baseContent) === 1) {
+                $baseContent = (string) preg_replace($pattern, $key . '=' . $quoted, $baseContent, 1);
+            } else {
+                $baseContent = rtrim($baseContent, "\n") . PHP_EOL . $key . '=' . $quoted . PHP_EOL;
+            }
+        }
+
+        file_put_contents($envPath, $baseContent);
+    }
+
+    /**
      * @param array<string, string> $envData
      */
     private function applyRuntimeConfig(array $envData): void
@@ -1169,6 +1386,8 @@ class InstallService extends BaseService
 
         $jwt = Config::get('jwt', []);
         $jwt['secret'] = $envData['JWT_SECRET'] ?? '';
+        $jwt['expire'] = (int) ($envData['JWT_EXPIRE'] ?? 7200);
+        $jwt['refresh_expire'] = (int) ($envData['JWT_REFRESH_EXPIRE'] ?? 2592000);
         Config::set($jwt, 'jwt');
 
         $cron = Config::get('cron', []);

@@ -1,10 +1,11 @@
 <script setup>
+import { useDecorateStore } from '@/store/decorate'
 import { computed, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { getRechargeMethods } from '@/api/config'
 import { getRechargePackages } from '@/api/recharge/package'
 import { getWalletInfo } from '@/api/user/wallet'
-import { getPlatform } from '@/utils/platform'
+const decorateStore = useDecorateStore()
 
 const loading = ref(false)
 const submitLoading = ref(false)
@@ -84,11 +85,9 @@ async function submitRecharge() {
   submitLoading.value = true
   try {
     const methods = await getRechargeMethods()
-    const platform = getPlatform()
     const channels = (Array.isArray(methods) ? methods : []).filter((item) => {
       const code = Number(item?.code)
       if (code === 1) return true
-      if (code === 2) return platform === 'h5'
       return false
     })
 
@@ -116,8 +115,12 @@ async function submitRecharge() {
 </script>
 
 <template>
-  <view class="page">
-    <mb-navbar title="余额充值" bg-color="#ffffff" />
+  <view
+    class="page"
+    :class="[`theme-${decorateStore.resolvedThemeMode}`]"
+    :style="decorateStore.themeStyle"
+  >
+    <mb-navbar title="余额充值" bg-color="var(--color-bg, #ffffff)" />
 
     <view class="top-action" @tap="goRechargeRecords">
       <text class="top-action__icon">▤</text>
@@ -181,6 +184,8 @@ async function submitRecharge() {
       </view>
     </view>
 
+    <mb-copyright-footer />
+
     <view class="footer">
       <view class="footer__info">
         <text class="footer__label">到账余额</text>
@@ -196,7 +201,8 @@ async function submitRecharge() {
         <text class="footer__button-text">{{ submitLoading ? '处理中' : '立即充值' }}</text>
       </view>
     </view>
-  </view>
+      <mb-floating-action />
+</view>
 </template>
 
 <style lang="scss" scoped>
@@ -238,7 +244,7 @@ async function submitRecharge() {
   overflow: hidden;
   margin-top: 36rpx;
   padding: 32rpx;
-  background: $mb-color-bg;
+  background: var(--color-bg, #ffffff);
   border: 1rpx solid rgba(233, 198, 146, 0.42);
   border-radius: 28rpx;
 }
@@ -259,7 +265,7 @@ async function submitRecharge() {
 
 .summary__label,
 .section__title {
-  color: $mb-color-text-secondary;
+  color: var(--color-text-secondary, #434654);
   font-size: $mb-font-sm;
 }
 
@@ -270,14 +276,14 @@ async function submitRecharge() {
 }
 
 .summary__symbol {
-  color: $mb-color-text-title;
+  color: var(--color-text-title, #191b23);
   font-size: $mb-font-lg;
   font-weight: 700;
 }
 
 .summary__value {
   margin-left: 6rpx;
-  color: $mb-color-text-title;
+  color: var(--color-text-title, #191b23);
   font-size: 64rpx;
   font-weight: 800;
 }
@@ -290,7 +296,7 @@ async function submitRecharge() {
 }
 
 .section__title {
-  color: $mb-color-text-title;
+  color: var(--color-text-title, #191b23);
   font-size: $mb-font-xl;
   font-weight: 700;
 }
@@ -332,8 +338,8 @@ async function submitRecharge() {
 }
 
 .package-card--active {
-  border-color: $mb-color-primary;
-  box-shadow: inset 0 0 0 1rpx $mb-color-primary;
+  border-color: var(--color-primary, #0d50d5);
+  box-shadow: inset 0 0 0 1rpx var(--color-primary, #0d50d5);
 }
 
 .package-card__corner {
@@ -363,7 +369,7 @@ async function submitRecharge() {
   align-items: center;
   height: 52rpx;
   padding: 0 18rpx;
-  background: $mb-color-primary;
+  background: var(--color-primary, #0d50d5);
   border-radius: $mb-radius-full;
 }
 
@@ -374,7 +380,7 @@ async function submitRecharge() {
   width: 28rpx;
   height: 28rpx;
   margin-right: 8rpx;
-  color: $mb-color-primary;
+  color: var(--color-primary, #0d50d5);
   font-size: 20rpx;
   font-weight: 800;
   background: #ffffff;
@@ -418,7 +424,7 @@ async function submitRecharge() {
 }
 
 .package-card__metric-label {
-  color: $mb-color-text-secondary;
+  color: var(--color-text-secondary, #434654);
   font-size: $mb-font-md;
 }
 
@@ -431,14 +437,14 @@ async function submitRecharge() {
 
 .package-card__amount {
   margin-top: 8rpx;
-  color: $mb-color-primary;
+  color: var(--color-primary, #0d50d5);
   font-size: 42rpx;
   font-weight: 800;
 }
 
 .package-card__pay {
   margin-top: 8rpx;
-  color: $mb-color-text-title;
+  color: var(--color-text-title, #191b23);
   font-size: 40rpx;
   font-weight: 800;
 }
@@ -451,14 +457,14 @@ async function submitRecharge() {
 }
 
 .empty__title {
-  color: $mb-color-text-title;
+  color: var(--color-text-title, #191b23);
   font-size: $mb-font-md;
   font-weight: 700;
 }
 
 .empty__desc {
   margin-top: 8rpx;
-  color: $mb-color-text-secondary;
+  color: var(--color-text-secondary, #434654);
   font-size: $mb-font-sm;
 }
 
@@ -472,8 +478,8 @@ async function submitRecharge() {
   align-items: center;
   justify-content: space-between;
   padding: 20rpx $mb-spacing-page calc(20rpx + env(safe-area-inset-bottom));
-  background: $mb-color-bg;
-  border-top: 1rpx solid $mb-color-divider;
+  background: var(--color-bg, #ffffff);
+  border-top: 1rpx solid var(--color-divider, #f0f2f5);
 }
 
 .footer__info {
@@ -482,13 +488,13 @@ async function submitRecharge() {
 }
 
 .footer__label {
-  color: $mb-color-text-secondary;
+  color: var(--color-text-secondary, #434654);
   font-size: $mb-font-xs;
 }
 
 .footer__amount {
   margin-top: 4rpx;
-  color: $mb-color-text-title;
+  color: var(--color-text-title, #191b23);
   font-size: $mb-font-xl;
   font-weight: 800;
 }
@@ -500,7 +506,7 @@ async function submitRecharge() {
   min-width: 220rpx;
   height: $mb-btn-height-md;
   padding: 0 36rpx;
-  background: $mb-color-primary;
+  background: var(--color-primary, #0d50d5);
   border-radius: $mb-radius-full;
 }
 

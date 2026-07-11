@@ -19,12 +19,15 @@ use mall_base\base\BaseModel;
  */
 class Order extends BaseModel
 {
+    public const DELIVERY_TYPE_PHYSICAL = 'physical';
+    public const DELIVERY_TYPE_VIRTUAL = 'virtual';
+
     protected $name = 'order';
     protected $pk = 'id';
     protected $autoWriteTimestamp = true;
     protected $deleteTime = 'delete_time';
 
-    protected array $append = ['status_text', 'pay_method_text'];
+    protected array $append = ['status_text', 'pay_method_text', 'delivery_type_text'];
 
     /**
      * 订单项（一对多）
@@ -79,5 +82,18 @@ class Order extends BaseModel
             return '';
         }
         return PayMethod::textOf((int) $method);
+    }
+
+    public static function deliveryTypeLabel(string $type): string
+    {
+        return match ($type) {
+            self::DELIVERY_TYPE_VIRTUAL => '虚拟发货',
+            default => '实物快递',
+        };
+    }
+
+    public function getDeliveryTypeTextAttr($value, $data): string
+    {
+        return self::deliveryTypeLabel((string) ($data['delivery_type'] ?? self::DELIVERY_TYPE_PHYSICAL));
     }
 }

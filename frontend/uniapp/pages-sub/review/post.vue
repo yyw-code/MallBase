@@ -1,9 +1,11 @@
 <script setup>
+import { useDecorateStore } from '@/store/decorate'
 import { ref, computed } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { postReview, uploadReviewImage } from '@/api/goods/review'
 import { getOrderDetail } from '@/api/order/order'
 import { getUploadConfig, getUploadedAssetValue } from '@/api/upload'
+const decorateStore = useDecorateStore()
 
 // ---------- query params ----------
 const orderId = ref('')
@@ -230,7 +232,11 @@ function normalizeUploadedPath(uploaded) {
 </script>
 
 <template>
-  <view class="page">
+  <view
+    class="page"
+    :class="[`theme-${decorateStore.resolvedThemeMode}`]"
+    :style="decorateStore.themeStyle"
+  >
     <mb-navbar title="发布评价" />
 
     <view v-if="loadingOrder" class="order-picker order-picker--loading">
@@ -352,6 +358,7 @@ function normalizeUploadedPath(uploaded) {
     </view>
 
     <!-- Bottom spacer for fixed button -->
+    <mb-copyright-footer />
     <view class="bottom-spacer" />
 
     <!-- Fixed bottom submit bar -->
@@ -364,13 +371,14 @@ function normalizeUploadedPath(uploaded) {
         <text class="submit-bar__btn-text">{{ submitText }}</text>
       </view>
     </view>
-  </view>
+      <mb-floating-action />
+</view>
 </template>
 
 <style lang="scss" scoped>
 .page {
   min-height: 100vh;
-  background: $mb-color-bg;
+  background: var(--color-bg, #ffffff);
   padding: 0 $mb-spacing-page $mb-spacing-lg;
 }
 
@@ -378,7 +386,7 @@ function normalizeUploadedPath(uploaded) {
 .order-picker {
   margin-top: $mb-spacing-md;
   padding: $mb-spacing-lg;
-  background: $mb-color-bg-secondary;
+  background: var(--color-bg-secondary, #faf8ff);
   border-radius: $mb-radius-lg;
 }
 
@@ -390,7 +398,7 @@ function normalizeUploadedPath(uploaded) {
 
 .order-picker__loading-text {
   font-size: $mb-font-sm;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
 }
 
 .order-picker__title {
@@ -398,7 +406,7 @@ function normalizeUploadedPath(uploaded) {
   margin-bottom: $mb-spacing-md;
   font-size: $mb-font-md;
   font-weight: 600;
-  color: $mb-color-text-title;
+  color: var(--color-text-title, #191b23);
 }
 
 .order-picker__item {
@@ -406,7 +414,7 @@ function normalizeUploadedPath(uploaded) {
   align-items: center;
   gap: $mb-spacing-md;
   padding: $mb-spacing-md 0;
-  border-top: 1rpx solid $mb-color-divider;
+  border-top: 1rpx solid var(--color-divider, #f0f2f5);
 }
 
 .order-picker__item:first-of-type {
@@ -415,7 +423,7 @@ function normalizeUploadedPath(uploaded) {
 }
 
 .order-picker__item--active .order-picker__name {
-  color: $mb-color-primary;
+  color: var(--color-primary, #0d50d5);
 }
 
 .order-picker__img {
@@ -423,7 +431,7 @@ function normalizeUploadedPath(uploaded) {
   width: 104rpx;
   height: 104rpx;
   border-radius: $mb-radius-md;
-  background: $mb-color-bg;
+  background: var(--color-bg, #ffffff);
 }
 
 .order-picker__img--empty {
@@ -436,7 +444,7 @@ function normalizeUploadedPath(uploaded) {
   width: 44rpx;
   height: 44rpx;
   border-radius: $mb-radius-sm;
-  background: $mb-color-divider;
+  background: var(--color-divider, #f0f2f5);
 }
 
 .order-picker__info {
@@ -450,7 +458,7 @@ function normalizeUploadedPath(uploaded) {
 .order-picker__name {
   font-size: $mb-font-sm;
   font-weight: 600;
-  color: $mb-color-text-title;
+  color: var(--color-text-title, #191b23);
   line-height: 1.4;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -461,7 +469,7 @@ function normalizeUploadedPath(uploaded) {
 .order-picker__spec,
 .order-picker__qty {
   font-size: $mb-font-xs;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
   line-height: 1.4;
 }
 
@@ -470,7 +478,7 @@ function normalizeUploadedPath(uploaded) {
   width: 36rpx;
   height: 36rpx;
   border-radius: 50%;
-  border: 2rpx solid $mb-color-border;
+  border: 2rpx solid var(--color-border, #e0e4e8);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -480,7 +488,7 @@ function normalizeUploadedPath(uploaded) {
   width: 20rpx;
   height: 20rpx;
   border-radius: 50%;
-  background: $mb-color-primary;
+  background: var(--color-primary, #0d50d5);
 }
 
 // ---- Product card ----
@@ -490,7 +498,7 @@ function normalizeUploadedPath(uploaded) {
   gap: $mb-spacing-md;
   padding: $mb-spacing-lg;
   margin-top: $mb-spacing-md;
-  background: $mb-color-bg-secondary;
+  background: var(--color-bg-secondary, #faf8ff);
   border-radius: $mb-radius-lg;
 }
 
@@ -499,14 +507,14 @@ function normalizeUploadedPath(uploaded) {
   width: 120rpx;
   height: 120rpx;
   border-radius: $mb-radius-md;
-  background: $mb-color-bg-secondary;
+  background: var(--color-bg-secondary, #faf8ff);
 }
 
 .product-card__img--empty {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: $mb-color-divider;
+  background: var(--color-divider, #f0f2f5);
 }
 
 .product-card__img-placeholder {
@@ -524,7 +532,7 @@ function normalizeUploadedPath(uploaded) {
 .product-card__name {
   font-size: $mb-font-md;
   font-weight: 600;
-  color: $mb-color-text-title;
+  color: var(--color-text-title, #191b23);
   line-height: 1.4;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -534,7 +542,7 @@ function normalizeUploadedPath(uploaded) {
 
 .product-card__spec {
   font-size: $mb-font-sm;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
   line-height: 1.4;
 }
 
@@ -547,7 +555,7 @@ function normalizeUploadedPath(uploaded) {
   display: block;
   font-size: $mb-font-md;
   font-weight: 600;
-  color: $mb-color-text-title;
+  color: var(--color-text-title, #191b23);
   margin-bottom: $mb-spacing-md;
 }
 
@@ -556,7 +564,7 @@ function normalizeUploadedPath(uploaded) {
   margin-top: -8rpx;
   margin-bottom: $mb-spacing-md;
   font-size: $mb-font-xs;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
   line-height: 1.4;
 }
 
@@ -570,11 +578,11 @@ function normalizeUploadedPath(uploaded) {
 .star-row__star {
   font-size: 56rpx;
   line-height: 1;
-  color: $mb-color-border;
+  color: var(--color-border, #e0e4e8);
   transition: color 0.15s;
 
   &--active {
-    color: $mb-color-text;
+    color: var(--color-text, #191b23);
   }
 }
 
@@ -582,13 +590,13 @@ function normalizeUploadedPath(uploaded) {
   display: block;
   margin-top: $mb-spacing-sm;
   font-size: $mb-font-sm;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
 }
 
 // ---- Textarea ----
 .textarea-wrap {
   position: relative;
-  background: $mb-color-bg-secondary;
+  background: var(--color-bg-secondary, #faf8ff);
   border-radius: $mb-radius-lg;
   padding: $mb-spacing-md;
 }
@@ -597,13 +605,13 @@ function normalizeUploadedPath(uploaded) {
   width: 100%;
   min-height: 200rpx;
   font-size: $mb-font-md;
-  color: $mb-color-text;
+  color: var(--color-text, #191b23);
   line-height: 1.6;
   background: transparent;
 }
 
 .textarea-wrap__placeholder {
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
   font-size: $mb-font-md;
 }
 
@@ -612,7 +620,7 @@ function normalizeUploadedPath(uploaded) {
   text-align: right;
   margin-top: $mb-spacing-sm;
   font-size: $mb-font-xs;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
 }
 
 // ---- Image grid ----
@@ -650,7 +658,7 @@ function normalizeUploadedPath(uploaded) {
 
 .image-grid__delete-text {
   font-size: $mb-font-xs;
-  color: $mb-color-text-inverse;
+  color: var(--color-text-inverse, #ffffff);
   line-height: 1;
 }
 
@@ -658,8 +666,8 @@ function normalizeUploadedPath(uploaded) {
   width: 200rpx;
   height: 200rpx;
   border-radius: $mb-radius-md;
-  background: $mb-color-bg-secondary;
-  border: 2rpx dashed $mb-color-border;
+  background: var(--color-bg-secondary, #faf8ff);
+  border: 2rpx dashed var(--color-border, #e0e4e8);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -667,7 +675,7 @@ function normalizeUploadedPath(uploaded) {
 
 .image-grid__add-icon {
   font-size: 64rpx;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
   line-height: 1;
   font-weight: 300;
 }
@@ -679,12 +687,12 @@ function normalizeUploadedPath(uploaded) {
   justify-content: space-between;
   margin-top: $mb-spacing-xl;
   padding: $mb-spacing-md 0;
-  border-top: 1rpx solid $mb-color-divider;
+  border-top: 1rpx solid var(--color-divider, #f0f2f5);
 }
 
 .anonymous-row__label {
   font-size: $mb-font-md;
-  color: $mb-color-text;
+  color: var(--color-text, #191b23);
 }
 
 // ---- Bottom submit bar ----
@@ -695,7 +703,7 @@ function normalizeUploadedPath(uploaded) {
   right: 0;
   padding: 24rpx 48rpx;
   padding-bottom: calc(24rpx + env(safe-area-inset-bottom));
-  background: $mb-color-bg;
+  background: var(--color-bg, #ffffff);
   box-shadow: $mb-shadow-bar;
   z-index: 100;
 }
@@ -703,7 +711,7 @@ function normalizeUploadedPath(uploaded) {
 .submit-bar__btn {
   height: 88rpx;
   border-radius: $mb-radius-sm;
-  background: $mb-color-primary;
+  background: var(--color-primary, #0d50d5);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -724,7 +732,7 @@ function normalizeUploadedPath(uploaded) {
 .submit-bar__btn-text {
   font-size: $mb-font-lg;
   font-weight: 600;
-  color: $mb-color-text-inverse;
+  color: var(--color-text-inverse, #ffffff);
 }
 
 // ---- Bottom spacer ----

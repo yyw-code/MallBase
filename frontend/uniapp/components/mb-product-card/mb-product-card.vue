@@ -1,40 +1,121 @@
 <template>
-  <view
-    class="mb-card"
-    :class="[`mb-card--${mode}`]"
-    @tap="$emit('tap', goods)"
-  >
-    <view class="mb-card__img-wrap" :class="[`mb-card__img-wrap--${mode}`]">
-      <image
-        class="mb-card__img"
-        :src="cover"
-        :mode="mode === 'grid' ? 'aspectFill' : 'aspectFill'"
-        lazy-load
-        @error="onImageError"
-      />
-    </view>
-    <view class="mb-card__info">
-      <text class="mb-card__name">{{ goods.name }}</text>
-      <text v-if="goods.subtitle" class="mb-card__sub">{{ goods.subtitle }}</text>
-      <view class="mb-card__bottom">
-        <mb-price :value="goods.price" :size="mode === 'grid' ? 'md' : 'md'" color="var(--color-primary, #0d50d5)" />
-        <text v-if="goods.original_price && Number(goods.original_price) > Number(goods.price)" class="mb-card__original">
-          ¥{{ Number(goods.original_price).toFixed(0) }}
+  <view class="mb-product-card">
+    <view
+      class="mb-card"
+      :class="[`mb-card--${mode}`]"
+      @tap="$emit('tap', goods)"
+    >
+      <view class="mb-card__img-wrap" :class="[`mb-card__img-wrap--${mode}`]">
+        <image
+          class="mb-card__img"
+          :src="cover"
+          :mode="mode === 'grid' ? 'aspectFill' : 'aspectFill'"
+          lazy-load
+          @error="onImageError"
+        />
+        <view
+          v-if="showBadge && badgeText"
+          class="mb-card__badge"
+          :style="badgeStyle"
+        >
+          <text class="mb-card__badge-text" :style="badgeTextStyle">
+            {{ badgeText }}
+          </text>
+        </view>
+      </view>
+      <view class="mb-card__info">
+        <text class="mb-card__name">{{ goods.name }}</text>
+        <text v-if="showSubtitle && subtitleText" class="mb-card__sub">
+          {{ subtitleText }}
         </text>
+        <view class="mb-card__bottom">
+          <view class="mb-card__price-main">
+            <mb-price
+              :value="goods.price"
+              :size="mode === 'grid' ? 'md' : 'md'"
+              color="var(--color-price, #ff5a1f)"
+            />
+            <text
+              v-if="showMarketPrice && marketPrice > Number(goods.price)"
+              class="mb-card__original"
+            >
+              ¥{{ marketPrice.toFixed(0) }}
+            </text>
+          </view>
+          <view
+            v-if="showCartButton"
+            class="mb-card__add"
+            :class="{ 'mb-card__add--loading': adding }"
+            @tap.stop="quickAddCart"
+          >
+            <text class="mb-card__add-symbol">+</text>
+          </view>
+        </view>
+        <text v-if="showSales" class="mb-card__sales">{{ salesText }}</text>
       </view>
     </view>
+    <mb-spec-selector
+      :visible="specVisible"
+      :goods="specGoods || {}"
+      :sku-list="specSkuList"
+      mode="cart"
+      :selected-specs="specSelectedSpecs"
+      :selected-sku-id="specSelectedSkuId"
+      :points-enabled="pointsEnabled"
+      :member-enabled="memberEnabled"
+      @change="onSpecChange"
+      @close="specVisible = false"
+      @add-to-cart="onSpecAddToCart"
+    />
   </view>
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
+import { getGoodsDetail } from '@/api/goods/goods'
+import { useAppStore } from '@/store/app'
+import { useCartStore } from '@/store/cart'
+import { requireLogin } from '@/utils/auth'
+import {
+  getGoodsBadgeBoxStyle,
+  getGoodsBadgeText,
+  getGoodsBadgeTextStyle,
+  normalizeGoodsBadgeConfig,
+} from '@/utils/goods-badge'
 
 const props = defineProps({
   goods: { type: Object, required: true },
+  loginRedirect: { type: String, default: '/pages/index/index' },
   mode: { type: String, default: 'grid' },
+  showBadge: { type: [Boolean, Number, String], default: undefined },
+  showCartButton: { type: [Boolean, Number, String], default: undefined },
+  showMarketPrice: { type: [Boolean, Number, String], default: undefined },
+  showSales: { type: [Boolean, Number, String], default: undefined },
+  showSubtitle: { type: [Boolean, Number, String], default: undefined },
 })
 
 defineEmits(['tap'])
+
+const appStore = useAppStore()
+const cartStore = useCartStore()
+const adding = ref(false)
+const specVisible = ref(false)
+const specGoods = ref(null)
+const specSelectedSpecs = ref({})
+const specSelectedSkuId = ref(null)
+
+function isTruthyFlag(value) {
+  return value === true || value === 1 || value === '1' || value === 'true'
+}
+
+function configFlag(propValue, code, fallback = true) {
+  if (propValue !== undefined && propValue !== null && propValue !== '') {
+    return isTruthyFlag(propValue)
+  }
+  const value = appStore.siteConfig?.[code]
+  if (value === undefined || value === null || value === '') return fallback
+  return isTruthyFlag(value)
+}
 
 const cover = computed(() => {
   if (props.goods.cover) return props.goods.cover
@@ -48,6 +129,150 @@ const cover = computed(() => {
   return ''
 })
 
+const showSubtitle = computed(() =>
+  configFlag(props.showSubtitle, 'client_goods_card_show_subtitle'),
+)
+const showMarketPrice = computed(() =>
+  configFlag(props.showMarketPrice, 'client_goods_card_show_market_price'),
+)
+const showSales = computed(() =>
+  configFlag(props.showSales, 'client_goods_card_show_sales'),
+)
+const showBadge = computed(() =>
+  configFlag(props.showBadge, 'client_goods_card_show_badge'),
+)
+const showCartButton = computed(() =>
+  configFlag(props.showCartButton, 'client_goods_card_show_cart_button'),
+)
+const pointsEnabled = computed(() => configFlag(undefined, 'points_enabled', true))
+const memberEnabled = computed(() => configFlag(undefined, 'member_enabled', false))
+
+const goodsBadgeConfig = computed(() =>
+  normalizeGoodsBadgeConfig(appStore.siteConfig?.client_goods_badge_config),
+)
+
+const badgeStyle = computed(() => {
+  return getGoodsBadgeBoxStyle(goodsBadgeConfig.value)
+})
+
+const badgeTextStyle = computed(() => {
+  return getGoodsBadgeTextStyle(goodsBadgeConfig.value)
+})
+
+const marketPrice = computed(() =>
+  Number(props.goods.market_price || props.goods.original_price || 0),
+)
+
+const subtitleText = computed(() =>
+  props.goods.subtitle ||
+  props.goods.description ||
+  props.goods.category_name ||
+  '',
+)
+
+const badgeText = computed(() => {
+  return getGoodsBadgeText(props.goods, goodsBadgeConfig.value)
+})
+
+const salesText = computed(() => {
+  const sales = Number(
+    props.goods.sales || props.goods.sales_count || props.goods.virtual_sales || 0,
+  )
+  if (sales >= 10000) return `月销 ${(sales / 10000).toFixed(1)}万+`
+  if (sales > 0) return `月销 ${sales}+`
+  return '月销 200+'
+})
+
+const specSkuList = computed(() => (
+  Array.isArray(specGoods.value?.skus) ? specGoods.value.skus : []
+))
+
+function resolveGoodsId() {
+  return props.goods.id || props.goods.goods_id || ''
+}
+
+async function quickAddCart() {
+  if (!showCartButton.value || adding.value) return
+
+  const goodsId = resolveGoodsId()
+  if (!goodsId) {
+    uni.showToast({ title: '商品信息异常', icon: 'none' })
+    return
+  }
+
+  adding.value = true
+  try {
+    const detail = await getGoodsDetail(goodsId)
+    specGoods.value = {
+      ...props.goods,
+      ...(detail?.data ?? detail ?? {}),
+    }
+    resetSpecSelection(specGoods.value)
+    specVisible.value = true
+  } catch {
+    uni.showToast({ title: '规格加载失败，请重试', icon: 'none' })
+  } finally {
+    adding.value = false
+  }
+}
+
+function getSpecGroups(goods) {
+  const meta = goods?.spec_meta
+  if (!Array.isArray(meta) || meta.length === 0) return []
+  return meta.map((group) => ({
+    name: group.name,
+    values: Array.isArray(group.values) ? group.values.map((item) => item.value) : [],
+  }))
+}
+
+function resetSpecSelection(goods) {
+  specSelectedSpecs.value = {}
+  specSelectedSkuId.value = null
+
+  const skus = Array.isArray(goods?.skus) ? goods.skus : []
+  const groups = getSpecGroups(goods)
+  const defaultSku = skus.find((sku) => Number(sku.stock) > 0) || skus[0]
+  if (!defaultSku) return
+
+  if (groups.length === 0) {
+    specSelectedSkuId.value = defaultSku.id
+    return
+  }
+
+  const values = String(defaultSku.spec_values || '').split(',')
+  const nextSpecs = {}
+  groups.forEach((group, idx) => {
+    const value = values[idx]
+    if (value) nextSpecs[group.name] = value
+  })
+  specSelectedSpecs.value = nextSpecs
+  specSelectedSkuId.value = defaultSku.id
+}
+
+function onSpecChange(payload) {
+  specSelectedSpecs.value = { ...(payload?.selectedSpecs || {}) }
+  specSelectedSkuId.value = payload?.sku?.id || null
+}
+
+async function onSpecAddToCart({ sku, quantity }) {
+  if (!requireLogin(props.loginRedirect)) {
+    specVisible.value = false
+    return
+  }
+  if (!sku?.id || adding.value) return
+
+  adding.value = true
+  try {
+    await cartStore.add(sku.id, quantity)
+    specVisible.value = false
+    uni.showToast({ title: '已加入购物车', icon: 'success' })
+  } catch {
+    uni.showToast({ title: '加入失败，请重试', icon: 'none' })
+  } finally {
+    adding.value = false
+  }
+}
+
 function onImageError(error) {
   if (import.meta.env.DEV) {
     console.warn('[mb-product-card:image-error]', {
@@ -59,7 +284,13 @@ function onImageError(error) {
 </script>
 
 <style scoped>
+.mb-product-card {
+  width: 100%;
+}
+
 .mb-card {
+  width: 100%;
+  box-sizing: border-box;
   background: var(--color-bg, #ffffff);
   border-radius: var(--radius-lg, 20rpx);
   border: 1rpx solid var(--color-divider, #f0f2f5);
@@ -74,12 +305,16 @@ function onImageError(error) {
 .mb-card--list {
   display: flex;
   flex-direction: row;
+  align-items: stretch;
   padding: 20rpx;
   gap: 20rpx;
 }
 
-.mb-card__img-wrap--grid {
+.mb-card__img-wrap {
   position: relative;
+}
+
+.mb-card__img-wrap--grid {
   width: 100%;
   height: 0;
   padding-bottom: 100%;
@@ -107,11 +342,31 @@ function onImageError(error) {
   left: 0;
 }
 
+.mb-card__badge {
+  position: absolute;
+  top: 16rpx;
+  left: 16rpx;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-primary, #0d50d5);
+}
+
+.mb-card__badge-text {
+  font-size: 20rpx;
+  line-height: 1;
+  font-weight: 600;
+  color: var(--color-text-on-primary, #ffffff);
+}
+
 .mb-card__info {
   padding: 20rpx 24rpx 24rpx;
   display: flex;
   flex-direction: column;
   flex: 1;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .mb-card--list .mb-card__info {
@@ -120,6 +375,7 @@ function onImageError(error) {
 }
 
 .mb-card__name {
+  max-width: 100%;
   font-size: 26rpx;
   font-weight: 600;
   color: var(--color-text, #191b23);
@@ -132,6 +388,7 @@ function onImageError(error) {
 }
 
 .mb-card__sub {
+  max-width: 100%;
   font-size: 22rpx;
   color: var(--color-text-tertiary, #737686);
   margin-top: 4rpx;
@@ -142,14 +399,54 @@ function onImageError(error) {
 
 .mb-card__bottom {
   display: flex;
-  align-items: baseline;
+  align-items: center;
+  justify-content: space-between;
   gap: 12rpx;
+  min-width: 0;
   margin-top: 12rpx;
+}
+
+.mb-card__price-main {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 12rpx;
+  min-width: 0;
 }
 
 .mb-card__original {
   font-size: 22rpx;
   color: var(--color-text-tertiary, #737686);
   text-decoration: line-through;
+}
+
+.mb-card__add {
+  width: 32rpx;
+  height: 32rpx;
+  border-radius: 999rpx;
+  background: var(--color-primary, #0d50d5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.mb-card__add--loading {
+  opacity: 0.45;
+}
+
+.mb-card__add-symbol {
+  margin-top: -2rpx;
+  font-size: 26rpx;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--color-text-inverse, #ffffff);
+}
+
+.mb-card__sales {
+  margin-top: 10rpx;
+  font-size: 22rpx;
+  line-height: 1.3;
+  color: var(--color-text-tertiary, #737686);
 }
 </style>

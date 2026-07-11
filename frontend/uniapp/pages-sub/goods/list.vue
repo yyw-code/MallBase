@@ -1,5 +1,9 @@
 <template>
-  <view class="goods-list">
+  <view
+    class="goods-list"
+    :class="[`theme-${decorateStore.resolvedThemeMode}`]"
+    :style="decorateStore.themeStyle"
+  >
     <mb-navbar title="商品列表" />
 
     <!-- Search bar -->
@@ -88,21 +92,41 @@
             <view v-else class="goods-card__image-placeholder">
               <view class="goods-card__placeholder-icon" />
             </view>
-            <view v-if="getGoodsBadge(item)" class="goods-card__badge">
-              <text class="goods-card__badge-text">{{ getGoodsBadge(item) }}</text>
+            <view
+              v-if="showGoodsBadge && getGoodsBadge(item)"
+              class="goods-card__badge"
+              :style="goodsBadgeStyle"
+            >
+              <text class="goods-card__badge-text" :style="goodsBadgeTextStyle">
+                {{ getGoodsBadge(item) }}
+              </text>
             </view>
           </view>
           <view class="goods-card__body">
             <text class="goods-card__name">{{ item.name }}</text>
-            <text class="goods-card__sub">{{ getGoodsSubtitle(item) }}</text>
+            <text v-if="showGoodsSubtitle" class="goods-card__sub">
+              {{ getGoodsSubtitle(item) }}
+            </text>
             <view class="goods-card__bottom">
               <view class="goods-card__price-main">
-                <mb-price :value="item.price" size="md" color="var(--color-primary, #0d50d5)" />
-                <text v-if="item.market_price && Number(item.market_price) > Number(item.price)" class="goods-card__origin">
+                <mb-price
+                  :value="item.price"
+                  size="md"
+                  color="var(--color-primary, #0d50d5)"
+                />
+                <text
+                  v-if="
+                    showMarketPrice &&
+                    item.market_price &&
+                    Number(item.market_price) > Number(item.price)
+                  "
+                  class="goods-card__origin"
+                >
                   ¥{{ Number(item.market_price).toFixed(0) }}
                 </text>
               </view>
               <view
+                v-if="showCartButton"
                 class="goods-card__add"
                 :class="{ 'goods-card__add--loading': addingGoodsId === item.id }"
                 @tap.stop="quickAddCart(item)"
@@ -110,7 +134,9 @@
                 <text class="goods-card__add-symbol">+</text>
               </view>
             </view>
-            <text class="goods-card__sales">{{ formatSales(item) }}</text>
+            <text v-if="showGoodsSales" class="goods-card__sales">
+              {{ formatSales(item) }}
+            </text>
           </view>
         </view>
       </view>
@@ -138,18 +164,36 @@
             <view v-else class="goods-row__image-placeholder">
               <view class="goods-card__placeholder-icon" />
             </view>
+            <view
+              v-if="showGoodsBadge && getGoodsBadge(item)"
+              class="goods-card__badge"
+              :style="goodsBadgeStyle"
+            >
+              <text class="goods-card__badge-text" :style="goodsBadgeTextStyle">
+                {{ getGoodsBadge(item) }}
+              </text>
+            </view>
           </view>
           <view class="goods-row__body">
             <view class="goods-row__top">
               <text class="goods-row__name">{{ item.name }}</text>
-              <text class="goods-row__sub">{{ getGoodsSubtitle(item) }}</text>
+              <text v-if="showGoodsSubtitle" class="goods-row__sub">
+                {{ getGoodsSubtitle(item) }}
+              </text>
             </view>
             <view class="goods-row__bottom">
               <view class="goods-row__price-main">
-                <mb-price :value="item.price" size="md" color="var(--color-primary, #0d50d5)" />
-                <text class="goods-row__sales">{{ formatSales(item) }}</text>
+                <mb-price
+                  :value="item.price"
+                  size="md"
+                  color="var(--color-primary, #0d50d5)"
+                />
+                <text v-if="showGoodsSales" class="goods-row__sales">
+                  {{ formatSales(item) }}
+                </text>
               </view>
               <view
+                v-if="showCartButton"
                 class="goods-card__add"
                 :class="{ 'goods-card__add--loading': addingGoodsId === item.id }"
                 @tap.stop="quickAddCart(item)"
@@ -170,23 +214,64 @@
       </view>
       <text v-else-if="noMore" class="goods-list__no-more">没有更多了</text>
     </view>
+    <mb-copyright-footer />
+    <mb-floating-action />
+    <mb-spec-selector
+      :visible="specVisible"
+      :goods="specGoods || {}"
+      :sku-list="specSkuList"
+      mode="cart"
+      :selected-specs="specSelectedSpecs"
+      :selected-sku-id="specSelectedSkuId"
+      @change="onSpecChange"
+      @close="specVisible = false"
+      @add-to-cart="onSpecAddToCart"
+    />
   </view>
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
+import { useDecorateStore } from '@/store/decorate'
+import { computed, ref, reactive } from 'vue'
 import { onLoad, onPullDownRefresh, onReachBottom } from '@dcloudio/uni-app'
 import { getGoodsDetail, getGoodsList } from '@/api/goods/goods'
 import { useCartStore } from '@/store/cart'
 import { requireLogin } from '@/utils/auth'
+import { useAppStore } from '@/store/app'
+import {
+  getGoodsBadgeBoxStyle,
+  getGoodsBadgeText,
+  getGoodsBadgeTextStyle,
+  normalizeGoodsBadgeConfig,
+} from '@/utils/goods-badge'
+const decorateStore = useDecorateStore()
 
 const cartStore = useCartStore()
+const appStore = useAppStore()
 
 // ---------- query params ----------
 const query = reactive({
+  brand_id: '',
   category_id: '',
+  ids: '',
+  is_hot: '',
+  is_new: '',
+  is_recommend: '',
   keyword: '',
+  sort_by: '',
+  tag_id: '',
+  tag_ids: '',
 })
+
+const queryValueKeys = [
+  'category_id',
+  'brand_id',
+  'ids',
+  'tag_id',
+  'tag_ids',
+  'keyword',
+]
+const queryFlagKeys = ['is_recommend', 'is_new', 'is_hot']
 
 // ---------- sort state ----------
 const sortOptions = [
@@ -211,15 +296,44 @@ const loading = ref(false)
 const initialLoading = ref(true)
 const noMore = ref(false)
 const addingGoodsId = ref(null)
+const specVisible = ref(false)
+const specGoods = ref(null)
+const specSelectedSpecs = ref({})
+const specSelectedSkuId = ref(null)
+
+const showCartButton = computed(() =>
+  configFlag('client_goods_card_show_cart_button', true),
+)
+const showGoodsSales = computed(() =>
+  configFlag('client_goods_card_show_sales', true),
+)
+const showMarketPrice = computed(() =>
+  configFlag('client_goods_card_show_market_price', true),
+)
+const showGoodsSubtitle = computed(() =>
+  configFlag('client_goods_card_show_subtitle', true),
+)
+const showGoodsBadge = computed(() =>
+  configFlag('client_goods_card_show_badge', true),
+)
+const goodsBadgeConfig = computed(() =>
+  normalizeGoodsBadgeConfig(appStore.siteConfig?.client_goods_badge_config),
+)
+const goodsBadgeStyle = computed(() => {
+  return getGoodsBadgeBoxStyle(goodsBadgeConfig.value)
+})
+const goodsBadgeTextStyle = computed(() => {
+  return getGoodsBadgeTextStyle(goodsBadgeConfig.value)
+})
+const specSkuList = computed(() => (
+  Array.isArray(specGoods.value?.skus) ? specGoods.value.skus : []
+))
 
 // ---------- lifecycle ----------
 onLoad((params) => {
-  if (params?.category_id) {
-    query.category_id = params.category_id
-  }
-  if (params?.keyword) {
-    query.keyword = params.keyword
-  }
+  syncQueryFromParams(params || {})
+  applyInitialSort(query.sort_by)
+  applyInitialFilter()
   fetchGoods(true)
 })
 
@@ -251,16 +365,20 @@ async function fetchGoods(reset) {
     limit,
   }
 
-  if (query.category_id) {
-    params.category_id = query.category_id
-  }
-  if (query.keyword) {
-    params.keyword = query.keyword
-  }
+  queryValueKeys.forEach((key) => {
+    if (query[key]) {
+      params[key] = query[key]
+    }
+  })
+  queryFlagKeys.forEach((key) => {
+    if (isEnabledFlag(query[key])) {
+      params[key] = 1
+    }
+  })
   if (activeFilter.value) {
     params[activeFilter.value] = 1
   }
-  const sortBy = getSortBy()
+  const sortBy = getSortBy() || query.sort_by
   if (sortBy) {
     params.sort_by = sortBy
   }
@@ -294,6 +412,7 @@ async function fetchGoods(reset) {
 
 // ---------- sort ----------
 function onSortTap(item) {
+  query.sort_by = ''
   if (item.key === 'price') {
     if (activeSortKey.value === 'price') {
       sortOrder.value = sortOrder.value === 'asc' ? 'desc' : 'asc'
@@ -318,6 +437,54 @@ function getSortBy() {
   return ''
 }
 
+function syncQueryFromParams(params) {
+  const queryKeys = [...queryValueKeys, ...queryFlagKeys, 'sort_by']
+  queryKeys.forEach((key) => {
+    if (params?.[key] !== undefined && params[key] !== null) {
+      query[key] = String(params[key])
+    }
+  })
+}
+
+function applyInitialSort(sortBy) {
+  if (sortBy === 'sales_desc') {
+    activeSortKey.value = 'sales'
+    sortField.value = 'sales'
+    sortOrder.value = 'desc'
+    return
+  }
+  if (sortBy === 'price_asc' || sortBy === 'price_desc') {
+    activeSortKey.value = 'price'
+    sortField.value = 'price'
+    sortOrder.value = sortBy === 'price_desc' ? 'desc' : 'asc'
+    return
+  }
+  activeSortKey.value = 'default'
+  sortField.value = ''
+  sortOrder.value = ''
+}
+
+function applyInitialFilter() {
+  activeFilter.value =
+    queryFlagKeys.find((key) => isEnabledFlag(query[key])) || ''
+}
+
+function isEnabledFlag(value) {
+  return value === true || value === 1 || value === '1' || value === 'true'
+}
+
+function configFlag(code, fallback = true) {
+  const value = appStore.siteConfig?.[code]
+  if (value === undefined || value === null || value === '') return fallback
+  return isEnabledFlag(value)
+}
+
+function clearQueryFlags() {
+  queryFlagKeys.forEach((key) => {
+    query[key] = ''
+  })
+}
+
 // ---------- filters ----------
 function openFilterSheet() {
   const nextViewText = viewMode.value === 'grid' ? '切换列表展示' : '切换双列展示'
@@ -340,7 +507,11 @@ function openFilterSheet() {
         return
       }
 
+      clearQueryFlags()
       activeFilter.value = option.filter
+      if (activeFilter.value) {
+        query[activeFilter.value] = '1'
+      }
       fetchGoods(true)
     },
   })
@@ -363,10 +534,7 @@ function getGoodsSubtitle(item) {
 }
 
 function getGoodsBadge(item) {
-  if (item.is_new || item.is_new_arrival) return '新品'
-  if (item.is_hot || Number(item.sales || item.sales_count || 0) > 500) return '热卖'
-  if (item.is_recommend || item.is_recommended) return '推荐'
-  return ''
+  return getGoodsBadgeText(item, goodsBadgeConfig.value)
 }
 
 function formatSales(item) {
@@ -376,37 +544,79 @@ function formatSales(item) {
   return '月销 200+'
 }
 
-function getDirectSkuId(item) {
-  if (item.sku_id) return item.sku_id
-  if (item.default_sku_id) return item.default_sku_id
-  if (Array.isArray(item.skus) && item.skus.length === 1) return item.skus[0].id
-  return ''
-}
-
 async function quickAddCart(item) {
-  if (!requireLogin(`/pages-sub/goods/list${buildCurrentQuery()}`)) return
   if (addingGoodsId.value) return
 
   addingGoodsId.value = item.id
   try {
-    let skuId = getDirectSkuId(item)
-
-    if (!skuId) {
-      const detail = await getGoodsDetail(item.id)
-      const goods = detail?.data ?? detail ?? {}
-      const skus = Array.isArray(goods.skus) ? goods.skus : []
-      if (skus.length === 1) {
-        skuId = skus[0].id
-      }
-    }
-
-    if (!skuId) {
-      uni.showToast({ title: '请选择规格', icon: 'none' })
-      setTimeout(() => goDetail(item.id), 500)
+    if (!item?.id) {
+      uni.showToast({ title: '商品信息异常', icon: 'none' })
       return
     }
 
-    await cartStore.add(skuId, 1)
+    const detail = await getGoodsDetail(item.id)
+    specGoods.value = {
+      ...item,
+      ...(detail?.data ?? detail ?? {}),
+    }
+    resetSpecSelection(specGoods.value)
+    specVisible.value = true
+  } catch {
+    uni.showToast({ title: '规格加载失败，请重试', icon: 'none' })
+  } finally {
+    addingGoodsId.value = null
+  }
+}
+
+function getSpecGroups(goods) {
+  const meta = goods?.spec_meta
+  if (!Array.isArray(meta) || meta.length === 0) return []
+  return meta.map((group) => ({
+    name: group.name,
+    values: Array.isArray(group.values) ? group.values.map((item) => item.value) : [],
+  }))
+}
+
+function resetSpecSelection(goods) {
+  specSelectedSpecs.value = {}
+  specSelectedSkuId.value = null
+
+  const skus = Array.isArray(goods?.skus) ? goods.skus : []
+  const groups = getSpecGroups(goods)
+  const defaultSku = skus.find((sku) => Number(sku.stock) > 0) || skus[0]
+  if (!defaultSku) return
+
+  if (groups.length === 0) {
+    specSelectedSkuId.value = defaultSku.id
+    return
+  }
+
+  const values = String(defaultSku.spec_values || '').split(',')
+  const nextSpecs = {}
+  groups.forEach((group, idx) => {
+    const value = values[idx]
+    if (value) nextSpecs[group.name] = value
+  })
+  specSelectedSpecs.value = nextSpecs
+  specSelectedSkuId.value = defaultSku.id
+}
+
+function onSpecChange(payload) {
+  specSelectedSpecs.value = { ...(payload?.selectedSpecs || {}) }
+  specSelectedSkuId.value = payload?.sku?.id || null
+}
+
+async function onSpecAddToCart({ sku, quantity }) {
+  if (!requireLogin(`/pages-sub/goods/list${buildCurrentQuery()}`)) {
+    specVisible.value = false
+    return
+  }
+  if (!sku?.id) return
+
+  addingGoodsId.value = specGoods.value?.id || null
+  try {
+    await cartStore.add(sku.id, quantity)
+    specVisible.value = false
     uni.showToast({ title: '已加入购物车', icon: 'success' })
   } catch {
     uni.showToast({ title: '加入失败，请重试', icon: 'none' })
@@ -428,8 +638,16 @@ function goSearch() {
 
 function buildCurrentQuery() {
   const params = []
-  if (query.category_id) params.push(`category_id=${encodeURIComponent(query.category_id)}`)
-  if (query.keyword) params.push(`keyword=${encodeURIComponent(query.keyword)}`)
+  const queryKeys = [...queryValueKeys, ...queryFlagKeys]
+  queryKeys.forEach((key) => {
+    if (query[key]) {
+      params.push(`${key}=${encodeURIComponent(query[key])}`)
+    }
+  })
+  const sortBy = getSortBy() || query.sort_by
+  if (sortBy) {
+    params.push(`sort_by=${encodeURIComponent(sortBy)}`)
+  }
   return params.length > 0 ? `?${params.join('&')}` : ''
 }
 </script>
@@ -437,7 +655,7 @@ function buildCurrentQuery() {
 <style lang="scss" scoped>
 .goods-list {
   min-height: 100vh;
-  background: $mb-color-bg-secondary;
+  background: var(--color-bg-secondary, #faf8ff);
 }
 
 // ---------- Search ----------
@@ -445,8 +663,8 @@ function buildCurrentQuery() {
   margin: $mb-spacing-sm $mb-spacing-page 0;
   height: 64rpx;
   border-radius: $mb-radius-sm;
-  background: $mb-color-bg;
-  border: 1rpx solid $mb-color-divider;
+  background: var(--color-bg, #ffffff);
+  border: 1rpx solid var(--color-divider, #f0f2f5);
   display: flex;
   align-items: center;
   padding: 0 $mb-spacing-md;
@@ -456,7 +674,7 @@ function buildCurrentQuery() {
 .goods-list__search-icon {
   width: 24rpx;
   height: 24rpx;
-  border: 3rpx solid $mb-color-text-tertiary;
+  border: 3rpx solid var(--color-text-tertiary, #737686);
   border-radius: 50%;
   position: relative;
   flex-shrink: 0;
@@ -467,7 +685,7 @@ function buildCurrentQuery() {
     width: 10rpx;
     height: 3rpx;
     border-radius: $mb-radius-full;
-    background: $mb-color-text-tertiary;
+    background: var(--color-text-tertiary, #737686);
     right: -7rpx;
     bottom: -3rpx;
     transform: rotate(45deg);
@@ -477,7 +695,7 @@ function buildCurrentQuery() {
 .goods-list__search-text {
   flex: 1;
   font-size: $mb-font-sm;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -490,7 +708,7 @@ function buildCurrentQuery() {
   z-index: 90;
   display: flex;
   align-items: center;
-  background: $mb-color-bg-secondary;
+  background: var(--color-bg-secondary, #faf8ff);
   border-bottom: 0;
   padding: 0 $mb-spacing-page;
 }
@@ -522,13 +740,13 @@ function buildCurrentQuery() {
 
 .goods-list__sort-text {
   font-size: $mb-font-md;
-  color: $mb-color-text-secondary;
+  color: var(--color-text-secondary, #434654);
   font-weight: 500;
   transition: color 0.2s;
 }
 
 .goods-list__sort-item--active .goods-list__sort-text {
-  color: $mb-color-primary;
+  color: var(--color-primary, #0d50d5);
   font-weight: 600;
 }
 
@@ -543,7 +761,7 @@ function buildCurrentQuery() {
   width: 28rpx;
   height: 4rpx;
   border-radius: $mb-radius-full;
-  background: $mb-color-primary;
+  background: var(--color-primary, #0d50d5);
   transform: translateX(-50%);
 }
 
@@ -563,20 +781,20 @@ function buildCurrentQuery() {
 }
 
 .goods-list__arrow--up {
-  border-bottom: 10rpx solid $mb-color-text-tertiary;
+  border-bottom: 10rpx solid var(--color-text-tertiary, #737686);
 }
 
 .goods-list__arrow--down {
-  border-top: 10rpx solid $mb-color-text-tertiary;
+  border-top: 10rpx solid var(--color-text-tertiary, #737686);
 }
 
 .goods-list__arrow--active {
   &.goods-list__arrow--up {
-    border-bottom-color: $mb-color-primary;
+    border-bottom-color: var(--color-primary, #0d50d5);
   }
 
   &.goods-list__arrow--down {
-    border-top-color: $mb-color-primary;
+    border-top-color: var(--color-primary, #0d50d5);
   }
 }
 
@@ -592,15 +810,15 @@ function buildCurrentQuery() {
 
 .goods-list__filter-text {
   font-size: $mb-font-sm;
-  color: $mb-color-text-secondary;
+  color: var(--color-text-secondary, #434654);
   font-weight: 500;
 }
 
 .goods-list__filter-arrow {
   width: 10rpx;
   height: 10rpx;
-  border-right: 2rpx solid $mb-color-text-tertiary;
-  border-bottom: 2rpx solid $mb-color-text-tertiary;
+  border-right: 2rpx solid var(--color-text-tertiary, #737686);
+  border-bottom: 2rpx solid var(--color-text-tertiary, #737686);
   transform: rotate(45deg);
   margin-top: -4rpx;
 }
@@ -621,9 +839,9 @@ function buildCurrentQuery() {
 
 .goods-list__skeleton-card {
   width: calc(50% - 8rpx);
-  background: $mb-color-bg;
+  background: var(--color-bg, #ffffff);
   border-radius: $mb-radius-lg;
-  border: 1rpx solid $mb-color-divider;
+  border: 1rpx solid var(--color-divider, #f0f2f5);
   overflow: hidden;
 }
 
@@ -642,9 +860,9 @@ function buildCurrentQuery() {
 
 // ---------- Design-card grid ----------
 .goods-card {
-  background: $mb-color-bg;
+  background: var(--color-bg, #ffffff);
   border-radius: $mb-radius-sm;
-  border: 1rpx solid $mb-color-divider;
+  border: 1rpx solid var(--color-divider, #f0f2f5);
   overflow: hidden;
   min-height: 100%;
 }
@@ -673,7 +891,7 @@ function buildCurrentQuery() {
 .goods-card__placeholder-icon {
   width: 52rpx;
   height: 42rpx;
-  border: 4rpx solid $mb-color-primary;
+  border: 4rpx solid var(--color-primary, #0d50d5);
   border-radius: $mb-radius-sm;
   position: relative;
   opacity: 0.8;
@@ -686,7 +904,7 @@ function buildCurrentQuery() {
     top: 12rpx;
     height: 4rpx;
     border-radius: $mb-radius-full;
-    background: $mb-color-primary;
+    background: var(--color-primary, #0d50d5);
   }
 }
 
@@ -694,17 +912,15 @@ function buildCurrentQuery() {
   position: absolute;
   left: 8rpx;
   top: 8rpx;
-  height: 28rpx;
-  padding: 0 10rpx;
-  border-radius: 4rpx;
-  background: rgba(13, 80, 213, 0.1);
   display: flex;
   align-items: center;
+  justify-content: center;
+  background: var(--color-primary, #0d50d5);
 }
 
 .goods-card__badge-text {
   font-size: 18rpx;
-  color: $mb-color-primary;
+  color: var(--color-text-inverse, #ffffff);
   font-weight: 700;
   line-height: 1;
 }
@@ -717,7 +933,7 @@ function buildCurrentQuery() {
   display: -webkit-box;
   font-size: 22rpx;
   font-weight: 600;
-  color: $mb-color-text-title;
+  color: var(--color-text-title, #191b23);
   line-height: 1.35;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
@@ -728,7 +944,7 @@ function buildCurrentQuery() {
   display: block;
   margin-top: 4rpx;
   font-size: 19rpx;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
   line-height: 1.3;
   overflow: hidden;
   white-space: nowrap;
@@ -752,7 +968,7 @@ function buildCurrentQuery() {
 
 .goods-card__origin {
   font-size: 18rpx;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
   text-decoration: line-through;
 }
 
@@ -760,7 +976,7 @@ function buildCurrentQuery() {
   width: 32rpx;
   height: 32rpx;
   border-radius: $mb-radius-full;
-  background: $mb-color-primary;
+  background: var(--color-primary, #0d50d5);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -774,7 +990,7 @@ function buildCurrentQuery() {
 .goods-card__add-symbol {
   font-size: 26rpx;
   line-height: 1;
-  color: $mb-color-text-inverse;
+  color: var(--color-text-inverse, #ffffff);
   font-weight: 600;
   margin-top: -2rpx;
 }
@@ -783,7 +999,7 @@ function buildCurrentQuery() {
   display: block;
   margin-top: 5rpx;
   font-size: 18rpx;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
   line-height: 1.3;
 }
 
@@ -803,8 +1019,8 @@ function buildCurrentQuery() {
   display: flex;
   gap: $mb-spacing-md;
   padding: $mb-spacing-md;
-  background: $mb-color-bg;
-  border: 1rpx solid $mb-color-divider;
+  background: var(--color-bg, #ffffff);
+  border: 1rpx solid var(--color-divider, #f0f2f5);
   border-radius: $mb-radius-sm;
 }
 
@@ -818,6 +1034,7 @@ function buildCurrentQuery() {
 }
 
 .goods-row__image-wrap {
+  position: relative;
   overflow: hidden;
   background: #f3f3fe;
 }
@@ -844,7 +1061,7 @@ function buildCurrentQuery() {
   display: -webkit-box;
   font-size: $mb-font-md;
   font-weight: 600;
-  color: $mb-color-text-title;
+  color: var(--color-text-title, #191b23);
   line-height: 1.4;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
@@ -855,7 +1072,7 @@ function buildCurrentQuery() {
   display: block;
   margin-top: 6rpx;
   font-size: $mb-font-sm;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -876,7 +1093,7 @@ function buildCurrentQuery() {
   display: block;
   margin-top: 4rpx;
   font-size: $mb-font-xs;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
 }
 
 // ---------- Bottom status ----------
@@ -896,8 +1113,8 @@ function buildCurrentQuery() {
 .goods-list__spinner {
   width: 32rpx;
   height: 32rpx;
-  border: 4rpx solid $mb-color-divider;
-  border-top-color: $mb-color-primary;
+  border: 4rpx solid var(--color-divider, #f0f2f5);
+  border-top-color: var(--color-primary, #0d50d5);
   border-radius: 50%;
   animation: goods-spin 0.7s linear infinite;
 }
@@ -910,11 +1127,11 @@ function buildCurrentQuery() {
 
 .goods-list__loading-text {
   font-size: $mb-font-sm;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
 }
 
 .goods-list__no-more {
   font-size: $mb-font-sm;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
 }
 </style>

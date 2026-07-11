@@ -6,6 +6,7 @@ namespace app\middleware\admin;
 
 use Closure;
 use mall_base\exception\AuthException;
+use mall_base\service\JwtCacheService;
 use mall_base\service\JwtService;
 use think\Request;
 use think\Response;
@@ -53,6 +54,10 @@ class JwtAuth
 
         if (($decoded->data->type ?? null) !== 'access') {
             throw new AuthException('Token 类型无效');
+        }
+
+        if (isset($decoded->data->guard) && $decoded->data->guard !== JwtCacheService::GUARD_ADMIN) {
+            throw new AuthException('Token 身份域无效');
         }
 
         // 将用户信息存入请求对象

@@ -335,7 +335,7 @@ abstract class BasePaymentDriver extends BaseDriver
 ```php
 namespace mall_base\drivers\payment;
 
-class AlipayDriver extends BasePaymentDriver
+class WechatPayDriver extends BasePaymentDriver
 {
     protected function init(): void
     {
@@ -344,7 +344,7 @@ class AlipayDriver extends BasePaymentDriver
     
     public function pay(array $order): string
     {
-        // 实现支付宝支付逻辑
+        // 实现微信支付逻辑
     }
     
     public function query(string $orderNo): array
@@ -363,11 +363,10 @@ class AlipayDriver extends BasePaymentDriver
 
 ```php
 DriverManager::register('payment', [
-    'alipay' => AlipayDriver::class,
     'wechat' => WechatPayDriver::class,
 ]);
 
-$payment = DriverManager::driver('payment', 'alipay', $config);
+$payment = DriverManager::driver('payment', 'wechat', $config);
 $payment->pay(['order_no' => '123456', 'amount' => 100]);
 ```
 

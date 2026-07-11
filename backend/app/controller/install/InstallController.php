@@ -29,6 +29,11 @@ class InstallController extends BaseController
         return $this->success($this->service()->getFormDefaults(), '获取成功');
     }
 
+    public function agreement(): Response
+    {
+        return $this->success($this->service()->getInstallAgreement(), '获取成功');
+    }
+
     public function status(): Response
     {
         return $this->success($this->service()->getInstallStatus($this->buildEntryUrls()), '获取成功');

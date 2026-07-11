@@ -8,6 +8,7 @@ use think\facade\Route;
 Route::group('user', function () {
     Route::get('list', 'list')->name('SystemUserList')->option(['_alias' => '列表', '_desc' => '获取前台用户列表', '_auth' => true, '_type' => Permission::TYPE_MENU]);
     Route::get('stats', 'stats')->name('SystemUserStats')->option(['_alias' => '用户统计', '_desc' => '获取前台用户状态统计', '_auth' => true, '_type' => Permission::TYPE_MENU]);
+    Route::get('memberLevels', 'memberLevelOptions')->name('SystemUserMemberLevelOptions')->option(['_alias' => '会员等级选项', '_desc' => '获取用户可设置的会员等级选项', '_auth' => true, '_type' => Permission::TYPE_MENU]);
     Route::get('export', 'export')->name('SystemUserExport')->option(['_alias' => '导出用户', '_desc' => '按筛选条件导出前台用户 CSV', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::get('info/:id', 'info')->name('SystemUserInfo')->option(['_alias' => '详情', '_desc' => '获取前台用户详情', '_auth' => true, '_type' => Permission::TYPE_MENU]);
     Route::post('create', 'create')->name('SystemUserCreate')->option(['_alias' => '新增', '_desc' => '创建前台用户', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
@@ -15,6 +16,7 @@ Route::group('user', function () {
     Route::delete('delete/:id', 'delete')->name('SystemUserDelete')->option(['_alias' => '删除', '_desc' => '删除前台用户', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::put('status/:id', 'updateStatus')->name('SystemUserUpdateStatus')->option(['_alias' => '状态', '_desc' => '更新用户状态', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::put('resetPassword/:id', 'resetPassword')->name('SystemUserResetPassword')->option(['_alias' => '重置密码', '_desc' => '重置用户密码', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
+    Route::put('member/:id', 'setMember')->name('SystemUserSetMember')->option(['_alias' => '设置会员', '_desc' => '后台设置用户会员等级', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
 })->prefix('admin.user.UserController/')
     ->middleware([JwtAuth::class, CheckPermission::class])
     ->option([

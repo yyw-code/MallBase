@@ -157,4 +157,69 @@ INSERT INTO `mb_upload_asset_category` (`id`, `pid`, `name`, `code`, `sort`, `is
 (3, 0, '评价图片', 'review', 30, 1, 1),
 (4, 0, '用户头像', 'avatar', 40, 1, 1),
 (5, 0, '系统设置', 'setting', 50, 1, 1),
-(6, 0, '其他', 'other', 100, 1, 1);
+(6, 0, '其他', 'other', 100, 1, 1),
+(7, 0, '文章素材', 'article', 60, 1, 1),
+(8, 0, '装修素材', 'client_decorate', 70, 1, 1);
+
+-- -----------------------------
+-- 系统默认装修素材
+-- -----------------------------
+INSERT INTO `mb_upload_asset`
+  (`id`, `category_id`, `type`, `name`, `original_name`, `mime`, `ext`, `size`, `hash`, `width`, `height`, `module`, `uploader_type`, `uploader_id`, `visibility`, `status`, `meta`)
+VALUES
+  (1001, 8, 'image', 'decorate-banner-market.png', 'decorate-banner-market.png', 'image/png', 'png', 47442, '', 0, 0, 'client_decorate', 'system', 0, 'public', 1, '{"source":"system","scope":"decorate"}'),
+  (1002, 8, 'image', 'decorate-banner-member.png', 'decorate-banner-member.png', 'image/png', 'png', 42492, '', 0, 0, 'client_decorate', 'system', 0, 'public', 1, '{"source":"system","scope":"decorate"}'),
+  (1003, 8, 'image', 'decorate-banner-home.png', 'decorate-banner-home.png', 'image/png', 'png', 53517, '', 0, 0, 'client_decorate', 'system', 0, 'public', 1, '{"source":"system","scope":"decorate"}'),
+  (1004, 8, 'image', 'decorate-nav-digital.png', 'decorate-nav-digital.png', 'image/png', 'png', 8182, '', 0, 0, 'client_decorate', 'system', 0, 'public', 1, '{"source":"system","scope":"decorate"}'),
+  (1005, 8, 'image', 'decorate-nav-beauty.png', 'decorate-nav-beauty.png', 'image/png', 'png', 8549, '', 0, 0, 'client_decorate', 'system', 0, 'public', 1, '{"source":"system","scope":"decorate"}'),
+  (1006, 8, 'image', 'decorate-nav-fashion.png', 'decorate-nav-fashion.png', 'image/png', 'png', 9301, '', 0, 0, 'client_decorate', 'system', 0, 'public', 1, '{"source":"system","scope":"decorate"}'),
+  (1007, 8, 'image', 'decorate-nav-home.png', 'decorate-nav-home.png', 'image/png', 'png', 8027, '', 0, 0, 'client_decorate', 'system', 0, 'public', 1, '{"source":"system","scope":"decorate"}'),
+  (1008, 8, 'image', 'decorate-nav-food.png', 'decorate-nav-food.png', 'image/png', 'png', 8527, '', 0, 0, 'client_decorate', 'system', 0, 'public', 1, '{"source":"system","scope":"decorate"}'),
+  (1009, 8, 'image', 'decorate-nav-sport.png', 'decorate-nav-sport.png', 'image/png', 'png', 8678, '', 0, 0, 'client_decorate', 'system', 0, 'public', 1, '{"source":"system","scope":"decorate"}'),
+  (1010, 8, 'image', 'decorate-cube-new.png', 'decorate-cube-new.png', 'image/png', 'png', 24726, '', 0, 0, 'client_decorate', 'system', 0, 'public', 1, '{"source":"system","scope":"decorate"}'),
+  (1011, 8, 'image', 'decorate-cube-picks.png', 'decorate-cube-picks.png', 'image/png', 'png', 24816, '', 0, 0, 'client_decorate', 'system', 0, 'public', 1, '{"source":"system","scope":"decorate"}'),
+  (1012, 8, 'image', 'decorate-cube-member.png', 'decorate-cube-member.png', 'image/png', 'png', 27068, '', 0, 0, 'client_decorate', 'system', 0, 'public', 1, '{"source":"system","scope":"decorate"}'),
+  (1013, 8, 'image', 'decorate-cube-sale.png', 'decorate-cube-sale.png', 'image/png', 'png', 25609, '', 0, 0, 'client_decorate', 'system', 0, 'public', 1, '{"source":"system","scope":"decorate"}'),
+  (1014, 8, 'image', 'decorate-entry-category.png', 'decorate-entry-category.png', 'image/png', 'png', 48075, '', 0, 0, 'client_decorate', 'system', 0, 'public', 1, '{"source":"system","scope":"decorate"}'),
+  (1015, 8, 'image', 'profile-order-pay.svg', 'profile-order-pay.svg', 'image/svg+xml', 'svg', 468, '', 0, 0, 'client_decorate', 'system', 0, 'public', 1, '{"source":"system","scope":"decorate"}'),
+  (1016, 8, 'image', 'profile-order-ship.svg', 'profile-order-ship.svg', 'image/svg+xml', 'svg', 464, '', 0, 0, 'client_decorate', 'system', 0, 'public', 1, '{"source":"system","scope":"decorate"}'),
+  (1017, 8, 'image', 'profile-order-receive.svg', 'profile-order-receive.svg', 'image/svg+xml', 'svg', 519, '', 0, 0, 'client_decorate', 'system', 0, 'public', 1, '{"source":"system","scope":"decorate"}'),
+  (1018, 8, 'image', 'profile-order-refund.svg', 'profile-order-refund.svg', 'image/svg+xml', 'svg', 504, '', 0, 0, 'client_decorate', 'system', 0, 'public', 1, '{"source":"system","scope":"decorate"}'),
+  (1019, 8, 'image', 'profile-service-address.svg', 'profile-service-address.svg', 'image/svg+xml', 'svg', 341, '', 0, 0, 'client_decorate', 'system', 0, 'public', 1, '{"source":"system","scope":"decorate"}'),
+  (1020, 8, 'image', 'profile-service-settings.svg', 'profile-service-settings.svg', 'image/svg+xml', 'svg', 380, '', 0, 0, 'client_decorate', 'system', 0, 'public', 1, '{"source":"system","scope":"decorate"}'),
+  (1021, 8, 'image', 'profile-service-support.svg', 'profile-service-support.svg', 'image/svg+xml', 'svg', 545, '', 0, 0, 'client_decorate', 'system', 0, 'public', 1, '{"source":"system","scope":"decorate"}'),
+  (1022, 8, 'image', 'service.png', 'service.png', 'image/png', 'png', 1112, '', 0, 0, 'client_decorate', 'system', 0, 'public', 1, '{"source":"system","scope":"decorate"}'),
+  (1023, 8, 'image', 'cart.png', 'cart.png', 'image/png', 'png', 876, '', 0, 0, 'client_decorate', 'system', 0, 'public', 1, '{"source":"system","scope":"decorate"}'),
+  (1024, 8, 'image', 'home.png', 'home.png', 'image/png', 'png', 837, '', 0, 0, 'client_decorate', 'system', 0, 'public', 1, '{"source":"system","scope":"decorate"}'),
+  (1025, 8, 'image', 'collapse-left.png', 'collapse-left.png', 'image/png', 'png', 848, '', 0, 0, 'client_decorate', 'system', 0, 'public', 1, '{"source":"system","scope":"decorate"}'),
+  (1026, 8, 'image', 'collapse-right.png', 'collapse-right.png', 'image/png', 'png', 818, '', 0, 0, 'client_decorate', 'system', 0, 'public', 1, '{"source":"system","scope":"decorate"}');
+
+INSERT INTO `mb_upload_asset_location`
+  (`asset_id`, `driver`, `path`, `url_prefix`, `bucket`, `region`, `endpoint`, `is_primary`, `status`, `etag`, `size`, `meta`)
+VALUES
+  (1001, 'static', 'static/decorate/decorate-banner-market.png', '', '', '', '', 1, 1, '', 47442, '{"source":"system","scope":"decorate"}'),
+  (1002, 'static', 'static/decorate/decorate-banner-member.png', '', '', '', '', 1, 1, '', 42492, '{"source":"system","scope":"decorate"}'),
+  (1003, 'static', 'static/decorate/decorate-banner-home.png', '', '', '', '', 1, 1, '', 53517, '{"source":"system","scope":"decorate"}'),
+  (1004, 'static', 'static/decorate/decorate-nav-digital.png', '', '', '', '', 1, 1, '', 8182, '{"source":"system","scope":"decorate"}'),
+  (1005, 'static', 'static/decorate/decorate-nav-beauty.png', '', '', '', '', 1, 1, '', 8549, '{"source":"system","scope":"decorate"}'),
+  (1006, 'static', 'static/decorate/decorate-nav-fashion.png', '', '', '', '', 1, 1, '', 9301, '{"source":"system","scope":"decorate"}'),
+  (1007, 'static', 'static/decorate/decorate-nav-home.png', '', '', '', '', 1, 1, '', 8027, '{"source":"system","scope":"decorate"}'),
+  (1008, 'static', 'static/decorate/decorate-nav-food.png', '', '', '', '', 1, 1, '', 8527, '{"source":"system","scope":"decorate"}'),
+  (1009, 'static', 'static/decorate/decorate-nav-sport.png', '', '', '', '', 1, 1, '', 8678, '{"source":"system","scope":"decorate"}'),
+  (1010, 'static', 'static/decorate/decorate-cube-new.png', '', '', '', '', 1, 1, '', 24726, '{"source":"system","scope":"decorate"}'),
+  (1011, 'static', 'static/decorate/decorate-cube-picks.png', '', '', '', '', 1, 1, '', 24816, '{"source":"system","scope":"decorate"}'),
+  (1012, 'static', 'static/decorate/decorate-cube-member.png', '', '', '', '', 1, 1, '', 27068, '{"source":"system","scope":"decorate"}'),
+  (1013, 'static', 'static/decorate/decorate-cube-sale.png', '', '', '', '', 1, 1, '', 25609, '{"source":"system","scope":"decorate"}'),
+  (1014, 'static', 'static/decorate/decorate-entry-category.png', '', '', '', '', 1, 1, '', 48075, '{"source":"system","scope":"decorate"}'),
+  (1015, 'static', 'static/decorate/profile-order-pay.svg', '', '', '', '', 1, 1, '', 468, '{"source":"system","scope":"decorate"}'),
+  (1016, 'static', 'static/decorate/profile-order-ship.svg', '', '', '', '', 1, 1, '', 464, '{"source":"system","scope":"decorate"}'),
+  (1017, 'static', 'static/decorate/profile-order-receive.svg', '', '', '', '', 1, 1, '', 519, '{"source":"system","scope":"decorate"}'),
+  (1018, 'static', 'static/decorate/profile-order-refund.svg', '', '', '', '', 1, 1, '', 504, '{"source":"system","scope":"decorate"}'),
+  (1019, 'static', 'static/decorate/profile-service-address.svg', '', '', '', '', 1, 1, '', 341, '{"source":"system","scope":"decorate"}'),
+  (1020, 'static', 'static/decorate/profile-service-settings.svg', '', '', '', '', 1, 1, '', 380, '{"source":"system","scope":"decorate"}'),
+  (1021, 'static', 'static/decorate/profile-service-support.svg', '', '', '', '', 1, 1, '', 545, '{"source":"system","scope":"decorate"}'),
+  (1022, 'static', 'static/decorate/floating/service.png', '', '', '', '', 1, 1, '', 1112, '{"source":"system","scope":"decorate"}'),
+  (1023, 'static', 'static/decorate/floating/cart.png', '', '', '', '', 1, 1, '', 876, '{"source":"system","scope":"decorate"}'),
+  (1024, 'static', 'static/decorate/floating/home.png', '', '', '', '', 1, 1, '', 837, '{"source":"system","scope":"decorate"}'),
+  (1025, 'static', 'static/decorate/floating/collapse-left.png', '', '', '', '', 1, 1, '', 848, '{"source":"system","scope":"decorate"}'),
+  (1026, 'static', 'static/decorate/floating/collapse-right.png', '', '', '', '', 1, 1, '', 818, '{"source":"system","scope":"decorate"}');

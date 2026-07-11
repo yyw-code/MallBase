@@ -14,7 +14,7 @@ use app\service\client\payment\dto\PrepayResult;
  *  - PrepayAdapter 负责「出账」：生成 prepay_id / mweb_url 返回给前端
  *  - PaymentAdapter 负责「退款」：售后审核通过后的资金回退
  *
- * 真实渠道（微信 JSAPI / H5 / 支付宝）实现本接口；测试用 stub 实现也通过本接口接入。
+ * 真实渠道（微信 JSAPI / H5）实现本接口；测试用 stub 实现也通过本接口接入。
  *
  * 幂等语义：
  *  - 调用方（PrepayService）负责防重，本接口实现不强制保证 idempotent

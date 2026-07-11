@@ -1,11 +1,21 @@
 <template>
   <view>
-    <view class="mb-navbar" :style="{ backgroundColor: bgColor }">
+    <view
+      class="mb-navbar"
+      :class="{ 'mb-navbar--immersive': immersive }"
+      :style="{ backgroundColor: bgColor }"
+    >
       <view v-if="accentLine" class="mb-navbar__accent" />
       <view class="mb-navbar__status" :style="{ height: statusBarHeight + 'px' }" />
       <view class="mb-navbar__content" :style="contentStyle">
-        <view v-if="back" class="mb-navbar__back" @tap="onBack">
-          <text class="mb-navbar__back-icon" :style="{ color: textColor }">&#10094;</text>
+        <view
+          v-if="back"
+          class="mb-navbar__back"
+          hover-class="mb-navbar__back--hover"
+          hover-stay-time="80"
+          @tap="onBack"
+        >
+          <view class="mb-navbar__back-icon" :style="{ borderColor: textColor }" />
         </view>
         <text class="mb-navbar__title" :style="titleStyle">{{ title }}</text>
         <view class="mb-navbar__right" :style="rightStyle">
@@ -23,9 +33,10 @@ import { computed } from 'vue'
 const props = defineProps({
   title: { type: String, default: '' },
   back: { type: Boolean, default: true },
-  bgColor: { type: String, default: '#ffffff' },
+  bgColor: { type: String, default: 'var(--color-bg, #ffffff)' },
   textColor: { type: String, default: 'var(--color-text, #191b23)' },
   accentLine: { type: Boolean, default: false },
+  immersive: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['back'])
@@ -102,6 +113,17 @@ function onBack() {
   left: 0;
   right: 0;
   z-index: 999;
+  border-bottom: 1rpx solid var(--color-divider, rgba(148, 163, 184, 0.18));
+  box-shadow: 0 8rpx 28rpx rgba(15, 23, 42, 0.06);
+  -webkit-backdrop-filter: blur(24rpx);
+  backdrop-filter: blur(24rpx);
+}
+
+.mb-navbar--immersive {
+  border-bottom: none;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 
 .mb-navbar__accent {
@@ -122,13 +144,27 @@ function onBack() {
   justify-content: center;
   width: 64rpx;
   height: 64rpx;
+  border-radius: 50%;
+  background: var(--color-bg-surface, rgba(148, 163, 184, 0.12));
+  border: 1rpx solid var(--color-divider, rgba(148, 163, 184, 0.18));
   z-index: 1;
+  transition:
+    background-color 0.15s ease,
+    transform 0.15s ease;
+}
+
+.mb-navbar__back--hover {
+  background: var(--color-primary-softer, rgba(13, 80, 213, 0.12));
+  transform: scale(0.96);
 }
 
 .mb-navbar__back-icon {
-  font-size: 36rpx;
-  font-weight: 600;
-  line-height: 1;
+  width: 18rpx;
+  height: 18rpx;
+  border-left: 4rpx solid currentColor;
+  border-bottom: 4rpx solid currentColor;
+  border-radius: 2rpx;
+  transform: translateX(4rpx) rotate(45deg);
 }
 
 .mb-navbar__title {
@@ -136,7 +172,8 @@ function onBack() {
   top: 0;
   text-align: center;
   font-size: 32rpx;
-  font-weight: 600;
+  font-weight: 700;
+  letter-spacing: 0;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;

@@ -17,4 +17,11 @@ final class ClientRouteContractTest extends TestCase
         $this->assertStringContainsString("'client' . DIRECTORY_SEPARATOR . 'index.html'", $source);
         $this->assertStringContainsString("abort(404, '客户端 H5 页面未找到，请先构建 H5 前端');", $source);
     }
+
+    public function testClientAuthRoutesExposeRefreshTokenEndpoint(): void
+    {
+        $source = (string) file_get_contents(dirname(__DIR__, 3) . '/route/api/client/user.php');
+
+        $this->assertStringContainsString("Route::post('refreshToken', 'refreshToken')", $source);
+    }
 }

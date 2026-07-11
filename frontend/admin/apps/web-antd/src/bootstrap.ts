@@ -69,9 +69,13 @@ async function applyAppMetaFromBackend(): Promise<void> {
       enable?: boolean;
       icp?: string;
       icpLink?: string;
+      psb?: string;
+      psbLink?: string;
     } = {};
+    let copyrightEnabled: boolean | undefined;
     if (meta.copyright_enabled !== undefined) {
-      copyrightPatch.enable = String(meta.copyright_enabled) === '1';
+      copyrightEnabled = String(meta.copyright_enabled) === '1';
+      copyrightPatch.enable = copyrightEnabled;
     }
     if (meta.copyright_company) {
       copyrightPatch.companyName = meta.copyright_company;
@@ -88,6 +92,12 @@ async function applyAppMetaFromBackend(): Promise<void> {
     if (meta.copyright_icp_url) {
       copyrightPatch.icpLink = meta.copyright_icp_url;
     }
+    if (meta.copyright_psb) {
+      copyrightPatch.psb = meta.copyright_psb;
+    }
+    if (meta.copyright_psb_url) {
+      copyrightPatch.psbLink = meta.copyright_psb_url;
+    }
 
     // 批量更新，单次响应式触发
     const patch: Record<string, unknown> = {};
@@ -99,6 +109,12 @@ async function applyAppMetaFromBackend(): Promise<void> {
     }
     if (Object.keys(copyrightPatch).length > 0) {
       patch.copyright = copyrightPatch;
+    }
+    if (copyrightEnabled !== undefined) {
+      patch.footer = {
+        enable: copyrightEnabled,
+        fixed: true,
+      };
     }
     if (Object.keys(patch).length > 0) {
       updatePreferences(patch);

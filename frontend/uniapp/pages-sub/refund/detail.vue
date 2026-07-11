@@ -1,8 +1,10 @@
 <script setup>
+import { useDecorateStore } from '@/store/decorate'
 import { computed, ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { cancelRefund, getRefundDetail, submitRefundReturn } from '@/api/order/refund'
 import config from '@/config/index'
+const decorateStore = useDecorateStore()
 
 const STATUS_CONFIG = {
   0: { label: '待审核', color: '#0d50d5', bg: 'rgba(13, 80, 213, 0.08)' },
@@ -223,7 +225,11 @@ async function onSubmitReturn() {
 </script>
 
 <template>
-  <view class="page">
+  <view
+    class="page"
+    :class="[`theme-${decorateStore.resolvedThemeMode}`]"
+    :style="decorateStore.themeStyle"
+  >
     <mb-navbar title="售后详情" />
 
     <view v-if="loading" class="loading-wrap">
@@ -434,6 +440,7 @@ async function onSubmitReturn() {
         </view>
       </view>
 
+      <mb-copyright-footer />
       <view v-if="canCancel" class="bottom-spacer" />
       <view v-if="canCancel" class="action-bar">
         <view class="action-bar__inner">
@@ -447,7 +454,8 @@ async function onSubmitReturn() {
         </view>
       </view>
     </template>
-  </view>
+      <mb-floating-action />
+</view>
 </template>
 
 <style lang="scss" scoped>
@@ -490,7 +498,7 @@ async function onSubmitReturn() {
   display: block;
   margin-top: 10rpx;
   font-size: $mb-font-sm;
-  color: $mb-color-text-secondary;
+  color: var(--color-text-secondary, #434654);
   line-height: 1.45;
 }
 
@@ -504,18 +512,18 @@ async function onSubmitReturn() {
 
 .status-card__amount-label {
   font-size: $mb-font-xs;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
 }
 
 .status-card__amount-value {
   margin-top: 6rpx;
   font-size: 38rpx;
   font-weight: 800;
-  color: $mb-color-primary;
+  color: var(--color-primary, #0d50d5);
 }
 
 .card {
-  background: $mb-color-bg;
+  background: var(--color-bg, #ffffff);
   border-radius: 16rpx;
   padding: $mb-spacing-lg;
   margin-bottom: $mb-spacing-md;
@@ -527,7 +535,7 @@ async function onSubmitReturn() {
   margin-bottom: $mb-spacing-md;
   font-size: $mb-font-md;
   font-weight: 700;
-  color: $mb-color-text-title;
+  color: var(--color-text-title, #191b23);
 }
 
 .section-title-row {
@@ -544,7 +552,7 @@ async function onSubmitReturn() {
 .section-title-row__link {
   font-size: $mb-font-sm;
   font-weight: 600;
-  color: $mb-color-primary;
+  color: var(--color-primary, #0d50d5);
 }
 
 .timeline {
@@ -569,32 +577,32 @@ async function onSubmitReturn() {
   width: 18rpx;
   height: 18rpx;
   border-radius: 50%;
-  background: $mb-color-border;
+  background: var(--color-border, #e0e4e8);
 }
 
 .timeline__dot--done {
-  background: $mb-color-success;
+  background: var(--color-success, #34c759);
 }
 
 .timeline__dot--active {
-  background: $mb-color-primary;
+  background: var(--color-primary, #0d50d5);
   border: 6rpx solid rgba(13, 80, 213, 0.14);
   box-sizing: content-box;
 }
 
 .timeline__dot--rejected {
-  background: $mb-color-error;
+  background: var(--color-error, #ba1a1a);
 }
 
 .timeline__line {
   flex: 1;
   width: 2rpx;
   margin: 4rpx 0;
-  background: $mb-color-border;
+  background: var(--color-border, #e0e4e8);
 }
 
 .timeline__line--done {
-  background: $mb-color-success;
+  background: var(--color-success, #34c759);
 }
 
 .timeline__content {
@@ -606,17 +614,17 @@ async function onSubmitReturn() {
 .timeline__label {
   display: block;
   font-size: $mb-font-md;
-  color: $mb-color-text-secondary;
+  color: var(--color-text-secondary, #434654);
   line-height: 1.35;
 }
 
 .timeline__label--active {
-  color: $mb-color-primary;
+  color: var(--color-primary, #0d50d5);
   font-weight: 700;
 }
 
 .timeline__label--rejected {
-  color: $mb-color-error;
+  color: var(--color-error, #ba1a1a);
   font-weight: 700;
 }
 
@@ -624,7 +632,7 @@ async function onSubmitReturn() {
   display: block;
   margin-top: 4rpx;
   font-size: $mb-font-xs;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
 }
 
 .product-row {
@@ -665,7 +673,7 @@ async function onSubmitReturn() {
 .product-row__name {
   font-size: 27rpx;
   font-weight: 600;
-  color: $mb-color-text-title;
+  color: var(--color-text-title, #191b23);
   line-height: 1.38;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -675,7 +683,7 @@ async function onSubmitReturn() {
 
 .product-row__spec {
   font-size: $mb-font-xs;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
 }
 
 .product-row__bottom {
@@ -689,12 +697,12 @@ async function onSubmitReturn() {
   border-radius: 999rpx;
   background: rgba(13, 80, 213, 0.08);
   font-size: $mb-font-xs;
-  color: $mb-color-primary;
+  color: var(--color-primary, #0d50d5);
 }
 
 .product-row__qty {
   font-size: $mb-font-xs;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
 }
 
 .info-row {
@@ -718,14 +726,14 @@ async function onSubmitReturn() {
 .info-row__label {
   flex-shrink: 0;
   font-size: $mb-font-sm;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
 }
 
 .info-row__value {
   min-width: 0;
   flex: 1;
   font-size: $mb-font-sm;
-  color: $mb-color-text-title;
+  color: var(--color-text-title, #191b23);
   text-align: right;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -734,7 +742,7 @@ async function onSubmitReturn() {
 
 .info-row__desc {
   font-size: $mb-font-sm;
-  color: $mb-color-text-title;
+  color: var(--color-text-title, #191b23);
   line-height: 1.55;
 }
 
@@ -749,14 +757,14 @@ async function onSubmitReturn() {
   display: block;
   font-size: $mb-font-md;
   font-weight: 700;
-  color: $mb-color-text-title;
+  color: var(--color-text-title, #191b23);
 }
 
 .return-address__detail {
   display: block;
   margin-top: 8rpx;
   font-size: $mb-font-sm;
-  color: $mb-color-text-secondary;
+  color: var(--color-text-secondary, #434654);
   line-height: 1.5;
 }
 
@@ -768,7 +776,7 @@ async function onSubmitReturn() {
   display: block;
   margin-bottom: 10rpx;
   font-size: $mb-font-sm;
-  color: $mb-color-text-secondary;
+  color: var(--color-text-secondary, #434654);
 }
 
 .form-block__input {
@@ -776,10 +784,10 @@ async function onSubmitReturn() {
   height: 78rpx;
   padding: 0 $mb-spacing-md;
   box-sizing: border-box;
-  background: $mb-color-bg-secondary;
-  border: 1rpx solid $mb-color-divider;
+  background: var(--color-bg-secondary, #faf8ff);
+  border: 1rpx solid var(--color-divider, #f0f2f5);
   border-radius: 14rpx;
-  color: $mb-color-text;
+  color: var(--color-text, #191b23);
   font-size: $mb-font-md;
 }
 
@@ -789,7 +797,7 @@ async function onSubmitReturn() {
   align-items: center;
   justify-content: center;
   margin-top: $mb-spacing-md;
-  background: $mb-color-primary;
+  background: var(--color-primary, #0d50d5);
   border-radius: $mb-radius-full;
 }
 
@@ -813,7 +821,7 @@ async function onSubmitReturn() {
   right: 0;
   bottom: 0;
   z-index: 100;
-  background: $mb-color-bg;
+  background: var(--color-bg, #ffffff);
   box-shadow: $mb-shadow-bar;
 }
 
@@ -844,6 +852,6 @@ async function onSubmitReturn() {
 .action-bar__btn-text {
   font-size: $mb-font-md;
   font-weight: 700;
-  color: $mb-color-primary;
+  color: var(--color-primary, #0d50d5);
 }
 </style>

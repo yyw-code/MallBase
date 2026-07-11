@@ -1,0 +1,215 @@
+import { requestClient } from '#/api/request';
+
+export namespace ClientPageApi {
+  export type PageCategoryId = number;
+  export type PageSource = 'auto' | 'manual' | 'system';
+  export type PageType = 'page' | 'subpackage' | 'tab';
+
+  export interface PageItem {
+    id: number;
+    name: string;
+    path: string;
+    page_type: PageType;
+    category_id: PageCategoryId;
+    category_label?: string;
+    package_root?: null | string;
+    need_login: number;
+    source: PageSource;
+    remark?: null | string;
+    sort: number;
+    status: number;
+    create_time?: string;
+    update_time?: string;
+  }
+
+  export interface PagePickerItem {
+    id: number;
+    name: string;
+    path: string;
+    page_type: PageType;
+    page_type_label: string;
+    category_id: PageCategoryId;
+    category_label: string;
+    package_root?: null | string;
+    need_login: number;
+    source: PageSource;
+    remark?: null | string;
+  }
+
+  export interface PagePickerGroup {
+    count: number;
+    items: PagePickerItem[];
+    key: string;
+    label: string;
+  }
+
+  export interface PageCategoryItem {
+    create_time?: string;
+    delete_time?: null | number;
+    description?: null | string;
+    id: number;
+    is_system: number;
+    name: string;
+    sort: number;
+    status: number;
+    update_time?: string;
+  }
+
+  export interface ListParams {
+    keyword?: string;
+    page?: number;
+    category_id?: PageCategoryId;
+    page_type?: PageType;
+    limit?: number;
+    source?: PageSource;
+    status?: number;
+  }
+
+  export interface CategoryListParams {
+    keyword?: string;
+    limit?: number;
+    page?: number;
+    status?: number;
+  }
+
+  export interface PickerParams {
+    keyword?: string;
+  }
+
+  export interface SaveParams {
+    name: string;
+    path: string;
+    page_type: PageType;
+    category_id?: PageCategoryId;
+    package_root?: null | string;
+    need_login?: number;
+    source?: PageSource;
+    remark?: null | string;
+    sort?: number;
+    status?: number;
+  }
+
+  export interface CategorySaveParams {
+    description?: null | string;
+    name: string;
+    sort?: number;
+    status?: number;
+  }
+
+  export interface ImportParams {
+    file?: File;
+    pages_json?: string;
+  }
+
+  export interface ImportResult {
+    created: number;
+    skipped: number;
+    updated: number;
+  }
+}
+
+export async function getClientPageListApi(params?: ClientPageApi.ListParams) {
+  return requestClient.get<{
+    list: ClientPageApi.PageItem[];
+    total: number;
+  }>('/client/page/list', { params });
+}
+
+export async function getClientPageInfoApi(id: number) {
+  return requestClient.get<ClientPageApi.PageItem>(`/client/page/info/${id}`);
+}
+
+export async function getClientPagePickerApi(
+  params?: ClientPageApi.PickerParams,
+) {
+  return requestClient.get<{
+    groups: ClientPageApi.PagePickerGroup[];
+    total: number;
+  }>('/client/page/picker', { params });
+}
+
+export async function createClientPageApi(data: ClientPageApi.SaveParams) {
+  return requestClient.post<{ id: number }>('/client/page/create', data);
+}
+
+export async function updateClientPageApi(
+  id: number,
+  data: ClientPageApi.SaveParams,
+) {
+  return requestClient.put(`/client/page/update/${id}`, data);
+}
+
+export async function deleteClientPageApi(id: number) {
+  return requestClient.delete(`/client/page/delete/${id}`);
+}
+
+export async function importClientPageApi(data?: ClientPageApi.ImportParams) {
+  if (data?.file) {
+    const formData = new FormData();
+    formData.append('file', data.file);
+
+    return requestClient.post<ClientPageApi.ImportResult>(
+      '/client/page/import',
+      formData,
+      {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      },
+    );
+  }
+
+  return requestClient.post<ClientPageApi.ImportResult>('/client/page/import', {
+    pages_json: data?.pages_json ?? '',
+  });
+}
+
+export async function getClientPageCategoryListApi(
+  params?: ClientPageApi.CategoryListParams,
+) {
+  return requestClient.get<{
+    list: ClientPageApi.PageCategoryItem[];
+    total: number;
+  }>('/client/page/category/list', { params });
+}
+
+export async function getAllClientPageCategoriesApi() {
+  return requestClient.get<ClientPageApi.PageCategoryItem[]>(
+    '/client/page/category/all',
+  );
+}
+
+export async function getClientPageCategoryInfoApi(id: number) {
+  return requestClient.get<ClientPageApi.PageCategoryItem>(
+    `/client/page/category/info/${id}`,
+  );
+}
+
+export async function createClientPageCategoryApi(
+  data: ClientPageApi.CategorySaveParams,
+) {
+  return requestClient.post<{ id: number }>(
+    '/client/page/category/create',
+    data,
+  );
+}
+
+export async function updateClientPageCategoryApi(
+  id: number,
+  data: ClientPageApi.CategorySaveParams,
+) {
+  return requestClient.put(`/client/page/category/update/${id}`, data);
+}
+
+export async function deleteClientPageCategoryApi(id: number) {
+  return requestClient.delete(`/client/page/category/delete/${id}`);
+}
+
+export async function updateClientPageCategoryStatusApi(
+  id: number,
+  status: number,
+) {
+  return requestClient.put(`/client/page/category/updateStatus/${id}`, {
+    status,
+  });
+}

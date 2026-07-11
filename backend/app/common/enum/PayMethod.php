@@ -11,18 +11,14 @@ class PayMethod
     /** 微信支付 */
     public const WECHAT = 1;
 
-    /** 支付宝 */
-    public const ALIPAY = 2;
-
     /** 余额支付 */
     public const BALANCE = 3;
 
-    /** Mock 测试支付（历史数据展示用，不再作为客户端支付入口） */
+    /** Mock 测试支付（不作为客户端支付入口） */
     public const MOCK = 9;
 
     private const TEXTS = [
         self::WECHAT  => '微信支付',
-        self::ALIPAY  => '支付宝',
         self::BALANCE => '余额支付',
         self::MOCK    => 'Mock支付',
     ];

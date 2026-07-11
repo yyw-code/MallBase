@@ -67,6 +67,32 @@ mall-base/
 │
 ├── docs/                           # 文档
 │   ├── index.md                    # 文档中心总入口
+│   ├── faq.md                      # 业务文档常见问题与入口跳转
+│   ├── modules/                    # 业务模块总览
+│   │   ├── member.md               # 会员模块总览
+│   │   ├── points.md               # 积分模块总览
+│   │   ├── wallet.md               # 余额模块总览
+│   │   └── client-diy.md           # 客户端装修模块总览
+│   ├── operation/                  # 操作文档
+│   │   ├── index.md                # 操作文档入口
+│   │   ├── basic-config.md         # 基础配置操作说明
+│   │   ├── member.md               # 会员操作说明
+│   │   ├── points.md               # 积分操作说明
+│   │   ├── wallet.md               # 余额操作说明
+│   │   └── client-diy.md           # 客户端装修操作说明
+│   ├── logic/                      # 业务逻辑文档
+│   │   ├── index.md                # 业务逻辑文档入口
+│   │   ├── member.md               # 会员业务逻辑
+│   │   ├── points.md               # 积分业务逻辑
+│   │   ├── wallet.md               # 余额业务逻辑
+│   │   └── client-diy.md           # 客户端装修业务逻辑
+│   ├── development/                # 开发文档
+│   │   ├── index.md                # 开发文档入口
+│   │   ├── member.md               # 会员开发文档
+│   │   ├── points.md               # 积分开发文档
+│   │   ├── wallet.md               # 余额开发文档
+│   │   ├── client-diy.md           # 客户端装修开发文档
+│   │   └── customer-service-h5-resource-action.md # UniApp 客服 H5 资源跳转设计
 │   ├── install/                    # 安装与部署（导航入口：install/index.md）
 │   │   ├── index.md                # 安装与部署导航
 │   │   ├── manual.md               # 方式一：手动安装（无 Docker）
@@ -96,8 +122,13 @@ mall-base/
 │   ├── upload-storage-driver-extension.md # 新增云存储上传驱动开发指南
 │   ├── privacy.md                  # 隐私与平台实例统计说明
 │   ├── claude-code-guide.md        # Claude Code 使用指南
+│   ├── superpowers/                # 历史规划与设计档案
+│   │   ├── specs/                  # 功能设计方案
+│   │   └── plans/                  # 实施计划
 │   └── testing/
-│       └── change-trigger-test-matrix.md  # 测试基线与触发矩阵
+│       ├── change-trigger-test-matrix.md  # 测试基线与触发矩阵
+│       ├── order-create-1000-concurrency-report.md  # 订单创建 1000 并发压测报告
+│       └── swoole-concurrency-config-guide.md  # Swoole 并发配置建议
 ├── docker-compose.yml              # 单后端容器（生产，需外部 MySQL / Redis）
 ├── docker-compose.dev.yml          # 开发全套（后端 + MySQL + Redis）
 ├── docker-compose.frontend-build.yml  # 后台前端打包
@@ -116,6 +147,10 @@ mall-base/
 | Delivery | 收货地址、运费模板（按件/按重、多层级区域匹配） |
 | Region | 省市区街道四级地区库 |
 | Setting | 系统设置（分组 + 设置项，后台动态配置） |
+| Member | 会员等级、成长值、会员折扣、规格会员价 |
+| Points | 积分账户、积分赠送、积分抵扣、积分商城 |
+| Wallet | 用户余额、余额流水、余额支付、余额退款 |
+| Client DIY | 页面库、首页/个人中心装修、底部导航、主题 |
 
 ## 在线演示
 
@@ -144,11 +179,52 @@ docker compose restart
 
 ## 文档
 
-### 安装与部署
+### 文档入口
 
 | 文档 | 说明 |
 |------|------|
 | [文档中心](docs/index.md) | 所有文档的总入口：按场景查常用与不常用文档 |
+| [业务文档常见问题](docs/faq.md) | 会员、积分、余额、客户端装修等业务文档入口 |
+| [会员模块总览](docs/modules/member.md) | 会员等级、成长值、会员权益和订单快照总览 |
+| [积分模块总览](docs/modules/points.md) | 积分账户、积分规则、积分抵扣、积分商城和兑换单总览 |
+| [余额模块总览](docs/modules/wallet.md) | 用户余额、余额流水、余额支付、余额退款和充值套餐总览 |
+| [客户端装修模块总览](docs/modules/client-diy.md) | 页面库、装修方案、底部导航、悬浮按钮和主题总览 |
+
+### 操作文档
+
+| 文档 | 说明 |
+|------|------|
+| [操作文档入口](docs/operation/index.md) | 后台操作文档总入口 |
+| [基础配置操作文档](docs/operation/basic-config.md) | 上传、支付、积分、会员、客户端配置等基础配置入口 |
+| [会员操作文档](docs/operation/member.md) | 会员配置、会员等级、手动设置会员 |
+| [积分操作文档](docs/operation/points.md) | 积分配置、积分规则、积分商品、兑换单和积分流水 |
+| [余额操作文档](docs/operation/wallet.md) | 余额支付、充值套餐、用户余额调整和余额流水 |
+| [客户端装修操作文档](docs/operation/client-diy.md) | 首页、个人中心、底部导航、悬浮按钮和主题装修 |
+
+### 业务逻辑
+
+| 文档 | 说明 |
+|------|------|
+| [业务逻辑文档入口](docs/logic/index.md) | 核心业务规则和状态流总入口 |
+| [会员业务逻辑](docs/logic/member.md) | 成长值、等级匹配、手动等级、会员折扣和订单快照 |
+| [积分业务逻辑](docs/logic/points.md) | 积分账户、赠送、冻结、释放、回收、抵扣和兑换 |
+| [余额业务逻辑](docs/logic/wallet.md) | 余额账户、余额流水、余额支付、余额退款和充值套餐边界 |
+| [客户端装修业务逻辑](docs/logic/client-diy.md) | 页面库、装修方案、系统默认、启用策略、主题和客户端读取 |
+
+### 开发文档
+
+| 文档 | 说明 |
+|------|------|
+| [开发文档入口](docs/development/index.md) | 表、接口、Service、前端页面、扩展点和测试入口 |
+| [会员开发文档](docs/development/member.md) | 会员等级、成长值、会员权益和订单快照开发入口 |
+| [积分开发文档](docs/development/points.md) | 积分账户、积分规则、积分抵扣、积分商城和兑换单开发入口 |
+| [余额开发文档](docs/development/wallet.md) | 余额账户、余额流水、余额支付、余额退款和充值套餐开发入口 |
+| [客户端装修开发文档](docs/development/client-diy.md) | 页面库、装修方案、主题、配置读取和 UniApp 渲染开发入口 |
+
+### 安装与部署
+
+| 文档 | 说明 |
+|------|------|
 | [安装与部署导航](docs/install/index.md) | 唯一入口：选择安装方式、环境要求、专题文档索引 |
 | [方式一：手动安装](docs/install/manual.md) | 无 Docker 场景的完整部署步骤 |
 | [方式二：Docker 开发（仅后端）](docs/install/docker-backend-only.md) | 宿主机 MySQL / Redis + 后端容器 |
@@ -191,7 +267,12 @@ docker compose restart
 | [新增云存储上传驱动开发指南](docs/upload-storage-driver-extension.md) | 新增云存储服务商时需要修改的后端、前端、seed、测试和文档清单 |
 | [隐私与平台实例统计说明](docs/privacy.md) | 平台实例统计的数据范围、本地状态与关闭方式 |
 | [测试基线与触发矩阵](docs/testing/change-trigger-test-matrix.md) | 后端 / 前端测试入口与变更触发规则 |
+| [订单创建 1000 并发压测报告](docs/testing/order-create-1000-concurrency-report.md) | 1000 个不同用户同时下单的压测结果、数据一致性和边界说明 |
+| [Swoole 并发配置建议](docs/testing/swoole-concurrency-config-guide.md) | worker、连接数、backlog、连接池与订单高并发调参建议 |
 | [Claude Code 使用指南](docs/claude-code-guide.md) | AI 工具、Skills、MCP、多 Agent 协作 |
+| [客户端装修功能设计方案](docs/superpowers/specs/2026-06-03-client-diy-design.md) | 客户端装修一期范围、后台信息架构和方案库模型 |
+| [UniApp 客服 H5 资源跳转设计](docs/development/customer-service-h5-resource-action.md) | 客服 Widget 的商品与订单 URL 模板及 H5 顶层跳转方案 |
+| [客户端装修基础实施计划](docs/superpowers/plans/2026-06-03-client-diy-foundation-plan.md) | 客户端装修后端基础能力的历史实施计划 |
 
 ## 开发约定
 
@@ -205,6 +286,7 @@ docker compose restart
 ## 交流与反馈
 
 - QQ 群：958717939
+- 微信号：yyw1329847115
 
 ## 开源协议
 

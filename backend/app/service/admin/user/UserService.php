@@ -4,14 +4,19 @@ declare(strict_types=1);
 
 namespace app\service\admin\user;
 
+use app\model\user\MemberLevel;
 use app\model\user\User;
 use app\model\user\UserGroup;
 use app\model\user\UserGroupRelation;
+use app\model\user\UserMember;
+use app\model\user\UserPoints;
 use app\model\user\UserTag;
 use app\model\user\UserTagRelation;
 use app\model\user\UserWallet;
+use app\service\admin\distribution\DistributionManagementService;
 use app\service\admin\support\CsvExportService;
 use app\service\upload\AssetHydrator;
+use app\service\user\UserMemberService;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
 
@@ -86,6 +91,9 @@ class UserService extends BaseService
             $row['groups_text'] = implode('、', array_column($row['groups'] ?? [], 'name'));
             $row['tags_text'] = implode('、', array_column($row['tags'] ?? [], 'name'));
             $row['balance'] = $row['wallet']['balance'] ?? '0.00';
+            $row['points'] = $row['points']['balance_points'] ?? 0;
+            $row['member_level'] = $row['member']['level_name'] ?? '';
+            $row['growth_value'] = $row['member']['growth_value'] ?? 0;
         }
         unset($row);
 
@@ -95,6 +103,9 @@ class UserService extends BaseService
             'mobile' => '手机号',
             'email' => '邮箱',
             'balance' => '余额',
+            'points' => '积分',
+            'member_level' => '会员等级',
+            'growth_value' => '成长值',
             'register_type' => '注册方式',
             'status_text' => '状态',
             'groups_text' => '分组',
@@ -148,6 +159,8 @@ class UserService extends BaseService
         $groupMap = $this->batchGetUserGroups($userIds);
         $tagMap = $this->batchGetUserTags($userIds);
         $walletMap = $this->batchGetWallets($userIds);
+        $pointsMap = $this->batchGetPoints($userIds);
+        $memberMap = $this->batchGetMembers($userIds);
 
         $list = app()->make(AssetHydrator::class)->hydrateFields($list, [
             'avatar' => 'avatar_full_url',
@@ -159,6 +172,20 @@ class UserService extends BaseService
             $user['wallet'] = $walletMap[$user['id']] ?? [
                 'balance' => '0.00',
                 'frozen_amount' => '0.00',
+            ];
+            $user['points'] = $pointsMap[$user['id']] ?? [
+                'balance_points' => 0,
+                'total_income_points' => 0,
+                'total_expense_points' => 0,
+            ];
+            $user['member'] = $memberMap[$user['id']] ?? [
+                'growth_value' => 0,
+                'total_growth_value' => 0,
+                'level_id' => 0,
+                'level_name' => '',
+                'level_source' => 'auto',
+                'level_lock_until' => null,
+                'level_remark' => '',
             ];
         }
         unset($user);
@@ -293,6 +320,66 @@ class UserService extends BaseService
     }
 
     /**
+     * @param array<int> $userIds
+     * @return array<int, array{balance_points:int,total_income_points:int,total_expense_points:int}>
+     */
+    protected function batchGetPoints(array $userIds): array
+    {
+        if (empty($userIds)) {
+            return [];
+        }
+
+        $rows = $this->model(UserPoints::class)
+            ->whereIn('user_id', $userIds)
+            ->select()
+            ->toArray();
+
+        $result = [];
+        foreach ($rows as $row) {
+            $result[(int) $row['user_id']] = [
+                'balance_points' => (int) ($row['balance_points'] ?? 0),
+                'total_income_points' => (int) ($row['total_income_points'] ?? 0),
+                'total_expense_points' => (int) ($row['total_expense_points'] ?? 0),
+            ];
+        }
+
+        return $result;
+    }
+
+    /**
+     * @param array<int> $userIds
+     * @return array<int, array{growth_value:int,total_growth_value:int,level_id:int,level_name:string,level_source:string,level_lock_until:?string,level_remark:string}>
+     */
+    protected function batchGetMembers(array $userIds): array
+    {
+        if (empty($userIds)) {
+            return [];
+        }
+
+        $rows = $this->model(UserMember::class)
+            ->whereIn('user_id', $userIds)
+            ->select()
+            ->toArray();
+
+        $result = [];
+        foreach ($rows as $row) {
+            $result[(int) $row['user_id']] = [
+                'growth_value' => (int) ($row['growth_value'] ?? 0),
+                'total_growth_value' => (int) ($row['total_growth_value'] ?? 0),
+                'level_id' => (int) ($row['level_id'] ?? 0),
+                'level_name' => (string) ($row['level_name'] ?? ''),
+                'level_source' => (string) ($row['level_source'] ?? 'auto'),
+                'level_lock_until' => ($row['level_lock_until'] ?? null) !== null
+                    ? (string) $row['level_lock_until']
+                    : null,
+                'level_remark' => (string) ($row['level_remark'] ?? ''),
+            ];
+        }
+
+        return $result;
+    }
+
+    /**
      * 获取用户详情
      */
     public function getInfo(int $id): array
@@ -310,8 +397,70 @@ class UserService extends BaseService
         $result = $rows[0] ?? $result;
         $result['groups'] = $this->getUserGroups($id);
         $result['tags'] = $this->getUserTags($id);
+        $result['points'] = $this->batchGetPoints([$id])[$id] ?? [
+            'balance_points' => 0,
+            'total_income_points' => 0,
+            'total_expense_points' => 0,
+        ];
+        $result['member'] = $this->batchGetMembers([$id])[$id] ?? [
+            'growth_value' => 0,
+            'total_growth_value' => 0,
+            'level_id' => 0,
+            'level_name' => '',
+            'level_source' => 'auto',
+            'level_lock_until' => null,
+            'level_remark' => '',
+        ];
+        $result['distribution'] = app()->make(DistributionManagementService::class)
+            ->userDistributionSummary($id);
 
         return $result;
+    }
+
+    /**
+     * @return array<int,array{id:int,name:string,growth_min:int,discount_percent:string}>
+     */
+    public function memberLevelOptions(): array
+    {
+        $rows = $this->model(MemberLevel::class)
+            ->where('status', 1)
+            ->order('growth_min', 'asc')
+            ->order('sort', 'asc')
+            ->order('id', 'asc')
+            ->select()
+            ->toArray();
+
+        return array_map(static fn(array $row): array => [
+            'id' => (int) ($row['id'] ?? 0),
+            'name' => (string) ($row['name'] ?? ''),
+            'growth_min' => (int) ($row['growth_min'] ?? 0),
+            'discount_percent' => number_format((float) ($row['discount_percent'] ?? 100), 2, '.', ''),
+        ], $rows);
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    public function setMemberLevel(int $id, array $data, int $adminId): array
+    {
+        $levelId = (int) ($data['level_id'] ?? 0);
+        if ($levelId <= 0) {
+            throw new BusinessException('请选择会员等级');
+        }
+
+        $remark = trim((string) ($data['remark'] ?? ''));
+        if ($remark === '') {
+            throw new BusinessException('请填写调整原因');
+        }
+
+        return app()->make(UserMemberService::class)->adminSetLevel(
+            userId: $id,
+            levelId: $levelId,
+            locked: !empty($data['locked']),
+            lockUntil: isset($data['lock_until']) ? (string) $data['lock_until'] : null,
+            remark: $remark,
+            adminId: $adminId,
+        );
     }
 
     /**

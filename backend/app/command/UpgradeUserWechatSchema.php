@@ -10,15 +10,14 @@ use think\console\Output;
 use think\facade\Db;
 
 /**
- * 历史兼容修复：mb_user 微信 openid 拆列 + username 列 + 微信新设置项
+ * 历史兼容修复：mb_user 微信 openid 拆列 + username 列 + 微信登录设置项
  *
  * 背景：
  *  - 旧 schema 只有一个 wx_openid 列，现实里同一用户在小程序与公众号会拿到不同 openid，
  *    单列存不下两端 openid。本命令新增 wx_miniapp_openid / wx_official_openid 两列。
  *  - mb_user 新增 username 列（账号密码登录使用）。
- *  - 微信设置新增：小程序"强制获取手机号 / 强制获取头像昵称"、公众号"必须绑定手机号
- *    / 强制获取头像昵称"、新增"微信开放平台"分组与三项设置（AppID / AppSecret /
- *    已绑定主体开关）。
+ *  - 微信设置新增：小程序"强制获取手机号 / 强制获取头像昵称"、
+ *    公众号"必须绑定手机号 / 强制获取头像昵称"。
  *
  * 数据迁移策略：
  *  - 历史 wx_openid 全部来自小程序（之前只接了小程序），统一复制到 wx_miniapp_openid。
@@ -36,7 +35,7 @@ class UpgradeUserWechatSchema extends Command
     protected function configure(): void
     {
         $this->setName('upgrade:user-wechat-schema')
-            ->setDescription('历史兼容修复：mb_user 微信 openid 拆列、username 列、微信新设置项');
+            ->setDescription('历史兼容修复：mb_user 微信 openid 拆列、username 列、微信登录设置项');
     }
 
     protected function execute(Input $input, Output $output): int
@@ -115,13 +114,7 @@ class UpgradeUserWechatSchema extends Command
             $output->writeln('<info>+ ' . $table . '.uk_wx_official_openid 索引已添加</info>');
         }
 
-        // 6. 给 wx_unionid 加普通索引（之前可能没有）
-        if ($this->columnExists($table, 'wx_unionid') && !$this->indexExists($table, 'idx_wx_unionid')) {
-            Db::execute(sprintf("ALTER TABLE `%s` ADD KEY `idx_wx_unionid` (`wx_unionid`)", $table));
-            $output->writeln('<info>+ ' . $table . '.idx_wx_unionid 索引已添加</info>');
-        }
-
-        // 7. 旧 wx_openid 的 UNIQUE 索引若存在则去掉，避免与新列约束冲突；列本身保留兼容
+        // 6. 旧 wx_openid 的 UNIQUE 索引若存在则去掉，避免与新列约束冲突；列本身保留兼容
         if ($this->indexExists($table, 'uk_wx_openid')) {
             Db::execute(sprintf("ALTER TABLE `%s` DROP INDEX `uk_wx_openid`", $table));
             $output->writeln('<comment>· 旧 ' . $table . '.uk_wx_openid 索引已移除（列保留兼容，下版本删除）</comment>');
@@ -129,29 +122,11 @@ class UpgradeUserWechatSchema extends Command
     }
 
     /**
-     * 同步微信相关的新设置项与新分组（开放平台）
+     * 同步微信登录相关设置项
      */
     private function upgradeSettings(Output $output, string $groupTable, string $settingTable): void
     {
-        // 1) 新增 1033 微信开放平台分组
-        $openGroupExists = Db::name('setting_group')->where('id', 1033)->whereOr('code', 'WechatOpenPlatform')->find();
-        if ($openGroupExists === null) {
-            Db::name('setting_group')->insert([
-                'id'           => 1033,
-                'parent_id'    => 103,
-                'permission_id'=> 0,
-                'name'         => '微信开放平台',
-                'code'         => 'WechatOpenPlatform',
-                'icon'         => null,
-                'description'  => '开放平台主体绑定标记，用于跨小程序/公众号 unionid 互通',
-                'sort'         => 30,
-                'display_type' => 'page',
-                'status'       => 1,
-            ]);
-            $output->writeln('<info>+ setting_group 1033 WechatOpenPlatform 已创建</info>');
-        }
-
-        // 2) 新增 5 项微信设置（小程序 2 项 + 公众号 2 项 + 开放平台 3 项）
+        // 新增 4 项微信设置（小程序 2 项 + 公众号 2 项）
         $rows = [
             // 1031 微信小程序
             [1031, '强制获取手机号', 'wechat_mini_force_mobile', '0', 'switch', '开启后小程序首次登录必须授权手机号（getPhoneNumber），用于跨端账号合并；关闭后走"绑定手机号"中间步骤', 60],
@@ -159,10 +134,6 @@ class UpgradeUserWechatSchema extends Command
             // 1032 公众号
             [1032, '必须绑定手机号', 'wechat_offi_force_mobile_bind', '0', 'switch', '开启后公众号 OAuth 注册的用户必须走短信验证码绑定手机号（公众号 OAuth 本身无法直接获取手机号）', 50],
             [1032, '强制获取头像昵称', 'wechat_offi_force_userinfo', '0', 'switch', '开启后 OAuth scope 使用 snsapi_userinfo 强制获取头像/昵称；关闭后使用 snsapi_base 仅取 openid', 60],
-            // 1033 开放平台
-            [1033, '开放平台 AppID', 'wechat_open_appid', '', 'input', '占位字段，本期不调用开放平台 API；接入 PC 扫码或移动 APP 时使用', 10],
-            [1033, '开放平台 AppSecret', 'wechat_open_secret', '', 'password', '占位字段，配合 AppID 同时填写', 20],
-            [1033, '已绑定开放平台主体', 'wechat_open_bound', '0', 'switch', '若小程序与公众号已绑定到同一开放平台主体，开启此项以信任 unionid 进行跨端账号合并；未绑定时关闭，避免 unionid 误用', 30],
         ];
 
         $added = 0;

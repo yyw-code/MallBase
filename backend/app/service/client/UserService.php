@@ -11,6 +11,7 @@ use app\model\user\UserTag;
 use app\model\user\UserTagRelation;
 use app\service\UploadService;
 use app\service\upload\AssetHydrator;
+use app\service\user\UserMemberService;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
 use mall_base\service\JwtCacheService;
@@ -33,7 +34,7 @@ class UserService extends BaseService
     /**
      * 用户登录(手机号 + 密码)
      */
-    public function login(string $account, string $password): array
+    public function login(string $account, string $password, string $clientType = 'uniapp'): array
     {
         $user = $this->model()
             ->where('mobile', $account)
@@ -47,7 +48,7 @@ class UserService extends BaseService
             throw new BusinessException('密码错误');
         }
 
-        return $this->finishLogin($user, $account);
+        return $this->finishLogin($user, $account, $clientType);
     }
 
     /**
@@ -56,7 +57,7 @@ class UserService extends BaseService
      * 用户名可在注册时填,或在个人中心补设。username 列 UNIQUE,可空,
      * 与 mobile/wechat 登录互不冲突
      */
-    public function loginByUsername(string $username, string $password): array
+    public function loginByUsername(string $username, string $password, string $clientType = 'uniapp'): array
     {
         $username = trim($username);
         if ($username === '') {
@@ -74,7 +75,7 @@ class UserService extends BaseService
             throw new BusinessException('密码错误');
         }
 
-        return $this->finishLogin($user, $username);
+        return $this->finishLogin($user, $username, $clientType);
     }
 
     /**
@@ -85,7 +86,7 @@ class UserService extends BaseService
      *  - 手机号不存在 → 自动创建账号,register_type=h5(纯网页注册路径),
      *    密码留空(后续个人中心可补设)
      */
-    public function loginBySms(string $mobile, string $smsCode): array
+    public function loginBySms(string $mobile, string $smsCode, string $clientType = 'uniapp'): array
     {
         $sms = app()->make(SmsService::class);
         $sms->verifyCode($mobile, SmsScene::LOGIN, $smsCode);
@@ -107,7 +108,7 @@ class UserService extends BaseService
             throw new BusinessException('账号已禁用');
         }
 
-        return $this->finishLogin($user, $mobile);
+        return $this->finishLogin($user, $mobile, $clientType);
     }
 
     /**
@@ -115,17 +116,21 @@ class UserService extends BaseService
      *
      * @return array<string, mixed>
      */
-    private function finishLogin(User $user, string $account): array
+    private function finishLogin(User $user, string $account, string $clientType): array
     {
         $user->last_login_time = date('Y-m-d H:i:s');
         $user->last_login_ip   = Request::ip();
         $user->save();
 
         $jwtService = app()->make(JwtService::class);
+        $sid = $this->makeSessionId();
         $token = $jwtService->encode([
             'user_id'       => $user->id,
             'account'       => $account,
             'register_type' => $user->register_type,
+            'guard'         => JwtCacheService::GUARD_CLIENT,
+            'client_type'   => $this->normalizeClientType($clientType),
+            'sid'           => $sid,
         ]);
 
         $jwtCacheService = app()->make(JwtCacheService::class);
@@ -133,6 +138,77 @@ class UserService extends BaseService
             $token['refresh_token'],
             $user->id,
             $jwtService->getRefreshExpire(),
+            JwtCacheService::GUARD_CLIENT,
+            $sid,
+        );
+
+        return $token;
+    }
+
+    /**
+     * 刷新前台用户 Token，保持同一个登录会话 sid。
+     *
+     * @return array<string, mixed>
+     */
+    public function refreshToken(string $refreshToken): array
+    {
+        $jwtService = app()->make(JwtService::class);
+
+        try {
+            $decoded = $jwtService->decode($refreshToken);
+            $payload = $decoded->data;
+        } catch (\Exception $e) {
+            throw new BusinessException('刷新令牌无效或已过期');
+        }
+
+        if (($payload->type ?? null) !== 'refresh') {
+            throw new BusinessException('刷新令牌类型错误');
+        }
+        if (($payload->guard ?? null) !== JwtCacheService::GUARD_CLIENT) {
+            throw new BusinessException('刷新令牌身份域错误');
+        }
+
+        $userId = (int) ($payload->user_id ?? 0);
+        $sid = (string) ($payload->sid ?? '');
+        if ($userId <= 0 || $sid === '') {
+            throw new BusinessException('刷新令牌会话无效');
+        }
+
+        $user = $this->model()
+            ->where('id', $userId)
+            ->where('status', 1)
+            ->find();
+        if (!$user) {
+            throw new BusinessException('用户不存在或已禁用');
+        }
+
+        $jwtCacheService = app()->make(JwtCacheService::class);
+        if (!$jwtCacheService->verifyRefreshToken(
+            $refreshToken,
+            $userId,
+            JwtCacheService::GUARD_CLIENT,
+            $sid
+        )) {
+            throw new BusinessException('刷新令牌已失效');
+        }
+
+        $jwtCacheService->revokeRefreshToken($userId, JwtCacheService::GUARD_CLIENT, $sid);
+
+        $token = $jwtService->encode([
+            'user_id'       => $user->id,
+            'account'       => (string) ($payload->account ?? ''),
+            'register_type' => (string) ($payload->register_type ?? $user->register_type),
+            'guard'         => JwtCacheService::GUARD_CLIENT,
+            'client_type'   => $this->normalizeClientType((string) ($payload->client_type ?? 'uniapp')),
+            'sid'           => $sid,
+        ]);
+
+        $jwtCacheService->storeRefreshToken(
+            $token['refresh_token'],
+            $userId,
+            $jwtService->getRefreshExpire(),
+            JwtCacheService::GUARD_CLIENT,
+            $sid,
         );
 
         return $token;
@@ -356,10 +432,10 @@ class UserService extends BaseService
     /**
      * 用户登出
      */
-    public function logout(int $userId): bool
+    public function logout(int $userId, ?string $sid = null): bool
     {
         $jwtCacheService = app()->make(JwtCacheService::class);
-        $jwtCacheService->clearUserTokens($userId);
+        $jwtCacheService->clearUserTokens($userId, JwtCacheService::GUARD_CLIENT, $sid);
         return true;
     }
 
@@ -385,6 +461,8 @@ class UserService extends BaseService
 
         // 获取用户标签
         $info['tags'] = $this->getUserTags($userId);
+
+        $info['member'] = app()->make(UserMemberService::class)->clientSummary($userId);
 
         return $info;
     }
@@ -471,5 +549,23 @@ class UserService extends BaseService
             $parts = explode('@', $account);
             return $parts[0] ?? '用户';
         }
+    }
+
+    private function makeSessionId(): string
+    {
+        return bin2hex(random_bytes(16));
+    }
+
+    private function normalizeClientType(string $clientType): string
+    {
+        $clientType = trim($clientType);
+        if ($clientType === '') {
+            return 'uniapp';
+        }
+
+        $clientType = strtolower($clientType);
+        $clientType = preg_replace('/[^a-z0-9_:-]/', '', $clientType) ?: 'uniapp';
+
+        return mb_substr($clientType, 0, 32);
     }
 }

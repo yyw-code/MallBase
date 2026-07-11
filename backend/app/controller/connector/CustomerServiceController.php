@@ -1,0 +1,94 @@
+<?php
+declare(strict_types=1);
+
+namespace app\controller\connector;
+
+use app\service\connector\CustomerServiceConnectorService;
+use app\service\connector\CustomerServiceContextTokenService;
+use app\service\connector\CustomerServiceSettingService;
+use mall_base\base\BaseController;
+use think\Response;
+
+/**
+ * 客服系统服务端连接器入口。
+ *
+ * @extends BaseController<CustomerServiceConnectorService>
+ */
+class CustomerServiceController extends BaseController
+{
+    protected string $serviceClass = CustomerServiceConnectorService::class;
+
+    public function health(): Response
+    {
+        return $this->connectorSuccess($this->service()->health());
+    }
+
+    public function contextToken(): Response
+    {
+        $payload = (array) $this->request->param();
+        $token = $this->service(CustomerServiceContextTokenService::class)->issue($payload);
+
+        return $this->connectorSuccess([
+            'token' => $token,
+            'expires_in' => $this->service(CustomerServiceSettingService::class)->contextTtl(),
+        ]);
+    }
+
+    public function productSummary($id): Response
+    {
+        return $this->connectorSuccess($this->service()->productSummary((int) $id));
+    }
+
+    public function productSearch(): Response
+    {
+        return $this->connectorSuccess($this->service()->productSearch((array) $this->request->param()));
+    }
+
+    public function orderSummary($id): Response
+    {
+        return $this->connectorSuccess($this->service()->orderSummary((int) $id));
+    }
+
+    public function userSummary($id): Response
+    {
+        return $this->connectorSuccess($this->service()->userSummary((int) $id));
+    }
+
+    public function addOrderRemark($id): Response
+    {
+        $result = $this->service()->addOrderRemark(
+            (int) $id,
+            (string) $this->request->param('remark', ''),
+            (string) $this->request->param('actor_name', '')
+        );
+
+        return $this->connectorSuccess($result);
+    }
+
+    public function shipOrder($id): Response
+    {
+        return $this->connectorSuccess($this->service()->shipOrder((int) $id, (array) $this->request->param()));
+    }
+
+    public function approveRefund($id): Response
+    {
+        return $this->connectorSuccess($this->service()->approveRefund((int) $id, (array) $this->request->param()));
+    }
+
+    public function rejectRefund($id): Response
+    {
+        return $this->connectorSuccess($this->service()->rejectRefund((int) $id, (array) $this->request->param()));
+    }
+
+    /**
+     * @param mixed $data
+     */
+    private function connectorSuccess($data = null): Response
+    {
+        return json([
+            'ok' => true,
+            'data' => $data,
+            'error' => null,
+        ]);
+    }
+}

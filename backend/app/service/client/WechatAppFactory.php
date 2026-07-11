@@ -102,17 +102,6 @@ class WechatAppFactory
         return 'https://open.weixin.qq.com/connect/oauth2/authorize?' . $query . '#wechat_redirect';
     }
 
-    /**
-     * 是否信任 unionid 进行跨端账号合并
-     *
-     * 仅当后台开关 wechat_open_bound = true 时为 true。
-     * 未绑定开放平台主体时 unionid 可能各 AppID 独立,合并会出错
-     */
-    public function trustUnionid(): bool
-    {
-        return in_array((string) getSystemSetting('wechat_open_bound', '0'), ['1', 'true', 'on', 'yes'], true);
-    }
-
     private function assertCredentials(string $appId, string $secret, string $label): void
     {
         if ($appId === '' || $secret === '') {

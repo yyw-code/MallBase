@@ -323,7 +323,7 @@ MallBase 是一个开源通用电商基座系统，包含：
 
 **支付页（模态或跳转）：**
 - 支付金额展示
-- 支付方式选择：微信支付 / 支付宝（带图标的单选列表）
+- 支付方式选择：微信支付 / 余额支付（带图标的单选列表）
 - 确认支付按钮
 
 **支付结果页：**
@@ -331,7 +331,7 @@ MallBase 是一个开源通用电商基座系统，包含：
 - 按钮：查看订单 | 返回首页
 - 推荐商品（预留）
 
-**API**: `POST /client/api/order/pay/:sn` — `{ pay_method: "wechat" | "alipay" | "mock" }`
+**API**: `POST /client/api/order/pay/:sn` — `{ pay_method: 1 | 3, scene?: "mini" | "offi" | "h5" }`
 
 ---
 
@@ -501,11 +501,11 @@ MallBase 是一个开源通用电商基座系统，包含：
 1. 用户点击"微信登录" → 前端调 `wx.login()` 拿 code → 调用 `POST /client/api/user/auth/wechat` 传 `{ code }`
 2. 后端返回两种情况：
    - **直接登录成功**：返回 `{ access_token, refresh_token, expires_in, refresh_expires_in }`
-   - **需绑定手机号**：返回 `{ need_mobile: true, openid, unionid?, session_key, force_phone_number: true }`
+   - **需绑定手机号**：返回 `{ need_mobile: true, bind_token, force_phone_number: true }`
      - 前端根据 `force_phone_number: true` 优先展示微信获取手机号按钮
 3. 绑定手机号两种方式：
-   - 方式 A（推荐）：微信获取手机号按钮（`open-type="getPhoneNumber"`）→ 拿到 phone_code → 调用 `POST /client/api/user/auth/wechat/bindMobileByPhoneCode` 传 `{ openid, phone_code }`
-   - 方式 B（兜底）：用户手动输入手机号 + 短信验证码 → 先调 `POST /client/api/user/auth/sms/send` 传 `{ mobile, scene: "bind_mobile" }` → 再调 `POST /client/api/user/auth/wechat/bindMobile` 传 `{ openid, mobile, code }`
+   - 方式 A（推荐）：微信获取手机号按钮（`open-type="getPhoneNumber"`）→ 拿到 phone_code → 调用 `POST /client/api/user/auth/wechat/bindMobileByPhoneCode` 传 `{ bind_token, phone_code }`
+   - 方式 B（兜底）：用户手动输入手机号 + 短信验证码 → 先调 `POST /client/api/user/auth/sms/send` 传 `{ mobile, scene: "bind_mobile" }` → 再调 `POST /client/api/user/auth/wechat/bindMobile` 传 `{ bind_token, mobile, code }`
 4. 绑定成功后返回 `{ access_token, refresh_token, expires_in, refresh_expires_in }`
 
 **微信公众号登录流程（H5 环境）：**
@@ -513,9 +513,9 @@ MallBase 是一个开源通用电商基座系统，包含：
 2. 授权回调拿到 code → 调用 `POST /client/api/user/auth/wechat/official` 传 `{ code }`
 3. 后端返回两种情况：
    - **直接登录成功**：返回 `{ access_token, refresh_token, expires_in, refresh_expires_in }`
-   - **需绑定手机号**：返回 `{ need_mobile: true, openid, unionid?, sms_required: true }`
+   - **需绑定手机号**：返回 `{ need_mobile: true, bind_token, sms_required: true }`
      - 前端根据 `sms_required: true` 展示手机号 + 短信验证码输入表单
-4. 绑定手机号：先调 `POST /client/api/user/auth/sms/send` 传 `{ mobile, scene: "wechat_official_bind" }` → 再调 `POST /client/api/user/auth/wechat/official/bindMobile` 传 `{ openid, mobile, code }`
+4. 绑定手机号：先调 `POST /client/api/user/auth/sms/send` 传 `{ mobile, scene: "wechat_official_bind" }` → 再调 `POST /client/api/user/auth/wechat/official/bindMobile` 传 `{ bind_token, mobile, code }`
 5. 绑定成功后返回 `{ access_token, refresh_token, expires_in, refresh_expires_in }`
 
 **登录成功统一响应结构：**
@@ -540,9 +540,7 @@ MallBase 是一个开源通用电商基座系统，包含：
   "message": "登录成功",
   "data": {
     "need_mobile": true,
-    "openid": "oXXXX",
-    "unionid": null,
-    "session_key": "xxxxx",
+    "bind_token": "opaque-token",
     "force_phone_number": true
   },
   "timestamp": 1745654321
@@ -556,8 +554,7 @@ MallBase 是一个开源通用电商基座系统，包含：
   "message": "登录成功",
   "data": {
     "need_mobile": true,
-    "openid": "oXXXX",
-    "unionid": null,
+    "bind_token": "opaque-token",
     "sms_required": true
   },
   "timestamp": 1745654321
@@ -784,7 +781,7 @@ MallBase 是一个开源通用电商基座系统，包含：
 | 方法 | 路径 | 请求参数 | 用途 |
 |------|------|---------|------|
 | POST | `/client/api/order/create` | `{ address_id, cart_ids, remark? }` | 创建订单 |
-| POST | `/client/api/order/pay/:sn` | `{ pay_method }` | 支付订单（pay_method: `wechat` / `alipay` / `mock`） |
+| POST | `/client/api/order/pay/:sn` | `{ pay_method, scene? }` | 支付订单（pay_method: `1` 微信 / `3` 余额） |
 | POST | `/client/api/order/cancel/:id` | — | 取消订单 |
 | POST | `/client/api/order/confirmReceive/:id` | — | 确认收货 |
 | GET | `/client/api/order/list` | `?status=&page=&limit=` | 订单列表 |

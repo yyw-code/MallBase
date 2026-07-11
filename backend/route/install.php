@@ -23,6 +23,7 @@ Route::group('install', function () {
         Route::get('adminReady', 'adminReady')->withoutMiddleware([InstallCheckMiddleware::class]);
         Route::get('check', 'check');
         Route::get('formDefaults', 'formDefaults');
+        Route::get('agreement', 'agreement');
         Route::post('testDb', 'testDb');
         Route::post('testRedis', 'testRedis');
         Route::post('execute', 'execute');

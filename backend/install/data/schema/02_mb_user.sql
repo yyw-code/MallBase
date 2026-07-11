@@ -18,10 +18,9 @@ CREATE TABLE `mb_user` (
   `nickname` varchar(50) DEFAULT NULL COMMENT '昵称',
   `avatar` bigint(20) unsigned DEFAULT NULL COMMENT '头像素材ID',
 
-  -- 微信相关字段（多端独立 openid，unionid 跨主体共享）
+  -- 微信相关字段（多端独立 openid）
   `wx_miniapp_openid` varchar(100) DEFAULT NULL COMMENT '微信小程序 openid',
   `wx_official_openid` varchar(100) DEFAULT NULL COMMENT '微信公众号 openid',
-  `wx_unionid` varchar(100) DEFAULT NULL COMMENT '微信 unionid（开放平台主体下跨 AppID 共享）',
   `session_key` varchar(100) DEFAULT NULL COMMENT '微信小程序会话密钥',
 
   -- 个人资料
@@ -54,7 +53,6 @@ CREATE TABLE `mb_user` (
   UNIQUE KEY `uk_wx_miniapp_openid` (`wx_miniapp_openid`),
   UNIQUE KEY `uk_wx_official_openid` (`wx_official_openid`),
   KEY `idx_email` (`email`),
-  KEY `idx_wx_unionid` (`wx_unionid`),
   KEY `idx_status` (`status`),
   KEY `idx_delete_time` (`delete_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='前台用户表';
@@ -123,3 +121,19 @@ CREATE TABLE `mb_user_tag_relation` (
   KEY `idx_user_id` (`user_id`),
   KEY `idx_tag_id` (`tag_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户标签关联表';
+
+-- -----------------------------
+-- 六、用户客户端主题偏好表
+-- -----------------------------
+DROP TABLE IF EXISTS `mb_user_theme_preference`;
+CREATE TABLE `mb_user_theme_preference` (
+  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT COMMENT '偏好ID',
+  `user_id` int(11) unsigned NOT NULL COMMENT '用户ID',
+  `theme_mode` varchar(20) NOT NULL DEFAULT 'system' COMMENT '主题模式：system/light/dark/custom',
+  `theme_id` int(11) unsigned DEFAULT NULL COMMENT '自定义主题ID，仅 theme_mode=custom 有效',
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_user_id` (`user_id`),
+  KEY `idx_theme` (`theme_mode`, `theme_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户客户端主题偏好表';

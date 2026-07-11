@@ -1,5 +1,9 @@
 <template>
-  <view class="confirm-page">
+  <view
+    class="confirm-page"
+    :class="[`theme-${decorateStore.resolvedThemeMode}`]"
+    :style="decorateStore.themeStyle"
+  >
     <mb-navbar title="确认订单" />
 
     <!-- 收货地址 -->
@@ -44,6 +48,13 @@
         <view class="goods-item__info">
           <text class="goods-item__name">{{ item.goods_name || item.name }}</text>
           <text v-if="item.sku_spec" class="goods-item__spec">{{ item.sku_spec }}</text>
+          <text
+            v-for="line in orderItemBenefitLines(item)"
+            :key="line.key"
+            class="goods-item__benefit"
+          >
+            {{ line.text }}
+          </text>
           <view class="goods-item__bottom">
             <mb-price :value="item.unit_price" size="sm" color="var(--color-text-title)" />
             <text class="goods-item__qty">&times;{{ item.quantity }}</text>
@@ -75,6 +86,33 @@
       />
     </view>
 
+    <view
+      v-for="slot in orderExtensionCards"
+      :key="slot.key"
+      class="card points-card"
+      :class="slot.className"
+    >
+      <view class="points-card__main">
+        <view class="points-card__title-row">
+          <text class="points-card__title">{{ slot.title }}</text>
+          <text
+            v-if="slot.amountText"
+            :class="slot.switchable ? 'points-card__discount' : 'points-card__reward'"
+          >
+            {{ slot.amountText }}
+          </text>
+        </view>
+        <text class="points-card__meta">{{ slot.metaText }}</text>
+      </view>
+      <switch
+        v-if="slot.switchable"
+        :checked="slot.checked"
+        :disabled="slot.disabled"
+        color="var(--color-primary, #0d50d5)"
+        @change="onUsePointsChange"
+      />
+    </view>
+
     <!-- 价格明细 -->
     <view class="card summary-card">
       <view class="summary-row">
@@ -87,12 +125,22 @@
         <text v-else-if="isFreeFreight" class="summary-row__free">免运费</text>
         <mb-price v-else :value="displayFreight" size="sm" color="var(--color-text)" />
       </view>
+      <view
+        v-for="row in summaryExtensionRows"
+        :key="row.key"
+        class="summary-row"
+      >
+        <text class="summary-row__label">{{ row.label }}</text>
+        <text class="summary-row__discount">{{ row.amountText }}</text>
+      </view>
       <view class="summary-divider" />
       <view class="summary-row summary-row--total">
         <text class="summary-row__label">合计</text>
         <mb-price :value="displayPayTotal" size="md" color="var(--color-text-title)" />
       </view>
     </view>
+
+    <mb-copyright-footer />
 
     <!-- 底部提交栏 -->
     <view class="submit-bar">
@@ -101,13 +149,13 @@
           <text class="submit-bar__sup">TOTAL AMOUNT</text>
           <mb-price :value="displayPayTotal" size="lg" color="var(--color-primary, #0d50d5)" />
         </view>
-        <view
+        <button
           class="submit-bar__btn"
           :class="{ 'submit-bar__btn--disabled': submitting || !address || !isAddressValid }"
-          @tap="handleSubmit"
+          @click="handleSubmit"
         >
           <text class="submit-bar__btn-text">{{ submitting ? '提交中...' : '提交订单' }}</text>
-        </view>
+        </button>
       </view>
     </view>
 
@@ -123,17 +171,25 @@
       @select="onPayMethodSelect"
       @close="onPayMethodClose"
     />
+    <mb-floating-action />
   </view>
 </template>
 
 <script setup>
+import { useDecorateStore } from '@/store/decorate'
 import { ref, computed, watch, onUnmounted } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
 import { useCartStore } from '@/store/cart'
 import { getAddressList } from '@/api/user/address'
 import { createOrder, previewOrder } from '@/api/order/order'
+import { isPointsEnabled as fetchPointsFeatureEnabled } from '@/utils/points-feature'
 import { usePayFlow } from '@/utils/usePayFlow'
 import { isPositivePrice, isZeroPrice, multiplyPrice, normalizePrice, sumPrices } from '@/utils/price'
+import {
+  buildOrderConfirmExtensionState,
+  buildOrderConfirmItemBenefitLines,
+} from '@/utils/extension-slots'
+const decorateStore = useDecorateStore()
 
 const {
   sheetVisible,
@@ -191,8 +247,11 @@ const remark = ref('')
 const submitting = ref(false)
 const idempotencyKey = ref('')
 const orderItems = ref([])
+const selectedCartIds = ref([])
 // 后端订单试算结果（含权威运费），为 null 时回退本地兜底
 const previewResult = ref(null)
+const usePoints = ref(false)
+const pointsFeatureEnabled = ref(false)
 
 /**
  * 生成幂等 key，防止重复提交
@@ -205,6 +264,7 @@ function generateKey() {
 onLoad((query) => {
   source.value = query.source || 'cart'
   idempotencyKey.value = generateKey()
+  refreshPointsFeatureState()
 
   if (source.value === 'sku') {
     skuId.value = query.sku_id || ''
@@ -225,16 +285,19 @@ onLoad((query) => {
     }
   } else {
     // 购物车模式
-    orderItems.value = cartStore.selectedItems.map((item) => ({
+    const selectedItems = cartStore.selectedItems.map((item) => ({
       ...item,
       quantity: item.quantity || 1,
     }))
+    selectedCartIds.value = selectedItems.map((item) => item.id)
+    orderItems.value = selectedItems
   }
 
   fetchDefaultAddress()
 })
 
 onShow(() => {
+  refreshPointsFeatureState()
   // 返回时检查是否有选中的地址
   const selected = uni.getStorageSync('selected_address')
   if (selected) {
@@ -242,6 +305,14 @@ onShow(() => {
     uni.removeStorageSync('selected_address')
   }
 })
+
+async function refreshPointsFeatureState() {
+  const enabled = await fetchPointsFeatureEnabled()
+  pointsFeatureEnabled.value = enabled
+  if (!enabled) {
+    usePoints.value = false
+  }
+}
 
 // 监听地址选择事件（兼容事件模式）
 function onAddressSelected(addr) {
@@ -298,6 +369,30 @@ const displayPayTotal = computed(() =>
 )
 const hasFreight = computed(() => isPositivePrice(displayFreight.value))
 const isFreeFreight = computed(() => previewResult.value && isZeroPrice(displayFreight.value))
+const orderExtensionState = computed(() =>
+  buildOrderConfirmExtensionState({
+    pointsFeatureEnabled: pointsFeatureEnabled.value,
+    previewResult: previewResult.value,
+    usePoints: usePoints.value,
+  }),
+)
+const pointsDeduction = computed(() => orderExtensionState.value.pointsDeduction)
+const canUsePoints = computed(() => orderExtensionState.value.canUsePoints)
+const shouldUsePoints = computed(() => orderExtensionState.value.shouldUsePoints)
+const orderExtensionCards = computed(() => orderExtensionState.value.cards)
+const summaryExtensionRows = computed(() => orderExtensionState.value.summaryRows)
+
+function orderItemBenefitLines(item) {
+  return buildOrderConfirmItemBenefitLines(item)
+}
+
+function onUsePointsChange(event) {
+  if (!canUsePoints.value) {
+    usePoints.value = false
+    return
+  }
+  usePoints.value = !!event.detail.value
+}
 
 /**
  * 调用后端订单试算，获取含运费的权威金额
@@ -312,22 +407,35 @@ async function fetchPreview() {
       ? {
           source: 'sku',
           address_id: address.value.id,
+          use_points: shouldUsePoints.value ? 1 : 0,
           items: [{ sku_id: Number(skuId.value), quantity: Number(quantity.value) || 1 }],
         }
       : {
           source: 'cart',
           address_id: address.value.id,
-          cart_ids: orderItems.value.map((item) => item.id),
+          use_points: shouldUsePoints.value ? 1 : 0,
+          cart_ids: selectedCartIds.value,
         }
   try {
-    previewResult.value = await previewOrder(payload)
+    const result = await previewOrder(payload)
+    previewResult.value = result
+    if (Array.isArray(result?.items) && result.items.length > 0) {
+      orderItems.value = result.items
+    }
+    const deduction = result?.points_deduction
+    if (usePoints.value && (!deduction || Number(deduction.used_points || 0) <= 0)) {
+      usePoints.value = false
+    }
   } catch {
     previewResult.value = null
+    usePoints.value = false
   }
 }
 
 // 收货地址变化（默认地址加载完成 / 用户重新选择）后重新试算
 watch(address, fetchPreview)
+watch(usePoints, fetchPreview)
+watch(pointsFeatureEnabled, fetchPreview)
 
 function maskPhone(phone) {
   if (!phone || phone.length < 7) return phone || ''
@@ -371,13 +479,17 @@ async function handleSubmit() {
           ],
           buyer_remark: remark.value,
           idempotency_key: idempotencyKey.value,
+          use_points: shouldUsePoints.value ? 1 : 0,
+          points_used: shouldUsePoints.value ? Number(pointsDeduction.value?.used_points || 0) : 0,
         }
       : {
           source: 'cart',
           address_id: address.value.id,
-          cart_ids: orderItems.value.map((item) => item.id),
+          cart_ids: selectedCartIds.value,
           buyer_remark: remark.value,
           idempotency_key: idempotencyKey.value,
+          use_points: shouldUsePoints.value ? 1 : 0,
+          points_used: shouldUsePoints.value ? Number(pointsDeduction.value?.used_points || 0) : 0,
         }
 
   try {
@@ -402,17 +514,17 @@ async function handleSubmit() {
 <style lang="scss" scoped>
 .confirm-page {
   min-height: 100vh;
-  background-color: $mb-color-bg-secondary;
+  background-color: var(--color-bg-secondary, #faf8ff);
   padding: 0 $mb-spacing-page $mb-spacing-lg;
 }
 
 // ---- Card base ----
 .card {
-  background: $mb-color-bg;
+  background: var(--color-bg, #ffffff);
   border-radius: $mb-radius-lg;
   padding: $mb-spacing-lg;
   margin-bottom: $mb-spacing-md;
-  border: 1rpx solid $mb-color-divider;
+  border: 1rpx solid var(--color-divider, #f0f2f5);
 }
 
 // ---- Address card ----
@@ -431,7 +543,7 @@ async function handleSubmit() {
   width: 72rpx;
   height: 72rpx;
   border-radius: 50%;
-  background: rgba($mb-color-primary, 0.08);
+  background: var(--color-primary-soft, rgba(13, 80, 213, 0.08));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -448,7 +560,7 @@ async function handleSubmit() {
   height: 28rpx;
   border-radius: 50% 50% 50% 0;
   transform: rotate(-45deg);
-  background: $mb-color-primary;
+  background: var(--color-primary, #0d50d5);
   position: absolute;
   top: 0;
   left: 0;
@@ -462,7 +574,7 @@ async function handleSubmit() {
     width: 10rpx;
     height: 10rpx;
     border-radius: 50%;
-    background: $mb-color-bg;
+    background: var(--color-bg, #ffffff);
   }
 }
 
@@ -473,7 +585,7 @@ async function handleSubmit() {
   transform: translateX(-50%);
   width: 4rpx;
   height: 10rpx;
-  background: $mb-color-primary;
+  background: var(--color-primary, #0d50d5);
   border-radius: 0 0 2rpx 2rpx;
 }
 
@@ -492,17 +604,17 @@ async function handleSubmit() {
 .address-card__name {
   font-size: $mb-font-lg;
   font-weight: 600;
-  color: $mb-color-text-title;
+  color: var(--color-text-title, #191b23);
 }
 
 .address-card__phone {
   font-size: $mb-font-sm;
-  color: $mb-color-text-secondary;
+  color: var(--color-text-secondary, #434654);
 }
 
 .address-card__detail {
   font-size: $mb-font-md;
-  color: $mb-color-text-secondary;
+  color: var(--color-text-secondary, #434654);
   line-height: 1.5;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -514,7 +626,7 @@ async function handleSubmit() {
   display: block;
   margin-top: 8rpx;
   font-size: $mb-font-sm;
-  color: $mb-color-error;
+  color: var(--color-error, #ba1a1a);
 }
 
 .address-card__empty {
@@ -523,13 +635,13 @@ async function handleSubmit() {
 
 .address-card__empty-text {
   font-size: $mb-font-md;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
 }
 
 .address-card__arrow {
   flex-shrink: 0;
   font-size: 24rpx;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
   margin-left: $mb-spacing-xs;
 }
 
@@ -538,7 +650,7 @@ async function handleSubmit() {
   height: 4rpx;
   margin-bottom: $mb-spacing-md;
   border-radius: 0 0 $mb-radius-lg $mb-radius-lg;
-  background: rgba($mb-color-primary, 0.12);
+  background: var(--color-primary-soft, rgba(13, 80, 213, 0.12));
 }
 
 // ---- Goods card ----
@@ -553,7 +665,7 @@ async function handleSubmit() {
 .section-label__text {
   font-size: $mb-font-md;
   font-weight: 600;
-  color: $mb-color-text-title;
+  color: var(--color-text-title, #191b23);
 }
 
 .goods-item {
@@ -562,7 +674,7 @@ async function handleSubmit() {
   padding: $mb-spacing-sm 0;
 
   & + & {
-    border-top: 1rpx solid $mb-color-divider;
+    border-top: 1rpx solid var(--color-divider, #f0f2f5);
   }
 }
 
@@ -571,7 +683,7 @@ async function handleSubmit() {
   width: 160rpx;
   height: 160rpx;
   border-radius: $mb-radius-lg;
-  background: $mb-color-bg-surface;
+  background: var(--color-bg-surface, #f3f3fe);
 }
 
 .goods-item__info {
@@ -586,7 +698,7 @@ async function handleSubmit() {
 .goods-item__name {
   font-size: $mb-font-md;
   font-weight: 500;
-  color: $mb-color-text-title;
+  color: var(--color-text-title, #191b23);
   line-height: 1.4;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -596,12 +708,19 @@ async function handleSubmit() {
 
 .goods-item__spec {
   font-size: $mb-font-sm;
-  color: $mb-color-text-tertiary;
-  background: $mb-color-bg-surface;
+  color: var(--color-text-tertiary, #737686);
+  background: var(--color-bg-surface, #f3f3fe);
   border-radius: $mb-radius-sm;
   padding: 4rpx 12rpx;
   align-self: flex-start;
   margin-top: 8rpx;
+}
+
+.goods-item__benefit {
+  margin-top: 6rpx;
+  font-size: 22rpx;
+  line-height: 1.35;
+  color: var(--color-primary, #0d50d5);
 }
 
 .goods-item__bottom {
@@ -613,7 +732,7 @@ async function handleSubmit() {
 
 .goods-item__qty {
   font-size: $mb-font-sm;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
 }
 
 // ---- Delivery card ----
@@ -627,7 +746,7 @@ async function handleSubmit() {
 .delivery-card__label {
   font-size: $mb-font-md;
   font-weight: 500;
-  color: $mb-color-text-title;
+  color: var(--color-text-title, #191b23);
   flex-shrink: 0;
 }
 
@@ -638,7 +757,7 @@ async function handleSubmit() {
 
 .delivery-card__value {
   font-size: $mb-font-md;
-  color: $mb-color-text-secondary;
+  color: var(--color-text-secondary, #434654);
 }
 
 // ---- Remark card ----
@@ -653,18 +772,58 @@ async function handleSubmit() {
   flex-shrink: 0;
   font-size: $mb-font-md;
   font-weight: 500;
-  color: $mb-color-text-title;
+  color: var(--color-text-title, #191b23);
 }
 
 .remark-card__input {
   flex: 1;
   font-size: $mb-font-md;
-  color: $mb-color-text;
+  color: var(--color-text, #191b23);
   text-align: right;
 }
 
 .remark-placeholder {
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
+}
+
+// ---- Points card ----
+.points-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: $mb-spacing-md;
+  padding: $mb-spacing-md $mb-spacing-lg;
+}
+
+.points-card__main {
+  flex: 1;
+  min-width: 0;
+}
+
+.points-card__title-row {
+  display: flex;
+  align-items: center;
+  gap: $mb-spacing-sm;
+  margin-bottom: 6rpx;
+}
+
+.points-card__title {
+  font-size: $mb-font-md;
+  font-weight: 600;
+  color: var(--color-text-title, #191b23);
+}
+
+.points-card__discount,
+.points-card__reward,
+.summary-row__discount {
+  font-size: $mb-font-md;
+  font-weight: 600;
+  color: var(--color-primary, #0d50d5);
+}
+
+.points-card__meta {
+  font-size: $mb-font-sm;
+  color: var(--color-text-tertiary, #737686);
 }
 
 // ---- Summary card ----
@@ -681,18 +840,18 @@ async function handleSubmit() {
 
 .summary-row__label {
   font-size: $mb-font-md;
-  color: $mb-color-text-secondary;
+  color: var(--color-text-secondary, #434654);
 }
 
 .summary-row__free {
   font-size: $mb-font-md;
-  color: $mb-color-success;
+  color: var(--color-success, #34c759);
   font-weight: 500;
 }
 
 .summary-divider {
   height: 1rpx;
-  background: $mb-color-divider;
+  background: var(--color-divider, #f0f2f5);
   margin: 8rpx 0;
 }
 
@@ -700,7 +859,7 @@ async function handleSubmit() {
   .summary-row__label {
     font-size: $mb-font-lg;
     font-weight: 600;
-    color: $mb-color-text-title;
+    color: var(--color-text-title, #191b23);
   }
 }
 
@@ -711,7 +870,7 @@ async function handleSubmit() {
   right: 0;
   bottom: 0;
   z-index: 100;
-  background: $mb-color-bg;
+  background: var(--color-bg, #ffffff);
   box-shadow: $mb-shadow-bar;
 }
 
@@ -731,22 +890,29 @@ async function handleSubmit() {
 
 .submit-bar__sup {
   font-size: 20rpx;
-  color: $mb-color-text-tertiary;
+  color: var(--color-text-tertiary, #737686);
   letter-spacing: 1rpx;
   font-weight: 500;
 }
 
 .submit-bar__btn {
+  border: 0;
   height: 88rpx;
   min-width: 260rpx;
   border-radius: $mb-radius-full;
-  background: $mb-color-primary;
+  background: var(--color-primary, #0d50d5);
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 0 $mb-spacing-xl;
   box-shadow: none;
+  line-height: 1;
+  margin: 0;
   transition: opacity 0.15s, transform 0.15s;
+
+  &::after {
+    border: 0;
+  }
 
   &:active {
     opacity: 0.85;
@@ -762,7 +928,7 @@ async function handleSubmit() {
 .submit-bar__btn-text {
   font-size: $mb-font-lg;
   font-weight: 600;
-  color: $mb-color-text-inverse;
+  color: var(--color-text-inverse, #ffffff);
   letter-spacing: 0;
 }
 

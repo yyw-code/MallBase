@@ -14,7 +14,6 @@ import { payOrder } from '@/api/order/order'
 import { getPlatform } from '@/utils/platform'
 
 const PAY_METHOD_WECHAT = 1
-const PAY_METHOD_ALIPAY = 2
 const PAY_METHOD_BALANCE = 3
 
 /**
@@ -131,10 +130,6 @@ export async function triggerPay(orderId, payMethod = PAY_METHOD_WECHAT) {
     } catch (e) {
       return { status: 'fail', message: e?.message || '余额支付失败' }
     }
-  }
-
-  if (Number(payMethod) === PAY_METHOD_ALIPAY) {
-    return { status: 'fail', message: '支付宝支付暂未接入' }
   }
 
   if (Number(payMethod) !== PAY_METHOD_WECHAT) {

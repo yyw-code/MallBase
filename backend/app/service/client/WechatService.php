@@ -25,13 +25,11 @@ use think\facade\Request;
  *  - 配置全部来自 mb_setting(后台改完即时生效),不读 .env
  *
  * 账号匹配优先级(authenticateOrCreate 内部统一):
- *  1) unionid(且开放平台已绑定)
- *  2) mobile(本次拿到的真实手机号)
- *  3) 当前来源对应的 openid 列(wx_miniapp_openid / wx_official_openid)
- *  4) 都没命中 → 新建用户,register_type 记录首次来源
+ *  1) mobile(本次拿到的真实手机号)
+ *  2) 当前来源对应的 openid 列(wx_miniapp_openid / wx_official_openid)
+ *  3) 都没命中 → 新建用户,register_type 记录首次来源
  *
  * 跨端合并语义:
- *  - 老用户首次出现 unionid → 写入 wx_unionid 列
  *  - 老用户首次出现某来源 openid → 写入对应列
  *  - 老用户已绑过 mobile → 不会被本次微信带的 mobile 覆盖
  *
@@ -61,7 +59,7 @@ class WechatService extends BaseService
      * 微信小程序登录
      *
      * 流程:
-     *  1) code → openid/session_key/unionid(via EasyWeChat)
+     *  1) code → openid/session_key(via EasyWeChat)
      *  2) authenticateOrCreate 匹配/创建用户
      *  3) 若开关 wechat_mini_force_mobile 开启且用户尚无 mobile → 返回 need_mobile 让前端
      *     调 miniappBindMobileByPhoneCode($phoneCode) 自动填手机号(走 getuserphonenumber)
@@ -76,13 +74,11 @@ class WechatService extends BaseService
         if ($openid === '') {
             throw new BusinessException('微信登录失败,未获取到 openid');
         }
-        $unionid = (string) ($session['unionid'] ?? '');
         $sessionKey = (string) ($session['session_key'] ?? '');
 
         $user = $this->authenticateOrCreate(
             source: RegisterType::WECHAT_MINIAPP,
             openid: $openid,
-            unionid: $unionid,
             mobile: '',
         );
 
@@ -176,7 +172,7 @@ class WechatService extends BaseService
             throw new BusinessException('用户登录态已过期,请重新登录');
         }
 
-        // 若该手机号已属于另一个用户(老 H5 用户) → 合并:把 openid/unionid 写到老用户上,
+        // 若该手机号已属于另一个用户(老 H5 用户) → 合并:把 openid 写到老用户上,
         // 删除本次创建的临时 user 行(register_type=wechat_miniapp 且 mobile=null 的占位用户)
         $existingByMobile = $this->model()
             ->where('mobile', $mobile)
@@ -234,7 +230,7 @@ class WechatService extends BaseService
      * 公众号 OAuth 登录
      *
      * 流程:
-     *  1) code → openid + 可选 unionid + 可选 nickname/headimg(via Socialite OAuth)
+     *  1) code → openid + 可选 nickname/headimg(via Socialite OAuth)
      *  2) authenticateOrCreate 匹配/创建用户
      *  3) 若开关 wechat_offi_force_mobile_bind 开启且用户尚无 mobile → 返回 need_mobile,
      *     前端再调 officialBindMobile($bindToken, $mobile, $smsCode) 完成短信绑定
@@ -247,14 +243,12 @@ class WechatService extends BaseService
         if ($openid === '') {
             throw new BusinessException('公众号登录失败,未获取到 openid');
         }
-        $unionid = (string) ($oauthUser['unionid'] ?? '');
         $nickname = (string) ($oauthUser['nickname'] ?? '');
         $avatar = (string) ($oauthUser['avatar'] ?? '');
 
         $user = $this->authenticateOrCreate(
             source: RegisterType::WECHAT_OFFICIAL,
             openid: $openid,
-            unionid: $unionid,
             mobile: '',
         );
 
@@ -329,30 +323,23 @@ class WechatService extends BaseService
     private function authenticateOrCreate(
         string $source,
         string $openid,
-        string $unionid,
         string $mobile,
     ): User {
         $openidColumn = $this->openidColumnOf($source);
-        $trustUnionid = $unionid !== '' && $this->factory->trustUnionid();
 
         $user = null;
 
-        // 1) unionid 优先(必须开放平台已绑定)
-        if ($trustUnionid) {
-            $user = $this->model()->where('wx_unionid', $unionid)->find();
-        }
-
-        // 2) mobile
-        if ($user === null && $mobile !== '') {
+        // 1) mobile
+        if ($mobile !== '') {
             $user = $this->model()->where('mobile', $mobile)->find();
         }
 
-        // 3) 来源对应的 openid
+        // 2) 来源对应的 openid
         if ($user === null) {
             $user = $this->model()->where($openidColumn, $openid)->find();
         }
 
-        // 4) 新建
+        // 3) 新建
         if ($user === null) {
             $data = [
                 $openidColumn   => $openid,
@@ -361,9 +348,6 @@ class WechatService extends BaseService
                 'status'        => 1,
                 'nickname'      => '',
             ];
-            if ($unionid !== '') {
-                $data['wx_unionid'] = $unionid;
-            }
             if ($mobile !== '') {
                 $data['mobile'] = $mobile;
             }
@@ -374,9 +358,6 @@ class WechatService extends BaseService
 
         // 命中老用户:补齐空字段
         $updates = [];
-        if ($unionid !== '' && (string) $user->wx_unionid === '') {
-            $updates['wx_unionid'] = $unionid;
-        }
         if ((string) $user->{$openidColumn} === '') {
             $updates[$openidColumn] = $openid;
         }
@@ -400,9 +381,6 @@ class WechatService extends BaseService
 
         if ((string) $to->{$openidColumn} === '' && (string) $from->{$openidColumn} !== '') {
             $updates[$openidColumn] = $from->{$openidColumn};
-        }
-        if ((string) $to->wx_unionid === '' && (string) $from->wx_unionid !== '') {
-            $updates['wx_unionid'] = $from->wx_unionid;
         }
         if ($source === RegisterType::WECHAT_MINIAPP
             && (string) $to->session_key === ''
@@ -475,10 +453,14 @@ class WechatService extends BaseService
         ]);
 
         $jwtService = app()->make(JwtService::class);
+        $sid = bin2hex(random_bytes(16));
         $token = $jwtService->encode([
             'user_id'       => $user->id,
             'account'       => $account,
             'register_type' => $registerType,
+            'guard'         => JwtCacheService::GUARD_CLIENT,
+            'client_type'   => $registerType,
+            'sid'           => $sid,
         ]);
 
         $jwtCacheService = app()->make(JwtCacheService::class);
@@ -486,6 +468,8 @@ class WechatService extends BaseService
             $token['refresh_token'],
             $user->id,
             $jwtService->getRefreshExpire(),
+            JwtCacheService::GUARD_CLIENT,
+            $sid,
         );
 
         return $token;
@@ -533,7 +517,7 @@ class WechatService extends BaseService
     // ============================================================
 
     /**
-     * @return array{openid?:string, session_key?:string, unionid?:string}
+     * @return array{openid?:string, session_key?:string}
      */
     protected function miniappCodeToSession(string $code): array
     {
@@ -590,7 +574,7 @@ class WechatService extends BaseService
     }
 
     /**
-     * @return array{openid?:string, unionid?:string, nickname?:string, avatar?:string}
+     * @return array{openid?:string, nickname?:string, avatar?:string}
      */
     protected function officialUserFromCode(string $code): array
     {
@@ -600,7 +584,6 @@ class WechatService extends BaseService
             $user = $oauth->userFromCode($code);
             return [
                 'openid'   => (string) ($user->getId() ?? ''),
-                'unionid'  => (string) ($user->getRaw()['unionid'] ?? ''),
                 'nickname' => (string) ($user->getNickname() ?? ''),
                 'avatar'   => (string) ($user->getAvatar() ?? ''),
             ];

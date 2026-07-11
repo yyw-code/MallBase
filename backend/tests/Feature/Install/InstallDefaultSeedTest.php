@@ -14,7 +14,7 @@ use Tests\Feature\Support\ApiClientTrait;
  * - 一级分组 "SystemSetting" 存在（display_type=category）
  * - 二级分组：SystemConfig / UploadConfig / WechatConfig / PaymentConfig / ClientConfig 齐全
  * - 三级：SystemBasic / SystemCopyright / UploadBasic/Local/Oss/Cos / WechatMiniProgram/OffiAccount /
- *        PaymentBasic/Wechat/Alipay 齐全
+ *        PaymentBasic/Wechat 齐全
  * - 重要设置项存在（site_url / admin_logo / copyright_enabled / upload_driver / client_logo 等）
  * - InstallService::seedSiteUrl 成功后 mb_setting.site_url 有非空值
  *
@@ -58,7 +58,7 @@ final class InstallDefaultSeedTest extends TestCase
             'SystemConfig', 'SystemBasic', 'SystemCopyright',
             'UploadConfig', 'UploadBasic', 'UploadLocal', 'UploadOss', 'UploadCos',
             'WechatConfig', 'WechatMiniProgram', 'WechatOffiAccount',
-            'PaymentConfig', 'PaymentBasic', 'PaymentWechat', 'PaymentAlipay',
+            'PaymentConfig', 'PaymentBasic', 'PaymentWechat',
             'ClientConfig',
         ];
         foreach ($expected as $code) {

@@ -39,12 +39,14 @@ class OrderController extends BaseController
     public function create()
     {
         $userId = (int) ($this->request->user_id ?? 0);
-        $data = $this->request->param(['source', 'cart_ids', 'items', 'address_id', 'buyer_remark', 'idempotency_key']);
+        $data = $this->request->param(['source', 'cart_ids', 'items', 'address_id', 'buyer_remark', 'idempotency_key', 'use_points', 'points_used']);
         $this->validate($data, OrderValidate::class . '.create');
 
         $service        = $this->service();
         $buyerRemark    = isset($data['buyer_remark']) && $data['buyer_remark'] !== '' ? (string) $data['buyer_remark'] : null;
         $idempotencyKey = isset($data['idempotency_key']) && $data['idempotency_key'] !== '' ? (string) $data['idempotency_key'] : null;
+        $usePoints = !empty($data['use_points']);
+        $pointsUsed = max(0, (int) ($data['points_used'] ?? 0));
 
         if ((string) $data['source'] === 'cart') {
             $result = $service->createFromCart(
@@ -53,6 +55,8 @@ class OrderController extends BaseController
                 addressId: (int) $data['address_id'],
                 buyerRemark: $buyerRemark,
                 idempotencyKey: $idempotencyKey,
+                usePoints: $usePoints,
+                pointsUsed: $pointsUsed,
             );
         } else {
             $items = array_map(
@@ -68,6 +72,8 @@ class OrderController extends BaseController
                 addressId: (int) $data['address_id'],
                 buyerRemark: $buyerRemark,
                 idempotencyKey: $idempotencyKey,
+                usePoints: $usePoints,
+                pointsUsed: $pointsUsed,
             );
         }
 
@@ -89,7 +95,7 @@ class OrderController extends BaseController
     public function preview()
     {
         $userId = (int) ($this->request->user_id ?? 0);
-        $data = $this->request->param(['source', 'cart_ids', 'items', 'address_id']);
+        $data = $this->request->param(['source', 'cart_ids', 'items', 'address_id', 'use_points', 'points_used']);
         $this->validate($data, OrderValidate::class . '.preview');
 
         $items = array_map(
@@ -106,6 +112,8 @@ class OrderController extends BaseController
             cartIds: array_map('intval', (array) ($data['cart_ids'] ?? [])),
             items: $items,
             addressId: (int) $data['address_id'],
+            usePoints: !empty($data['use_points']),
+            pointsUsed: max(0, (int) ($data['points_used'] ?? 0)),
         );
 
         return $this->success($result, '试算成功');

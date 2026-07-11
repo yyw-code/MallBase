@@ -17,8 +17,6 @@ final class WechatServiceResponseContractTest extends TestCase
         $this->assertStringNotContainsString("'session_key'        => \$sessionKey", $source, '小程序 session_key 不能返回给客户端。');
         $this->assertStringNotContainsString("'openid'             => \$openid", $source, '待绑定状态不能直接返回小程序 openid。');
         $this->assertStringNotContainsString("'openid'      => \$openid", $source, '待绑定状态不能直接返回公众号 openid。');
-        $this->assertStringNotContainsString("'unionid'            => \$unionid", $source, '待绑定状态不能直接返回 unionid。');
-        $this->assertStringNotContainsString("'unionid'     => \$unionid", $source, '待绑定状态不能直接返回公众号 unionid。');
     }
 
     public function testWechatBindEndpointsUseOpaqueBindToken(): void

@@ -16,6 +16,31 @@ function normalizePath(path: string): string {
   return path.length > 1 ? path.replace(/\/+$/, '') : path;
 }
 
+function normalizeRedirectPath(redirect: unknown): string {
+  const redirectValue = Array.isArray(redirect) ? redirect[0] : redirect;
+  if (!redirectValue || typeof redirectValue !== 'string') {
+    return '';
+  }
+
+  let decodedRedirect = redirectValue;
+  try {
+    decodedRedirect = decodeURIComponent(redirectValue);
+  } catch {
+    decodedRedirect = redirectValue;
+  }
+
+  if (!decodedRedirect.startsWith('/') || decodedRedirect.startsWith('//')) {
+    return '';
+  }
+
+  const redirectPathname = normalizePath(decodedRedirect.split(/[?#]/)[0] || '');
+  if (redirectPathname === LOGIN_PATH) {
+    return '';
+  }
+
+  return decodedRedirect;
+}
+
 function canAccessRoute(
   path: string,
   name: null | string | symbol | undefined,
@@ -107,10 +132,10 @@ function setupAccessGuard(router: Router) {
       if (accessStore.accessToken) {
         if (userStore.userInfo) {
           // 有有效的 token 和用户信息，重定向到首页
-          return decodeURIComponent(
-            (to.query?.redirect as string) ||
-              userStore.userInfo?.homePath ||
-              preferences.app.defaultHomePath,
+          return (
+            normalizeRedirectPath(to.query?.redirect) ||
+            userStore.userInfo?.homePath ||
+            preferences.app.defaultHomePath
           );
         } else {
           // 如果有 token 但没有用户信息，说明 token 可能无效，清除它
@@ -204,14 +229,14 @@ function setupAccessGuard(router: Router) {
 
     const userHomePath =
       userStore.userInfo?.homePath || preferences.app.defaultHomePath;
-    const redirectPath = (from.query.redirect ||
+    const redirectPath = (normalizeRedirectPath(from.query.redirect) ||
       (to.fullPath === preferences.app.defaultHomePath
         ? userHomePath
         : to.fullPath) ||
       userHomePath) as string;
 
     return {
-      ...router.resolve(decodeURIComponent(redirectPath)),
+      ...router.resolve(redirectPath),
       replace: true,
     };
   });

@@ -3,6 +3,27 @@
 $installLockPath = runtime_path() . 'install' . DIRECTORY_SEPARATOR . 'install.lock';
 $isInstalled = is_file($installLockPath);
 $swooleQueueEnabled = filter_var(env('SWOOLE_QUEUE_ENABLE', false), FILTER_VALIDATE_BOOLEAN);
+$httpOptions = [
+    // 安全默认：定期重启 worker，避免内存泄漏累积
+    'max_request'       => (int) env('SWOOLE_MAX_REQUEST', 2000),
+    // 平滑重启，避免强杀 worker 导致请求丢失
+    'reload_async'      => env('SWOOLE_RELOAD_ASYNC', true),
+    // reload/stop 最大等待时间（秒）
+    'max_wait_time'     => (int) env('SWOOLE_MAX_WAIT_TIME', 60),
+    // 心跳检查，及时清理失效连接
+    'heartbeat_idle_time' => (int) env('SWOOLE_HEARTBEAT_IDLE_TIME', 120),
+    'heartbeat_check_interval' => (int) env('SWOOLE_HEARTBEAT_CHECK_INTERVAL', 60),
+];
+
+$maxConn = (int) env('SWOOLE_MAX_CONN', 0);
+if ($maxConn > 0) {
+    $httpOptions['max_conn'] = $maxConn;
+}
+
+$backlog = (int) env('SWOOLE_BACKLOG', 0);
+if ($backlog > 0) {
+    $httpOptions['backlog'] = $backlog;
+}
 
 return [
     'http'       => [
@@ -10,17 +31,7 @@ return [
         'host'       => env('SWOOLE_HTTP_HOST', '0.0.0.0'),
         'port'       => (int) env('SWOOLE_HTTP_PORT', 8080),
         'worker_num' => (int) env('SWOOLE_WORKER_NUM', 0) > 0 ? (int) env('SWOOLE_WORKER_NUM', 0) : swoole_cpu_num(),
-        'options'    => [
-            // 安全默认：定期重启 worker，避免内存泄漏累积
-            'max_request'       => (int) env('SWOOLE_MAX_REQUEST', 2000),
-            // 平滑重启，避免强杀 worker 导致请求丢失
-            'reload_async'      => env('SWOOLE_RELOAD_ASYNC', true),
-            // reload/stop 最大等待时间（秒）
-            'max_wait_time'     => (int) env('SWOOLE_MAX_WAIT_TIME', 60),
-            // 心跳检查，及时清理失效连接
-            'heartbeat_idle_time' => (int) env('SWOOLE_HEARTBEAT_IDLE_TIME', 120),
-            'heartbeat_check_interval' => (int) env('SWOOLE_HEARTBEAT_CHECK_INTERVAL', 60),
-        ],
+        'options'    => $httpOptions,
     ],
     'websocket'  => [
         'enable'        => false,

@@ -1,5 +1,5 @@
 <template>
-  <view v-if="visible" class="mb-spec" @tap="close">
+  <view v-if="visible" class="mb-spec" @tap.stop="close">
     <view class="mb-spec__panel" :class="{ 'mb-spec__panel--show': show }" @tap.stop>
       <!-- header -->
       <view class="mb-spec__header">
@@ -13,6 +13,12 @@
           <mb-price :value="currentPrice" size="lg" color="var(--color-primary, #0d50d5)" />
           <text class="mb-spec__stock">库存 {{ currentStock }}</text>
           <text v-if="selectedSpecText" class="mb-spec__selected">已选：{{ selectedSpecText }}</text>
+          <mb-benefit-strip
+            v-if="hasSkuBenefit"
+            class="mb-spec__benefits"
+            :items="benefitItems"
+            size="compact"
+          />
         </view>
         <view class="mb-spec__close" @tap.stop="close">
           <text class="mb-spec__close-icon">✕</text>
@@ -79,6 +85,7 @@
 
 <script setup>
 import { ref, computed, watch, nextTick } from 'vue'
+import { buildGoodsDetailBenefitItems } from '@/utils/extension-slots'
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -87,6 +94,8 @@ const props = defineProps({
   mode: { type: String, default: 'both' },
   selectedSpecs: { type: Object, default: () => ({}) },
   selectedSkuId: { type: [Number, String], default: null },
+  pointsEnabled: { type: Boolean, default: true },
+  memberEnabled: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['close', 'change', 'addToCart', 'buyNow'])
@@ -121,6 +130,17 @@ const selectedSku = computed(() => {
 const currentPrice = computed(() => selectedSku.value?.price ?? props.goods.price ?? 0)
 const currentStock = computed(() => selectedSku.value?.stock ?? props.goods.stock ?? 0)
 const quantityMax = computed(() => Math.max(1, Number(currentStock.value) || 0))
+const benefitItems = computed(() =>
+  buildGoodsDetailBenefitItems({
+    features: {
+      member: props.memberEnabled,
+      points: props.pointsEnabled,
+    },
+    goods: props.goods,
+    sku: selectedSku.value,
+  }),
+)
+const hasSkuBenefit = computed(() => benefitItems.value.length > 0)
 
 const selectedSpecText = computed(() =>
   specGroups.value
@@ -273,6 +293,10 @@ watch(currentStock, (stock) => {
   color: var(--color-text-secondary, #434654);
 }
 
+.mb-spec__benefits {
+  margin-top: 2rpx;
+}
+
 .mb-spec__close {
   width: 48rpx;
   height: 48rpx;
@@ -330,7 +354,7 @@ watch(currentStock, (stock) => {
 }
 
 .mb-spec__tag--active {
-  background: rgba(13, 80, 213, 0.08);
+  background: var(--color-primary-soft, rgba(13, 80, 213, 0.08));
   border-color: var(--color-primary, #0d50d5);
 }
 
@@ -402,7 +426,7 @@ watch(currentStock, (stock) => {
 }
 
 .mb-spec__btn--cart {
-  background: #ffffff;
+  background: var(--color-bg, #ffffff);
   border: 2rpx solid var(--color-primary, #0d50d5);
 }
 
@@ -427,10 +451,10 @@ watch(currentStock, (stock) => {
 }
 
 .mb-spec__btn-text--light {
-  color: #ffffff;
+  color: var(--color-text-inverse, #ffffff);
 }
 
 .mb-spec__btn--cart-full .mb-spec__btn-text {
-  color: #ffffff;
+  color: var(--color-text-inverse, #ffffff);
 }
 </style>

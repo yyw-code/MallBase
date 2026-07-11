@@ -14,7 +14,7 @@ use Tests\Feature\Support\ApiClientTrait;
  * - 响应 JSON 字符串中**不应出现任何**下列前缀的字段 key：
  *     wechat_*、pay_*、upload_*、jwt_*、oss_*、cos_*、admin_*、site_url、default_avatar
  * - SystemBasic 只能输出白名单：site_name / site_slogan
- * - ClientConfig / SystemCopyright 全组放通
+ * - ClientConfig / SystemCopyright 放通公开字段，装修轮播走 decorate 配置
  *
  * 参见 backend/app/service/client/ConfigService.php::PUBLIC_GROUPS / SYSTEM_BASIC_PUBLIC_FIELDS
  */
@@ -44,9 +44,10 @@ final class ConfigControllerClientBasicTest extends TestCase
         $data = $response['data'] ?? [];
         $this->assertIsArray($data);
 
-        foreach (['client_site_name', 'client_logo', 'client_home_banners'] as $key) {
+        foreach (['client_site_name', 'client_logo', 'distribution_enabled'] as $key) {
             $this->assertArrayHasKey($key, $data, "client basic 缺少字段 {$key}");
         }
+        $this->assertArrayNotHasKey('client_home_banners', $data);
     }
 
     public function testClientBasicRejectsSensitiveFields(): void
@@ -75,6 +76,7 @@ final class ConfigControllerClientBasicTest extends TestCase
             '/"default_avatar"\s*:/',
             '/"mime_[a-zA-Z_]+"\s*:/',
             '/"local_[a-zA-Z_]+"\s*:/',
+            '/"customer_service_[a-zA-Z_]+"\s*:/',
         ];
 
         foreach ($forbiddenPatterns as $pattern) {

@@ -262,15 +262,22 @@ class SyncPermissions extends Command
                     $groupCode = $option['_group_code'];
                     $groupName = $option['_group_name'] ?? '';
 
-                    // 如果还没有创建过这个路由组
-                    if (!isset($this->createdGroups[$groupCode]) && !empty($groupName)) {
-                        // 创建路由组菜单
+                    if (!empty($groupName)) {
                         $groupOption = array_merge($option, [
                             '_alias' => $groupName,
                             '_type' => 'menu', // 强制为菜单类型
                         ]);
-                        $this->routeData[$groupCode] = $this->parseRouteOption($groupCode, $route, $groupOption);
-                        $this->createdGroups[$groupCode] = true;
+                        $groupData = $this->parseRouteOption($groupCode, $route, $groupOption);
+
+                        if (!isset($this->createdGroups[$groupCode])) {
+                            $this->routeData[$groupCode] = $groupData;
+                            $this->createdGroups[$groupCode] = true;
+                        } else {
+                            $this->routeData[$groupCode] = $this->mergeGeneratedGroupData(
+                                $this->routeData[$groupCode] ?? [],
+                                $groupData
+                            );
+                        }
                     }
 
                     // 修改子路由的 _parent 为路由组 code，这样子路由会挂在路由组菜单下
@@ -421,6 +428,27 @@ class SyncPermissions extends Command
         }
 
         return $data;
+    }
+
+    /**
+     * 同一 _group_code 可能被多个拆分路由文件声明。
+     * 首次遇到分组时不能把 path/component/icon 固定为空；后续路由声明了非空元信息时要补齐。
+     */
+    protected function mergeGeneratedGroupData(array $current, array $incoming): array
+    {
+        foreach ($incoming as $field => $value) {
+            if ($field === 'code' || $field === 'type') {
+                continue;
+            }
+            if ($value === null || $value === '') {
+                continue;
+            }
+            if (!isset($current[$field]) || $current[$field] === null || $current[$field] === '') {
+                $current[$field] = $value;
+            }
+        }
+
+        return $current;
     }
 
     /**

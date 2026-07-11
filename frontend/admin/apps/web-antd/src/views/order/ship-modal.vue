@@ -32,31 +32,55 @@ const loadingCompanies = ref(false);
 const platformOptions = ref<LogisticsApi.PlatformItem[]>([]);
 const companyOptions = ref<LogisticsApi.CompanyOption[]>([]);
 const isEditLogistics = computed(() => props.order?.status === 20);
+const isPhysicalDelivery = computed(() => form.delivery_type !== 'virtual');
 const modalTitle = computed(() =>
-  isEditLogistics.value ? '修改物流信息' : '订单发货',
+  isEditLogistics.value ? '修改发货信息' : '订单发货',
 );
 const submitText = computed(() =>
   isEditLogistics.value ? '保存修改' : '确认发货',
 );
 
 const form = reactive<OrderApi.ShipParams>({
+  delivery_type: 'physical',
+  delivery_note: '',
   logistics_platform: '',
-  logistics_company_id: 0,
+  logistics_company_id: undefined,
   logistics_company_code: '',
   logistics_company: '',
   logistics_sn: '',
 });
 
 const rules = {
-  logistics_platform: [
-    { required: true, message: '请选择物流平台', trigger: 'change' },
+  delivery_note: [
+    {
+      trigger: 'blur',
+      validator: async () => {
+        if (form.delivery_type === 'virtual' && !form.delivery_note?.trim()) {
+          throw new Error('请填写虚拟发货说明');
+        }
+      },
+    },
   ],
   logistics_company_id: [
-    { required: true, message: '请选择物流公司', trigger: 'change' },
+    {
+      trigger: 'change',
+      validator: async () => {
+        if (isPhysicalDelivery.value && !form.logistics_company_id) {
+          throw new Error('请选择物流公司');
+        }
+      },
+    },
   ],
   logistics_sn: [
-    { required: true, message: '请输入运单号', trigger: 'blur' },
-    { max: 100, message: '运单号最长 100 个字符', trigger: 'blur' },
+    {
+      trigger: 'blur',
+      validator: async () => {
+        if (isPhysicalDelivery.value && !form.logistics_sn?.trim()) {
+          throw new Error('请输入运单号');
+        }
+      },
+    },
+    { max: 64, message: '运单号最长 64 个字符', trigger: 'blur' },
   ],
 };
 
@@ -112,13 +136,13 @@ const loadCompanyOptions = async (platform: string) => {
 
 const applyCompanySnapshot = (companyId: number) => {
   const matched = companyOptions.value.find((item) => item.id === companyId);
-  form.logistics_company_id = matched?.id || 0;
+  form.logistics_company_id = matched?.id;
   form.logistics_company_code = matched?.code || '';
   form.logistics_company = matched?.name || matched?.label || '';
 };
 
 const resetCompany = () => {
-  form.logistics_company_id = 0;
+  form.logistics_company_id = undefined;
   form.logistics_company_code = '';
   form.logistics_company = '';
 };
@@ -129,15 +153,18 @@ const initializeForm = async () => {
     props.order?.logistics_platform || defaultPlatform()?.code || '';
 
   form.logistics_platform = platform;
-  form.logistics_company_id = props.order?.logistics_company_id || 0;
+  form.delivery_type = props.order?.delivery_type || 'physical';
+  form.delivery_note = props.order?.delivery_note ?? '';
+  form.logistics_company_id = props.order?.logistics_company_id || undefined;
   form.logistics_company_code = props.order?.logistics_company_code ?? '';
   form.logistics_company = props.order?.logistics_company ?? '';
   form.logistics_sn = props.order?.logistics_sn ?? '';
 
   await loadCompanyOptions(platform);
 
-  if (form.logistics_company_id > 0) {
-    applyCompanySnapshot(form.logistics_company_id);
+  const companyId = form.logistics_company_id;
+  if (typeof companyId === 'number' && companyId > 0) {
+    applyCompanySnapshot(companyId);
   } else if (form.logistics_company_code) {
     const matched = companyOptions.value.find(
       (item) => item.code === form.logistics_company_code,
@@ -167,6 +194,10 @@ const handleCompanyChange = (value?: number) => {
   applyCompanySnapshot(Number(value || 0));
 };
 
+const handleDeliveryTypeChange = () => {
+  formRef.value?.clearValidate?.();
+};
+
 const handleCancel = () => {
   if (submitting.value) return;
   emit('update:open', false);
@@ -181,14 +212,17 @@ const handleSubmit = async () => {
   }
   submitting.value = true;
   try {
+    const isVirtual = form.delivery_type === 'virtual';
     await shipOrderApi(props.order.id, {
-      logistics_platform: form.logistics_platform,
-      logistics_company_id: form.logistics_company_id,
-      logistics_company_code: form.logistics_company_code,
-      logistics_company: form.logistics_company.trim(),
-      logistics_sn: form.logistics_sn.trim(),
+      delivery_type: form.delivery_type,
+      delivery_note: isVirtual ? form.delivery_note?.trim() || '' : '',
+      logistics_platform: isVirtual ? '' : form.logistics_platform,
+      logistics_company_id: isVirtual ? 0 : form.logistics_company_id || 0,
+      logistics_company_code: isVirtual ? '' : form.logistics_company_code,
+      logistics_company: isVirtual ? '' : form.logistics_company.trim(),
+      logistics_sn: isVirtual ? '' : form.logistics_sn.trim(),
     });
-    message.success(isEditLogistics.value ? '物流信息已更新' : '发货成功');
+    message.success(isEditLogistics.value ? '发货信息已更新' : '发货成功');
     emit('success');
     emit('update:open', false);
   } catch (error: any) {
@@ -214,7 +248,7 @@ const handleSubmit = async () => {
   >
     <div
       v-if="order"
-      class="mb-3 rounded bg-gray-50 p-3 text-xs dark:bg-gray-800"
+      class="mb-3 rounded border border-[hsl(var(--border))] bg-[hsl(var(--muted))] p-3 text-xs text-[hsl(var(--foreground))]"
     >
       <div>订单号：{{ order.sn }}</div>
       <div v-if="order.receiver_name">
@@ -234,8 +268,19 @@ const handleSubmit = async () => {
       :label-col="{ style: { width: '100px' } }"
       class="pt-4"
     >
+      <a-form-item label="发货方式" name="delivery_type">
+        <a-radio-group
+          v-model:value="form.delivery_type"
+          button-style="solid"
+          @change="handleDeliveryTypeChange"
+        >
+          <a-radio-button value="physical">实物快递</a-radio-button>
+          <a-radio-button value="virtual">虚拟发货</a-radio-button>
+        </a-radio-group>
+      </a-form-item>
+
       <a-form-item
-        v-if="showPlatformSelect"
+        v-if="isPhysicalDelivery && showPlatformSelect"
         label="物流平台"
         name="logistics_platform"
       >
@@ -248,7 +293,11 @@ const handleSubmit = async () => {
         />
       </a-form-item>
 
-      <a-form-item label="物流公司" name="logistics_company_id">
+      <a-form-item
+        v-if="isPhysicalDelivery"
+        label="物流公司"
+        name="logistics_company_id"
+      >
         <a-select
           v-model:value="form.logistics_company_id"
           :disabled="!form.logistics_platform"
@@ -261,12 +310,22 @@ const handleSubmit = async () => {
           @change="handleCompanyChange"
         />
       </a-form-item>
-      <a-form-item label="运单号" name="logistics_sn">
+      <a-form-item v-if="isPhysicalDelivery" label="运单号" name="logistics_sn">
         <a-input
           v-model:value="form.logistics_sn"
           placeholder="请输入物流单号"
           allow-clear
           :max-length="100"
+        />
+      </a-form-item>
+      <a-form-item v-else label="发货说明" name="delivery_note">
+        <a-textarea
+          v-model:value="form.delivery_note"
+          :maxlength="255"
+          :rows="3"
+          allow-clear
+          placeholder="请输入虚拟发货说明，如卡密已发放、权益已开通"
+          show-count
         />
       </a-form-item>
     </a-form>

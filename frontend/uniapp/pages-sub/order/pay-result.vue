@@ -1,8 +1,10 @@
 <script setup>
+import { useDecorateStore } from '@/store/decorate'
 import { ref, computed, onUnmounted } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { getOrderDetail, getOrderList } from '@/api/order/order'
 import { usePayFlow } from '@/utils/usePayFlow'
+const decorateStore = useDecorateStore()
 
 const sn = ref('')
 const orderId = ref('')
@@ -55,7 +57,16 @@ const resultMeta = computed(() => {
 // 轮询配置：2s/次，最多 30 次（共 1min）
 const POLL_INTERVAL_MS = 2000
 const POLL_MAX_TIMES = 30
-const ORDER_STATUS_PAID = 10 // 与后端 OrderStatus::PAID 保持一致
+const ORDER_STATUS_PAID = 10
+const ORDER_STATUS_SHIPPED = 20
+const ORDER_STATUS_RECEIVED = 30
+const ORDER_STATUS_COMPLETED = 40
+const PAID_ORDER_STATUSES = [
+  ORDER_STATUS_PAID,
+  ORDER_STATUS_SHIPPED,
+  ORDER_STATUS_RECEIVED,
+  ORDER_STATUS_COMPLETED,
+] // 已支付、已发货、已收货、已完成
 
 let pollTimer = null
 let pollCount = 0
@@ -79,6 +90,10 @@ function normalizePayStatus(payStatus) {
     return 'pending'
   }
   return 'fail'
+}
+
+function isPaidOrderStatus(orderStatus) {
+  return orderStatus === ORDER_STATUS_PAID || PAID_ORDER_STATUSES.includes(orderStatus)
 }
 
 function applyPayResult(payResult) {
@@ -145,7 +160,7 @@ async function pollOrderStatus() {
       amount.value = detail?.pay_amount || detail?.total_amount || ''
     }
     const orderStatus = Number(detail?.status ?? 0)
-    if (orderStatus === ORDER_STATUS_PAID) {
+    if (isPaidOrderStatus(orderStatus)) {
       status.value = 'success'
       message.value = ''
       clearPoll()
@@ -221,7 +236,11 @@ async function onPayMethodSelect(code) {
 </script>
 
 <template>
-  <view class="page">
+  <view
+    class="page"
+    :class="[`theme-${decorateStore.resolvedThemeMode}`]"
+    :style="decorateStore.themeStyle"
+  >
     <mb-navbar title="支付结果" />
 
     <view class="result" :class="`result--${resultMeta.type}`">
@@ -282,7 +301,9 @@ async function onPayMethodSelect(code) {
       @select="onPayMethodSelect"
       @close="closeSheet"
     />
-  </view>
+      <mb-copyright-footer />
+      <mb-floating-action />
+</view>
 </template>
 
 <style lang="scss" scoped>
@@ -299,7 +320,7 @@ async function onPayMethodSelect(code) {
   padding: 40rpx 32rpx 32rpx;
   overflow: hidden;
   background: #ffffff;
-  border: 1rpx solid $mb-color-divider;
+  border: 1rpx solid var(--color-divider, #f0f2f5);
   border-radius: 28rpx;
 
   &::before {
@@ -309,19 +330,19 @@ async function onPayMethodSelect(code) {
     right: 0;
     height: 12rpx;
     content: '';
-    background: $mb-color-primary;
+    background: var(--color-primary, #0d50d5);
   }
 
   &--success::before {
-    background: $mb-color-success;
+    background: var(--color-success, #34c759);
   }
 
   &--pending::before {
-    background: $mb-color-warning;
+    background: var(--color-warning, #f0ad4e);
   }
 
   &--fail::before {
-    background: $mb-color-error;
+    background: var(--color-error, #ba1a1a);
   }
 
   &__hero {
@@ -360,19 +381,19 @@ async function onPayMethodSelect(code) {
     width: 104rpx;
     height: 104rpx;
     border-radius: 50%;
-    background: $mb-color-primary;
+    background: var(--color-primary, #0d50d5);
   }
 
   &--success &__icon {
-    background: $mb-color-success;
+    background: var(--color-success, #34c759);
   }
 
   &--pending &__icon {
-    background: $mb-color-warning;
+    background: var(--color-warning, #f0ad4e);
   }
 
   &--fail &__icon {
-    background: $mb-color-error;
+    background: var(--color-error, #ba1a1a);
   }
 
   &__icon-symbol {
@@ -386,14 +407,14 @@ async function onPayMethodSelect(code) {
     margin-top: 36rpx;
     font-size: 40rpx;
     font-weight: 700;
-    color: $mb-color-text-title;
+    color: var(--color-text-title, #191b23);
     line-height: 1.35;
   }
 
   &__subtitle {
     margin-top: 12rpx;
     font-size: 26rpx;
-    color: $mb-color-text-tertiary;
+    color: var(--color-text-tertiary, #737686);
     line-height: 1.5;
     text-align: center;
   }
@@ -402,22 +423,31 @@ async function onPayMethodSelect(code) {
     display: flex;
     align-items: flex-end;
     justify-content: center;
+    flex-wrap: nowrap;
     margin-top: 28rpx;
-    color: $mb-color-text-title;
+    color: var(--color-text-title, #191b23);
+    line-height: 1;
+    white-space: nowrap;
   }
 
   &__amount-prefix {
+    display: inline-block;
+    flex-shrink: 0;
     margin-right: 8rpx;
     padding-bottom: 8rpx;
     font-size: 28rpx;
     font-weight: 700;
     line-height: 1;
+    white-space: nowrap;
   }
 
   &__amount-value {
+    display: inline-block;
+    flex-shrink: 0;
     font-size: 64rpx;
     font-weight: 800;
     line-height: 1;
+    white-space: nowrap;
   }
 
   &__info {
@@ -434,13 +464,13 @@ async function onPayMethodSelect(code) {
     flex-shrink: 0;
     margin-right: 24rpx;
     font-size: 26rpx;
-    color: $mb-color-text-tertiary;
+    color: var(--color-text-tertiary, #737686);
   }
 
   &__info-value {
     min-width: 0;
     font-size: 26rpx;
-    color: $mb-color-text-secondary;
+    color: var(--color-text-secondary, #434654);
     line-height: 1.4;
     text-align: right;
     word-break: break-all;
@@ -469,12 +499,12 @@ async function onPayMethodSelect(code) {
     }
 
     &--primary {
-      background-color: $mb-color-primary;
+      background-color: var(--color-primary, #0d50d5);
     }
 
     &--outline {
       background-color: transparent;
-      border: 2rpx solid $mb-color-border;
+      border: 2rpx solid var(--color-border, #e0e4e8);
     }
   }
 
@@ -484,11 +514,11 @@ async function onPayMethodSelect(code) {
     line-height: 1;
 
     &--primary {
-      color: $mb-color-text-inverse;
+      color: var(--color-text-inverse, #ffffff);
     }
 
     &--outline {
-      color: $mb-color-text;
+      color: var(--color-text, #191b23);
     }
   }
 }

@@ -21,6 +21,7 @@ const repositoryUrl = 'https://gitee.com/gosowong/mall-base';
 const docsUrl = `${repositoryUrl}/tree/main/docs`;
 const frontendDocsUrl = `${repositoryUrl}/blob/main/frontend/admin/README.md`;
 const qqGroupNumber = '958717939';
+const wechatNumber = 'yyw1329847115';
 
 const projectHighlights = [
   '面向中小型商城业务的基础底座',
@@ -176,21 +177,32 @@ const buildItems = computed(() => [
           <div class="min-w-0">
             <div class="flex flex-wrap items-center gap-2">
               <a-tag color="blue">QQ群</a-tag>
+              <a-tag color="green">微信</a-tag>
               <a-tag>交流与反馈</a-tag>
             </div>
             <h3 class="mt-4 text-xl font-semibold text-foreground">
-              加入 MallBase 项目交流群
+              MallBase 交流与反馈
             </h3>
             <p class="mt-3 max-w-3xl text-sm leading-6 text-muted-foreground">
-              欢迎通过QQ群反馈安装、部署、二次开发和使用过程中的问题，也可以参与功能讨论与项目共建。
+              欢迎通过QQ群或微信反馈安装、部署、二次开发和使用过程中的问题，也可以参与功能讨论与项目共建。
             </p>
-            <div
-              class="mt-5 inline-flex flex-wrap items-center gap-3 rounded-md border border-border bg-muted/30 px-4 py-3"
-            >
-              <span class="text-sm text-muted-foreground">QQ群号</span>
-              <span class="font-mono text-lg font-semibold text-foreground">
-                {{ qqGroupNumber }}
-              </span>
+            <div class="mt-5 flex flex-wrap gap-3">
+              <div
+                class="inline-flex flex-wrap items-center gap-3 rounded-md border border-border bg-muted/30 px-4 py-3"
+              >
+                <span class="text-sm text-muted-foreground">QQ群号</span>
+                <span class="font-mono text-lg font-semibold text-foreground">
+                  {{ qqGroupNumber }}
+                </span>
+              </div>
+              <div
+                class="inline-flex flex-wrap items-center gap-3 rounded-md border border-border bg-muted/30 px-4 py-3"
+              >
+                <span class="text-sm text-muted-foreground">微信号</span>
+                <span class="font-mono text-lg font-semibold text-foreground">
+                  {{ wechatNumber }}
+                </span>
+              </div>
             </div>
           </div>
 

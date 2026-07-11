@@ -4,11 +4,18 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Service\Order;
 
+use app\cron\tasks\DistributionMaintenanceCron;
+use app\cron\tasks\OrderMaintenanceCron;
+use app\cron\tasks\PointsMaintenanceCron;
 use app\job\AutoReceiveOrdersJob;
 use app\job\CloseExpiredOrdersJob;
+use app\job\ReleaseDistributionCommissionsJob;
+use app\job\ReleaseFrozenPointsJob;
 use app\model\setting\Setting;
 use app\service\admin\order\OrderAdminService;
+use app\service\distribution\DistributionOrderEventService;
 use app\service\order\OrderSettingService;
+use app\service\user\UserPointsAccountService;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 
@@ -48,28 +55,69 @@ final class OrderSettingQueueContractTest extends TestCase
         }
     }
 
-    public function testOrderMaintenanceJobsAndCronAreWired(): void
+    public function testMaintenanceJobsAndCronTasksAreWiredByDomain(): void
     {
+        $this->assertTrue(class_exists(OrderMaintenanceCron::class));
+        $this->assertTrue(class_exists(PointsMaintenanceCron::class));
+        $this->assertTrue(class_exists(DistributionMaintenanceCron::class));
         $this->assertTrue(class_exists(CloseExpiredOrdersJob::class));
         $this->assertTrue(class_exists(AutoReceiveOrdersJob::class));
+        $this->assertTrue(class_exists(ReleaseFrozenPointsJob::class));
+        $this->assertTrue(class_exists(ReleaseDistributionCommissionsJob::class));
         $this->assertTrue(method_exists(OrderAdminService::class, 'closeExpired'));
         $this->assertTrue(method_exists(OrderAdminService::class, 'autoReceiveExpired'));
+        $this->assertTrue(method_exists(UserPointsAccountService::class, 'releaseDueRewards'));
+        $this->assertTrue(method_exists(DistributionOrderEventService::class, 'releaseDueCommissions'));
 
         $cronConfig = file_get_contents(__DIR__ . '/../../../../config/cron.php');
-        $cronTask = file_get_contents(__DIR__ . '/../../../../app/cron/tasks/OrderMaintenanceCron.php');
+        $orderCronTask = file_get_contents(__DIR__ . '/../../../../app/cron/tasks/OrderMaintenanceCron.php');
+        $pointsCronTask = file_get_contents(__DIR__ . '/../../../../app/cron/tasks/PointsMaintenanceCron.php');
+        $distributionCronTask = file_get_contents(__DIR__ . '/../../../../app/cron/tasks/DistributionMaintenanceCron.php');
 
         $this->assertIsString($cronConfig);
-        $this->assertIsString($cronTask);
+        $this->assertIsString($orderCronTask);
+        $this->assertIsString($pointsCronTask);
+        $this->assertIsString($distributionCronTask);
         $this->assertStringContainsString('OrderMaintenanceCron::class', $cronConfig);
-        $this->assertStringContainsString('JobQueue::push(CloseExpiredOrdersJob::class', $cronTask);
-        $this->assertStringContainsString('JobQueue::push(AutoReceiveOrdersJob::class', $cronTask);
-        $this->assertStringContainsString('runInSandbox', $cronTask);
-        $this->assertStringContainsString('setnx', $cronTask);
+        $this->assertStringContainsString('PointsMaintenanceCron::class', $cronConfig);
+        $this->assertStringContainsString('DistributionMaintenanceCron::class', $cronConfig);
+
+        $this->assertStringContainsString('JobQueue::push(CloseExpiredOrdersJob::class', $orderCronTask);
+        $this->assertStringContainsString('JobQueue::push(AutoReceiveOrdersJob::class', $orderCronTask);
+        $this->assertStringNotContainsString('ReleaseFrozenPointsJob::class', $orderCronTask);
+        $this->assertStringNotContainsString('ReleaseDistributionCommissionsJob::class', $orderCronTask);
+
+        $this->assertStringContainsString('JobQueue::push(ReleaseFrozenPointsJob::class', $pointsCronTask);
+        $this->assertStringNotContainsString('CloseExpiredOrdersJob::class', $pointsCronTask);
+        $this->assertStringNotContainsString('ReleaseDistributionCommissionsJob::class', $pointsCronTask);
+
+        $this->assertStringContainsString('JobQueue::push(ReleaseDistributionCommissionsJob::class', $distributionCronTask);
+        $this->assertStringNotContainsString('CloseExpiredOrdersJob::class', $distributionCronTask);
+        $this->assertStringNotContainsString('ReleaseFrozenPointsJob::class', $distributionCronTask);
+
+        foreach ([$orderCronTask, $pointsCronTask, $distributionCronTask] as $cronTask) {
+            $this->assertStringContainsString('runInSandbox', $cronTask);
+            $this->assertStringContainsString('setnx', $cronTask);
+        }
+    }
+
+    public function testReceiveFlowsCompleteOrdersForRewards(): void
+    {
+        $clientOrderService = (string) file_get_contents(__DIR__ . '/../../../../app/service/client/order/OrderService.php');
+        $adminOrderService = (string) file_get_contents(__DIR__ . '/../../../../app/service/admin/order/OrderAdminService.php');
+
+        $this->assertStringContainsString('toStatus: OrderStatus::RECEIVED', $clientOrderService);
+        $this->assertStringContainsString('toStatus: OrderStatus::COMPLETED', $clientOrderService);
+        $this->assertStringContainsString('确认收货后订单完成', $clientOrderService);
+
+        $this->assertStringContainsString('toStatus: OrderStatus::RECEIVED', $adminOrderService);
+        $this->assertStringContainsString('toStatus: OrderStatus::COMPLETED', $adminOrderService);
+        $this->assertStringContainsString('自动确认收货后订单完成', $adminOrderService);
     }
 
     public function testInstallSeedContainsOrderAndRefundDefaults(): void
     {
-        $schema = file_get_contents(__DIR__ . '/../../../../../backend/install/data/schema/03_mb_setting.sql');
+        $schema = file_get_contents(__DIR__ . '/../../../../install/data/schema/03_mb_setting.sql');
         $this->assertIsString($schema);
 
         foreach ([
