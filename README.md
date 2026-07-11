@@ -1,287 +1,117 @@
-# MallBase
+<p align="center">
+  <img src="frontend/admin/apps/web-antd/public/logo.svg" width="112" alt="MallBase Logo" />
+</p>
 
-MallBase 是一个面向中小型商城业务的基础后端框架，以 ThinkPHP 8 + think-swoole 为核心，提供一套清晰、可扩展、适合长期维护的项目骨架。
+<h1 align="center">MallBase</h1>
 
-项目目标不是做"功能最全的商城"，而是提供一个结构合理、技术选型稳定、易于二次开发、适合团队协作的商城型应用基础底座。
+<p align="center">面向二次开发与长期维护的开源商城基础底座</p>
+
+<p align="center">
+  <a href="https://platform.gosowong.cn/">官方网站</a> ·
+  <a href="https://preview.gosowong.cn/admin">Admin 演示</a> ·
+  <a href="https://preview.gosowong.cn/client/#/">H5 演示</a> ·
+  <a href="docs/index.md">文档中心</a>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT License" />
+  <img src="https://img.shields.io/badge/PHP-8.2%2B-777BB4.svg" alt="PHP 8.2+" />
+  <img src="https://img.shields.io/badge/ThinkPHP-8-2D8CF0.svg" alt="ThinkPHP 8" />
+  <img src="https://img.shields.io/badge/Swoole-enabled-ED6A5A.svg" alt="Swoole" />
+  <img src="https://img.shields.io/badge/Vue-3-42B883.svg" alt="Vue 3" />
+</p>
+
+MallBase 基于 ThinkPHP 8、Swoole、Vben Admin 和 UniApp，覆盖商城后台、客户端与部署基础设施。项目强调清晰分层、稳定边界和可扩展能力，适合作为团队持续演进商城业务的工程基础。
+
+## 产品界面
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/assets/readme/admin-overview.webp" alt="MallBase Admin 后台概览" /></td>
+    <td width="50%"><img src="docs/assets/readme/client-diy.webp" alt="MallBase 客户端装修编辑器" /></td>
+  </tr>
+  <tr>
+    <td align="center">后台管理</td>
+    <td align="center">客户端装修</td>
+  </tr>
+</table>
+
+<table>
+  <tr>
+    <td width="50%" align="center"><img src="docs/assets/readme/client-home.webp" width="390" alt="MallBase 客户端首页" /></td>
+    <td width="50%" align="center"><img src="docs/assets/readme/goods-detail.webp" width="390" alt="MallBase 客户端商品详情" /></td>
+  </tr>
+  <tr>
+    <td align="center">客户端首页</td>
+    <td align="center">商品详情</td>
+  </tr>
+</table>
+
+## 核心能力
+
+| 能力 | 说明 |
+|------|------|
+| 商品与 SKU | 支持商品、分类、品牌、规格与 SKU 的统一管理，并覆盖客户端商品列表、详情与规格选择。 |
+| 订单与售后 | 覆盖购物车、下单、支付、订单履约，以及退款、退货和后台售后审核流程。 |
+| 会员权益 | 提供会员等级、成长值、积分、余额与分销等可组合的用户权益能力。 |
+| 客户端装修 | 支持页面库、首页与个人中心装修、底部导航、悬浮入口和主题配置。 |
+| 系统能力 | 提供管理员、角色权限、后端驱动菜单、系统设置和素材管理等后台基础能力。 |
+| 部署与扩展 | 提供 Docker Compose 开发环境、Swoole 运行方式，以及扩展槽和存储驱动扩展边界。 |
+
+## 快速开始
+
+```bash
+docker compose -f docker-compose.dev.yml up -d
+```
+
+打开 `http://localhost:8080/install`，按安装向导完成初始化。需要自定义端口、数据库账号或站点地址时，先复制 `deploy/docker/.example.env` 为根目录 `.env`。
+
+更多安装方式与完整步骤见[安装与部署导航](docs/install/index.md)。
 
 ## 技术栈
 
-### 后端
-
-- PHP >= 8.2
-- ThinkPHP 8.0（多应用模式）
-- think-swoole（Swoole HTTP 服务）
-- MySQL 8.0+
-- Redis 6+
-
-### 前端
-
-- Admin：Vben Admin 5（Vue3 + Vite + Ant Design Vue）
-- 移动端：UniApp（预留）
-
-### 部署
-
-- Docker / Docker Compose（单后端容器生产 / 多容器开发全套）
-- Swoole 原生部署
+| 范围 | 技术 |
+|------|------|
+| 后端 | PHP >= 8.2、ThinkPHP 8、think-swoole、MySQL、Redis |
+| Admin | Vben Admin 5.5.9、Vue 3、Vite、Ant Design Vue |
+| 客户端 | UniApp、Vue 3、Pinia |
+| 部署 | Docker、Docker Compose、Swoole |
 
 ## 项目结构
 
 ```text
 mall-base/
-├── backend/                        # 后端（ThinkPHP + Swoole）
-│   ├── app/
-│   │   ├── admin/                  # 后台管理 API
-│   │   │   ├── controller/         # 控制器（薄层，仅参数校验和路由）
-│   │   │   ├── service/            # 业务逻辑（无状态）
-│   │   │   ├── model/              # 数据模型
-│   │   │   ├── validate/           # 验证器
-│   │   │   └── middleware/         # 后台中间件（JWT、权限、操作日志）
-│   │   ├── client/                 # C 端 API（预留）
-│   │   ├── install/                # 安装模块
-│   │   │   ├── controller/         # 安装接口
-│   │   │   └── service/            # 安装逻辑
-│   │   └── middleware/             # 全局中间件（CORS、安装检测）
-│   ├── config/                     # 框架配置
-│   ├── install/                    # 安装资源（SQL / 演示数据 / 地区数据 / 演示静态图）
-│   ├── route/                      # 路由定义
-│   ├── public/                     # 静态文件（前端构建产物、安装页面）
-│   └── mall_base/                  # 项目基础类库（BaseController / BaseService）
-│
+├── backend/                         # ThinkPHP + Swoole 后端
+│   └── app/
+│       ├── controller/              # Admin、Client、安装与连接器控制器
+│       ├── service/                 # 无状态业务服务
+│       ├── model/                   # 领域模型
+│       ├── validate/                # 请求验证器
+│       └── middleware/              # 全局及分端中间件
 ├── frontend/
-│   ├── admin/                      # Vben Admin 5 后台管理前端
-│   └── uniapp/                     # UniApp 移动端（预留）
-│
-├── deploy/
-│   ├── docker/
-│   │   ├── Dockerfile              # 后端镜像构建
-│   │   ├── frontend-build.sh       # 后台前端（Admin）打包脚本
-│   │   ├── uniapp-build.sh         # UniApp H5 打包脚本
-│   │   ├── cleanup-dev.sh          # 分级清理基础运行态、前端文件、Docker 开发状态与镜像
-│   │   ├── prepare-data-dirs.sh    # 开发全套模式数据目录权限预检
-│   │   ├── ...                     # 其它内部辅助脚本（ensure-env / check-db-auth / 入口脚本等）
-│   │   └── mysql/                  # MySQL 初始化脚本
-│   ├── nginx/
-│   │   └── mallbase.conf           # Nginx 配置示例
-│   ├── upload-frontend.sh          # 打包并上传前端静态资源（后台 admin + H5 client）
-│   └── upload-frontend.local.sh.example  # 上传脚本本地配置示例（复制为 upload-frontend.local.sh，已被 git 忽略）
-│
-├── docs/                           # 文档
-│   ├── index.md                    # 文档中心总入口
-│   ├── faq.md                      # 业务文档常见问题与入口跳转
-│   ├── modules/                    # 业务模块总览
-│   │   ├── member.md               # 会员模块总览
-│   │   ├── points.md               # 积分模块总览
-│   │   ├── wallet.md               # 余额模块总览
-│   │   └── client-diy.md           # 客户端装修模块总览
-│   ├── operation/                  # 操作文档
-│   │   ├── index.md                # 操作文档入口
-│   │   ├── basic-config.md         # 基础配置操作说明
-│   │   ├── member.md               # 会员操作说明
-│   │   ├── points.md               # 积分操作说明
-│   │   ├── wallet.md               # 余额操作说明
-│   │   └── client-diy.md           # 客户端装修操作说明
-│   ├── logic/                      # 业务逻辑文档
-│   │   ├── index.md                # 业务逻辑文档入口
-│   │   ├── member.md               # 会员业务逻辑
-│   │   ├── points.md               # 积分业务逻辑
-│   │   ├── wallet.md               # 余额业务逻辑
-│   │   └── client-diy.md           # 客户端装修业务逻辑
-│   ├── development/                # 开发文档
-│   │   ├── index.md                # 开发文档入口
-│   │   ├── member.md               # 会员开发文档
-│   │   ├── points.md               # 积分开发文档
-│   │   ├── wallet.md               # 余额开发文档
-│   │   ├── client-diy.md           # 客户端装修开发文档
-│   │   └── customer-service-h5-resource-action.md # UniApp 客服 H5 资源跳转设计
-│   ├── install/                    # 安装与部署（导航入口：install/index.md）
-│   │   ├── index.md                # 安装与部署导航
-│   │   ├── manual.md               # 方式一：手动安装（无 Docker）
-│   │   ├── docker-backend-only.md  # 方式二：Docker 开发（仅后端）
-│   │   ├── docker-fullstack.md     # 方式三：Docker 开发（全套）
-│   │   ├── docker-production.md    # 方式四：Docker 生产
-│   │   ├── commands.md             # 安装与部署命令导航
-│   │   ├── commands-common.md      # 常用命令速查
-│   │   ├── commands-local.md       # 本地安装与 Swoole 命令
-│   │   ├── commands-docker.md      # Docker 启停、日志与容器命令
-│   │   ├── commands-frontend.md    # 前端构建与静态资源命令
-│   │   ├── commands-cleanup.md     # 删除与清理命令
-│   │   ├── commands-maintenance.md # 验证与维护命令
-│   │   ├── cli-install.md          # 命令行安装 install:auto
-│   │   ├── troubleshooting.md      # 安装与部署故障排查
-│   │   ├── env-files.md            # 环境文件职责说明
-│   │   ├── nginx-reverse-proxy.md  # Nginx 反向代理配置说明
-│   │   ├── cloud-storage-upload.md # 上传云存储配置（本地 / OSS / COS）
-│   │   ├── admin-build.md          # 后台前端（Admin）打包说明
-│   │   ├── uniapp-build.md         # UniApp H5 打包说明
-│   │   ├── upload-frontend.md      # 前端静态资源上传脚本说明
-│   │   ├── cleanup-dev.md          # 分级清理脚本说明
-│   │   └── issues/
-│   │       └── docker-fullstack-first-run.md  # 方式三首装问题排查记录
-│   ├── uniapp-design-brief.md      # UniApp 移动端设计需求文档
-│   ├── freight-template-roadmap.md # 运费模板路线图
-│   ├── upload-storage-driver-extension.md # 新增云存储上传驱动开发指南
-│   ├── privacy.md                  # 隐私与平台实例统计说明
-│   ├── claude-code-guide.md        # Claude Code 使用指南
-│   ├── superpowers/                # 历史规划与设计档案
-│   │   ├── specs/                  # 功能设计方案
-│   │   └── plans/                  # 实施计划
-│   └── testing/
-│       ├── change-trigger-test-matrix.md  # 测试基线与触发矩阵
-│       ├── order-create-1000-concurrency-report.md  # 订单创建 1000 并发压测报告
-│       └── swoole-concurrency-config-guide.md  # Swoole 并发配置建议
-├── docker-compose.yml              # 单后端容器（生产，需外部 MySQL / Redis）
-├── docker-compose.dev.yml          # 开发全套（后端 + MySQL + Redis）
-├── docker-compose.frontend-build.yml  # 后台前端打包
-├── docker-compose.uniapp-build.yml # UniApp H5 打包
+│   ├── admin/apps/web-antd/         # Vben Admin 后台
+│   └── uniapp/                      # UniApp 客户端
+├── deploy/                          # Docker、Nginx 与发布辅助文件
+├── docs/                            # 文档中心
+├── docker-compose.dev.yml           # 后端 + MySQL + Redis 开发环境
+├── docker-compose.yml               # 后端容器部署入口
 └── README.md
 ```
 
-## 业务模块
-
-| 模块 | 说明 |
-|------|------|
-| Auth | 管理员登录、JWT 认证、角色权限（RBAC） |
-| User | C 端用户管理、状态控制 |
-| Goods | 商品 SPU/SKU、分类、品牌、规格、标签、评论 |
-| Order | 购物车、下单、状态流转、物流、售后退款 |
-| Delivery | 收货地址、运费模板（按件/按重、多层级区域匹配） |
-| Region | 省市区街道四级地区库 |
-| Setting | 系统设置（分组 + 设置项，后台动态配置） |
-| Member | 会员等级、成长值、会员折扣、规格会员价 |
-| Points | 积分账户、积分赠送、积分抵扣、积分商城 |
-| Wallet | 用户余额、余额流水、余额支付、余额退款 |
-| Client DIY | 页面库、首页/个人中心装修、底部导航、主题 |
-
-## 在线演示
-
-- 演示站 Admin：[https://preview.gosowong.cn/admin](https://preview.gosowong.cn/admin)
-- 演示站 H5：[https://preview.gosowong.cn/client/#/](https://preview.gosowong.cn/client/#/)
-
-## 快速开始
-
-### Docker 一键部署（推荐）
-
-```bash
-docker compose up -d --build
-```
-
-访问 `http://localhost` 进入安装向导，填写数据库和 Redis 配置，创建管理员账号。
-
-安装完成后重启服务：
-
-```bash
-docker compose restart
-```
-
-重启后访问 `/admin` 进入后台。
-
-其它安装方式（手动安装、开发全套、生产部署）与完整步骤见下方文档表，或直接看 [安装与部署导航](docs/install/index.md)。
-
 ## 文档
 
-### 文档入口
-
 | 文档 | 说明 |
 |------|------|
-| [文档中心](docs/index.md) | 所有文档的总入口：按场景查常用与不常用文档 |
-| [业务文档常见问题](docs/faq.md) | 会员、积分、余额、客户端装修等业务文档入口 |
-| [会员模块总览](docs/modules/member.md) | 会员等级、成长值、会员权益和订单快照总览 |
-| [积分模块总览](docs/modules/points.md) | 积分账户、积分规则、积分抵扣、积分商城和兑换单总览 |
-| [余额模块总览](docs/modules/wallet.md) | 用户余额、余额流水、余额支付、余额退款和充值套餐总览 |
-| [客户端装修模块总览](docs/modules/client-diy.md) | 页面库、装修方案、底部导航、悬浮按钮和主题总览 |
-
-### 操作文档
-
-| 文档 | 说明 |
-|------|------|
-| [操作文档入口](docs/operation/index.md) | 后台操作文档总入口 |
-| [基础配置操作文档](docs/operation/basic-config.md) | 上传、支付、积分、会员、客户端配置等基础配置入口 |
-| [会员操作文档](docs/operation/member.md) | 会员配置、会员等级、手动设置会员 |
-| [积分操作文档](docs/operation/points.md) | 积分配置、积分规则、积分商品、兑换单和积分流水 |
-| [余额操作文档](docs/operation/wallet.md) | 余额支付、充值套餐、用户余额调整和余额流水 |
-| [客户端装修操作文档](docs/operation/client-diy.md) | 首页、个人中心、底部导航、悬浮按钮和主题装修 |
-
-### 业务逻辑
-
-| 文档 | 说明 |
-|------|------|
-| [业务逻辑文档入口](docs/logic/index.md) | 核心业务规则和状态流总入口 |
-| [会员业务逻辑](docs/logic/member.md) | 成长值、等级匹配、手动等级、会员折扣和订单快照 |
-| [积分业务逻辑](docs/logic/points.md) | 积分账户、赠送、冻结、释放、回收、抵扣和兑换 |
-| [余额业务逻辑](docs/logic/wallet.md) | 余额账户、余额流水、余额支付、余额退款和充值套餐边界 |
-| [客户端装修业务逻辑](docs/logic/client-diy.md) | 页面库、装修方案、系统默认、启用策略、主题和客户端读取 |
-
-### 开发文档
-
-| 文档 | 说明 |
-|------|------|
-| [开发文档入口](docs/development/index.md) | 表、接口、Service、前端页面、扩展点和测试入口 |
-| [会员开发文档](docs/development/member.md) | 会员等级、成长值、会员权益和订单快照开发入口 |
-| [积分开发文档](docs/development/points.md) | 积分账户、积分规则、积分抵扣、积分商城和兑换单开发入口 |
-| [余额开发文档](docs/development/wallet.md) | 余额账户、余额流水、余额支付、余额退款和充值套餐开发入口 |
-| [客户端装修开发文档](docs/development/client-diy.md) | 页面库、装修方案、主题、配置读取和 UniApp 渲染开发入口 |
-
-### 安装与部署
-
-| 文档 | 说明 |
-|------|------|
-| [安装与部署导航](docs/install/index.md) | 唯一入口：选择安装方式、环境要求、专题文档索引 |
-| [方式一：手动安装](docs/install/manual.md) | 无 Docker 场景的完整部署步骤 |
-| [方式二：Docker 开发（仅后端）](docs/install/docker-backend-only.md) | 宿主机 MySQL / Redis + 后端容器 |
-| [方式三：Docker 开发（全套）](docs/install/docker-fullstack.md) | 后端 + MySQL + Redis 一键启动，前端打包单独执行 |
-| [方式四：Docker 生产](docs/install/docker-production.md) | 单后端容器 + 宿主机 Nginx |
-| [安装与部署命令导航](docs/install/commands.md) | 命令分册入口，按常用、本地、Docker、前端、清理、维护拆分 |
-| [命令行安装 install:auto](docs/install/cli-install.md) | 手动安装或本地安装失败时执行 `php think install:auto` |
-| [安装与部署故障排查](docs/install/troubleshooting.md) | 安装、Docker、前端静态资源与运行时故障处理 |
-| [环境文件说明](docs/install/env-files.md) | 根 `.env`、`backend/.env` 与安装运行时配置职责 |
-| [Nginx 反向代理配置](docs/install/nginx-reverse-proxy.md) | `/`、`/client/`、`/admin/`、`/client/api/`、`/admin/api/` 等路径规则 |
-| [上传云存储配置](docs/install/cloud-storage-upload.md) | 本地存储、阿里云 OSS、腾讯云 COS 上传驱动配置与验证 |
-| [方式三首装问题记录](docs/install/issues/docker-fullstack-first-run.md) | 方式三首次启动的密码错位、时序问题与修复结论 |
-
-### 命令分册
-
-| 文档 | 说明 |
-|------|------|
-| [常用命令速查](docs/install/commands-common.md) | 日常最常用命令：安装、启动、日志、构建、上传、清理 |
-| [本地安装与 Swoole 命令](docs/install/commands-local.md) | 本地 PHP / MySQL / Redis、`install:auto`、Swoole 重启 |
-| [Docker 命令](docs/install/commands-docker.md) | Docker 启停、日志、容器内依赖、连接容器服务 |
-| [前端构建与静态资源命令](docs/install/commands-frontend.md) | Admin / UniApp 构建、前端 dev server、静态资源上传 |
-| [删除与清理命令](docs/install/commands-cleanup.md) | 开发环境清理、安装锁、重新测试首装前检查 |
-| [验证与维护命令](docs/install/commands-maintenance.md) | HTTP 验证、地区数据导入、旧环境升级、E2E 准备 |
-
-### 前端构建与发布
-
-| 文档 | 说明 |
-|------|------|
-| [后台前端（Admin）打包](docs/install/admin-build.md) | 把 `frontend/admin` 打包到 `backend/public/admin`（Docker 一键 / 本地） |
-| [UniApp H5 打包](docs/install/uniapp-build.md) | 把 UniApp H5 打包到 `backend/public/client` |
-| [前端静态资源上传脚本](docs/install/upload-frontend.md) | 用 `deploy/upload-frontend.sh` 上传 admin / client 到服务器 |
-| [分级清理脚本](docs/install/cleanup-dev.md) | `deploy/docker/cleanup-dev.sh`：按等级清理基础运行态、前端文件、Docker 开发状态与镜像 |
-
-### 其它
-
-| 文档 | 说明 |
-|------|------|
-| [UniApp 移动端设计需求](docs/uniapp-design-brief.md) | UniApp 端功能范围、页面清单、数据结构与设计方向 |
-| [运费模板路线图](docs/freight-template-roadmap.md) | 运费计算能力落地进度与订单接入计划 |
-| [新增云存储上传驱动开发指南](docs/upload-storage-driver-extension.md) | 新增云存储服务商时需要修改的后端、前端、seed、测试和文档清单 |
-| [隐私与平台实例统计说明](docs/privacy.md) | 平台实例统计的数据范围、本地状态与关闭方式 |
-| [测试基线与触发矩阵](docs/testing/change-trigger-test-matrix.md) | 后端 / 前端测试入口与变更触发规则 |
-| [订单创建 1000 并发压测报告](docs/testing/order-create-1000-concurrency-report.md) | 1000 个不同用户同时下单的压测结果、数据一致性和边界说明 |
-| [Swoole 并发配置建议](docs/testing/swoole-concurrency-config-guide.md) | worker、连接数、backlog、连接池与订单高并发调参建议 |
-| [Claude Code 使用指南](docs/claude-code-guide.md) | AI 工具、Skills、MCP、多 Agent 协作 |
-| [客户端装修功能设计方案](docs/superpowers/specs/2026-06-03-client-diy-design.md) | 客户端装修一期范围、后台信息架构和方案库模型 |
-| [UniApp 客服 H5 资源跳转设计](docs/development/customer-service-h5-resource-action.md) | 客服 Widget 的商品与订单 URL 模板及 H5 顶层跳转方案 |
-| [客户端装修基础实施计划](docs/superpowers/plans/2026-06-03-client-diy-foundation-plan.md) | 客户端装修后端基础能力的历史实施计划 |
-
-## 开发约定
-
-- 严格三层：Controller -> Service -> Model
-- Swoole 长驻内存，Service 必须无状态
-- 事务遵循"先校验再事务"
-- 分页查询 list/total 条件同源
-- 后台路由权限后端驱动
-- 详见 `.codex/skills/` 目录下的项目规范
+| [文档中心](docs/index.md) | 按使用场景浏览项目文档。 |
+| [常见问题](docs/faq.md) | 查找常见业务问题与对应文档入口。 |
+| [安装与部署](docs/install/index.md) | 选择本地、Docker 或生产环境安装方式。 |
+| [操作文档](docs/operation/index.md) | 查看后台配置与业务操作流程。 |
+| [业务逻辑](docs/logic/index.md) | 了解核心业务规则与状态流转。 |
+| [开发文档](docs/development/index.md) | 查看数据表、接口、服务、扩展点与测试入口。 |
+| [变更触发测试矩阵](docs/testing/change-trigger-test-matrix.md) | 根据改动范围选择必要测试。 |
+| [Swoole 并发配置指南](docs/testing/swoole-concurrency-config-guide.md) | 查看 worker、连接池与并发参数建议。 |
+| [隐私说明](docs/privacy.md) | 了解实例统计的数据范围与关闭方式。 |
+| [客服 H5 资源跳转设计](docs/development/customer-service-h5-resource-action.md) | 了解客服 Widget 的资源动作与 H5 跳转协议。 |
 
 ## 交流与反馈
 
@@ -290,4 +120,4 @@ docker compose restart
 
 ## 开源协议
 
-本项目基于 MIT License 开源。
+本项目基于 [MIT License](LICENSE) 开源。

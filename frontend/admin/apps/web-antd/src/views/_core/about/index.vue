@@ -17,6 +17,7 @@ interface AdminMetadata {
 
 const metadata: AdminMetadata = __VBEN_ADMIN_METADATA__ || {};
 
+const websiteUrl = 'https://platform.gosowong.cn/';
 const repositoryUrl = 'https://gitee.com/gosowong/mall-base';
 const docsUrl = `${repositoryUrl}/tree/main/docs`;
 const frontendDocsUrl = `${repositoryUrl}/blob/main/frontend/admin/README.md`;
@@ -127,7 +128,10 @@ const buildItems = computed(() => [
               项目目标不是堆叠功能清单，而是提供结构稳定、边界清楚、便于扩展的商城型应用骨架，让后台管理、接口服务、部署路径和开发规范保持一致。
             </p>
             <div class="mt-5 flex flex-wrap gap-2">
-              <a-button type="primary" :href="docsUrl" target="_blank">
+              <a-button type="primary" :href="websiteUrl" target="_blank">
+                访问官方网站
+              </a-button>
+              <a-button :href="docsUrl" target="_blank">
                 查看项目文档
               </a-button>
               <a-button :href="repositoryUrl" target="_blank">
