@@ -30,11 +30,8 @@ Route::group('setting/section', function () {
     Route::delete('delete/:id', 'delete')->name('SettingSectionDelete')->option(['_alias' => '删除页内分组', '_desc' => '删除设置页内分组', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
 })->prefix('admin.setting.SectionController/')
     ->option([
-        '_group_name' => '设置页内分组',
-        '_group_code' => 'SettingSection',
-        '_path'       => '/settings/group',
-        '_auth'       => true,
-        '_parent'     => 'SettingGroup',
+        '_auth'   => true,
+        '_parent' => 'SettingGroup',
     ]);
 
 Route::group('setting/item', function () {

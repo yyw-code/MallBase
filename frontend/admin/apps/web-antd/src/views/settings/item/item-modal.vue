@@ -1067,21 +1067,6 @@ const handleOk = async () => {
                 class="w-full"
               />
             </a-form-item>
-          </a-tab-pane>
-
-          <a-tab-pane key="config" tab="表单配置">
-            <a-form-item label="页内分组">
-              <a-select
-                v-model:value="uiSectionCode"
-                :loading="sectionLoading"
-                :options="sectionSelectOptions"
-                allow-clear
-                placeholder="请选择页内分组"
-                show-search
-                option-filter-prop="label"
-              />
-              <div class="rule-tip">页内分组在设置分组编辑中统一维护。</div>
-            </a-form-item>
 
             <a-form-item label="输入组件">
               <div class="component-config">
@@ -1331,6 +1316,21 @@ const handleOk = async () => {
                   不添加规则时，将使用「必填」字段进行简单验证
                 </div>
               </div>
+            </a-form-item>
+          </a-tab-pane>
+
+          <a-tab-pane key="section" tab="页内分组">
+            <a-form-item label="页内分组">
+              <a-select
+                v-model:value="uiSectionCode"
+                :loading="sectionLoading"
+                :options="sectionSelectOptions"
+                allow-clear
+                placeholder="请选择页内分组"
+                show-search
+                option-filter-prop="label"
+              />
+              <div class="rule-tip">页内分组在设置分组编辑中统一维护。</div>
             </a-form-item>
           </a-tab-pane>
         </a-tabs>

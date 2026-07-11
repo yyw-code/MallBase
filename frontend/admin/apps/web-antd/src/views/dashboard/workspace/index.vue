@@ -275,7 +275,7 @@ onMounted(() => {
       >
         <section
           v-if="hasTodoAccess"
-          class="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))]"
+          class="overflow-hidden rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] shadow-sm"
         >
           <div
             class="flex items-center justify-between border-b border-[hsl(var(--border))] px-5 py-4"
@@ -298,7 +298,7 @@ onMounted(() => {
             <button
               v-for="item in todos"
               :key="item.key"
-              class="grid w-full grid-cols-[44px_minmax(0,1fr)_auto] items-center gap-4 px-5 py-5 text-left transition hover:bg-[hsl(var(--accent))]"
+              class="grid w-full grid-cols-[40px_minmax(0,1fr)] items-center gap-3 px-4 py-4 text-left transition hover:bg-[hsl(var(--accent))] sm:grid-cols-[44px_minmax(0,1fr)_auto] sm:gap-4 sm:px-5 sm:py-5"
               type="button"
               @click="navTo(item.link, item.query)"
             >
@@ -320,9 +320,11 @@ onMounted(() => {
                   {{ item.description }}
                 </span>
               </span>
-              <a-button size="small" type="link">
+              <span
+                class="col-start-2 justify-self-start text-sm font-medium text-[hsl(var(--primary))] sm:col-start-auto"
+              >
                 {{ item.action_text }}
-              </a-button>
+              </span>
             </button>
           </div>
 
@@ -333,7 +335,7 @@ onMounted(() => {
 
         <section
           v-if="hasShortcutAccess"
-          class="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))]"
+          class="overflow-hidden rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] shadow-sm"
         >
           <div
             class="flex items-center justify-between border-b border-[hsl(var(--border))] px-5 py-4"
@@ -357,11 +359,14 @@ onMounted(() => {
             </a-button>
           </div>
 
-          <div v-if="shortcuts.length > 0" class="grid grid-cols-2 gap-3 p-5">
+          <div
+            v-if="shortcuts.length > 0"
+            class="grid grid-cols-1 gap-3 p-4 sm:grid-cols-2 sm:p-5"
+          >
             <button
               v-for="item in shortcuts"
               :key="item.path"
-              class="flex min-h-24 flex-col items-start justify-between rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-4 text-left transition hover:border-[hsl(var(--primary))] hover:bg-[hsl(var(--accent))]"
+              class="flex min-h-20 items-center gap-4 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-4 text-left transition hover:border-[hsl(var(--primary))] hover:bg-[hsl(var(--accent))] sm:min-h-24 sm:flex-col sm:items-start sm:justify-between sm:gap-0"
               type="button"
               @click="navTo(item.path)"
             >
@@ -369,7 +374,7 @@ onMounted(() => {
                 :icon="item.icon || 'lucide:circle'"
                 class="h-6 w-6 text-[hsl(var(--primary))]"
               />
-              <span class="mt-4 min-w-0">
+              <span class="min-w-0 sm:mt-4">
                 <span
                   class="block truncate text-sm font-semibold text-[hsl(var(--foreground))]"
                 >
@@ -404,7 +409,7 @@ onMounted(() => {
 
       <div
         v-if="!hasWorkspaceBlocks && !loading"
-        class="mt-5 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-5 py-12"
+        class="mt-5 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-5 py-12 shadow-sm"
       >
         <a-empty description="暂无可访问的工作台模块" />
       </div>

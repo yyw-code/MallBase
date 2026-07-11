@@ -2193,6 +2193,65 @@ watch(
   }
 }
 
+@media (max-width: 768px) {
+  .page-header {
+    height: auto;
+    min-height: 52px;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 8px 12px;
+  }
+
+  .page-header-left,
+  .page-header-right {
+    min-width: 0;
+  }
+
+  .page-header-right {
+    margin-left: auto;
+  }
+
+  .page-body {
+    padding: 10px;
+  }
+
+  .page-content-min,
+  .edit-tabs {
+    min-width: 0;
+  }
+
+  .edit-tabs :deep(.ant-tabs-nav) {
+    padding: 0 12px;
+  }
+
+  .tab-body {
+    padding: 16px 12px 12px;
+  }
+
+  .flag-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+    max-width: none;
+  }
+
+  .flag-cell {
+    border-bottom: 1px solid hsl(var(--border));
+  }
+
+  .flag-cell:nth-child(2n) {
+    border-right: none;
+  }
+
+  .flag-cell:nth-last-child(-n + 2) {
+    border-bottom: none;
+  }
+
+  .spec-name-input {
+    width: min(240px, 100%);
+  }
+}
+
 /* ===== 规格库弹窗 ===== */
 .spec-lib-list {
   display: flex;
