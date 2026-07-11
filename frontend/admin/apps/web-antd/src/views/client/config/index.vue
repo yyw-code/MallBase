@@ -218,7 +218,7 @@ function parseJsonArray<T>(value: unknown, fallback: T[]): T[] {
 }
 
 function cloneGoodsBadgeConfig(config = DEFAULT_GOODS_BADGE_CONFIG) {
-  return JSON.parse(JSON.stringify(config)) as GoodsBadgeConfig;
+  return structuredClone(config);
 }
 
 function parseJsonObject<T extends object>(value: unknown, fallback: T): T {
@@ -522,7 +522,7 @@ function fillFormFromSettings() {
     settingValue('client_search_category_ids'),
     [],
   )
-    .map((id) => Number(id))
+    .map(Number)
     .filter((id) => Number.isFinite(id));
 
   form.client_about_content = settingValue('client_about_content');
@@ -1331,7 +1331,7 @@ onBeforeUnmount(() => {
         class="content-preview-frame"
         sandbox=""
         :srcdoc="previewHtml(previewContent.code)"
-      />
+      ></iframe>
     </a-modal>
   </div>
 </template>
