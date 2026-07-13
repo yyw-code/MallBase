@@ -458,6 +458,48 @@ final class UpgradeSharedFileStoreTest extends TestCase
         $this->assertFileExists($lockPath);
     }
 
+    public function testInstanceLockRefreshesCachedModeAfterAnotherProcessCompletesCreation(): void
+    {
+        $this->assertTrue(function_exists('proc_open'), 'proc_open is required for the stat-cache contract.');
+        $lockPath = $this->root . '/run/instance-config.lock';
+        touch($lockPath);
+        chmod($lockPath, 0644);
+        clearstatcache(true, $lockPath);
+
+        $operations = $this->statOperations();
+        $nativeLstat = $operations['lstat'];
+        $creationCompleted = false;
+        $operations['lstat'] = static function (string $path) use (
+            $lockPath,
+            $nativeLstat,
+            &$creationCompleted,
+        ): array|false {
+            $stat = $nativeLstat($path);
+            if ($path !== $lockPath || $creationCompleted) {
+                return $stat;
+            }
+            $creationCompleted = true;
+            $process = proc_open([
+                PHP_BINARY,
+                '-r',
+                'exit(chmod($argv[1], 0660) ? 0 : 1);',
+                '--',
+                $lockPath,
+            ], [], $pipes);
+            if (!is_resource($process) || proc_close($process) !== 0) {
+                throw new \RuntimeException('Unable to complete lock creation in child process.');
+            }
+
+            return $stat;
+        };
+
+        $this->assertSame(
+            'converged',
+            $this->store($operations, 1000)->withInstanceLock(static fn(): string => 'converged'),
+        );
+        $this->assertTrue($creationCompleted);
+    }
+
     public function testInstanceLockExcludesASeparateProcessWithinTheBoundedDeadline(): void
     {
         $this->assertTrue(function_exists('proc_open'), 'proc_open is required for the lock contract.');

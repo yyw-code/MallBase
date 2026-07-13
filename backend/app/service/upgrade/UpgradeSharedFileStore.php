@@ -570,6 +570,7 @@ final class UpgradeSharedFileStore
     /** @return array<string|int, int>|null */
     private function lstat(string $path): ?array
     {
+        clearstatcache(true, $path);
         $stat = $this->operation('lstat', $path);
         if (is_array($stat)) {
             return $stat;
