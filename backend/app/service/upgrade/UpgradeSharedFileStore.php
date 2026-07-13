@@ -1,0 +1,620 @@
+<?php
+
+declare(strict_types=1);
+
+namespace app\service\upgrade;
+
+use Closure;
+use JsonException;
+use RuntimeException;
+use stdClass;
+use Throwable;
+
+/**
+ * Agent 与 PHP 共享文件的固定路径、权限和持久化边界。
+ *
+ * 构造参数只能来自服务端配置；I/O 替换表仅供单元测试注入故障。
+ */
+final class UpgradeSharedFileStore
+{
+    private const DOCUMENTS = [
+        'instance' => ['path' => 'config/instance.json', 'owner' => 'php', 'mode' => 0660, 'write' => true],
+        'namespace_projection' => ['path' => 'staging/storage-namespace.json', 'owner' => 'agent', 'mode' => 0444, 'write' => false],
+    ];
+
+    private const LOCK_PATH = 'run/instance-config.lock';
+
+    private const OPERATION_NAMES = [
+        'lstat', 'fstat', 'fopen', 'fwrite', 'fflush', 'fsync', 'rename',
+        'flock', 'open_dir', 'close_dir', 'fault',
+    ];
+
+    /** @var array<string, callable> */
+    private readonly array $operations;
+
+    /**
+     * @param array<string, callable> $testOperations
+     */
+    public function __construct(
+        private readonly string $root,
+        private readonly int $agentUid,
+        private readonly int $expectedGid,
+        private readonly int $phpEuid,
+        private readonly int $maxJsonBytes = 65536,
+        private readonly int $lockTimeoutMilliseconds = 2000,
+        array $testOperations = [],
+    ) {
+        if ($this->root === '' || !str_starts_with($this->root, DIRECTORY_SEPARATOR)
+            || $this->agentUid < 0 || $this->expectedGid < 0 || $this->phpEuid < 0
+            || $this->agentUid === $this->phpEuid || $this->maxJsonBytes < 1
+            || $this->lockTimeoutMilliseconds < 1) {
+            $this->throwPublic('SHARED_FILE_PERMISSION_INVALID');
+        }
+
+        foreach ($testOperations as $name => $operation) {
+            if (!in_array($name, self::OPERATION_NAMES, true) || !is_callable($operation)) {
+                $this->throwPublic('SHARED_FILE_PERMISSION_INVALID');
+            }
+        }
+
+        $this->operations = array_replace($this->nativeOperations(), $testOperations);
+    }
+
+    public function readJson(string $logicalName): ?object
+    {
+        if (!isset(self::DOCUMENTS[$logicalName])) {
+            $this->throwPublic('SHARED_FILE_UNAVAILABLE');
+        }
+
+        try {
+            $raw = $this->readRawDocument($logicalName);
+            if ($raw === null) {
+                return null;
+            }
+
+            return $this->decodeStrictObject($raw);
+        } catch (Throwable $exception) {
+            $code = $exception->getMessage() === 'SHARED_FILE_INVALID'
+                ? 'SHARED_FILE_INVALID'
+                : ($exception->getMessage() === 'SHARED_FILE_PERMISSION_INVALID'
+                    ? 'SHARED_FILE_PERMISSION_INVALID'
+                    : 'SHARED_FILE_UNAVAILABLE');
+            $this->throwPublic($code);
+        }
+    }
+
+    public function writeJson(string $logicalName, object $document): void
+    {
+        $definition = self::DOCUMENTS[$logicalName] ?? null;
+        if ($definition === null || $definition['write'] !== true) {
+            $this->throwPublic('SHARED_FILE_UNAVAILABLE');
+        }
+
+        try {
+            $bytes = json_encode(
+                $document,
+                JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION,
+            );
+        } catch (JsonException) {
+            $this->throwPublic('SHARED_FILE_INVALID');
+        }
+        if (!is_string($bytes) || strlen($bytes) > $this->maxJsonBytes) {
+            $this->throwPublic('SHARED_FILE_INVALID');
+        }
+
+        $renamed = false;
+        $temporaryPath = '';
+        $temporaryHandle = null;
+
+        try {
+            $this->validateSharedDirectory('config', 02770);
+            $targetPath = $this->path((string) $definition['path']);
+            $targetStat = $this->lstat($targetPath);
+            if ($targetStat !== null) {
+                $this->validateRegularFile($targetStat, $this->phpEuid, 0660);
+            }
+
+            $temporaryPath = $this->path('config/.instance.' . bin2hex(random_bytes(16)) . '.tmp');
+            $temporaryHandle = $this->operation('fopen', $temporaryPath, 'x+b');
+            if (!is_resource($temporaryHandle) || !@chmod($temporaryPath, 0660)) {
+                throw new RuntimeException('write temp');
+            }
+            $this->checkpoint('after_temp_create');
+
+            $offset = 0;
+            $length = strlen($bytes);
+            while ($offset < $length) {
+                $written = $this->operation('fwrite', $temporaryHandle, substr($bytes, $offset));
+                if (!is_int($written) || $written <= 0) {
+                    throw new RuntimeException('write temp');
+                }
+                $offset += $written;
+            }
+            $this->checkpoint('after_write');
+
+            if ($this->operation('fflush', $temporaryHandle) !== true) {
+                throw new RuntimeException('flush temp');
+            }
+            $this->checkpoint('after_fflush');
+            if ($this->operation('fsync', $temporaryHandle) !== true) {
+                throw new RuntimeException('sync temp');
+            }
+            $this->checkpoint('after_file_fsync');
+
+            $descriptorStat = $this->operation('fstat', $temporaryHandle);
+            $nameStat = $this->lstat($temporaryPath);
+            if (!is_array($descriptorStat) || $nameStat === null) {
+                throw new RuntimeException('stat temp');
+            }
+            $this->validateRegularFile($descriptorStat, $this->phpEuid, 0660);
+            $this->validateRegularFile($nameStat, $this->phpEuid, 0660);
+            $this->assertSameInode($descriptorStat, $nameStat);
+            $this->checkpoint('after_verify');
+
+            @fclose($temporaryHandle);
+            $temporaryHandle = null;
+            if ($this->operation('rename', $temporaryPath, $targetPath) !== true) {
+                throw new RuntimeException('rename temp');
+            }
+            $renamed = true;
+            $temporaryPath = '';
+            $publishedStat = $this->lstat($targetPath);
+            if ($publishedStat === null) {
+                throw new RuntimeException('stat published file');
+            }
+            $this->validateRegularFile($publishedStat, $this->phpEuid, 0660);
+            $this->assertSameInode($descriptorStat, $publishedStat);
+            $this->checkpoint('after_rename');
+            $this->checkpoint('before_parent_fsync');
+
+            $directoryHandle = $this->operation('open_dir', $this->path('config'));
+            if (!is_resource($directoryHandle)) {
+                throw new RuntimeException('open parent');
+            }
+            try {
+                $directoryDescriptorStat = $this->operation('fstat', $directoryHandle);
+                $directoryNameStat = $this->lstat($this->path('config'));
+                if (!is_array($directoryDescriptorStat) || $directoryNameStat === null) {
+                    throw new RuntimeException('stat parent');
+                }
+                $this->validateDirectoryStat($directoryDescriptorStat, 02770);
+                $this->validateDirectoryStat($directoryNameStat, 02770);
+                $this->assertSameInode($directoryDescriptorStat, $directoryNameStat);
+                if ($this->operation('fsync', $directoryHandle) !== true) {
+                    throw new RuntimeException('sync parent');
+                }
+            } finally {
+                $this->operation('close_dir', $directoryHandle);
+            }
+            $this->checkpoint('after_parent_fsync');
+        } catch (Throwable $exception) {
+            if (is_resource($temporaryHandle)) {
+                @fclose($temporaryHandle);
+            }
+            if (!$renamed) {
+                if ($temporaryPath !== '') {
+                    @unlink($temporaryPath);
+                }
+                $this->throwPublic($exception->getMessage() === 'SHARED_FILE_PERMISSION_INVALID'
+                    ? 'SHARED_FILE_PERMISSION_INVALID'
+                    : 'SHARED_FILE_UNAVAILABLE');
+            }
+
+            $this->classifyUncertainVisibleState($logicalName, $bytes);
+            $this->throwPublic('DURABILITY_UNCERTAIN');
+        }
+    }
+
+    public function withInstanceLock(Closure $callback): mixed
+    {
+        $handle = null;
+        $acquired = false;
+        try {
+            $this->validateSharedDirectory('run', 02770);
+            $path = $this->path(self::LOCK_PATH);
+            $nameStat = $this->lstat($path);
+            if ($nameStat === null) {
+                $handle = $this->operation('fopen', $path, 'x+b');
+                if (is_resource($handle)) {
+                    if (!@chmod($path, 0660)) {
+                        throw new RuntimeException('create lock');
+                    }
+                    $nameStat = $this->lstat($path);
+                } else {
+                    $nameStat = $this->lstat($path);
+                    if ($nameStat === null) {
+                        throw new RuntimeException('create lock');
+                    }
+                    $this->validateRegularFile($nameStat, $this->phpEuid, 0660);
+                    $handle = $this->operation('fopen', $path, 'c+b');
+                }
+            } else {
+                $this->validateRegularFile($nameStat, $this->phpEuid, 0660);
+                $handle = $this->operation('fopen', $path, 'c+b');
+            }
+            if (!is_resource($handle) || $nameStat === null) {
+                throw new RuntimeException('open lock');
+            }
+
+            $descriptorStat = $this->operation('fstat', $handle);
+            if (!is_array($descriptorStat)) {
+                throw new RuntimeException('stat lock');
+            }
+            $this->validateRegularFile($descriptorStat, $this->phpEuid, 0660);
+            $this->assertSameInode($descriptorStat, $nameStat);
+
+            $deadline = hrtime(true) + $this->lockTimeoutMilliseconds * 1_000_000;
+            do {
+                $acquired = $this->operation('flock', $handle, LOCK_EX | LOCK_NB) === true;
+                if ($acquired) {
+                    break;
+                }
+                usleep(5_000);
+            } while (hrtime(true) < $deadline);
+
+            if (!$acquired) {
+                @fclose($handle);
+                $this->throwPublic('INSTANCE_CONFIG_BUSY');
+            }
+
+            $descriptorStat = $this->operation('fstat', $handle);
+            $lockedNameStat = $this->lstat($path);
+            if (!is_array($descriptorStat) || $lockedNameStat === null) {
+                throw new RuntimeException('restat lock');
+            }
+            $this->validateRegularFile($descriptorStat, $this->phpEuid, 0660);
+            $this->validateRegularFile($lockedNameStat, $this->phpEuid, 0660);
+            $this->assertSameInode($descriptorStat, $lockedNameStat);
+        } catch (Throwable $exception) {
+            if (is_resource($handle)) {
+                if ($acquired) {
+                    try {
+                        $this->operation('flock', $handle, LOCK_UN);
+                    } catch (Throwable) {
+                    }
+                }
+                @fclose($handle);
+            }
+            if (in_array($exception->getMessage(), ['INSTANCE_CONFIG_BUSY', 'SHARED_FILE_PERMISSION_INVALID'], true)) {
+                $this->throwPublic($exception->getMessage());
+            }
+            $this->throwPublic('SHARED_FILE_UNAVAILABLE');
+        }
+
+        try {
+            return $callback();
+        } finally {
+            try {
+                $this->operation('flock', $handle, LOCK_UN);
+            } catch (Throwable) {
+            }
+            @fclose($handle);
+        }
+    }
+
+    private function readRawDocument(string $logicalName): ?string
+    {
+        $definition = self::DOCUMENTS[$logicalName] ?? null;
+        if ($definition === null) {
+            throw new RuntimeException('SHARED_FILE_UNAVAILABLE');
+        }
+
+        $directory = dirname((string) $definition['path']);
+        $this->validateSharedDirectory($directory, $directory === 'config' ? 02770 : 0750);
+        $path = $this->path((string) $definition['path']);
+        $nameStat = $this->lstat($path);
+        if ($nameStat === null) {
+            return null;
+        }
+        $expectedOwner = $definition['owner'] === 'agent' ? $this->agentUid : $this->phpEuid;
+        $this->validateRegularFile($nameStat, $expectedOwner, (int) $definition['mode']);
+
+        $handle = $this->operation('fopen', $path, 'rb');
+        if (!is_resource($handle)) {
+            throw new RuntimeException('read file');
+        }
+        try {
+            $descriptorStat = $this->operation('fstat', $handle);
+            if (!is_array($descriptorStat)) {
+                throw new RuntimeException('stat file');
+            }
+            $this->validateRegularFile($descriptorStat, $expectedOwner, (int) $definition['mode']);
+            $this->assertSameInode($descriptorStat, $nameStat);
+
+            $raw = '';
+            while (!feof($handle) && strlen($raw) <= $this->maxJsonBytes) {
+                $chunk = fread($handle, min(8192, $this->maxJsonBytes + 1 - strlen($raw)));
+                if ($chunk === false) {
+                    throw new RuntimeException('read file');
+                }
+                $raw .= $chunk;
+                if ($chunk === '') {
+                    break;
+                }
+            }
+            if (strlen($raw) > $this->maxJsonBytes) {
+                throw new RuntimeException('SHARED_FILE_INVALID');
+            }
+
+            return $raw;
+        } finally {
+            @fclose($handle);
+        }
+    }
+
+    private function decodeStrictObject(string $raw): object
+    {
+        if ($raw === '' || !mb_check_encoding($raw, 'UTF-8')) {
+            throw new RuntimeException('SHARED_FILE_INVALID');
+        }
+        $offset = 0;
+        try {
+            $this->parseJsonValue($raw, $offset);
+            $this->skipWhitespace($raw, $offset);
+            if ($offset !== strlen($raw)) {
+                throw new RuntimeException('invalid json');
+            }
+            $decoded = json_decode($raw, false, 512, JSON_THROW_ON_ERROR);
+        } catch (Throwable) {
+            throw new RuntimeException('SHARED_FILE_INVALID');
+        }
+        if (!$decoded instanceof stdClass) {
+            throw new RuntimeException('SHARED_FILE_INVALID');
+        }
+
+        return $decoded;
+    }
+
+    private function parseJsonValue(string $json, int &$offset): void
+    {
+        $this->skipWhitespace($json, $offset);
+        $character = $json[$offset] ?? '';
+        if ($character === '{') {
+            $this->parseJsonObject($json, $offset);
+
+            return;
+        }
+        if ($character === '[') {
+            $this->parseJsonArray($json, $offset);
+
+            return;
+        }
+        if ($character === '"') {
+            $this->parseJsonString($json, $offset);
+
+            return;
+        }
+        foreach (['true', 'false', 'null'] as $literal) {
+            if (substr($json, $offset, strlen($literal)) === $literal) {
+                $offset += strlen($literal);
+
+                return;
+            }
+        }
+        if (preg_match('/\A-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?/', substr($json, $offset), $match) !== 1) {
+            throw new RuntimeException('invalid json');
+        }
+        $offset += strlen($match[0]);
+    }
+
+    private function parseJsonObject(string $json, int &$offset): void
+    {
+        $offset++;
+        $seen = [];
+        $this->skipWhitespace($json, $offset);
+        if (($json[$offset] ?? '') === '}') {
+            $offset++;
+
+            return;
+        }
+        while (true) {
+            $this->skipWhitespace($json, $offset);
+            $key = $this->parseJsonString($json, $offset);
+            if (array_key_exists($key, $seen)) {
+                throw new RuntimeException('duplicate json key');
+            }
+            $seen[$key] = true;
+            $this->skipWhitespace($json, $offset);
+            if (($json[$offset] ?? '') !== ':') {
+                throw new RuntimeException('invalid json');
+            }
+            $offset++;
+            $this->parseJsonValue($json, $offset);
+            $this->skipWhitespace($json, $offset);
+            $delimiter = $json[$offset] ?? '';
+            if ($delimiter === '}') {
+                $offset++;
+
+                return;
+            }
+            if ($delimiter !== ',') {
+                throw new RuntimeException('invalid json');
+            }
+            $offset++;
+        }
+    }
+
+    private function parseJsonArray(string $json, int &$offset): void
+    {
+        $offset++;
+        $this->skipWhitespace($json, $offset);
+        if (($json[$offset] ?? '') === ']') {
+            $offset++;
+
+            return;
+        }
+        while (true) {
+            $this->parseJsonValue($json, $offset);
+            $this->skipWhitespace($json, $offset);
+            $delimiter = $json[$offset] ?? '';
+            if ($delimiter === ']') {
+                $offset++;
+
+                return;
+            }
+            if ($delimiter !== ',') {
+                throw new RuntimeException('invalid json');
+            }
+            $offset++;
+        }
+    }
+
+    private function parseJsonString(string $json, int &$offset): string
+    {
+        if (($json[$offset] ?? '') !== '"') {
+            throw new RuntimeException('invalid json');
+        }
+        $start = $offset++;
+        $length = strlen($json);
+        while ($offset < $length) {
+            $character = $json[$offset++];
+            if ($character === '\\') {
+                if ($offset >= $length) {
+                    throw new RuntimeException('invalid json');
+                }
+                $offset++;
+                continue;
+            }
+            if ($character === '"') {
+                $encoded = substr($json, $start, $offset - $start);
+                $decoded = json_decode($encoded, false, 512, JSON_THROW_ON_ERROR);
+                if (!is_string($decoded)) {
+                    throw new RuntimeException('invalid json');
+                }
+
+                return $decoded;
+            }
+        }
+        throw new RuntimeException('invalid json');
+    }
+
+    private function skipWhitespace(string $json, int &$offset): void
+    {
+        $length = strlen($json);
+        while ($offset < $length && str_contains(" \t\r\n", $json[$offset])) {
+            $offset++;
+        }
+    }
+
+    private function validateSharedDirectory(string $relativePath, int $mode): void
+    {
+        $this->validateDirectory($this->root, 0750);
+        if ($relativePath !== '') {
+            $this->validateDirectory($this->path($relativePath), $mode);
+        }
+    }
+
+    private function validateDirectory(string $path, int $mode): void
+    {
+        $stat = $this->lstat($path);
+        if ($stat === null) {
+            throw new RuntimeException('SHARED_FILE_PERMISSION_INVALID');
+        }
+        $this->validateDirectoryStat($stat, $mode);
+    }
+
+    /** @param array<string|int, int> $stat */
+    private function validateDirectoryStat(array $stat, int $mode): void
+    {
+        if (($stat['mode'] & 0170000) !== 0040000
+            || $stat['uid'] !== $this->agentUid || $stat['gid'] !== $this->expectedGid
+            || ($stat['mode'] & 07777) !== $mode) {
+            throw new RuntimeException('SHARED_FILE_PERMISSION_INVALID');
+        }
+    }
+
+    /** @param array<string|int, int> $stat */
+    private function validateRegularFile(array $stat, int $owner, int $mode): void
+    {
+        if (($stat['mode'] & 0170000) !== 0100000 || $stat['nlink'] !== 1
+            || $stat['uid'] !== $owner || $stat['gid'] !== $this->expectedGid
+            || ($stat['mode'] & 07777) !== $mode) {
+            throw new RuntimeException('SHARED_FILE_PERMISSION_INVALID');
+        }
+    }
+
+    /**
+     * @param array<string|int, int> $left
+     * @param array<string|int, int> $right
+     */
+    private function assertSameInode(array $left, array $right): void
+    {
+        if ($left['dev'] !== $right['dev'] || $left['ino'] !== $right['ino']) {
+            throw new RuntimeException('SHARED_FILE_PERMISSION_INVALID');
+        }
+    }
+
+    /** @return array<string|int, int>|null */
+    private function lstat(string $path): ?array
+    {
+        $stat = $this->operation('lstat', $path);
+        if (is_array($stat)) {
+            return $stat;
+        }
+        if (file_exists($path) || is_link($path)) {
+            throw new RuntimeException('SHARED_FILE_UNAVAILABLE');
+        }
+
+        return null;
+    }
+
+    private function classifyUncertainVisibleState(string $logicalName, string $intendedBytes): void
+    {
+        $checkpoint = 'uncertain_reread_missing';
+        try {
+            $visible = $this->readRawDocument($logicalName);
+            if ($visible !== null) {
+                $checkpoint = hash_equals($intendedBytes, $visible)
+                    ? 'uncertain_reread_match'
+                    : 'uncertain_reread_mismatch';
+            }
+        } catch (Throwable) {
+            $checkpoint = file_exists($this->path((string) self::DOCUMENTS[$logicalName]['path']))
+                ? 'uncertain_reread_mismatch'
+                : 'uncertain_reread_missing';
+        }
+        try {
+            $this->checkpoint($checkpoint);
+        } catch (Throwable) {
+        }
+    }
+
+    private function checkpoint(string $name): void
+    {
+        $this->operation('fault', $name);
+    }
+
+    private function path(string $relativePath): string
+    {
+        return rtrim($this->root, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR
+            . str_replace('/', DIRECTORY_SEPARATOR, $relativePath);
+    }
+
+    private function operation(string $name, mixed ...$arguments): mixed
+    {
+        return ($this->operations[$name])(...$arguments);
+    }
+
+    /** @return array<string, callable> */
+    private function nativeOperations(): array
+    {
+        return [
+            'lstat' => static fn(string $path): array|false => @lstat($path),
+            'fstat' => static fn($handle): array|false => @fstat($handle),
+            'fopen' => static fn(string $path, string $mode) => @fopen($path, $mode),
+            'fwrite' => static fn($handle, string $bytes): int|false => @fwrite($handle, $bytes),
+            'fflush' => static fn($handle): bool => @fflush($handle),
+            'fsync' => static fn($handle): bool => @fsync($handle),
+            'rename' => static fn(string $from, string $to): bool => @rename($from, $to),
+            'flock' => static fn($handle, int $operation): bool => @flock($handle, $operation),
+            'open_dir' => static fn(string $path) => @fopen($path, 'r'),
+            'close_dir' => static fn($handle): bool => @fclose($handle),
+            'fault' => static fn(string $checkpoint): null => null,
+        ];
+    }
+
+    private function throwPublic(string $code): never
+    {
+        throw new RuntimeException($code);
+    }
+}
