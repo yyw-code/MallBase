@@ -112,4 +112,35 @@ if [ ! -f /app/vendor/autoload.php ] && [ -f /app/composer.json ]; then
     composer install --working-dir /app --no-interaction
 fi
 
+# runtime_instance_id 由容器 hostname 稳定派生，同一容器重启保持不变；
+# boot_id 每次 entrypoint 执行重新生成，旧进程和新启动不会共享 boot 身份。
+container_identity_seed=$(cat /etc/hostname 2>/dev/null || true)
+if [ -z "$container_identity_seed" ]; then
+    echo ">>> 无法确定容器运行身份，拒绝启动" >&2
+    exit 1
+fi
+
+MALLBASE_RUNTIME_INSTANCE_ID=$(php -r '
+$bytes = hash("sha256", $argv[1], true);
+$bytes[6] = chr((ord($bytes[6]) & 0x0f) | 0x40);
+$bytes[8] = chr((ord($bytes[8]) & 0x3f) | 0x80);
+$hex = bin2hex(substr($bytes, 0, 16));
+printf("%s-%s-%s-%s-%s", substr($hex, 0, 8), substr($hex, 8, 4), substr($hex, 12, 4), substr($hex, 16, 4), substr($hex, 20, 12));
+' "$container_identity_seed")
+MALLBASE_RUNTIME_BOOT_ID=$(php -r '
+$bytes = random_bytes(16);
+$bytes[6] = chr((ord($bytes[6]) & 0x0f) | 0x40);
+$bytes[8] = chr((ord($bytes[8]) & 0x3f) | 0x80);
+$hex = bin2hex($bytes);
+printf("%s-%s-%s-%s-%s", substr($hex, 0, 8), substr($hex, 8, 4), substr($hex, 12, 4), substr($hex, 16, 4), substr($hex, 20, 12));
+')
+if ! printf '%s\n' "$MALLBASE_RUNTIME_INSTANCE_ID" \
+    | grep -Eq '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$' \
+    || ! printf '%s\n' "$MALLBASE_RUNTIME_BOOT_ID" \
+    | grep -Eq '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'; then
+    echo ">>> 生成容器运行身份失败，拒绝启动" >&2
+    exit 1
+fi
+export MALLBASE_RUNTIME_INSTANCE_ID MALLBASE_RUNTIME_BOOT_ID
+
 exec "$@"

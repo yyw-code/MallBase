@@ -2,6 +2,7 @@
 // 全局中间件定义文件
 use app\middleware\CorsMiddleware;
 use app\middleware\InstallCheckMiddleware;
+use app\middleware\UpgradeTrafficGateMiddleware;
 
 return [
     // 全局请求缓存
@@ -12,4 +13,5 @@ return [
     // \think\middleware\SessionInit::class
     CorsMiddleware::class,
     InstallCheckMiddleware::class,
+    UpgradeTrafficGateMiddleware::class,
 ];

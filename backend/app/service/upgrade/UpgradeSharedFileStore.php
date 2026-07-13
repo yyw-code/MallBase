@@ -22,6 +22,7 @@ final class UpgradeSharedFileStore
         'upgrade_gate' => ['path' => 'state/upgrade-gate.json', 'owner' => 'php', 'mode' => 0660, 'directory_mode' => 02770, 'write' => true],
         'agent_status' => ['path' => 'run/agent-status.json', 'owner' => 'agent', 'mode' => 0660, 'directory_mode' => 02770, 'write' => false],
         'namespace_projection' => ['path' => 'staging/storage-namespace.json', 'owner' => 'agent', 'mode' => 0444, 'directory_mode' => 0750, 'write' => false],
+        'runtime_retirement_evidence' => ['path' => 'run/runtime-retirement-evidence.json', 'owner' => 'php', 'mode' => 0660, 'directory_mode' => 02770, 'write' => true],
     ];
 
     private const INSTANCE_LOCK_PATH = 'run/instance-config.lock';
@@ -106,7 +107,7 @@ final class UpgradeSharedFileStore
             $this->throwPublic('SHARED_FILE_INVALID');
         }
 
-        $this->writeEncodedDefinition($logicalName, $definition, $bytes);
+        $this->writeEncodedDefinition($definition, $bytes);
     }
 
     public function readRuntimeInstance(string $fileName): ?object
@@ -140,7 +141,41 @@ final class UpgradeSharedFileStore
         if (!is_string($bytes) || strlen($bytes) > $this->maxJsonBytes) {
             $this->throwPublic('SHARED_FILE_INVALID');
         }
-        $this->writeEncodedDefinition('runtime:' . $fileName, $definition, $bytes);
+        $this->writeEncodedDefinition($definition, $bytes);
+    }
+
+    public function readDrainCheckpoint(string $jobId): ?object
+    {
+        $definition = $this->drainCheckpointDefinition($jobId);
+        try {
+            $raw = $this->readRawDefinition($definition);
+
+            return $raw === null ? null : $this->decodeStrictObject($raw);
+        } catch (Throwable $exception) {
+            $code = $exception->getMessage() === 'SHARED_FILE_INVALID'
+                ? 'SHARED_FILE_INVALID'
+                : ($exception->getMessage() === 'SHARED_FILE_PERMISSION_INVALID'
+                    ? 'SHARED_FILE_PERMISSION_INVALID'
+                    : 'SHARED_FILE_UNAVAILABLE');
+            $this->throwPublic($code);
+        }
+    }
+
+    public function writeDrainCheckpoint(string $jobId, object $document): void
+    {
+        $definition = $this->drainCheckpointDefinition($jobId);
+        try {
+            $bytes = json_encode(
+                $document,
+                JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION,
+            );
+        } catch (JsonException) {
+            $this->throwPublic('SHARED_FILE_INVALID');
+        }
+        if (!is_string($bytes) || strlen($bytes) > $this->maxJsonBytes) {
+            $this->throwPublic('SHARED_FILE_INVALID');
+        }
+        $this->writeEncodedDefinition($definition, $bytes);
     }
 
     /** @return list<string> */
@@ -172,7 +207,7 @@ final class UpgradeSharedFileStore
     }
 
     /** @param array{path:string,owner:string,mode:int,directory_mode:int,write:bool} $definition */
-    private function writeEncodedDefinition(string $logicalName, array $definition, string $bytes): void
+    private function writeEncodedDefinition(array $definition, string $bytes): void
     {
 
         $renamed = false;
@@ -300,6 +335,27 @@ final class UpgradeSharedFileStore
     public function withRuntimeRegistryLock(Closure $callback): mixed
     {
         return $this->withLock(self::RUNTIME_REGISTRY_LOCK_PATH, 'RUNTIME_REGISTRY_BUSY', $callback);
+    }
+
+    public function withDrainCheckpointLock(Closure $callback): mixed
+    {
+        return $this->withLock(self::UPGRADE_GATE_LOCK_PATH, 'UPGRADE_GATE_BUSY', $callback);
+    }
+
+    /** @return array{path:string,owner:string,mode:int,directory_mode:int,write:bool} */
+    private function drainCheckpointDefinition(string $jobId): array
+    {
+        if (preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/D', $jobId) !== 1) {
+            $this->throwPublic('SHARED_FILE_UNAVAILABLE');
+        }
+
+        return [
+            'path' => 'jobs/drain-' . $jobId . '.json',
+            'owner' => 'php',
+            'mode' => 0660,
+            'directory_mode' => 02770,
+            'write' => true,
+        ];
     }
 
     private function withLock(string $relativePath, string $busyCode, Closure $callback): mixed
@@ -465,7 +521,8 @@ final class UpgradeSharedFileStore
     /** @return array{path:string,owner:string,mode:int,directory_mode:int,write:bool} */
     private function runtimeDefinition(string $fileName): array
     {
-        if (preg_match('/^[0-9a-f-]{36}-[0-9a-f-]{36}-(?:http|queue|cron)\.json$/D', $fileName) !== 1
+        $uuid = '[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}';
+        if (preg_match('/^' . $uuid . '-' . $uuid . '-(?:http|queue|cron)\.json$/D', $fileName) !== 1
             || str_contains($fileName, '..')) {
             throw new RuntimeException('SHARED_FILE_UNAVAILABLE');
         }

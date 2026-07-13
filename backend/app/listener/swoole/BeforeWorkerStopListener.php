@@ -4,8 +4,10 @@ declare (strict_types=1);
 
 namespace app\listener\swoole;
 
+use app\service\upgrade\UpgradeRuntimeLifecycle;
 use Swoole\Timer;
 use think\swoole\Manager;
+use Throwable;
 
 /**
  * Worker 停止前监听器
@@ -15,16 +17,23 @@ class BeforeWorkerStopListener
 {
     public function handle(Manager $manager): void
     {
-        // 1️⃣ 清理所有定时器
         Timer::clearAll();
-
-        // 2️⃣ 标记 worker 正在退出（可选）
         defined('WORKER_STOPPING') || define('WORKER_STOPPING', true);
 
-        // 3️⃣ 关闭自定义资源（示例）
-        // MyTcpClient::close();
-        // MyRedisPool::close();
-
-//        echo "[Swoole] Worker stopping, resources cleaned\n";
+        if (!defined('MALLBASE_UPGRADE_WORKER_REGISTERED')) {
+            return;
+        }
+        try {
+            $application = $manager->getApplication();
+            if ($application === null || !$application->bound(UpgradeRuntimeLifecycle::class)) {
+                throw new \RuntimeException('UPGRADE_RUNTIME_LIFECYCLE_UNAVAILABLE');
+            }
+            /** @var UpgradeRuntimeLifecycle $lifecycle */
+            $lifecycle = $application->make(UpgradeRuntimeLifecycle::class);
+            $lifecycle->stopWorker();
+        } catch (Throwable) {
+            // 退出仍继续，进程退出时内核也会释放该进程持有的 SH lock。
+            fwrite(STDERR, "[MallBase Upgrade] Worker 生命周期锁释放失败；自动升级保持安全关闭。\n");
+        }
     }
 }

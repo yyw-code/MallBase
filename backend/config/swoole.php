@@ -3,6 +3,12 @@
 $installLockPath = runtime_path() . 'install' . DIRECTORY_SEPARATOR . 'install.lock';
 $isInstalled = is_file($installLockPath);
 $swooleQueueEnabled = filter_var(env('SWOOLE_QUEUE_ENABLE', false), FILTER_VALIDATE_BOOLEAN);
+$upgradeRuntimeEnabled = $isInstalled
+    && filter_var(env('MALLBASE_UPGRADE_RUNTIME_ENABLE', false), FILTER_VALIDATE_BOOLEAN);
+$upgradeRuntimeRequired = filter_var(
+    env('MALLBASE_UPGRADE_RUNTIME_FAILURE_BLOCKS_COMMERCIAL_STARTUP', false),
+    FILTER_VALIDATE_BOOLEAN,
+);
 $httpOptions = [
     // 安全默认：定期重启 worker，避免内存泄漏累积
     'max_request'       => (int) env('SWOOLE_MAX_REQUEST', 2000),
@@ -79,6 +85,11 @@ return [
                 'worker_num' => 1,
             ],
         ],
+    ],
+    'upgrade_runtime' => [
+        'enable' => $upgradeRuntimeEnabled,
+        'failure_blocks_commercial_startup' => $upgradeRuntimeRequired,
+        'heartbeat_interval_milliseconds' => 5000,
     ],
     'hot_update' => [
         'enable'  => env('APP_DEBUG', false),

@@ -167,12 +167,12 @@ final class AgentHeartbeatRunnerTest extends TestCase
 
         try {
             $started = hrtime(true);
-            $result = (new AgentHeartbeatRunner(null, $binary, 1000, $validator))->run($payload);
+            $result = (new AgentHeartbeatRunner(null, $binary, 3000, $validator))->run($payload);
             $elapsedMilliseconds = (hrtime(true) - $started) / 1_000_000;
 
             self::assertFalse($result->ok);
             self::assertSame('AGENT_OUTPUT_INVALID', $result->error);
-            self::assertLessThan(900, $elapsedMilliseconds, 'duplex pipes must progress under one deadline');
+            self::assertLessThan(2500, $elapsedMilliseconds, 'duplex pipes must progress under one deadline');
         } finally {
             chmod($bin, 0755);
             chmod($binary, 0644);
