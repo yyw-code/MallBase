@@ -2,176 +2,287 @@
 
 declare(strict_types=1);
 
-namespace {
-    if (!function_exists('config')) {
-        function config(string $name, mixed $default = null): mixed
-        {
-            return $default;
-        }
+namespace Tests\Unit\Install;
+
+use app\service\install\AgentHeartbeatClient;
+use app\service\install\AgentHeartbeatPayloadFactory;
+use app\service\install\AgentHeartbeatResult;
+use app\service\install\AgentInstanceStateStore;
+use app\service\install\AgentPlatformBootstrapService;
+use app\service\install\AgentRuntimeLeaseReader;
+use app\service\install\InstallLockService;
+use app\service\install\PlatformReporter;
+use PHPUnit\Framework\TestCase;
+use RuntimeException;
+
+final class PlatformReporterTest extends TestCase
+{
+    private string $lockPath;
+    private string $versionPath;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->lockPath = sys_get_temp_dir() . '/mallbase-platform-report-' . bin2hex(random_bytes(8)) . '.lock';
+        $this->versionPath = sys_get_temp_dir() . '/mallbase-platform-version-' . bin2hex(random_bytes(8)) . '.json';
+        file_put_contents($this->versionPath, '{"version":"1.0.0"}');
     }
 
-    if (!function_exists('root_path')) {
-        function root_path(): string
-        {
-            return dirname(__DIR__, 3) . DIRECTORY_SEPARATOR;
-        }
+    protected function tearDown(): void
+    {
+        @unlink($this->lockPath);
+        @unlink($this->versionPath);
+        parent::tearDown();
+    }
+
+    public function testUninstalledDisabledAndLiveServeInstancesNeverSpawnHeartbeat(): void
+    {
+        $client = new ReporterQueueClient([]);
+        $store = new ReporterMemoryStore($this->confirmed());
+        $reporter = $this->reporter(new InstallLockService($this->lockPath), $store, $client, true);
+        $reporter->tick();
+        self::assertCount(0, $client->payloads);
+
+        $legacy = $this->installedLock();
+        $store->instance['disabled'] = true;
+        $this->reporter($legacy, $store, $client, false)->tick();
+        self::assertCount(0, $client->payloads);
+
+        $store->instance['disabled'] = false;
+        $this->reporter($legacy, $store, $client, true)->tick();
+        self::assertCount(0, $client->payloads);
+        self::assertSame(0, $store->reservationCount);
+    }
+
+    public function testConfirmedInstanceUsesOneSharedReservationAndRecordsSuccess(): void
+    {
+        $legacy = $this->installedLock();
+        $store = new ReporterMemoryStore($this->confirmed());
+        $client = new ReporterQueueClient([
+            new AgentHeartbeatResult(true, ReporterMemoryStore::INSTANCE_ID),
+        ]);
+        $reporter = $this->reporter($legacy, $store, $client, false);
+
+        $reporter->tick('admin_web');
+        $reporter->tick('admin_web');
+
+        self::assertCount(1, $client->payloads);
+        self::assertSame('mbt_token', $client->payloads[0]['token']);
+        self::assertSame(1, $store->reservationCount);
+        self::assertSame([
+            'success' => true,
+            'next' => 86400,
+            'error' => '',
+        ], $store->lastResult);
+    }
+
+    public function testHeartbeatFailureUsesStableShortRetryWithoutLeakingRunnerText(): void
+    {
+        $legacy = $this->installedLock();
+        $store = new ReporterMemoryStore($this->confirmed());
+        $client = new ReporterQueueClient([
+            AgentHeartbeatResult::failure('secret platform token'),
+        ]);
+
+        $this->reporter($legacy, $store, $client, false)->tick('backend_php');
+
+        self::assertSame([
+            'success' => false,
+            'next' => 300,
+            'error' => 'AGENT_HEARTBEAT_FAILED',
+        ], $store->lastResult);
+    }
+
+    public function testActivationDelegatesToCrashSafeBootstrapAndDoesNotUseHttpTransport(): void
+    {
+        $legacy = $this->installedLock();
+        $store = new ReporterMemoryStore($this->activating());
+        $client = new ReporterQueueClient([
+            new AgentHeartbeatResult(true, ReporterMemoryStore::INSTANCE_ID, 'mbt_token', 86400),
+            new AgentHeartbeatResult(true, ReporterMemoryStore::INSTANCE_ID),
+        ]);
+
+        $this->reporter($legacy, $store, $client, false)->tick('backend_php');
+
+        self::assertSame('confirmed', $store->instance['activation_state']);
+        self::assertSame('mbt_token', $store->instance['token']);
+        self::assertCount(2, $client->payloads);
+        self::assertSame('', $client->payloads[0]['token']);
+        self::assertSame('mbt_token', $client->payloads[1]['token']);
+    }
+
+    private function reporter(
+        InstallLockService $legacy,
+        ReporterMemoryStore $store,
+        ReporterQueueClient $client,
+        bool $leaseAlive,
+    ): PlatformReporter {
+        $payloads = new AgentHeartbeatPayloadFactory($this->versionPath, static fn(): array => []);
+        $clock = static fn(): int => 1000;
+        $bootstrap = new AgentPlatformBootstrapService($store, $client, $payloads, $legacy, $clock);
+
+        return new PlatformReporter(
+            $legacy,
+            $store,
+            $client,
+            new ReporterLease($leaseAlive),
+            $payloads,
+            $bootstrap,
+            $clock,
+            ['reservation_interval' => 60, 'report_interval' => 86400, 'retry_interval' => 300],
+        );
+    }
+
+    private function installedLock(): InstallLockService
+    {
+        $legacy = new InstallLockService($this->lockPath);
+        $legacy->writeInstalledLock('2026-07-13 12:00:00');
+
+        return $legacy;
+    }
+
+    /** @return array<string,mixed> */
+    private function confirmed(): array
+    {
+        $instance = $this->activating();
+        $instance['activation_state'] = 'confirmed';
+        $instance['token'] = 'mbt_token';
+        $instance['activation_secret'] = '';
+        $instance['activation_secret_expires_at'] = 0;
+
+        return $instance;
+    }
+
+    /** @return array<string,mixed> */
+    private function activating(): array
+    {
+        return [
+            'schema_version' => 1,
+            'revision' => 1,
+            'platform_base_url' => 'https://platform.gosowong.cn',
+            'upgrade_namespace_id' => 'mbs_test',
+            'instance_id' => ReporterMemoryStore::INSTANCE_ID,
+            'token' => '',
+            'activation_secret' => 'activation-proof',
+            'activation_generation' => ReporterMemoryStore::GENERATION,
+            'activation_secret_expires_at' => 1900,
+            'activation_state' => 'activating',
+            'disabled' => false,
+            'components' => [],
+            'report' => [],
+            'updated_at' => 1000,
+        ];
     }
 }
 
-namespace Tests\Unit\Install {
-
-    use app\service\install\InstallLockService;
-    use app\service\install\PlatformReporter;
-    use PHPUnit\Framework\TestCase;
-
-    final class PlatformReporterTest extends TestCase
+final class ReporterLease implements AgentRuntimeLeaseReader
+{
+    public function __construct(private readonly bool $alive)
     {
-        private string $lockPath;
+    }
 
-        protected function setUp(): void
-        {
-            parent::setUp();
+    public function isServeLeaseAlive(int $now): bool
+    {
+        return $this->alive;
+    }
+}
 
-            $dir = sys_get_temp_dir() . '/mallbase-platform-report-' . bin2hex(random_bytes(6));
-            mkdir($dir, 0755, true);
-            $this->lockPath = $dir . '/install.lock';
+final class ReporterQueueClient implements AgentHeartbeatClient
+{
+    /** @var list<array<string,mixed>> */
+    public array $payloads = [];
+
+    /** @param list<AgentHeartbeatResult> $results */
+    public function __construct(private array $results)
+    {
+    }
+
+    public function run(array $payload): AgentHeartbeatResult
+    {
+        $this->payloads[] = $payload;
+        if ($this->results === []) {
+            throw new RuntimeException('unexpected heartbeat');
         }
 
-        protected function tearDown(): void
-        {
-            if (is_file($this->lockPath)) {
-                unlink($this->lockPath);
-            }
+        return array_shift($this->results);
+    }
+}
 
-            $dir = dirname($this->lockPath);
-            if (is_dir($dir)) {
-                rmdir($dir);
-            }
+final class ReporterMemoryStore implements AgentInstanceStateStore
+{
+    public const INSTANCE_ID = 'c6f83b5e-aadc-4a65-9c71-79a64aa22e58';
+    public const GENERATION = '550e8400-e29b-41d4-a716-446655440000';
 
-            parent::tearDown();
+    public int $reservationCount = 0;
+
+    /** @var array{success:bool,next:int,error:string}|null */
+    public ?array $lastResult = null;
+
+    private bool $reserved = false;
+
+    /** @param array<string,mixed> $instance */
+    public function __construct(public array $instance)
+    {
+    }
+
+    public function load(): ?array
+    {
+        return $this->instance;
+    }
+
+    public function initializeFromLegacy(InstallLockService $legacy, int $now): array
+    {
+        return $this->instance;
+    }
+
+    public function reserveReportWindow(string $componentType, int $now, int $reservationSeconds): ?array
+    {
+        if ($this->reserved) {
+            return null;
         }
+        $this->reserved = true;
+        $this->reservationCount++;
+        $this->instance['revision']++;
+        $this->instance['components'][$componentType] = $now;
 
-        public function testActivationFailureKeepsShortRetryWindow(): void
-        {
-            $lock = new InstallLockService($this->lockPath);
-            $lock->writeInstalledLock('2026-06-19 12:00:00');
-            $before = time();
+        return [
+            'reservation_id' => '018f5d35-3f42-7a31-a731-9e45df3356c2',
+            'reservation_revision' => $this->instance['revision'],
+            'instance' => $this->instance,
+        ];
+    }
 
-            $reporter = new PlatformReporter($lock, static fn() => ['_error' => 'http_500']);
-            $reporter->tick('admin_web');
+    public function recordReportResult(string $reservationId, int $reservationRevision, bool $success, int $now, int $nextReportAfterSeconds, string $errorCode = ''): bool
+    {
+        $this->lastResult = ['success' => $success, 'next' => $nextReportAfterSeconds, 'error' => $errorCode];
 
-            $state = $lock->getPlatformState();
-            $this->assertSame('http_500', $state['last_report_error'] ?? null);
-            $this->assertArrayNotHasKey('last_report_at', $state);
-            $this->assertArrayNotHasKey('instance_id', $state);
-            $this->assertGreaterThanOrEqual($before + 300, $state['next_report_after'] ?? 0);
-            $this->assertLessThanOrEqual(time() + 300, $state['next_report_after'] ?? 0);
-        }
+        return true;
+    }
 
-        public function testActivationSuccessStoresCredentialsAndDailyWindow(): void
-        {
-            $lock = new InstallLockService($this->lockPath);
-            $lock->writeInstalledLock('2026-06-19 12:00:00');
-            $before = time();
-            $calls = [];
+    public function storeActivationResponse(string $generation, int $expectedRevision, string $instanceId, string $token, int $now): array
+    {
+        $this->instance['revision']++;
+        $this->instance['token'] = $token;
+        $this->instance['activation_state'] = 'confirming';
 
-            $reporter = new PlatformReporter($lock, static function (string $path, array $payload) use (&$calls): array {
-                $calls[] = compact('path', 'payload');
+        return $this->instance;
+    }
 
-                return [
-                    'data' => [
-                        'instance_id' => 'd3ec761b-c5d1-4663-8c76-7d2d351efad5',
-                        'token' => 'mbt_token',
-                    ],
-                ];
-            });
-            $reporter->tick('backend_php');
+    public function confirmActivation(string $generation, int $expectedRevision, int $now): array
+    {
+        $this->instance['revision']++;
+        $this->instance['activation_state'] = 'confirmed';
+        $this->instance['activation_secret'] = '';
+        $this->instance['activation_secret_expires_at'] = 0;
 
-            $this->assertSame('/api/v1/telemetry/activate', $calls[0]['path'] ?? null);
-            $this->assertSame('mallbase', $calls[0]['payload']['app_code'] ?? null);
+        return $this->instance;
+    }
 
-            $state = $lock->getPlatformState();
-            $this->assertSame('d3ec761b-c5d1-4663-8c76-7d2d351efad5', $state['instance_id'] ?? null);
-            $this->assertSame('mbt_token', $state['token'] ?? null);
-            $this->assertSame('', $state['last_report_error'] ?? null);
-            $this->assertGreaterThanOrEqual($before, $state['last_report_at'] ?? 0);
-            $this->assertGreaterThanOrEqual($before + 86400, $state['next_report_after'] ?? 0);
-            $this->assertLessThanOrEqual(time() + 86400, $state['next_report_after'] ?? 0);
-        }
+    public function markExpiredActivationRecoveryRequired(int $now): array
+    {
+        $this->instance['revision']++;
+        $this->instance['activation_state'] = 'recovery_required';
 
-        public function testHeartbeatFailureKeepsShortRetryWindow(): void
-        {
-            $lock = new InstallLockService($this->lockPath);
-            $lock->writeInstalledLock('2026-06-19 12:00:00');
-            $lock->savePlatformState([
-                'instance_id' => 'd3ec761b-c5d1-4663-8c76-7d2d351efad5',
-                'token' => 'mbt_token',
-            ]);
-            $before = time();
-            $calls = [];
-
-            $reporter = new PlatformReporter($lock, static function (string $path, array $payload, array $headers) use (&$calls): array {
-                $calls[] = compact('path', 'payload', 'headers');
-
-                return ['data' => ['accepted' => false]];
-            });
-            $reporter->tick('admin_web');
-
-            $this->assertSame('/api/v1/telemetry/heartbeat', $calls[0]['path'] ?? null);
-            $this->assertSame('Bearer mbt_token', $calls[0]['headers']['Authorization'] ?? null);
-
-            $state = $lock->getPlatformState();
-            $this->assertSame('heartbeat_rejected', $state['last_report_error'] ?? null);
-            $this->assertArrayNotHasKey('last_report_at', $state);
-            $this->assertGreaterThanOrEqual($before + 300, $state['next_report_after'] ?? 0);
-            $this->assertLessThanOrEqual(time() + 300, $state['next_report_after'] ?? 0);
-        }
-
-        public function testPendingActivationWindowIsRepairedAfterOldFailure(): void
-        {
-            $lock = new InstallLockService($this->lockPath);
-            $lock->writeInstalledLock('2026-06-19 12:00:00');
-            $lock->savePlatformState([
-                'next_report_after' => time() + 86400,
-            ]);
-            $calls = [];
-
-            $reporter = new PlatformReporter($lock, static function (string $path) use (&$calls): array {
-                $calls[] = $path;
-
-                return ['_error' => 'http_500'];
-            });
-            $reporter->tick('admin_web');
-
-            $state = $lock->getPlatformState();
-            $this->assertSame(['/api/v1/telemetry/activate'], $calls);
-            $this->assertSame('http_500', $state['last_report_error'] ?? null);
-            $this->assertLessThanOrEqual(time() + 300, $state['next_report_after'] ?? 0);
-        }
-
-        public function testFormatHeadersAcceptsAssociativeHeaders(): void
-        {
-            $method = new \ReflectionMethod(PlatformReporter::class, 'formatHeaders');
-            $reporter = new PlatformReporter();
-
-            $this->assertSame([
-                'Authorization: Bearer mbt_token',
-                'X-Test: 1',
-                'Accept: application/json',
-            ], $method->invoke($reporter, [
-                'Authorization' => 'Bearer mbt_token',
-                'X-Test' => '1',
-                'Accept: application/json',
-            ]));
-        }
-
-        public function testNetworkTimeoutsAllowContainerDnsLatency(): void
-        {
-            $connectTimeout = new \ReflectionClassConstant(PlatformReporter::class, 'CONNECT_TIMEOUT_MS');
-            $requestTimeout = new \ReflectionClassConstant(PlatformReporter::class, 'TIMEOUT_MS');
-
-            $this->assertGreaterThanOrEqual(2000, $connectTimeout->getValue());
-            $this->assertGreaterThanOrEqual(5000, $requestTimeout->getValue());
-        }
+        return $this->instance;
     }
 }

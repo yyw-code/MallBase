@@ -54,6 +54,7 @@ final class UpgradeSharedFileStoreTest extends TestCase
         $this->assertArrayHasKey('agent_uid', $configuration);
         $this->assertArrayHasKey('php_euid', $configuration);
         $this->assertArrayHasKey('upgrade_namespace_id', $configuration);
+        $this->assertSame(5000, $configuration['heartbeat_timeout_milliseconds']);
         $this->assertArrayNotHasKey('binary', $configuration);
         $this->assertArrayNotHasKey('relative_path', $configuration);
     }
@@ -85,6 +86,7 @@ final class UpgradeSharedFileStoreTest extends TestCase
         yield 'reservation decimal' => ['MALLBASE_AGENT_RESERVATION_INTERVAL', '1.0', 'reservation_interval'];
         yield 'component overflow' => ['MALLBASE_AGENT_COMPONENT_SEEN_THROTTLE', '4102444801', 'component_seen_throttle'];
         yield 'lock timeout overflow' => ['MALLBASE_AGENT_LOCK_TIMEOUT_MS', '60001', 'instance_lock_timeout_milliseconds'];
+        yield 'heartbeat timeout overflow' => ['MALLBASE_AGENT_HEARTBEAT_TIMEOUT_MS', '60001', 'heartbeat_timeout_milliseconds'];
     }
 
     public function testConfigurationRejectsWhitespacePaddedNamespaceInsteadOfTrimmingIt(): void
@@ -115,6 +117,18 @@ final class UpgradeSharedFileStoreTest extends TestCase
         $this->assertNull($store->readJson('instance'));
         $this->assertNull($store->readJson('namespace_projection'));
         $this->assertDirectoryDoesNotExist($this->root . '/state');
+    }
+
+    public function testAgentStatusUsesSharedRunDirectoryModeAndAgentOwnedLeaf(): void
+    {
+        file_put_contents($this->root . '/run/agent-status.json', '{"schema_version":1,"mode":"serve"}');
+        chmod($this->root . '/run/agent-status.json', 0660);
+
+        $status = $this->store()->readJson('agent_status');
+
+        self::assertNotNull($status);
+        self::assertSame(1, $status->schema_version);
+        self::assertSame('serve', $status->mode);
     }
 
     public function testReadAndWriteUseCanonicalCompactJsonObjectBytes(): void
@@ -155,6 +169,7 @@ final class UpgradeSharedFileStoreTest extends TestCase
         yield 'multiple' => ['{} {}'];
         yield 'trailing comma' => ['{"a":1,}'];
         yield 'invalid number' => ['{"a":01}'];
+        yield 'excessive depth' => ['{"a":' . str_repeat('[', 34) . '0' . str_repeat(']', 34) . '}'];
         yield 'empty' => [''];
     }
 
@@ -579,7 +594,8 @@ final class UpgradeSharedFileStoreTest extends TestCase
 
     private function expectedOwner(string $path, bool $directory): int
     {
-        if ($directory || str_ends_with($path, '/staging/storage-namespace.json')) {
+        if ($directory || str_ends_with($path, '/staging/storage-namespace.json')
+            || str_ends_with($path, '/run/agent-status.json')) {
             return self::AGENT_UID;
         }
 

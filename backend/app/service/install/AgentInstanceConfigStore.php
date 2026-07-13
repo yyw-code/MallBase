@@ -14,7 +14,7 @@ use Throwable;
  *
  * 服务仅保存不可变配置；所有请求态和并发态均落在共享文件及固定锁中。
  */
-final class AgentInstanceConfigStore
+final class AgentInstanceConfigStore implements AgentInstanceStateStore
 {
     private const MAX_TIMESTAMP = 4_102_444_800;
 
@@ -569,24 +569,27 @@ final class AgentInstanceConfigStore
     private function assertLegacyJsonHasUniqueKeys(string $json): void
     {
         $offset = 0;
-        $this->scanLegacyJsonValue($json, $offset);
+        $this->scanLegacyJsonValue($json, $offset, 0);
         $this->skipLegacyJsonWhitespace($json, $offset);
         if ($offset !== strlen($json)) {
             throw new RuntimeException('invalid legacy json');
         }
     }
 
-    private function scanLegacyJsonValue(string $json, int &$offset): void
+    private function scanLegacyJsonValue(string $json, int &$offset, int $depth): void
     {
+        if ($depth > 32) {
+            throw new RuntimeException('invalid legacy json');
+        }
         $this->skipLegacyJsonWhitespace($json, $offset);
         $character = $json[$offset] ?? '';
         if ($character === '{') {
-            $this->scanLegacyJsonObject($json, $offset);
+            $this->scanLegacyJsonObject($json, $offset, $depth + 1);
 
             return;
         }
         if ($character === '[') {
-            $this->scanLegacyJsonArray($json, $offset);
+            $this->scanLegacyJsonArray($json, $offset, $depth + 1);
 
             return;
         }
@@ -608,7 +611,7 @@ final class AgentInstanceConfigStore
         $offset += strlen($match[0]);
     }
 
-    private function scanLegacyJsonObject(string $json, int &$offset): void
+    private function scanLegacyJsonObject(string $json, int &$offset, int $depth): void
     {
         $offset++;
         $seen = [];
@@ -630,7 +633,7 @@ final class AgentInstanceConfigStore
                 throw new RuntimeException('invalid legacy json');
             }
             $offset++;
-            $this->scanLegacyJsonValue($json, $offset);
+            $this->scanLegacyJsonValue($json, $offset, $depth);
             $this->skipLegacyJsonWhitespace($json, $offset);
             $delimiter = $json[$offset] ?? '';
             if ($delimiter === '}') {
@@ -645,7 +648,7 @@ final class AgentInstanceConfigStore
         }
     }
 
-    private function scanLegacyJsonArray(string $json, int &$offset): void
+    private function scanLegacyJsonArray(string $json, int &$offset, int $depth): void
     {
         $offset++;
         $this->skipLegacyJsonWhitespace($json, $offset);
@@ -655,7 +658,7 @@ final class AgentInstanceConfigStore
             return;
         }
         while (true) {
-            $this->scanLegacyJsonValue($json, $offset);
+            $this->scanLegacyJsonValue($json, $offset, $depth);
             $this->skipLegacyJsonWhitespace($json, $offset);
             $delimiter = $json[$offset] ?? '';
             if ($delimiter === ']') {

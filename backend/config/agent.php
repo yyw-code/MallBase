@@ -52,6 +52,7 @@ return [
     'retry_interval' => $readDecimal('MALLBASE_AGENT_RETRY_INTERVAL', 300, 1, 4_102_444_800),
     'reservation_interval' => $readDecimal('MALLBASE_AGENT_RESERVATION_INTERVAL', 60, 1, 4_102_444_800),
     'component_seen_throttle' => $readDecimal('MALLBASE_AGENT_COMPONENT_SEEN_THROTTLE', 3600, 1, 4_102_444_800),
+    'heartbeat_timeout_milliseconds' => $readDecimal('MALLBASE_AGENT_HEARTBEAT_TIMEOUT_MS', 5000, 1, 60_000),
     'instance_lock_timeout_milliseconds' => $readDecimal('MALLBASE_AGENT_LOCK_TIMEOUT_MS', 2000, 1, 60_000),
     'max_json_bytes' => 64 * 1024,
 ];

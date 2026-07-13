@@ -179,6 +179,7 @@ final class AgentInstanceConfigStoreTest extends TestCase
         yield 'identity' => ['{"platform":{"instance_id":"' . self::INSTANCE_ID . '","instance_id":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","token":"mbt_token"}}'];
         yield 'escaped identity' => ['{"platform":{"instance_id":"' . self::INSTANCE_ID . '","\\u0069nstance_id":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","token":"mbt_token"}}'];
         yield 'nested component' => ['{"platform":{"components":{"backend_php":1,"\\u0062ackend_php":2}}}'];
+        yield 'excessive depth' => ['{"platform":{"extra":' . str_repeat('[', 34) . '0' . str_repeat(']', 34) . '}}'];
     }
 
     /** @return iterable<string, array{array<string, mixed>}> */

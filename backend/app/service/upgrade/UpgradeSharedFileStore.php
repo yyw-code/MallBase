@@ -18,11 +18,15 @@ use Throwable;
 final class UpgradeSharedFileStore
 {
     private const DOCUMENTS = [
-        'instance' => ['path' => 'config/instance.json', 'owner' => 'php', 'mode' => 0660, 'write' => true],
-        'namespace_projection' => ['path' => 'staging/storage-namespace.json', 'owner' => 'agent', 'mode' => 0444, 'write' => false],
+        'instance' => ['path' => 'config/instance.json', 'owner' => 'php', 'mode' => 0660, 'directory_mode' => 02770, 'write' => true],
+        'upgrade_gate' => ['path' => 'state/upgrade-gate.json', 'owner' => 'php', 'mode' => 0660, 'directory_mode' => 02770, 'write' => true],
+        'agent_status' => ['path' => 'run/agent-status.json', 'owner' => 'agent', 'mode' => 0660, 'directory_mode' => 02770, 'write' => false],
+        'namespace_projection' => ['path' => 'staging/storage-namespace.json', 'owner' => 'agent', 'mode' => 0444, 'directory_mode' => 0750, 'write' => false],
     ];
 
-    private const LOCK_PATH = 'run/instance-config.lock';
+    private const INSTANCE_LOCK_PATH = 'run/instance-config.lock';
+    private const UPGRADE_GATE_LOCK_PATH = 'state/upgrade-gate.lock';
+    private const RUNTIME_REGISTRY_LOCK_PATH = 'run/runtime-registry.lock';
 
     private const OPERATION_NAMES = [
         'lstat', 'fstat', 'fopen', 'fwrite', 'fflush', 'fsync', 'rename',
@@ -102,20 +106,90 @@ final class UpgradeSharedFileStore
             $this->throwPublic('SHARED_FILE_INVALID');
         }
 
+        $this->writeEncodedDefinition($logicalName, $definition, $bytes);
+    }
+
+    public function readRuntimeInstance(string $fileName): ?object
+    {
+        $definition = $this->runtimeDefinition($fileName);
+        try {
+            $raw = $this->readRawDefinition($definition);
+
+            return $raw === null ? null : $this->decodeStrictObject($raw);
+        } catch (Throwable $exception) {
+            $code = $exception->getMessage() === 'SHARED_FILE_INVALID'
+                ? 'SHARED_FILE_INVALID'
+                : ($exception->getMessage() === 'SHARED_FILE_PERMISSION_INVALID'
+                    ? 'SHARED_FILE_PERMISSION_INVALID'
+                    : 'SHARED_FILE_UNAVAILABLE');
+            $this->throwPublic($code);
+        }
+    }
+
+    public function writeRuntimeInstance(string $fileName, object $document): void
+    {
+        $definition = $this->runtimeDefinition($fileName);
+        try {
+            $bytes = json_encode(
+                $document,
+                JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION,
+            );
+        } catch (JsonException) {
+            $this->throwPublic('SHARED_FILE_INVALID');
+        }
+        if (!is_string($bytes) || strlen($bytes) > $this->maxJsonBytes) {
+            $this->throwPublic('SHARED_FILE_INVALID');
+        }
+        $this->writeEncodedDefinition('runtime:' . $fileName, $definition, $bytes);
+    }
+
+    /** @return list<string> */
+    public function listRuntimeInstances(): array
+    {
+        try {
+            $relative = 'run/runtime-instances';
+            $this->validateSharedDirectory($relative, 02770);
+            $entries = @scandir($this->path($relative));
+            if (!is_array($entries) || count($entries) > 10_002) {
+                throw new RuntimeException('list runtime instances');
+            }
+            $result = [];
+            foreach ($entries as $entry) {
+                if ($entry === '.' || $entry === '..') {
+                    continue;
+                }
+                $this->runtimeDefinition($entry);
+                $result[] = $entry;
+            }
+            sort($result, SORT_STRING);
+
+            return $result;
+        } catch (Throwable $exception) {
+            $this->throwPublic($exception->getMessage() === 'SHARED_FILE_PERMISSION_INVALID'
+                ? 'SHARED_FILE_PERMISSION_INVALID'
+                : 'SHARED_FILE_UNAVAILABLE');
+        }
+    }
+
+    /** @param array{path:string,owner:string,mode:int,directory_mode:int,write:bool} $definition */
+    private function writeEncodedDefinition(string $logicalName, array $definition, string $bytes): void
+    {
+
         $renamed = false;
         $temporaryPath = '';
         $temporaryHandle = null;
         $temporaryIdentity = null;
 
         try {
-            $this->validateSharedDirectory('config', 02770);
+            $directory = dirname((string) $definition['path']);
+            $this->validateSharedDirectory($directory, (int) $definition['directory_mode']);
             $targetPath = $this->path((string) $definition['path']);
             $targetStat = $this->lstat($targetPath);
             if ($targetStat !== null) {
                 $this->validateRegularFile($targetStat, $this->phpEuid, 0660);
             }
 
-            $temporaryPath = $this->path('config/.instance.' . bin2hex(random_bytes(16)) . '.tmp');
+            $temporaryPath = $this->path($directory . '/.' . basename((string) $definition['path']) . '.' . bin2hex(random_bytes(16)) . '.tmp');
             $temporaryHandle = $this->operation('fopen', $temporaryPath, 'x+b');
             if (!is_resource($temporaryHandle) || !@chmod($temporaryPath, 0660)) {
                 throw new RuntimeException('write temp');
@@ -177,13 +251,13 @@ final class UpgradeSharedFileStore
             $this->checkpoint('after_rename');
             $this->checkpoint('before_parent_fsync');
 
-            $directoryHandle = $this->operation('open_dir', $this->path('config'));
+            $directoryHandle = $this->operation('open_dir', $this->path($directory));
             if (!is_resource($directoryHandle)) {
                 throw new RuntimeException('open parent');
             }
             try {
                 $directoryDescriptorStat = $this->operation('fstat', $directoryHandle);
-                $directoryNameStat = $this->lstat($this->path('config'));
+                $directoryNameStat = $this->lstat($this->path($directory));
                 if (!is_array($directoryDescriptorStat) || $directoryNameStat === null) {
                     throw new RuntimeException('stat parent');
                 }
@@ -208,18 +282,34 @@ final class UpgradeSharedFileStore
                     : 'SHARED_FILE_UNAVAILABLE');
             }
 
-            $this->classifyUncertainVisibleState($logicalName, $bytes);
+            $this->classifyUncertainVisibleState($definition, $bytes);
             $this->throwPublic('DURABILITY_UNCERTAIN');
         }
     }
 
     public function withInstanceLock(Closure $callback): mixed
     {
+        return $this->withLock(self::INSTANCE_LOCK_PATH, 'INSTANCE_CONFIG_BUSY', $callback);
+    }
+
+    public function withUpgradeGateLock(Closure $callback): mixed
+    {
+        return $this->withLock(self::UPGRADE_GATE_LOCK_PATH, 'UPGRADE_GATE_BUSY', $callback);
+    }
+
+    public function withRuntimeRegistryLock(Closure $callback): mixed
+    {
+        return $this->withLock(self::RUNTIME_REGISTRY_LOCK_PATH, 'RUNTIME_REGISTRY_BUSY', $callback);
+    }
+
+    private function withLock(string $relativePath, string $busyCode, Closure $callback): mixed
+    {
         $handle = null;
         $acquired = false;
         try {
-            $this->validateSharedDirectory('run', 02770);
-            $path = $this->path(self::LOCK_PATH);
+            $directory = dirname($relativePath);
+            $this->validateSharedDirectory($directory, 02770);
+            $path = $this->path($relativePath);
             $deadline = hrtime(true) + $this->lockTimeoutMilliseconds * 1_000_000;
             do {
                 $nameStat = $this->lstat($path);
@@ -277,7 +367,7 @@ final class UpgradeSharedFileStore
 
             if (!$acquired) {
                 @fclose($handle);
-                $this->throwPublic('INSTANCE_CONFIG_BUSY');
+                $this->throwPublic($busyCode);
             }
 
             $descriptorStat = $this->operation('fstat', $handle);
@@ -298,7 +388,7 @@ final class UpgradeSharedFileStore
                 }
                 @fclose($handle);
             }
-            if (in_array($exception->getMessage(), ['INSTANCE_CONFIG_BUSY', 'SHARED_FILE_PERMISSION_INVALID'], true)) {
+            if (in_array($exception->getMessage(), [$busyCode, 'SHARED_FILE_PERMISSION_INVALID'], true)) {
                 $this->throwPublic($exception->getMessage());
             }
             $this->throwPublic('SHARED_FILE_UNAVAILABLE');
@@ -322,8 +412,15 @@ final class UpgradeSharedFileStore
             throw new RuntimeException('SHARED_FILE_UNAVAILABLE');
         }
 
+        return $this->readRawDefinition($definition);
+    }
+
+    /** @param array{path:string,owner:string,mode:int,directory_mode:int,write:bool} $definition */
+    private function readRawDefinition(array $definition): ?string
+    {
+
         $directory = dirname((string) $definition['path']);
-        $this->validateSharedDirectory($directory, $directory === 'config' ? 02770 : 0750);
+        $this->validateSharedDirectory($directory, (int) $definition['directory_mode']);
         $path = $this->path((string) $definition['path']);
         $nameStat = $this->lstat($path);
         if ($nameStat === null) {
@@ -365,6 +462,23 @@ final class UpgradeSharedFileStore
         }
     }
 
+    /** @return array{path:string,owner:string,mode:int,directory_mode:int,write:bool} */
+    private function runtimeDefinition(string $fileName): array
+    {
+        if (preg_match('/^[0-9a-f-]{36}-[0-9a-f-]{36}-(?:http|queue|cron)\.json$/D', $fileName) !== 1
+            || str_contains($fileName, '..')) {
+            throw new RuntimeException('SHARED_FILE_UNAVAILABLE');
+        }
+
+        return [
+            'path' => 'run/runtime-instances/' . $fileName,
+            'owner' => 'php',
+            'mode' => 0660,
+            'directory_mode' => 02770,
+            'write' => true,
+        ];
+    }
+
     private function decodeStrictObject(string $raw): object
     {
         if ($raw === '' || !mb_check_encoding($raw, 'UTF-8')) {
@@ -372,7 +486,7 @@ final class UpgradeSharedFileStore
         }
         $offset = 0;
         try {
-            $this->parseJsonValue($raw, $offset);
+            $this->parseJsonValue($raw, $offset, 0);
             $this->skipWhitespace($raw, $offset);
             if ($offset !== strlen($raw)) {
                 throw new RuntimeException('invalid json');
@@ -388,17 +502,20 @@ final class UpgradeSharedFileStore
         return $decoded;
     }
 
-    private function parseJsonValue(string $json, int &$offset): void
+    private function parseJsonValue(string $json, int &$offset, int $depth): void
     {
+        if ($depth > 32) {
+            throw new RuntimeException('invalid json');
+        }
         $this->skipWhitespace($json, $offset);
         $character = $json[$offset] ?? '';
         if ($character === '{') {
-            $this->parseJsonObject($json, $offset);
+            $this->parseJsonObject($json, $offset, $depth + 1);
 
             return;
         }
         if ($character === '[') {
-            $this->parseJsonArray($json, $offset);
+            $this->parseJsonArray($json, $offset, $depth + 1);
 
             return;
         }
@@ -420,7 +537,7 @@ final class UpgradeSharedFileStore
         $offset += strlen($match[0]);
     }
 
-    private function parseJsonObject(string $json, int &$offset): void
+    private function parseJsonObject(string $json, int &$offset, int $depth): void
     {
         $offset++;
         $seen = [];
@@ -442,7 +559,7 @@ final class UpgradeSharedFileStore
                 throw new RuntimeException('invalid json');
             }
             $offset++;
-            $this->parseJsonValue($json, $offset);
+            $this->parseJsonValue($json, $offset, $depth);
             $this->skipWhitespace($json, $offset);
             $delimiter = $json[$offset] ?? '';
             if ($delimiter === '}') {
@@ -457,7 +574,7 @@ final class UpgradeSharedFileStore
         }
     }
 
-    private function parseJsonArray(string $json, int &$offset): void
+    private function parseJsonArray(string $json, int &$offset, int $depth): void
     {
         $offset++;
         $this->skipWhitespace($json, $offset);
@@ -467,7 +584,7 @@ final class UpgradeSharedFileStore
             return;
         }
         while (true) {
-            $this->parseJsonValue($json, $offset);
+            $this->parseJsonValue($json, $offset, $depth);
             $this->skipWhitespace($json, $offset);
             $delimiter = $json[$offset] ?? '';
             if ($delimiter === ']') {
@@ -582,18 +699,19 @@ final class UpgradeSharedFileStore
         return null;
     }
 
-    private function classifyUncertainVisibleState(string $logicalName, string $intendedBytes): void
+    /** @param array{path:string,owner:string,mode:int,directory_mode:int,write:bool} $definition */
+    private function classifyUncertainVisibleState(array $definition, string $intendedBytes): void
     {
         $checkpoint = 'uncertain_reread_missing';
         try {
-            $visible = $this->readRawDocument($logicalName);
+            $visible = $this->readRawDefinition($definition);
             if ($visible !== null) {
                 $checkpoint = hash_equals($intendedBytes, $visible)
                     ? 'uncertain_reread_match'
                     : 'uncertain_reread_mismatch';
             }
         } catch (Throwable) {
-            $checkpoint = file_exists($this->path((string) self::DOCUMENTS[$logicalName]['path']))
+            $checkpoint = file_exists($this->path($definition['path']))
                 ? 'uncertain_reread_mismatch'
                 : 'uncertain_reread_missing';
         }
