@@ -1,0 +1,230 @@
+# Existing-installation storage adoption only. This overlay is run explicitly
+# by the adoption host wrapper; normal HTTP, Queue and Cron roles are absent.
+name: ${MALLBASE_COMPOSE_PROJECT_NAME:-mallbase}
+
+x-adoption-helper: &adoption-helper
+  image: ${MALLBASE_BACKEND_IMAGE_ID:?set MALLBASE_BACKEND_IMAGE_ID}
+  pull_policy: never
+  user: "0:${MALLBASE_UPGRADE_SHARED_GID:?run host-preflight.sh first}"
+  network_mode: none
+  read_only: true
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  cap_add:
+    - DAC_READ_SEARCH
+    - CHOWN
+    - FOWNER
+  tmpfs:
+    - /tmp:rw,nosuid,nodev,noexec,size=16m,mode=0700
+  environment:
+    MALLBASE_BOOTSTRAP_OPERATION_ID: ${MALLBASE_BOOTSTRAP_OPERATION_ID:?bootstrap operation id is required}
+
+services:
+  bootstrap-permission-normalize:
+    <<: *adoption-helper
+    command: ["/bootstrap/bootstrap-permission-normalize.sh"]
+    volumes:
+      - type: volume
+        source: backend_runtime
+        target: /storage/runtime
+        volume:
+          nocopy: true
+      - type: volume
+        source: backend_uploads
+        target: /storage/uploads
+        volume:
+          nocopy: true
+      - type: bind
+        source: ./upgrade/bootstrap-retention/operations/${MALLBASE_BOOTSTRAP_OPERATION_ID:?bootstrap operation id is required}/normalize.json
+        target: /bootstrap-input/request.json
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./upgrade/legacy-results/bootstrap-adopt/${MALLBASE_BOOTSTRAP_OPERATION_ID:?bootstrap operation id is required}/normalization
+        target: /bootstrap-results/normalization
+        bind:
+          create_host_path: false
+    configs:
+      - source: bootstrap_permission_normalize_script
+        target: /bootstrap/bootstrap-permission-normalize.sh
+        mode: 0555
+      - source: bootstrap_adoption_validator
+        target: /bootstrap/validate-bootstrap-adoption.php
+        mode: 0444
+
+  bootstrap-retention-import:
+    <<: *adoption-helper
+    command: ["/bootstrap/bootstrap-retention-import.sh"]
+    volumes:
+      - type: volume
+        source: backend_runtime
+        target: /storage/runtime
+        volume:
+          nocopy: true
+      - type: volume
+        source: backend_uploads
+        target: /storage/uploads
+        volume:
+          nocopy: true
+      - type: bind
+        source: ./upgrade/bootstrap-retention/env
+        target: /storage/env
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./upgrade/bootstrap-retention/cert
+        target: /storage/cert
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./upgrade/bootstrap-retention/demo
+        target: /storage/demo
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./upgrade/bootstrap-retention/public-storage
+        target: /storage/public-storage
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./upgrade/bootstrap-retention/operations/${MALLBASE_BOOTSTRAP_OPERATION_ID:?bootstrap operation id is required}/import.json
+        target: /bootstrap-input/import.json
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./upgrade/bootstrap-retention/operations/${MALLBASE_BOOTSTRAP_OPERATION_ID:?bootstrap operation id is required}/retention
+        target: /bootstrap-retention
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./upgrade/legacy-results/bootstrap-adopt/${MALLBASE_BOOTSTRAP_OPERATION_ID:?bootstrap operation id is required}/normalization
+        target: /bootstrap-results/normalization
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./upgrade/legacy-results/bootstrap-adopt/${MALLBASE_BOOTSTRAP_OPERATION_ID:?bootstrap operation id is required}/import
+        target: /bootstrap-results/import
+        bind:
+          create_host_path: false
+    configs:
+      - source: bootstrap_retention_import_script
+        target: /bootstrap/bootstrap-retention-import.sh
+        mode: 0555
+      - source: bootstrap_adoption_validator
+        target: /bootstrap/validate-bootstrap-adoption.php
+        mode: 0444
+
+  # This is the only PHP role allowed before business-ready projection exists.
+  # It sees two exact public authority files and one exact operation result
+  # leaf, never Agent-private/layout authority or the legacy result parent.
+  bootstrap-target-confirm:
+    image: ${MALLBASE_BACKEND_IMAGE_ID:?set MALLBASE_BACKEND_IMAGE_ID}
+    pull_policy: never
+    user: "10000:${MALLBASE_UPGRADE_SHARED_GID:?run host-preflight.sh first}"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,noexec,size=16m,mode=1777
+    env_file:
+      - .env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      MALLBASE_RUNTIME_ROLE: bootstrap-retention-finalize
+      MALLBASE_AGENT_UID: ${MALLBASE_AGENT_UID:?run host-preflight.sh first}
+      MALLBASE_UPGRADE_SHARED_GID: ${MALLBASE_UPGRADE_SHARED_GID:?run host-preflight.sh first}
+    entrypoint: ["php", "think", "upgrade:bootstrap-retention-finalize"]
+    command: ["--retention-id=${MALLBASE_BOOTSTRAP_OPERATION_ID:?bootstrap operation id is required}"]
+    networks:
+      - bootstrap-target-db
+    volumes:
+      - type: volume
+        source: backend_runtime
+        target: /app/runtime
+        read_only: true
+        volume:
+          nocopy: true
+      - type: volume
+        source: backend_uploads
+        target: /app/public/uploads
+        read_only: true
+        volume:
+          nocopy: true
+      - type: bind
+        source: ./upgrade/bootstrap-retention/env
+        target: /app/.mallbase-env
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./upgrade/bootstrap-retention/cert
+        target: /app/storage/cert
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./upgrade/bootstrap-retention/demo
+        target: /app/public/static/demo
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./upgrade/bootstrap-retention/public-storage
+        target: /app/public/storage
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./upgrade/staging/storage-ready.pub
+        target: /bootstrap-authority/storage-ready.pub
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./upgrade/staging/bootstrap-target-authority.json
+        target: /bootstrap-authority/bootstrap-target-authority.json
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./upgrade/bootstrap-retention/operations/${MALLBASE_BOOTSTRAP_OPERATION_ID:?bootstrap operation id is required}/target-output
+        target: /bootstrap-results/target
+        bind:
+          create_host_path: false
+
+volumes:
+  backend_runtime: !override
+    external: true
+    # Existing installations may predate namespaced volume names. The host
+    # wrapper exports the exact Docker-observed legacy name; the Agent binds
+    # that name to the installation namespace in signed authority instead of
+    # letting Compose guess it.
+    name: "${MALLBASE_BOOTSTRAP_RUNTIME_VOLUME_NAME:?legacy runtime volume name is required}"
+  backend_uploads: !override
+    external: true
+    name: "${MALLBASE_BOOTSTRAP_UPLOADS_VOLUME_NAME:?legacy uploads volume name is required}"
+
+networks:
+  bootstrap-target-db:
+    # This explicit operator-provided network must reach both the configured
+    # database and cache. It may be an internal Docker data network, or a
+    # bridge with egress when those services are external to Docker.
+    external: true
+    name: ${MALLBASE_BOOTSTRAP_DATA_NETWORK:?set a DB/cache data network}
+
+configs:
+  bootstrap_permission_normalize_script:
+    file: ./deploy/docker/bootstrap-permission-normalize.sh
+  bootstrap_retention_import_script:
+    file: ./deploy/docker/bootstrap-retention-import.sh
+  bootstrap_adoption_validator:
+    file: ./deploy/docker/validate-bootstrap-adoption.php

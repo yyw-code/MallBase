@@ -13,6 +13,11 @@
 .env
 backend/.env
 
+# Agent 生成的发布与实例身份控制文件（随部署变化，不属于源码）
+/.mallbase-deployment.json
+/.mallbase-release-inventory.json
+/.mallbase-sealed-context.json
+
 # 部署脚本的本地配置（含真实主机 / 私钥 / 远程目录，不入库）
 deploy/upload-frontend.local.sh
 

@@ -119,11 +119,11 @@ final class UpgradeAgentConfirmPausedRetryTest extends TestCase
 
         self::assertSame(200, $completed->getCode());
         self::assertSame('completed', $completedBody['data']['status']);
-        self::assertSame('backing_up', $completedBody['data']['result']['state']);
+        self::assertSame('paused', $completedBody['data']['result']['state']);
         self::assertIsArray($storedCompleted);
         self::assertSame('completed', $storedCompleted['state']);
         self::assertNull($storedCompleted['error_code']);
-        self::assertSame(UpgradeState::BackingUp, $gate->snapshot()->state);
+        self::assertSame(UpgradeState::Paused, $gate->snapshot()->state);
     }
 
     /** @return iterable<string,array{UpgradeState,string}> */

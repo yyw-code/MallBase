@@ -1,0 +1,336 @@
+# Explicit Runtime 6B storage-cutover overlay. The normal start path never
+# includes this file; the host cutover wrapper supplies it only after verifying
+# the Agent-published job selection.
+name: ${MALLBASE_COMPOSE_PROJECT_NAME:-mallbase}
+
+x-mallbase-storage-cutover: &mallbase-storage-cutover
+  environment:
+    MALLBASE_STORAGE_LAYOUT: granular
+    MALLBASE_UPGRADE_JOB_ID: ${MALLBASE_UPGRADE_JOB_ID:?set MALLBASE_UPGRADE_JOB_ID}
+  volumes:
+    - type: volume
+      target: /app/runtime
+    - type: volume
+      source: cutover_install
+      target: /app/runtime/install
+      volume:
+        nocopy: true
+    - type: volume
+      source: cutover_local_storage
+      target: /app/runtime/storage
+      volume:
+        nocopy: true
+    - type: volume
+      source: cutover_runtime_backup
+      target: /app/runtime/backup
+      volume:
+        nocopy: true
+    - type: volume
+      source: cutover_public_storage
+      target: /app/public/storage
+      volume:
+        nocopy: true
+    - type: volume
+      source: cutover_uploads
+      target: /app/public/uploads
+      volume:
+        nocopy: true
+    - type: volume
+      source: cutover_cert
+      target: /app/storage/cert
+      volume:
+        nocopy: true
+    - type: volume
+      source: cutover_demo
+      target: /app/public/static/demo
+      volume:
+        nocopy: true
+
+services:
+  backend:
+    <<: *mallbase-storage-cutover
+
+  queue:
+    <<: *mallbase-storage-cutover
+
+  cron:
+    <<: *mallbase-storage-cutover
+
+  legacy-state-import:
+    profiles: ["storage-cutover"]
+    image: ${MALLBASE_BACKEND_IMAGE_ID:?set candidate immutable image id}
+    pull_policy: never
+    network_mode: none
+    read_only: true
+    restart: "no"
+    user: "0:${MALLBASE_UPGRADE_SHARED_GID:?run host-preflight.sh first}"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - DAC_READ_SEARCH
+      - CHOWN
+      - FOWNER
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,noexec,size=32m,mode=0700
+    environment:
+      MALLBASE_UPGRADE_JOB_ID: ${MALLBASE_UPGRADE_JOB_ID:?set MALLBASE_UPGRADE_JOB_ID}
+      MALLBASE_AGENT_UID: ${MALLBASE_AGENT_UID:?run host-preflight.sh first}
+    entrypoint: ["sh", "/usr/local/bin/legacy-state-import.sh"]
+    command: ["import"]
+    volumes:
+      - type: bind
+        source: ./upgrade/staging/storage-cutover/${MALLBASE_UPGRADE_JOB_ID}/selection.json
+        target: /cutover/selection.json
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./upgrade/staging/storage-ready.pub
+        target: /cutover/storage-ready.pub
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./upgrade/legacy-import/${MALLBASE_UPGRADE_JOB_ID}
+        target: /input
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./upgrade/legacy-results/${MALLBASE_UPGRADE_JOB_ID}
+        target: /result
+        bind:
+          create_host_path: false
+      - type: volume
+        source: cutover_source_runtime
+        target: /source/runtime
+        read_only: true
+        volume:
+          nocopy: true
+      - type: volume
+        source: cutover_cert
+        target: /target/cert
+        volume:
+          nocopy: true
+      - type: volume
+        source: cutover_demo
+        target: /target/demo
+        volume:
+          nocopy: true
+      - type: volume
+        source: cutover_install
+        target: /target/install
+        volume:
+          nocopy: true
+      - type: volume
+        source: cutover_local_storage
+        target: /target/local_storage
+        volume:
+          nocopy: true
+      - type: volume
+        source: cutover_public_storage
+        target: /target/public_storage
+        volume:
+          nocopy: true
+      - type: volume
+        source: cutover_runtime_backup
+        target: /target/runtime_backup
+        volume:
+          nocopy: true
+      - type: volume
+        source: cutover_uploads
+        target: /target/uploads
+        volume:
+          nocopy: true
+
+  target-state-verify:
+    profiles: ["storage-cutover"]
+    image: ${MALLBASE_BACKEND_IMAGE_ID:?set candidate immutable image id}
+    pull_policy: never
+    read_only: true
+    restart: "no"
+    user: "0:${MALLBASE_UPGRADE_SHARED_GID:?run host-preflight.sh first}"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    env_file:
+      - .env
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - FOWNER
+      - SETUID
+      - SETGID
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,noexec,size=32m,mode=1777
+      - /app/runtime:rw,nosuid,nodev,noexec,size=64m,uid=10000,gid=${MALLBASE_UPGRADE_SHARED_GID},mode=0700
+    environment:
+      MALLBASE_UPGRADE_JOB_ID: ${MALLBASE_UPGRADE_JOB_ID:?set MALLBASE_UPGRADE_JOB_ID}
+      MALLBASE_AGENT_UID: ${MALLBASE_AGENT_UID:?run host-preflight.sh first}
+      MALLBASE_UPGRADE_SHARED_GID: ${MALLBASE_UPGRADE_SHARED_GID:?run host-preflight.sh first}
+      MALLBASE_UPGRADE_ROOT: /app/upgrade
+      MALLBASE_STORAGE_LAYOUT: granular
+      MALLBASE_RUNTIME_ROLE: target-verify
+    entrypoint: ["sh", "/usr/local/bin/target-state-verify.sh"]
+    command: []
+    volumes:
+      - type: bind
+        source: ./upgrade/staging/storage-cutover/${MALLBASE_UPGRADE_JOB_ID}/selection.json
+        target: /cutover/selection.json
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./upgrade/staging/storage-ready.pub
+        target: /cutover/storage-ready.pub
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./upgrade/legacy-results/${MALLBASE_UPGRADE_JOB_ID}
+        target: /result
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./upgrade/bootstrap-retention/env
+        target: /app/.mallbase-env
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./upgrade/bin
+        target: /app/upgrade/bin
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./upgrade/lifetime-locks
+        target: /app/upgrade/lifetime-locks
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./upgrade/staging
+        target: /app/upgrade/staging
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./upgrade/state
+        target: /app/upgrade/state
+        bind:
+          create_host_path: false
+      - type: volume
+        source: cutover_cert
+        target: /target/cert
+        read_only: true
+        volume:
+          nocopy: true
+      - type: volume
+        source: cutover_cert
+        target: /app/storage/cert
+        read_only: true
+        volume:
+          nocopy: true
+      - type: volume
+        source: cutover_demo
+        target: /target/demo
+        read_only: true
+        volume:
+          nocopy: true
+      - type: volume
+        source: cutover_demo
+        target: /app/public/static/demo
+        read_only: true
+        volume:
+          nocopy: true
+      - type: volume
+        source: cutover_install
+        target: /target/install
+        read_only: true
+        volume:
+          nocopy: true
+      - type: volume
+        source: cutover_install
+        target: /app/runtime/install
+        read_only: true
+        volume:
+          nocopy: true
+      - type: volume
+        source: cutover_local_storage
+        target: /target/local_storage
+        read_only: true
+        volume:
+          nocopy: true
+      - type: volume
+        source: cutover_local_storage
+        target: /app/runtime/storage
+        read_only: true
+        volume:
+          nocopy: true
+      - type: volume
+        source: cutover_public_storage
+        target: /target/public_storage
+        read_only: true
+        volume:
+          nocopy: true
+      - type: volume
+        source: cutover_public_storage
+        target: /app/public/storage
+        read_only: true
+        volume:
+          nocopy: true
+      - type: volume
+        source: cutover_runtime_backup
+        target: /target/runtime_backup
+        read_only: true
+        volume:
+          nocopy: true
+      - type: volume
+        source: cutover_runtime_backup
+        target: /app/runtime/backup
+        read_only: true
+        volume:
+          nocopy: true
+      - type: volume
+        source: cutover_uploads
+        target: /target/uploads
+        read_only: true
+        volume:
+          nocopy: true
+      - type: volume
+        source: cutover_uploads
+        target: /app/public/uploads
+        read_only: true
+        volume:
+          nocopy: true
+
+volumes:
+  cutover_source_runtime:
+    external: true
+    name: ${MALLBASE_CUTOVER_SOURCE_RUNTIME_VOLUME_NAME:?selection source runtime volume is required}
+  cutover_cert:
+    external: true
+    name: ${MALLBASE_CUTOVER_CERT_VOLUME_NAME:?selection target cert volume is required}
+  cutover_demo:
+    external: true
+    name: ${MALLBASE_CUTOVER_DEMO_VOLUME_NAME:?selection target demo volume is required}
+  cutover_install:
+    external: true
+    name: ${MALLBASE_CUTOVER_INSTALL_VOLUME_NAME:?selection target install volume is required}
+  cutover_local_storage:
+    external: true
+    name: ${MALLBASE_CUTOVER_LOCAL_STORAGE_VOLUME_NAME:?selection target local storage volume is required}
+  cutover_public_storage:
+    external: true
+    name: ${MALLBASE_CUTOVER_PUBLIC_STORAGE_VOLUME_NAME:?selection target public storage volume is required}
+  cutover_runtime_backup:
+    external: true
+    name: ${MALLBASE_CUTOVER_RUNTIME_BACKUP_VOLUME_NAME:?selection target runtime backup volume is required}
+  cutover_uploads:
+    external: true
+    name: ${MALLBASE_CUTOVER_UPLOADS_VOLUME_NAME:?selection target uploads volume is required}

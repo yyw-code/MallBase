@@ -1,0 +1,51 @@
+# syntax=docker/dockerfile:1.7
+
+# Development-only runtime. Production builds must continue through
+# deploy/docker/Dockerfile and its Agent-sealed attestation gate.
+FROM phpswoole/swoole:php8.2-alpine@sha256:625a200bce9198e8867616e5c0f976ba116976adb70b67c76403aa245baca8d4
+
+WORKDIR /app
+
+ARG MALLBASE_APP_UID=10000
+ARG MALLBASE_APP_GID=10000
+
+RUN apk add --no-cache \
+    mariadb-client \
+    util-linux \
+    libcap \
+    libzip-dev \
+    libpng-dev \
+    libjpeg-turbo-dev \
+    freetype-dev \
+    icu-dev \
+    oniguruma-dev \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && docker-php-ext-install -j$(nproc) \
+        pdo_mysql \
+        gd \
+        zip \
+        intl \
+        mbstring \
+        bcmath \
+        pcntl \
+        posix \
+        opcache \
+    && addgroup -g "$MALLBASE_APP_GID" -S mallbase \
+    && adduser -u "$MALLBASE_APP_UID" -S -D -H -G mallbase mallbase \
+    && rm -rf /var/cache/apk/*
+
+RUN echo "opcache.enable=1" >> /usr/local/etc/php/conf.d/opcache.ini \
+    && echo "opcache.enable_cli=1" >> /usr/local/etc/php/conf.d/opcache.ini \
+    && echo "opcache.jit_buffer_size=0" >> /usr/local/etc/php/conf.d/opcache.ini
+
+COPY --from=composer:2@sha256:5946476338742b200bb9ff88f8be56275ddae4b3949c72305cb0dbf10cfcb760 /usr/bin/composer /usr/bin/composer
+COPY deploy/docker/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+COPY deploy/docker/export-backend-env.php /usr/local/bin/export-backend-env.php
+RUN chmod 0555 /usr/local/bin/docker-entrypoint.sh /usr/local/bin/export-backend-env.php
+
+EXPOSE 8080
+
+USER mallbase
+
+ENTRYPOINT ["docker-entrypoint.sh"]
+CMD ["php", "think", "swoole"]

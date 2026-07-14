@@ -411,19 +411,21 @@ final class UpgradeService extends Service
                     runtimes: $app->make(UpgradeRuntimeRegistry::class),
                 );
             },
-            Worker::class => function (App $app): Worker {
-                return new UpgradeAwareWorker(
-                    queue: $app->make(Queue::class),
-                    event: $app->make(Event::class),
-                    handle: $app->make(Handle::class),
-                    cache: $app->make(Cache::class),
-                    upgradeGate: $app->make(UpgradeGateRepository::class),
-                    upgradeActivity: $app->make(UpgradeActivityTracker::class),
-                    upgradeRuntime: $app->make(UpgradeRuntimeContext::class),
-                    upgradeLifecycle: $app->make(UpgradeRuntimeLifecycle::class),
-                    upgradeEnabled: true,
-                );
-            },
+            ...($this->isIsolatedMaintenanceRole() ? [] : [
+                Worker::class => function (App $app): Worker {
+                    return new UpgradeAwareWorker(
+                        queue: $app->make(Queue::class),
+                        event: $app->make(Event::class),
+                        handle: $app->make(Handle::class),
+                        cache: $app->make(Cache::class),
+                        upgradeGate: $app->make(UpgradeGateRepository::class),
+                        upgradeActivity: $app->make(UpgradeActivityTracker::class),
+                        upgradeRuntime: $app->make(UpgradeRuntimeContext::class),
+                        upgradeLifecycle: $app->make(UpgradeRuntimeLifecycle::class),
+                        upgradeEnabled: true,
+                    );
+                },
+            ]),
         ]);
     }
 
@@ -526,12 +528,25 @@ final class UpgradeService extends Service
         if (!(bool) config('upgrade.enabled', false)) {
             return;
         }
+        // 隔离维护命令不注册为正常 HTTP/queue/cron 运行时，也不参与
+        // 活动账本引导；它们只使用各自命令所需的明确服务绑定。
+        if ($this->isIsolatedMaintenanceRole()) {
+            return;
+        }
         $ready = $this->app->make(UpgradeActivityBootstrapper::class)->initialize();
         if (!$ready) {
             defined('MALLBASE_AUTOMATIC_UPGRADE_DISABLED')
                 || define('MALLBASE_AUTOMATIC_UPGRADE_DISABLED', true);
             fwrite(STDERR, "[MallBase Upgrade] 活动账本初始化失败，已持久化安全闩；商业服务继续运行。\n");
         }
+    }
+
+    private function isIsolatedMaintenanceRole(): bool
+    {
+        return in_array((string) getenv('MALLBASE_RUNTIME_ROLE'), [
+            'target-verify',
+            'bootstrap-retention-finalize',
+        ], true);
     }
 
     /** @return array{host:string,port:int,user:string,password:string,database:string} */

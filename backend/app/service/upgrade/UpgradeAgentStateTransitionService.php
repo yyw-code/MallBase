@@ -319,9 +319,21 @@ final readonly class UpgradeAgentStateTransitionService
                     $now,
                 );
             }
-            $next = $nextState === UpgradeState::Normal
-                ? $this->gate->returnToNormal($expectedRevision, $expectedState, $jobId, $platformSyncPending)
-                : $this->gate->compareAndSet($expectedRevision, $expectedState, $nextState, $jobId);
+            if ($nextState === UpgradeState::Normal) {
+                $next = $this->gate->returnToNormal(
+                    $expectedRevision,
+                    $expectedState,
+                    $jobId,
+                    $platformSyncPending,
+                );
+            } elseif ($expectedState === UpgradeState::Paused && $nextState === UpgradeState::BackingUp) {
+                if (!$this->gate instanceof UpgradeDrainGateRepository) {
+                    throw new RuntimeException('UPGRADE_DRAIN_GATE_UNAVAILABLE');
+                }
+                $next = $this->gate->enterBackingUpAfterDrain($expectedRevision, $jobId);
+            } else {
+                $next = $this->gate->compareAndSet($expectedRevision, $expectedState, $nextState, $jobId);
+            }
 
             return $this->operations->complete(
                 $operationId,
@@ -369,6 +381,7 @@ final readonly class UpgradeAgentStateTransitionService
 
         return in_array([$from, $to], [
             [UpgradeState::Preparing, UpgradeState::ReadyToDrain],
+            [UpgradeState::Paused, UpgradeState::BackingUp],
             [UpgradeState::BackingUp, UpgradeState::Applying],
             [UpgradeState::Applying, UpgradeState::AwaitingDeployment],
             [UpgradeState::AwaitingDeployment, UpgradeState::Verifying],

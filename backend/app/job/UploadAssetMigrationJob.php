@@ -9,6 +9,7 @@ use app\model\upload\UploadAssetLocation;
 use app\model\upload\UploadAssetMigration;
 use app\model\upload\UploadAssetMigrationLog;
 use app\model\upload\UploadAssetUsage;
+use app\support\upload\LocalUploadRootPolicy;
 use mall_base\base\BaseJob;
 use mall_base\drivers\DriverManager;
 use think\facade\Db;
@@ -66,6 +67,8 @@ class UploadAssetMigrationJob extends BaseJob
         $this->clearMigrationLogs((int) $migration->id);
 
         try {
+            $this->assertCanonicalLocalUploadRoot();
+
             $result = $migration->source_driver === 'legacy_local'
                 ? $this->runLegacyLocalImport($migration)
                 : $this->runStorageMigration($migration);
@@ -960,6 +963,8 @@ class UploadAssetMigrationJob extends BaseJob
 
     private function uploadDriver(string $driver): object
     {
+        $this->assertCanonicalLocalUploadRoot();
+
         return DriverManager::driver('upload', $driver, $this->driverConfig($driver));
     }
 
@@ -1002,9 +1007,31 @@ class UploadAssetMigrationJob extends BaseJob
 
     private function localFullPath(string $path): string
     {
-        $rootPath = (string) getSystemSetting('local_root_path', 'uploads');
-        $root = str_starts_with($rootPath, '/') ? $rootPath : public_path() . $rootPath;
+        $root = $this->assertCanonicalLocalUploadRoot();
+
         return rtrim($root, '/') . '/' . ltrim($path, '/');
+    }
+
+    protected function assertCanonicalLocalUploadRoot(): string
+    {
+        try {
+            return (new LocalUploadRootPolicy())->assertSupported(
+                $this->configuredLocalUploadRoot(),
+                $this->localUploadPublicRoot(),
+            );
+        } catch (Throwable) {
+            throw new \RuntimeException(LocalUploadRootPolicy::MIGRATION_REQUIRED_MESSAGE);
+        }
+    }
+
+    protected function configuredLocalUploadRoot(): mixed
+    {
+        return getSystemSetting('local_root_path', LocalUploadRootPolicy::CANONICAL_ROOT);
+    }
+
+    protected function localUploadPublicRoot(): string
+    {
+        return rtrim(public_path(), DIRECTORY_SEPARATOR);
     }
 
     private function legacyFullPath(string $path): string

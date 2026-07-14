@@ -196,7 +196,7 @@ final class UpgradeAgentController extends BaseController
                     if ($gate->state->value === 'draining') {
                         $gate = $drain->tryPause($expectedRevision, $body['delayed_compatible']);
                     }
-                    $gate = $drain->confirmAndEnterBackingUp($gate->revision);
+                    $gate = $drain->confirmPaused($gate->revision);
 
                     return $this->gateProjection($gate);
                 },

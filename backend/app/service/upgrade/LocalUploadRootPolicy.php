@@ -4,26 +4,33 @@ declare(strict_types=1);
 
 namespace app\service\upgrade;
 
+use app\support\upload\LocalUploadRootPolicy as UploadLocalUploadRootPolicy;
 use RuntimeException;
 
-/** First official container release supports one physical local upload root. */
+/** Upgrade-facing adapter that preserves sanitized upgrade error codes. */
 final readonly class LocalUploadRootPolicy
 {
-    public const CANONICAL_ROOT = 'uploads';
+    public const CANONICAL_ROOT = UploadLocalUploadRootPolicy::CANONICAL_ROOT;
+
+    private UploadLocalUploadRootPolicy $policy;
+
+    public function __construct(?UploadLocalUploadRootPolicy $policy = null)
+    {
+        $this->policy = $policy ?? new UploadLocalUploadRootPolicy();
+    }
 
     public function assertSupported(string $configuredRoot, string $publicRoot): void
     {
-        if ($configuredRoot !== self::CANONICAL_ROOT || $publicRoot === ''
-            || !str_starts_with($publicRoot, '/') || str_contains($publicRoot, "\0")) {
-            throw new RuntimeException('UPGRADE_LOCAL_UPLOAD_ROOT_UNSUPPORTED');
-        }
-        $root = rtrim($publicRoot, '/') . '/' . self::CANONICAL_ROOT;
-        $publicReal = realpath($publicRoot);
-        $rootStat = @lstat($root);
-        if (!is_string($publicReal) || $publicReal !== rtrim($publicRoot, '/')
-            || !is_array($rootStat) || ($rootStat['mode'] & 0170000) !== 0040000
-            || realpath($root) !== $root || !str_starts_with($root . '/', $publicReal . '/')) {
-            throw new RuntimeException('UPGRADE_LOCAL_UPLOAD_ROOT_UNAVAILABLE');
+        try {
+            $this->policy->assertSupported($configuredRoot, $publicRoot);
+        } catch (RuntimeException $exception) {
+            $code = match ($exception->getMessage()) {
+                UploadLocalUploadRootPolicy::ERROR_UNSUPPORTED => 'UPGRADE_LOCAL_UPLOAD_ROOT_UNSUPPORTED',
+                UploadLocalUploadRootPolicy::ERROR_UNAVAILABLE => 'UPGRADE_LOCAL_UPLOAD_ROOT_UNAVAILABLE',
+                default => 'UPGRADE_WRITABLE_SURFACE_UNAVAILABLE',
+            };
+
+            throw new RuntimeException($code, 0, $exception);
         }
     }
 }

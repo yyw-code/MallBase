@@ -1,0 +1,145 @@
+# Fresh-install storage bootstrap only. This overlay is run explicitly by the
+# fresh host wrapper; HTTP, Queue, Cron and existing-install adoption are absent.
+name: ${MALLBASE_COMPOSE_PROJECT_NAME:-mallbase}
+
+x-storage-helper: &storage-helper
+  image: alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc
+  pull_policy: never
+  user: "0:${MALLBASE_UPGRADE_SHARED_GID:?run host-preflight.sh first}"
+  network_mode: none
+  read_only: true
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  cap_add:
+    - DAC_READ_SEARCH
+    - CHOWN
+    - FOWNER
+  tmpfs:
+    - /tmp:rw,nosuid,nodev,noexec,size=8m,mode=0700
+  environment: &storage-helper-environment
+    MALLBASE_STORAGE_OPERATION_ID: ${MALLBASE_STORAGE_OPERATION_ID:?storage operation id is required}
+    MALLBASE_STORAGE_NAMESPACE: ${MALLBASE_STORAGE_NAMESPACE:?storage namespace is required}
+    MALLBASE_AGENT_UID: ${MALLBASE_AGENT_UID:?run host-preflight.sh first}
+    MALLBASE_APP_UID: ${MALLBASE_APP_UID:-10000}
+    MALLBASE_UPGRADE_SHARED_GID: ${MALLBASE_UPGRADE_SHARED_GID:?run host-preflight.sh first}
+    MALLBASE_RUNTIME_VOLUME_NAME: ${MALLBASE_RUNTIME_VOLUME_NAME:?runtime volume name is required}
+    MALLBASE_RUNTIME_MOUNT_IDENTITY: ${MALLBASE_RUNTIME_MOUNT_IDENTITY:?runtime mount identity is required}
+    MALLBASE_RUNTIME_POLICY_SHA256: ${MALLBASE_RUNTIME_POLICY_SHA256:?runtime policy hash is required}
+    MALLBASE_UPLOADS_VOLUME_NAME: ${MALLBASE_UPLOADS_VOLUME_NAME:?uploads volume name is required}
+    MALLBASE_UPLOADS_MOUNT_IDENTITY: ${MALLBASE_UPLOADS_MOUNT_IDENTITY:?uploads mount identity is required}
+    MALLBASE_UPLOADS_POLICY_SHA256: ${MALLBASE_UPLOADS_POLICY_SHA256:?uploads policy hash is required}
+  volumes: &storage-targets
+    - type: volume
+      source: backend_runtime
+      target: /storage/runtime
+      volume:
+        nocopy: true
+    - type: volume
+      source: backend_uploads
+      target: /storage/uploads
+      volume:
+        nocopy: true
+    - type: bind
+      source: ./upgrade/bootstrap-retention/env
+      target: /storage/env
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ./upgrade/bootstrap-retention/cert
+      target: /storage/cert
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ./upgrade/bootstrap-retention/demo
+      target: /storage/demo
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ./upgrade/bootstrap-retention/public-storage
+      target: /storage/public-storage
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ./upgrade/storage-init-results/.helper-${MALLBASE_STORAGE_OPERATION_ID:?storage operation id is required}
+      target: /storage-init-results
+      bind:
+        create_host_path: false
+
+services:
+  fresh-storage-inspect:
+    <<: *storage-helper
+    command: ["/bootstrap/fresh-storage-inspect.sh"]
+    volumes: *storage-targets
+    configs:
+      - source: fresh_storage_inspect_script
+        target: /bootstrap/fresh-storage-inspect.sh
+        mode: 0555
+
+  fresh-storage-stamp:
+    <<: *storage-helper
+    command: ["/bootstrap/fresh-storage-stamp.sh"]
+    environment:
+      <<: *storage-helper-environment
+      MALLBASE_STORAGE_LAYOUT_GENERATION: ${MALLBASE_STORAGE_LAYOUT_GENERATION:-0}
+      MALLBASE_STORAGE_INIT_REQUEST_SHA256: ${MALLBASE_STORAGE_INIT_REQUEST_SHA256:-sha256:0000000000000000000000000000000000000000000000000000000000000000}
+    volumes: *storage-targets
+    configs:
+      - source: fresh_storage_stamp_script
+        target: /bootstrap/fresh-storage-stamp.sh
+        mode: 0555
+      - source: fresh_storage_request
+        target: /storage-input/request.json
+        mode: 0444
+      - source: fresh_storage_marker_cert
+        target: /storage-input/markers/cert.json
+        mode: 0444
+      - source: fresh_storage_marker_demo
+        target: /storage-input/markers/demo.json
+        mode: 0444
+      - source: fresh_storage_marker_install
+        target: /storage-input/markers/install.json
+        mode: 0444
+      - source: fresh_storage_marker_local_storage
+        target: /storage-input/markers/local_storage.json
+        mode: 0444
+      - source: fresh_storage_marker_public_storage
+        target: /storage-input/markers/public_storage.json
+        mode: 0444
+      - source: fresh_storage_marker_runtime_backup
+        target: /storage-input/markers/runtime_backup.json
+        mode: 0444
+      - source: fresh_storage_marker_uploads
+        target: /storage-input/markers/uploads.json
+        mode: 0444
+
+volumes:
+  backend_runtime: !override
+    external: true
+    name: "${MALLBASE_STORAGE_NAMESPACE:?storage namespace is required}_runtime"
+  backend_uploads: !override
+    external: true
+    name: "${MALLBASE_STORAGE_NAMESPACE:?storage namespace is required}_uploads"
+
+configs:
+  fresh_storage_inspect_script:
+    file: ./deploy/docker/fresh-storage-inspect.sh
+  fresh_storage_stamp_script:
+    file: ./deploy/docker/fresh-storage-stamp.sh
+  fresh_storage_request:
+    file: ./upgrade/staging/storage-init/${MALLBASE_STORAGE_OPERATION_ID:?storage operation id is required}/request.json
+  fresh_storage_marker_cert:
+    file: ./upgrade/staging/storage-init/${MALLBASE_STORAGE_OPERATION_ID:?storage operation id is required}/markers/cert.json
+  fresh_storage_marker_demo:
+    file: ./upgrade/staging/storage-init/${MALLBASE_STORAGE_OPERATION_ID:?storage operation id is required}/markers/demo.json
+  fresh_storage_marker_install:
+    file: ./upgrade/staging/storage-init/${MALLBASE_STORAGE_OPERATION_ID:?storage operation id is required}/markers/install.json
+  fresh_storage_marker_local_storage:
+    file: ./upgrade/staging/storage-init/${MALLBASE_STORAGE_OPERATION_ID:?storage operation id is required}/markers/local_storage.json
+  fresh_storage_marker_public_storage:
+    file: ./upgrade/staging/storage-init/${MALLBASE_STORAGE_OPERATION_ID:?storage operation id is required}/markers/public_storage.json
+  fresh_storage_marker_runtime_backup:
+    file: ./upgrade/staging/storage-init/${MALLBASE_STORAGE_OPERATION_ID:?storage operation id is required}/markers/runtime_backup.json
+  fresh_storage_marker_uploads:
+    file: ./upgrade/staging/storage-init/${MALLBASE_STORAGE_OPERATION_ID:?storage operation id is required}/markers/uploads.json

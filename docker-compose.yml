@@ -1,33 +1,172 @@
 # ==========================================
-# 生产环境：单后端容器
+# 生产环境：HTTP + Queue + Cron 独立业务角色
 #
-# 配置源：项目根目录 .env；Compose 读取它做变量插值，并通过 env_file 注入容器
-# 容器入口脚本会根据注入的环境变量派生 /app/.env
-# 用法: cp deploy/docker/.example.env .env && 按生产环境修改后 docker compose up -d --build
+# 生产 Compose 只运行已经构建并校验过的镜像，不在部署阶段重新构建源码。
+# 首次启动前：
+#   1. sh deploy/docker/host-preflight.sh
+#   2. sh deploy/docker/build-sealed-image.sh --release-id <平台发布ID> --tag mallbase-backend:<version>
+#   3. sh deploy/docker/start-sealed-image.sh <上一步返回的 32 位 receipt id>
+# tag 只用于人工识别；启动权威始终是 Agent 收据中的 immutable image ID。
+# Agent 和管理后台都不会执行 Docker，Docker 只由这两个宿主机包装脚本调用。
 # 需要：外部 MySQL 8.0+ / Redis 6.0+
 # ==========================================
 
 name: ${MALLBASE_COMPOSE_PROJECT_NAME:-mallbase}
 
+x-mallbase-environment: &mallbase-environment
+  TZ: Asia/Shanghai
+  MALLBASE_RUNTIME_MODE: production
+  MALLBASE_BACKEND_ENV_PATH: /app/.mallbase-env/backend.env
+  MALLBASE_UPGRADE_ROOT: /app/upgrade
+
+x-mallbase-runtime: &mallbase-runtime
+  image: ${MALLBASE_BACKEND_IMAGE_ID:?set MALLBASE_BACKEND_IMAGE_ID}
+  pull_policy: never
+  restart: unless-stopped
+  user: "10000:${MALLBASE_UPGRADE_SHARED_GID:?run host-preflight.sh first}"
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+  env_file:
+    - .env
+  read_only: true
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  tmpfs:
+    - /tmp:rw,nosuid,nodev,noexec,size=64m,mode=1777
+  volumes:
+    - type: volume
+      source: backend_runtime
+      target: /app/runtime
+      volume:
+        nocopy: true
+    - type: volume
+      source: backend_uploads
+      target: /app/public/uploads
+      volume:
+        nocopy: true
+    - type: bind
+      source: ./upgrade/bin
+      target: /app/upgrade/bin
+      read_only: true
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ./upgrade/lifetime-locks
+      target: /app/upgrade/lifetime-locks
+      read_only: true
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ./upgrade/staging
+      target: /app/upgrade/staging
+      read_only: true
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ./upgrade/staging/storage-ready.pub
+      target: /app/upgrade/staging/storage-ready.pub
+      read_only: true
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ./upgrade/staging/storage-ready.json
+      target: /app/upgrade/staging/storage-ready.json
+      read_only: true
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ./upgrade/config
+      target: /app/upgrade/config
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ./upgrade/run
+      target: /app/upgrade/run
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ./upgrade/state
+      target: /app/upgrade/state
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ./upgrade/jobs
+      target: /app/upgrade/jobs
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ./upgrade/backups
+      target: /app/upgrade/backups
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ./upgrade/bootstrap-retention/env
+      target: /app/.mallbase-env
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ./upgrade/bootstrap-retention/cert
+      target: /app/storage/cert
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ./upgrade/bootstrap-retention/demo
+      target: /app/public/static/demo
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ./upgrade/bootstrap-retention/public-storage
+      target: /app/public/storage
+      bind:
+        create_host_path: false
+
 services:
   backend:
-    build:
-      context: .
-      dockerfile: deploy/docker/Dockerfile
-    container_name: ${MALLBASE_CONTAINER_PREFIX:-mallbase}
-    restart: unless-stopped
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    env_file:
-      - .env
+    <<: *mallbase-runtime
     ports:
       - "${SWOOLE_HTTP_PORT:-8080}:${SWOOLE_HTTP_PORT:-8080}"
     environment:
-      TZ: Asia/Shanghai
-    volumes:
-      - backend_runtime:/app/runtime
-      - backend_uploads:/app/public/uploads
+      <<: *mallbase-environment
+      MALLBASE_RUNTIME_ROLE: http
+      CRON_ENABLE: "false"
+      SWOOLE_QUEUE_ENABLE: "false"
+    command: ["php", "think", "swoole"]
+
+  queue:
+    <<: *mallbase-runtime
+    environment:
+      <<: *mallbase-environment
+      MALLBASE_RUNTIME_ROLE: queue
+      CRON_ENABLE: "false"
+      SWOOLE_QUEUE_ENABLE: "false"
+    command: ["php", "think", "queue:work", "redis", "--queue=default", "--tries=3"]
+
+  cron:
+    <<: *mallbase-runtime
+    environment:
+      <<: *mallbase-environment
+      MALLBASE_RUNTIME_ROLE: cron
+      CRON_ENABLE: "true"
+      SWOOLE_QUEUE_ENABLE: "false"
+      SWOOLE_WORKER_NUM: "1"
+    command: ["php", "think", "swoole"]
 
 volumes:
   backend_runtime:
+    name: "${MALLBASE_STORAGE_NAMESPACE:?run fresh storage bootstrap first}_runtime"
+    labels:
+      com.mallbase.storage.namespace: "${MALLBASE_STORAGE_NAMESPACE:?run fresh storage bootstrap first}"
+      com.mallbase.storage.role: runtime
+      com.mallbase.storage.layout-version: "1"
+      com.mallbase.storage.layout-generation: "1"
+      com.mallbase.storage.managed: "true"
   backend_uploads:
+    name: "${MALLBASE_STORAGE_NAMESPACE:?run fresh storage bootstrap first}_uploads"
+    labels:
+      com.mallbase.storage.namespace: "${MALLBASE_STORAGE_NAMESPACE:?run fresh storage bootstrap first}"
+      com.mallbase.storage.role: uploads
+      com.mallbase.storage.layout-version: "1"
+      com.mallbase.storage.layout-generation: "1"
+      com.mallbase.storage.managed: "true"

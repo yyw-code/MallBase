@@ -1248,31 +1248,10 @@ class InstallService extends BaseService
      */
     private function writeEnvFile(array $envData): void
     {
-        $envPath = app()->getRootPath() . '.env';
+        $configuredPath = trim((string) getenv('MALLBASE_BACKEND_ENV_PATH'));
+        $envPath = $configuredPath !== '' ? $configuredPath : app()->getRootPath() . '.env';
         $templatePath = app()->getRootPath() . '.example.env';
-        $baseContent = '';
-
-        if (is_file($envPath)) {
-            $baseContent = (string) file_get_contents($envPath);
-        } elseif (is_file($templatePath)) {
-            $baseContent = (string) file_get_contents($templatePath);
-        }
-
-        if ($baseContent === '') {
-            throw new \RuntimeException('找不到可写入的环境配置模板');
-        }
-
-        foreach ($envData as $key => $value) {
-            $quoted = $this->formatEnvValue($value);
-            $pattern = '/^' . preg_quote($key, '/') . '\s*=.*$/m';
-            if (preg_match($pattern, $baseContent) === 1) {
-                $baseContent = (string) preg_replace($pattern, $key . '=' . $quoted, $baseContent, 1);
-            } else {
-                $baseContent = rtrim($baseContent, "\n") . PHP_EOL . $key . '=' . $quoted . PHP_EOL;
-            }
-        }
-
-        file_put_contents($envPath, $baseContent);
+        (new BackendEnvFileStore())->write($envPath, $templatePath, $envData);
     }
 
     /**
@@ -1297,10 +1276,6 @@ class InstallService extends BaseService
             return;
         }
 
-        $baseContent = is_file($envPath)
-            ? (string) file_get_contents($envPath)
-            : (string) file_get_contents($templatePath);
-
         $rootKeys = [
             'DB_HOST',
             'DB_PORT',
@@ -1318,21 +1293,11 @@ class InstallService extends BaseService
             'SITE_URL',
         ];
 
-        foreach ($rootKeys as $key) {
-            if (!array_key_exists($key, $envData)) {
-                continue;
-            }
-
-            $quoted = $this->formatEnvValue($envData[$key]);
-            $pattern = '/^' . preg_quote($key, '/') . '\s*=.*$/m';
-            if (preg_match($pattern, $baseContent) === 1) {
-                $baseContent = (string) preg_replace($pattern, $key . '=' . $quoted, $baseContent, 1);
-            } else {
-                $baseContent = rtrim($baseContent, "\n") . PHP_EOL . $key . '=' . $quoted . PHP_EOL;
-            }
-        }
-
-        file_put_contents($envPath, $baseContent);
+        (new BackendEnvFileStore())->write(
+            $envPath,
+            $templatePath,
+            array_intersect_key($envData, array_flip($rootKeys)),
+        );
     }
 
     /**
@@ -1754,19 +1719,6 @@ class InstallService extends BaseService
         }
 
         return 'Redis 连接失败：' . $message;
-    }
-
-    private function formatEnvValue(string $value): string
-    {
-        if ($value === '') {
-            return '';
-        }
-
-        if (preg_match('/\s|#|=|,|"|\'/', $value) === 1) {
-            return '"' . addcslashes($value, "\"\\") . '"';
-        }
-
-        return $value;
     }
 
     /**

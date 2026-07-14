@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "provenance_kind": "initial",
+  "app_version": "1.0.0",
+  "deployment_id": "018f5d35-3f42-7a31-a731-9e45df3356e8",
+  "release_id": "mallbase-1.0.0",
+  "release_inventory_sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "storage_layout_version": 1,
+  "storage_layout_generation": 1
+}

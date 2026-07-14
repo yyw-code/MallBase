@@ -11,6 +11,8 @@ use app\command\OrderRecoverRefund;
 use app\command\PointsReleaseCommand;
 use app\command\SyncPermissions;
 use app\command\SyncSettingPermissions;
+use app\command\StorageCutoverTargetSnapshot;
+use app\command\UpgradeBootstrapRetentionFinalize;
 use app\command\UpgradeAdminSchema;
 use app\command\UpgradeClientDecorationCustomMenu;
 use app\command\UpgradeClientSearchSchema;
@@ -29,6 +31,8 @@ return [
         'order:recover-refund' => OrderRecoverRefund::class,
         'points:release' => PointsReleaseCommand::class,
         'install:auto' => InstallAuto::class,
+        'upgrade:storage-cutover-target-snapshot' => StorageCutoverTargetSnapshot::class,
+        'upgrade:bootstrap-retention-finalize' => UpgradeBootstrapRetentionFinalize::class,
         'upgrade:admin-schema' => UpgradeAdminSchema::class,
         'upgrade:client-decoration-custom-menu' => UpgradeClientDecorationCustomMenu::class,
         'upgrade:client-search-schema' => UpgradeClientSearchSchema::class,

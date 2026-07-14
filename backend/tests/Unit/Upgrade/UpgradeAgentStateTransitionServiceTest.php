@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Unit\Upgrade;
 
 use app\service\upgrade\UpgradeAgentStateTransitionService;
+use app\service\upgrade\UpgradeDrainGateRepository;
 use app\service\upgrade\UpgradeGateRepository;
 use app\service\upgrade\UpgradeGateSnapshot;
 use app\service\upgrade\UpgradeOperationStore;
@@ -86,6 +87,27 @@ final class UpgradeAgentStateTransitionServiceTest extends TestCase
         self::assertSame(8, $first['result']['revision']);
         self::assertSame(self::JOB_ID, $first['result']['job_id']);
         self::assertSame($first, $this->operations->get($first['operation_id']));
+    }
+
+    public function testPausedEntersBackingUpOnlyThroughTheDrainCheckedBoundary(): void
+    {
+        $gate = new AgentTransitionGate($this->snapshot(UpgradeState::Paused, 8));
+        $service = new UpgradeAgentStateTransitionService($this->operations, $gate);
+
+        $result = $service->transition(
+            self::JOB_ID,
+            8,
+            UpgradeState::Paused,
+            UpgradeState::BackingUp,
+            false,
+            self::RUNTIME_ID,
+            self::BOOT_ID,
+            1005,
+        );
+
+        self::assertSame('completed', $result['state']);
+        self::assertSame('backing_up', $result['result']['state']);
+        self::assertSame(1, $gate->drainBoundaryCount);
     }
 
     #[DataProvider('terminalStateProvider')]
@@ -331,7 +353,11 @@ final class UpgradeAgentStateTransitionServiceTest extends TestCase
         }
     }
 
-    public function testExplicitCancelStopsOnlyAReferencedPreApplyState(): void
+    #[DataProvider('pausedExportStatusProvider')]
+    public function testExplicitCancelStopsOnlyAReferencedPreApplyState(
+        string $nextStep,
+        string $failureClass,
+    ): void
     {
         $requestId = '66666666-6666-4666-8666-666666666666';
         $controlRevision = 11;
@@ -344,7 +370,7 @@ final class UpgradeAgentStateTransitionServiceTest extends TestCase
             'expected_revision' => $controlRevision,
             'request_id' => $requestId,
         ]);
-        $this->writeAgentStatus($controlRevision, 'draining', 'paused', '');
+        $this->writeAgentStatus($controlRevision, 'paused', $nextStep, $failureClass);
         $gate = new AgentTransitionGate($this->snapshot(UpgradeState::Paused, 50));
         $service = new UpgradeAgentStateTransitionService($this->operations, $gate, $this->files);
 
@@ -374,6 +400,13 @@ final class UpgradeAgentStateTransitionServiceTest extends TestCase
         self::assertSame(51, $first['result']['revision']);
         self::assertSame($first, $replay);
         self::assertSame(1, $gate->mutationCount);
+    }
+
+    /** @return iterable<string,array{string,string}> */
+    public static function pausedExportStatusProvider(): iterable
+    {
+        yield 'export pending' => ['storage_export_pending', ''];
+        yield 'export error before apply' => ['storage_export_retry', 'storage_export_failed'];
     }
 
     private function snapshot(UpgradeState $state, int $revision): UpgradeGateSnapshot
@@ -469,9 +502,10 @@ final class UpgradeAgentStateTransitionServiceTest extends TestCase
     }
 }
 
-final class AgentTransitionGate implements UpgradeGateRepository, UpgradeRecoveryGateRepository
+final class AgentTransitionGate implements UpgradeGateRepository, UpgradeRecoveryGateRepository, UpgradeDrainGateRepository
 {
     public int $mutationCount = 0;
+    public int $drainBoundaryCount = 0;
     public bool $failNextMutation = false;
 
     public function __construct(private UpgradeGateSnapshot $current)
@@ -508,6 +542,16 @@ final class AgentTransitionGate implements UpgradeGateRepository, UpgradeRecover
         $this->assertCurrent($expectedRevision, $terminalState, $jobId);
         $this->beforeMutation();
         $this->current = $this->next(UpgradeState::Normal, $expectedRevision + 1, null, $platformSyncPending);
+
+        return $this->current;
+    }
+
+    public function enterBackingUpAfterDrain(int $expectedRevision, string $jobId): UpgradeGateSnapshot
+    {
+        $this->assertCurrent($expectedRevision, UpgradeState::Paused, $jobId);
+        $this->beforeMutation();
+        ++$this->drainBoundaryCount;
+        $this->current = $this->next(UpgradeState::BackingUp, $expectedRevision + 1, $jobId, false);
 
         return $this->current;
     }
