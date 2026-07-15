@@ -58,7 +58,7 @@ final class AgentHeartbeatPayloadFactory
             $this->fail();
         }
 
-        $release = $this->releaseInfo();
+        $release = $this->currentRelease();
         $provider = $this->environmentProvider;
         $environment = $provider();
         if (!is_array($environment)) {
@@ -96,7 +96,8 @@ final class AgentHeartbeatPayloadFactory
     }
 
     /** @return array<string, mixed> */
-    private function releaseInfo(): array
+    /** @return array{version:string,released_at?:string,notes?:list<string>} */
+    public function currentRelease(): array
     {
         $stat = @lstat($this->versionPath);
         if (!$this->validVersionStat($stat)) {

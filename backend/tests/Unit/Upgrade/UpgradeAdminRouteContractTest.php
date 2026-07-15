@@ -29,4 +29,26 @@ final class UpgradeAdminRouteContractTest extends TestCase
         $this->assertStringNotContainsString("'_alias'", $records);
         $this->assertSame(1, substr_count($route, "'_alias'"));
     }
+
+    public function testOverviewRouteReusesPagePermission(): void
+    {
+        $route = (string) file_get_contents(dirname(__DIR__, 3) . '/route/api/admin/upgrade.php');
+
+        $this->assertStringContainsString("Route::get('overview', 'overview')", $route);
+        $this->assertMatchesRegularExpression(
+            "/Route::get\\('overview'.*?'_permission'\\s*=>\\s*'SystemUpgrade'/s",
+            $route,
+        );
+    }
+
+    public function testReleaseCatalogRouteReusesPagePermission(): void
+    {
+        $route = (string) file_get_contents(dirname(__DIR__, 3) . '/route/api/admin/upgrade.php');
+
+        $this->assertStringContainsString("Route::get('releases', 'releases')", $route);
+        $this->assertMatchesRegularExpression(
+            "/Route::get\\('releases'.*?'_permission'\\s*=>\\s*'SystemUpgrade'/s",
+            $route,
+        );
+    }
 }

@@ -28,10 +28,33 @@ final class UpgradeController extends BaseController
         }
     }
 
+    public function overview(): Response
+    {
+        try {
+            return $this->success($this->service()->getOverview(), '获取版本概览成功')
+                ->header($this->securityHeaders());
+        } catch (Throwable $exception) {
+            return $this->mapError($exception);
+        }
+    }
+
+    public function releases(): Response
+    {
+        try {
+            return $this->success($this->service()->getReleaseCatalog(), '获取平台版本目录成功')
+                ->header($this->securityHeaders());
+        } catch (Throwable $exception) {
+            return $this->mapError($exception);
+        }
+    }
+
     public function createSession(): Response
     {
         try {
-            $result = $this->service()->createEntryTicket((int) ($this->request->admin_id ?? 0));
+            $result = $this->service()->createEntryTicket(
+                (int) ($this->request->admin_id ?? 0),
+                $this->request->post('target_version', ''),
+            );
 
             return $this->success($result, '升级入口授权已创建')
                 ->header($this->securityHeaders());
@@ -43,10 +66,11 @@ final class UpgradeController extends BaseController
     private function mapError(Throwable $exception): Response
     {
         [$status, $reason, $message] = match ($exception->getMessage()) {
-            'UPGRADE_RECORD_ARGUMENT_INVALID', 'UPGRADE_ENTRY_ARGUMENT_INVALID' => [422, $exception->getMessage(), '升级请求参数无效'],
+            'UPGRADE_RECORD_ARGUMENT_INVALID', 'UPGRADE_ENTRY_ARGUMENT_INVALID', 'UPGRADE_CATALOG_ARGUMENT_INVALID' => [422, $exception->getMessage(), '升级请求参数无效'],
             'UPGRADE_ENTRY_CONFLICT' => [409, 'UPGRADE_ENTRY_CONFLICT', '升级入口授权冲突，请重试'],
             'UPGRADE_RECORD_INVALID' => [500, 'UPGRADE_RECORD_INVALID', '升级记录文件损坏，请检查升级日志'],
-            'UPGRADE_ROOT_UNAVAILABLE', 'UPGRADE_RECORD_UNAVAILABLE', 'UPGRADE_ENTRY_UNAVAILABLE' => [503, $exception->getMessage(), '升级服务共享目录暂时不可用'],
+            'UPGRADE_ROOT_UNAVAILABLE', 'UPGRADE_RECORD_UNAVAILABLE', 'UPGRADE_ENTRY_UNAVAILABLE', 'UPGRADE_OVERVIEW_UNAVAILABLE' => [503, $exception->getMessage(), '升级服务共享目录暂时不可用'],
+            'UPGRADE_CATALOG_UNAVAILABLE' => [503, 'UPGRADE_CATALOG_UNAVAILABLE', '平台版本目录暂时不可用'],
             default => [503, 'UPGRADE_ADMIN_UNAVAILABLE', '升级服务暂时不可用'],
         };
         if ($status >= 500) {

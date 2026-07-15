@@ -115,6 +115,61 @@ final class UpgradeAdminServiceTest extends TestCase
         self::assertSame(0600, fileperms($this->root . '/runtime/install/install.lock') & 0777);
     }
 
+    public function testCreatesTargetBoundEntryTicketForDirectUpgrade(): void
+    {
+        $service = new UpgradeAdminService(
+            $this->root,
+            static fn(): int => 1000,
+            static fn(): string => self::TICKET,
+            $this->installLock(),
+        );
+
+        $service->createEntryTicket(7, '1.2.0');
+
+        $hash = hash('sha256', self::TICKET);
+        $stored = json_decode(
+            (string) file_get_contents($this->root . '/run/access-tickets/' . $hash . '.json'),
+            true,
+            32,
+            JSON_THROW_ON_ERROR,
+        );
+        self::assertSame('1.2.0', $stored['target_version'] ?? null);
+    }
+
+    public function testRejectsInvalidTargetBoundEntryTicket(): void
+    {
+        $service = new UpgradeAdminService(
+            $this->root,
+            static fn(): int => 1000,
+            static fn(): string => self::TICKET,
+            $this->installLock(),
+        );
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('UPGRADE_ENTRY_ARGUMENT_INVALID');
+        $service->createEntryTicket(7, 'latest');
+    }
+
+    public function testReturnsCurrentReleaseOverviewWithoutPlatformAccess(): void
+    {
+        $service = new UpgradeAdminService(
+            configuredRoot: $this->root,
+            currentReleaseReader: static fn(): array => [
+                'version' => '1.0.0',
+                'released_at' => '2026-04-23 12:00:00',
+                'notes' => ['安装模块契约统一', '后台路由与响应风格收口'],
+            ],
+        );
+
+        self::assertSame([
+            'current' => [
+                'version' => '1.0.0',
+                'released_at' => '2026-04-23 12:00:00',
+                'notes' => ['安装模块契约统一', '后台路由与响应风格收口'],
+            ],
+        ], $service->getOverview());
+    }
+
     public function testEntryTicketFailsClosedWhenPlatformTokenIsDisabledOrUnavailable(): void
     {
         foreach ([

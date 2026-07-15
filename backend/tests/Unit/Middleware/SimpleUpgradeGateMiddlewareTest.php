@@ -114,11 +114,23 @@ final class SimpleUpgradeGateMiddlewareTest extends TestCase
             $this->request('admin/api/system/upgrade/session', 'POST'),
             static fn(): Response => response('upgrade-admin-ok', 200),
         );
+        $overview = $middleware->handle(
+            $this->request('admin/api/system/upgrade/overview'),
+            static fn(): Response => response('upgrade-overview-ok', 200),
+        );
+        $releases = $middleware->handle(
+            $this->request('admin/api/system/upgrade/releases'),
+            static fn(): Response => response('upgrade-releases-ok', 200),
+        );
 
         self::assertSame(503, $blocked->getCode());
         self::assertStringContainsString('SYSTEM_MAINTENANCE', $blocked->getContent());
         self::assertSame(200, $upgrade->getCode());
         self::assertSame('upgrade-admin-ok', $upgrade->getContent());
+        self::assertSame(200, $overview->getCode());
+        self::assertSame('upgrade-overview-ok', $overview->getContent());
+        self::assertSame(200, $releases->getCode());
+        self::assertSame('upgrade-releases-ok', $releases->getContent());
     }
 
     public function testBusinessRequestFailsClosedWhenStateDocumentIsInvalid(): void

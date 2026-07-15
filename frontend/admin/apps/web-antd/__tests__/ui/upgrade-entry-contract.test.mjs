@@ -29,6 +29,11 @@ const routesSource = readFileSync(
 );
 
 test('Admin API is read-only except for issuing a one-time Go entry ticket', () => {
+  assert.match(apiSource, /getUpgradeOverviewApi/);
+  assert.match(apiSource, /\/system\/upgrade\/overview/);
+  assert.match(apiSource, /getUpgradeReleaseCatalogApi/);
+  assert.match(apiSource, /\/system\/upgrade\/releases/);
+  assert.doesNotMatch(apiSource, /\/upgrade\/api\/releases/);
   assert.match(apiSource, /getUpgradeRecordsApi/);
   assert.match(apiSource, /\/system\/upgrade\/records/);
   assert.match(apiSource, /createUpgradeEntryApi/);
@@ -39,13 +44,26 @@ test('Admin API is read-only except for issuing a one-time Go entry ticket', () 
 });
 
 test('Admin page shows records and gates the Go page button by backend permission', () => {
+  assert.match(adminSource, /最高平台版本/);
+  assert.match(adminSource, /平台可升级版本/);
+  assert.match(adminSource, /平台返回/);
+  assert.match(adminSource, /个当前版本可直达目标/);
+  assert.match(adminSource, /升级到此版本/);
   assert.match(adminSource, /getUpgradeRecordsApi/);
   assert.match(adminSource, /SystemUpgradeSessionCreate/);
   assert.match(adminSource, /v-access:code/);
   assert.match(adminSource, /backup_path/);
   assert.match(adminSource, /package_path/);
   assert.match(adminSource, /log_path/);
-  assert.match(adminSource, /Go 升级程序未启动/);
+  assert.match(adminSource, /升级执行服务未启动（Go）/);
+  assert.match(adminSource, /版本目录仍可查看，启动后方可执行升级/);
+  assert.match(adminSource, /catalogStatus\.value === 'ready'/);
+  assert.match(adminSource, /upgradeActionsDisabled/);
+  assert.doesNotMatch(adminSource, /catalogStatus\.value = 'offline'/);
+  assert.doesNotMatch(
+    adminSource,
+    /请先在服务器启动 Go 升级程序，再重新检查平台可升级版本/,
+  );
   assert.match(adminSource, /等待手动部署 PHP 代码/);
   assert.match(adminSource, /window\.location\.assign\(entry\.upgrade_url\)/);
   assert.doesNotMatch(

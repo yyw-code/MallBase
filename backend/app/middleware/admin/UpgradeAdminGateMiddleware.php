@@ -24,7 +24,11 @@ final readonly class UpgradeAdminGateMiddleware
 
         $path = trim($request->pathinfo(), '/');
         $method = strtoupper($request->method());
-        if (($method === 'GET' && $path === 'admin/api/system/upgrade/records')
+        if (($method === 'GET' && in_array($path, [
+            'admin/api/system/upgrade/overview',
+            'admin/api/system/upgrade/releases',
+            'admin/api/system/upgrade/records',
+        ], true))
             || ($method === 'POST' && $path === 'admin/api/system/upgrade/session')) {
             return $next($request);
         }

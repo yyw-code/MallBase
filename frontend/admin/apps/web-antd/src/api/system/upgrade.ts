@@ -40,6 +40,35 @@ export namespace UpgradeApi {
     expires_at: number;
     upgrade_url: string;
   }
+
+  export interface CurrentRelease {
+    notes: string[];
+    released_at: string;
+    version: string;
+  }
+
+  export interface Overview {
+    current: CurrentRelease;
+  }
+
+  export interface ReleaseCandidate {
+    channel: 'stable';
+    from_version: string;
+    package_kind: 'full' | 'patch';
+    released_at?: string;
+    summary: string;
+    version: string;
+  }
+
+  export interface ReleaseCatalog {
+    checked_at: number;
+    current_version: string;
+    releases: ReleaseCandidate[];
+  }
+}
+
+export function getUpgradeOverviewApi() {
+  return requestClient.get<UpgradeApi.Overview>('/system/upgrade/overview');
 }
 
 export function getUpgradeRecordsApi(params: { limit: number; page: number }) {
@@ -48,10 +77,16 @@ export function getUpgradeRecordsApi(params: { limit: number; page: number }) {
   });
 }
 
-export function createUpgradeEntryApi() {
+export function createUpgradeEntryApi(targetVersion = '') {
   return requestClient.post<UpgradeApi.EntryTicket>(
     '/system/upgrade/session',
-    {},
+    targetVersion ? { target_version: targetVersion } : {},
+  );
+}
+
+export function getUpgradeReleaseCatalogApi() {
+  return requestClient.get<UpgradeApi.ReleaseCatalog>(
+    '/system/upgrade/releases',
   );
 }
 

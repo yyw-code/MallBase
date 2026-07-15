@@ -4,6 +4,18 @@ use app\model\auth\Permission;
 use think\facade\Route;
 
 Route::group('system/upgrade', function () {
+    Route::get('overview', 'overview')
+        ->name('SystemUpgradeOverview')
+        ->option([
+            '_auth' => true,
+            '_permission' => 'SystemUpgrade',
+        ]);
+    Route::get('releases', 'releases')
+        ->name('SystemUpgradeReleases')
+        ->option([
+            '_auth' => true,
+            '_permission' => 'SystemUpgrade',
+        ]);
     Route::get('records', 'records')
         ->name('SystemUpgradeRecords')
         ->option([
