@@ -121,6 +121,12 @@ set -eu
     || exit 2
 root=$3
 artifact=$5
+if find "$root" -type f \( -name .env -o -name '.env.*' \) ! -name .env.example -print \
+    | grep -q .; then
+    printf '%s\n' FRONTEND_RECEIPT_ENV_NOT_CLEAN >&2
+    exit 3
+fi
+[ -f "$root/.env.example" ] || exit 3
 case "$artifact" in
     admin) receipt=$root/backend/public/admin/.mallbase-build-receipt.json ;;
     h5) receipt=$root/backend/public/client/.mallbase-build-receipt.json ;;

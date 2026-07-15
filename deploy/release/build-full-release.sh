@@ -159,6 +159,11 @@ for publish_root in "$SOURCE_TREE/backend/public/admin" "$SOURCE_TREE/backend/pu
         || fail RELEASE_FRONTEND_OUTPUT_INCOMPLETE
 done
 
+# 前端构建允许读取归档内的构建环境文件，但回执必须只绑定最终会发布的源码树。
+# 先安全删除普通环境文件；符号链接或其他异常类型保留给 release-packager fail closed。
+find "$SOURCE_TREE" -type f \( -name .env -o -name '.env.*' \) ! -name .env.example \
+    -exec rm -f -- {} +
+
 # 回执格式与内容哈希由 Platform 的 release-packager 唯一生成，MallBase 只消费固定命令边界。
 "$RELEASE_PACKAGER_BIN" frontend-receipt -root "$SOURCE_TREE" -artifact admin \
     || fail RELEASE_ADMIN_RECEIPT_FAILED
