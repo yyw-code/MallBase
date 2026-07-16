@@ -58,11 +58,14 @@ final readonly class SimpleUpgradeRuntimeService
         $this->requireJob($body['source_job_id']);
         $this->requirePaused();
 
-        return $this->database->restore(
+        $result = $this->database->restore(
             $body['source_job_id'],
             $body['database_path'],
             $body['database_sha256'],
         );
+        $this->migrations->forgetJob($body['source_job_id']);
+
+        return $result;
     }
 
     /** @param array<string,mixed> $body @return array<string,mixed> */

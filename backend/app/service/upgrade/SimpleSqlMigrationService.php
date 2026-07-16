@@ -106,6 +106,33 @@ final class SimpleSqlMigrationService
         }
     }
 
+    public function forgetJob(string $jobId): void
+    {
+        if (preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/D', $jobId) !== 1) {
+            throw new RuntimeException('SIMPLE_MIGRATION_INPUT_INVALID');
+        }
+        $lock = $this->openLock();
+        try {
+            if (!flock($lock, LOCK_EX)) {
+                throw new RuntimeException('SIMPLE_MIGRATION_LOCK_FAILED');
+            }
+            $document = $this->readCheckpoint();
+            $remaining = array_values(array_filter(
+                $document['migrations'],
+                static fn(array $entry): bool => $entry['job_id'] !== $jobId,
+            ));
+            if (count($remaining) !== count($document['migrations'])) {
+                $document['migrations'] = $remaining;
+                $this->writeCheckpoint($document);
+            }
+        } finally {
+            if (is_resource($lock)) {
+                @flock($lock, LOCK_UN);
+                fclose($lock);
+            }
+        }
+    }
+
     /** @return list<string> */
     private function statements(string $sql): array
     {

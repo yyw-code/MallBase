@@ -113,6 +113,40 @@ final class SimpleUpgradeRuntimeServiceTest extends TestCase
         }
     }
 
+    public function testRestoreForgetsMigrationCheckpointsFromSourceUpgradeJob(): void
+    {
+        $service = $this->service();
+        $service->pause(self::JOB_ID, [
+            'action' => 'upgrade',
+            'source_version' => '1.2.0',
+            'target_version' => '1.3.0',
+        ]);
+        $backup = $service->backup(self::JOB_ID, []);
+        $sql = 'CREATE TABLE IF NOT EXISTS migrated (id INTEGER PRIMARY KEY)';
+        file_put_contents($this->root . '/staging/' . self::JOB_ID . '/migrations/demo.sql', $sql);
+        $service->migrate(self::JOB_ID, [
+            'migration_id' => 'demo',
+            'version' => '1.3.0',
+            'path' => 'migrations/demo.sql',
+            'sha256' => hash('sha256', $sql),
+        ]);
+
+        $restored = $service->restore(self::ROLLBACK_JOB_ID, [
+            'source_job_id' => self::JOB_ID,
+            'database_path' => $backup['database_path'],
+            'database_sha256' => $backup['database_sha256'],
+        ]);
+
+        self::assertSame('restored', $restored['state']);
+        $checkpoint = json_decode(
+            (string) file_get_contents($this->root . '/run/simple-migrations.json'),
+            true,
+            32,
+            JSON_THROW_ON_ERROR,
+        );
+        self::assertSame([], $checkpoint['migrations']);
+    }
+
     public function testResumeOnlyAcceptsExactEmptyBodyAndRestoresPausedGate(): void
     {
         $service = $this->service();

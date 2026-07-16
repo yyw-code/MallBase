@@ -12,6 +12,7 @@ use RuntimeException;
 final class SimpleSqlMigrationServiceTest extends TestCase
 {
     private const JOB_ID = '11111111-1111-4111-8111-111111111111';
+    private const OTHER_JOB_ID = '22222222-2222-4222-8222-222222222222';
     private const MIGRATION_ID = '20260714_demo';
 
     private string $root;
@@ -109,6 +110,38 @@ final class SimpleSqlMigrationServiceTest extends TestCase
             hash('sha256', $forbidden),
         ));
         self::assertSame(0, (int) $this->pdo->query("SELECT COUNT(*) FROM sqlite_master WHERE name='forbidden'")->fetchColumn());
+    }
+
+    public function testForgetJobRemovesOnlyItsMigrationCheckpointsAndIsIdempotent(): void
+    {
+        $sql = 'CREATE TABLE IF NOT EXISTS demo (id INTEGER PRIMARY KEY)';
+        $this->writeMigration($sql);
+        mkdir($this->root . '/staging/' . self::OTHER_JOB_ID . '/migrations', 0770, true);
+        file_put_contents(
+            $this->root . '/staging/' . self::OTHER_JOB_ID . '/migrations/' . self::MIGRATION_ID . '.sql',
+            $sql,
+        );
+        $service = $this->service();
+        foreach ([self::JOB_ID, self::OTHER_JOB_ID] as $jobId) {
+            $service->execute(
+                $jobId,
+                self::MIGRATION_ID,
+                '1.2.0',
+                'migrations/' . self::MIGRATION_ID . '.sql',
+                hash('sha256', $sql),
+            );
+        }
+
+        $service->forgetJob(self::JOB_ID);
+        $service->forgetJob(self::JOB_ID);
+
+        $checkpoint = json_decode(
+            (string) file_get_contents($this->root . '/run/simple-migrations.json'),
+            true,
+            32,
+            JSON_THROW_ON_ERROR,
+        );
+        self::assertSame([self::OTHER_JOB_ID], array_column($checkpoint['migrations'], 'job_id'));
     }
 
     private function service(): SimpleSqlMigrationService
