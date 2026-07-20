@@ -19,10 +19,13 @@
 name: ${MALLBASE_COMPOSE_PROJECT_NAME:-mallbase}
 
 services:
-  # 一次性 preflight 容器：确保 MySQL / Redis 宿主机数据目录存在且容器可写。
+  # 一次性 preflight 容器：确保数据目录和升级共享目录存在且容器可写。
   prepare-data-dirs:
     image: alpine:3.19
     container_name: ${MALLBASE_CONTAINER_PREFIX:-mallbase}-prepare-data-dirs
+    environment:
+      MALLBASE_DEV_UID: "${MALLBASE_DEV_UID:-10000}"
+      MALLBASE_DEV_GID: "${MALLBASE_DEV_GID:-10000}"
     volumes:
       - .:/workdir
       - ./deploy/docker/prepare-data-dirs.sh:/prepare-data-dirs.sh:ro
@@ -72,7 +75,8 @@ services:
     user: "${MALLBASE_DEV_UID:-10000}:${MALLBASE_DEV_GID:-10000}"
     container_name: ${MALLBASE_CONTAINER_PREFIX:-mallbase}-install-auto
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
       TZ: Asia/Shanghai
       MALLBASE_RUNTIME_MODE: development
@@ -90,22 +94,22 @@ services:
         source: ./upgrade/config
         target: /app/upgrade/config
         bind:
-          create_host_path: false
+          create_host_path: true
       - type: bind
         source: ./upgrade/run
         target: /app/upgrade/run
         bind:
-          create_host_path: false
+          create_host_path: true
       - type: bind
         source: ./upgrade/jobs
         target: /app/upgrade/jobs
         bind:
-          create_host_path: false
+          create_host_path: true
       - type: bind
         source: ./upgrade/backups
         target: /app/upgrade/backups
         bind:
-          create_host_path: false
+          create_host_path: true
     command: php think install:auto
     restart: "no"
     depends_on:
@@ -128,7 +132,8 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     env_file:
-      - .env
+      - path: .env
+        required: false
     ports:
       - "${SWOOLE_HTTP_PORT:-8080}:${SWOOLE_HTTP_PORT:-8080}"
     environment:
@@ -148,22 +153,22 @@ services:
         source: ./upgrade/config
         target: /app/upgrade/config
         bind:
-          create_host_path: false
+          create_host_path: true
       - type: bind
         source: ./upgrade/run
         target: /app/upgrade/run
         bind:
-          create_host_path: false
+          create_host_path: true
       - type: bind
         source: ./upgrade/jobs
         target: /app/upgrade/jobs
         bind:
-          create_host_path: false
+          create_host_path: true
       - type: bind
         source: ./upgrade/backups
         target: /app/upgrade/backups
         bind:
-          create_host_path: false
+          create_host_path: true
     depends_on:
       ensure-env:
         condition: service_completed_successfully

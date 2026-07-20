@@ -73,6 +73,45 @@ final class AgentDeploymentContractTest extends TestCase
         }
     }
 
+    public function testDevelopmentComposeBootstrapsIgnoredUpgradeRuntimeDirectories(): void
+    {
+        $compose = $this->read('docker-compose.dev.yml');
+        $prepare = $this->read('deploy/docker/prepare-data-dirs.sh');
+        $ignore = $this->read('upgrade/.gitignore');
+
+        self::assertStringContainsString(
+            'MALLBASE_DEV_UID: "${MALLBASE_DEV_UID:-10000}"',
+            $compose,
+        );
+        self::assertStringContainsString(
+            'MALLBASE_DEV_GID: "${MALLBASE_DEV_GID:-10000}"',
+            $compose,
+        );
+        foreach (['config', 'run', 'jobs', 'backups'] as $directory) {
+            self::assertSame(
+                2,
+                preg_match_all(
+                    '/source: \.\/upgrade\/' . preg_quote($directory, '/')
+                        . '\s+target: \/app\/upgrade\/' . preg_quote($directory, '/')
+                        . '\s+bind:\s+create_host_path: true/',
+                    $compose,
+                ),
+                $directory,
+            );
+            self::assertStringContainsString('/' . $directory . '/', $ignore);
+            self::assertStringContainsString(
+                'prepare_upgrade_dir "upgrade/' . $directory . '"',
+                $prepare,
+            );
+        }
+        self::assertStringContainsString('prepare_upgrade_dir "upgrade/run/requests"', $prepare);
+        self::assertStringContainsString('chmod 2770 "$path"', $prepare);
+        self::assertStringNotContainsString(
+            'chown -R "${MALLBASE_DEV_UID}:${MALLBASE_DEV_GID}"',
+            $prepare,
+        );
+    }
+
     public function testProductionKeepsBusinessDataInPlainNamedVolumes(): void
     {
         $compose = $this->read('docker-compose.yml');

@@ -16,7 +16,10 @@ final class InstallEnvSourceContractTest extends TestCase
         $docs = (string) file_get_contents($root . '/docs/install/docker-backend-only.md');
 
         $this->assertStringNotContainsString('- .:/workspace:ro', $compose);
-        $this->assertGreaterThanOrEqual(2, substr_count($compose, "env_file:\n      - .env"));
+        $this->assertSame(
+            2,
+            substr_count($compose, "env_file:\n      - path: .env\n        required: false"),
+        );
         $this->assertStringContainsString('"${REDIS_HOST_PORT:-6379}:6379"', $compose);
         $this->assertStringNotContainsString('"${REDIS_PORT:-6379}:6379"', $compose);
         $this->assertStringContainsString('ROOT_ENV="/workspace/.env"', $entrypoint);
