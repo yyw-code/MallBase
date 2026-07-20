@@ -180,6 +180,39 @@ final class AgentDeploymentContractTest extends TestCase
         self::assertMatchesRegularExpression('/^\/data\/$/m', $dockerignore);
     }
 
+    public function testDockerImagesContainTheReadOnlyProjectLicenseWithoutComposeOverride(): void
+    {
+        $license = $this->read('LICENSE');
+        self::assertNotSame('', trim($license));
+
+        foreach ([
+            'deploy/docker/Dockerfile.dev',
+            'deploy/docker/Dockerfile',
+        ] as $dockerfilePath) {
+            $dockerfile = $this->read($dockerfilePath);
+            self::assertStringContainsString(
+                'COPY --chmod=0444 LICENSE /LICENSE',
+                $dockerfile,
+                $dockerfilePath . ' must make the project license available beside /app',
+            );
+        }
+
+        self::assertFalse(
+            $this->dockerignoreExcludes('LICENSE', $this->read('.dockerignore')),
+            '.dockerignore must keep the root LICENSE in the Docker build context',
+        );
+
+        foreach (['docker-compose.dev.yml', 'docker-compose.yml'] as $composePath) {
+            $compose = $this->read($composePath);
+            self::assertStringNotContainsString('target: /LICENSE', $compose);
+            self::assertDoesNotMatchRegularExpression(
+                '/^\\s*-\\s+[^#\\r\\n]*:\/LICENSE(?::(?:ro|rw))?\\s*$/m',
+                $compose,
+                $composePath . ' must not shadow the image-owned /LICENSE',
+            );
+        }
+    }
+
     public function testHostPreflightOnlyPreparesTheSimpleUpgradeWorkspace(): void
     {
         $preflight = $this->read('deploy/docker/host-preflight.sh');
@@ -424,5 +457,33 @@ final class AgentDeploymentContractTest extends TestCase
         self::assertIsString($contents);
 
         return $contents;
+    }
+
+    private function dockerignoreExcludes(string $path, string $dockerignore): bool
+    {
+        $excluded = false;
+        foreach (preg_split('/\\R/', $dockerignore) ?: [] as $rule) {
+            $rule = trim($rule);
+            if ($rule === '' || str_starts_with($rule, '#')) {
+                continue;
+            }
+
+            $negated = str_starts_with($rule, '!');
+            if ($negated) {
+                $rule = substr($rule, 1);
+            }
+            $rule = trim($rule, '/');
+            if ($rule === '') {
+                continue;
+            }
+
+            $matches = fnmatch($rule, $path, FNM_PATHNAME)
+                || (!str_contains($rule, '/') && fnmatch($rule, basename($path)));
+            if ($matches) {
+                $excluded = !$negated;
+            }
+        }
+
+        return $excluded;
     }
 }

@@ -68,6 +68,7 @@ COPY deploy/docker/export-backend-env.php /usr/local/bin/
 RUN chmod 0555 \
     /usr/local/bin/docker-entrypoint.sh \
     /usr/local/bin/export-backend-env.php
+COPY --chmod=0444 LICENSE /LICENSE
 
 EXPOSE 8080
 

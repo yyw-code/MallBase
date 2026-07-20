@@ -47,7 +47,7 @@ final class InstallProgressContractTest extends TestCase
         $this->assertStringContainsString('function fillHostValue(inputId, validationType, value)', $installPage);
     }
 
-    public function testInstallPageRequiresPlatformAgreementBeforeContinuing(): void
+    public function testInstallPageRequiresLocalLicenseBeforeContinuing(): void
     {
         $root = dirname(__DIR__, 3);
         $installPage = (string) file_get_contents($root . '/public/install/index.html');
@@ -63,6 +63,10 @@ final class InstallProgressContractTest extends TestCase
         $this->assertStringNotContainsString('platform.gosowong.cn', $installService);
         $this->assertStringNotContainsString('/api/v1/install/agreement', $installService);
         $this->assertMatchesRegularExpression("/'source'\\s*=>\\s*'local'/", $installService);
+        $this->assertStringContainsString(
+            "'error'    => \$available ? '' : 'license_unavailable'",
+            $installService,
+        );
 
         $this->assertStringContainsString('id="agreementPanel"', $installPage);
         $this->assertStringContainsString('id="install_agreement_accept"', $installPage);
@@ -72,9 +76,20 @@ final class InstallProgressContractTest extends TestCase
         $this->assertStringContainsString('id="envNext"', $installPage);
         $this->assertStringContainsString('sandbox=""', $installPage);
         $this->assertStringContainsString("const r = await api('/agreement');", $installPage);
+        $this->assertStringContainsString("data.error === 'license_unavailable'", $installPage);
+        $this->assertStringContainsString(
+            'MallBase 开源许可文件缺失或不可读，请确认部署包完整后重试。',
+            $installPage,
+        );
+        $this->assertStringNotContainsString('平台提供', $installPage);
+        $this->assertStringNotContainsString('检查服务器网络', $installPage);
         $this->assertStringContainsString('function agreementBlockMessage()', $installPage);
         $this->assertStringContainsString('function handleAgreementNext()', $installPage);
         $this->assertStringContainsString('frame.srcdoc = buildAgreementDocument(data.content);', $installPage);
+        $this->assertMatchesRegularExpression(
+            "/if \\(!agreementState\\.available\\) \\{\\s*return '安装协议未加载成功，请刷新协议后再继续。';\\s*\\}/",
+            $installPage,
+        );
         $this->assertStringContainsString("btn.disabled = agreementBlockMessage() !== '';", $installPage);
         $this->assertStringContainsString('btn.disabled = !envCheckPassed;', $installPage);
         $this->assertStringContainsString('<h2 id="installStateTitle">6. 正在安装</h2>', $installPage);
