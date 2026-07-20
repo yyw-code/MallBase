@@ -31,7 +31,9 @@ final class InstallEnvSourceContractTest extends TestCase
         $this->assertStringContainsString('`MYSQL_PORT` / `REDIS_HOST_PORT` 是方式三 MySQL / Redis 容器给宿主机暴露端口时用的变量', $docs);
         $this->assertStringContainsString('`DB_HOST` 和 `REDIS_HOST` 不是启动后端容器的必填项', $docs);
         $this->assertStringNotContainsString('cp backend/.example.env backend/.env', $docs);
-        $this->assertStringContainsString('不要手动复制或编辑 `backend/.env`', $docs);
+        $this->assertStringContainsString('不要手动复制或编辑 `backend/.mallbase-env/backend.env`', $docs);
+        $this->assertStringContainsString('MALLBASE_BACKEND_ENV_PATH: /app/.mallbase-env/backend.env', $compose);
+        $this->assertStringContainsString('BACKEND_ENV=${MALLBASE_BACKEND_ENV_PATH:-/app/.mallbase-env/backend.env}', $entrypoint);
     }
 
     public function testInstallServiceLetsRootEnvOverrideDerivedRuntimeEnvForInstallMeta(): void

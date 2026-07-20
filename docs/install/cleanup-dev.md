@@ -12,7 +12,7 @@
 
 | 等级 | 命令 | 包含内容 | 适合安装方式 |
 |------|------|----------|--------------|
-| 基础清理 | `sh deploy/docker/cleanup-dev.sh` 或 `--basic` | 安装锁、`.env`、`backend/.env`、演示静态文件 | 方式一、方式二、方式三、本地构建后的方式四 |
+| 基础清理 | `sh deploy/docker/cleanup-dev.sh` 或 `--basic` | 安装锁、根 `.env`、Docker 开发运行配置、旧 `backend/.env`、演示运行时素材 | 方式一、方式二、方式三、本地构建后的方式四 |
 | 前端清理 | `sh deploy/docker/cleanup-dev.sh --frontend` | 基础清理 + Admin / UniApp 依赖、构建产物和发布产物 | 方式一、方式二、方式三、本地构建后的方式四 |
 | Docker 状态清理 | `sh deploy/docker/cleanup-dev.sh --docker` | 前端清理 + 开发容器、网络、卷、`data/mysql`、`data/redis`、`backend/vendor` | 方式二、方式三 |
 | 项目镜像清理 | `sh deploy/docker/cleanup-dev.sh --images` | Docker 状态清理 + `mallbase-backend:dev` | 方式二、方式三 |
@@ -38,15 +38,19 @@ sh deploy/docker/cleanup-dev.sh --basic
 清理内容：
 
 - `.env`
+- `backend/.mallbase-env`（包括 `backend.env`、环境锁和未完成的临时文件）
 - `backend/.env`
+- `backend/.backend-env.lock`（旧版入口脚本可能遗留）
 - `backend/runtime/install/install.lock`
-- `backend/public/static/demo`
+- `backend/public/static/demo` 中安装生成的运行时素材
+
+`backend/public/static/demo/README.md` 是 Git 跟踪的目录说明文件，清理脚本会原样保留，不会让代码仓库出现删除记录。`backend/.mallbase-env` 是专用运行目录，基础清理会将它整体删除，下一次 preflight 会重新创建并交接权限。
 
 适用场景：
 
 - 重新走安装流程，但暂时不清数据库和 Redis
 - 清掉安装生成的运行态配置
-- 清掉安装流程移动或生成的演示静态文件
+- 清掉安装流程移动或生成的演示静态文件，同时保留仓库内 README
 
 ### 2. 前端清理
 
@@ -147,5 +151,5 @@ sh deploy/docker/cleanup-dev.sh --help
 
 - 方式一：回到 [manual.md](./manual.md) 的安装步骤，重新生成 `backend/.env` 并启动 Swoole。
 - 方式二：回到 [docker-backend-only.md](./docker-backend-only.md) 重新启动后端容器。
-- 方式三：回到 [docker-fullstack.md](./docker-fullstack.md) 从头启动开发全套。
+- 方式三：回到 [docker-fullstack.md](./docker-fullstack.md) 从头启动开发全套；preflight 会重建 `backend/.mallbase-env` 与演示素材目录并交接权限。
 - 方式四：本地重新构建前端后，按 [upload-frontend.md](./upload-frontend.md) 上传产物。

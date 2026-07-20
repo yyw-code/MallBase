@@ -24,7 +24,7 @@ final class EnvTemplateParseTest extends TestCase
             . 'Avoid ( ) & | $ " inside # comments — use full-width or reword.'
         );
 
-        foreach (['DB_HOST', 'DB_PORT', 'REDIS_PORT', 'SWOOLE_HTTP_PORT', 'SWOOLE_WORKER_NUM'] as $key) {
+        foreach (['DB_HOST', 'DB_PORT', 'REDIS_PORT', 'JWT_SECRET', 'INSTALL_RUNTIME_MARKER', 'SWOOLE_HTTP_PORT', 'SWOOLE_WORKER_NUM'] as $key) {
             $this->assertArrayHasKey($key, $parsed, "missing required key: {$key}");
         }
     }
@@ -106,24 +106,25 @@ final class EnvTemplateParseTest extends TestCase
 
             $this->assertSame(0, $exitCode, implode("\n", $output));
 
+            $backendEnvPath = $root . '/backend/.mallbase-env/backend.env';
             $rootParsed = @parse_ini_file($root . '/.env', true, INI_SCANNER_RAW);
-            $backendParsed = @parse_ini_file($root . '/backend/.env', true, INI_SCANNER_RAW);
+            $backendParsed = @parse_ini_file($backendEnvPath, true, INI_SCANNER_RAW);
 
             $this->assertNotFalse($rootParsed, 'derived root .env should remain parse_ini_file-compatible');
-            $this->assertNotFalse($backendParsed, 'derived backend/.env should remain parse_ini_file-compatible');
+            $this->assertNotFalse($backendParsed, 'derived backend/.mallbase-env/backend.env should remain parse_ini_file-compatible');
             $this->assertSame(0600, fileperms($root . '/.env') & 0777);
             $this->assertSame($projectUid, fileowner($root . '/.env'));
             $this->assertSame($projectGid, filegroup($root . '/.env'));
-            $this->assertSame(0600, fileperms($root . '/backend/.env') & 0777);
-            $this->assertSame($projectUid, fileowner($root . '/backend/.env'));
-            $this->assertSame($projectGid, filegroup($root . '/backend/.env'));
+            $this->assertSame(0600, fileperms($backendEnvPath) & 0777);
+            $this->assertSame($projectUid, fileowner($backendEnvPath));
+            $this->assertSame($projectGid, filegroup($backendEnvPath));
             $chownLog = (string) file_get_contents($root . '/chown.log');
             $this->assertStringContainsString(
                 $projectUid . ':' . $projectGid . ' ' . $root . '/.env',
                 $chownLog,
             );
             $this->assertStringContainsString(
-                $projectUid . ':' . $projectGid . ' ' . $root . '/backend/.env',
+                $projectUid . ':' . $projectGid . ' ' . $backendEnvPath,
                 $chownLog,
             );
             $this->assertSame('1', $rootParsed['SWOOLE_WORKER_NUM'] ?? null);
@@ -198,17 +199,18 @@ final class EnvTemplateParseTest extends TestCase
 
             $this->assertSame(0, $exitCode, implode("\n", $output));
 
+            $backendEnvPath = $root . '/backend/.mallbase-env/backend.env';
             $rootParsed = @parse_ini_file($root . '/.env', true, INI_SCANNER_RAW);
-            $backendParsed = @parse_ini_file($root . '/backend/.env', true, INI_SCANNER_RAW);
+            $backendParsed = @parse_ini_file($backendEnvPath, true, INI_SCANNER_RAW);
 
             $this->assertNotFalse($rootParsed, 'migrated root .env should remain parse_ini_file-compatible');
-            $this->assertNotFalse($backendParsed, 'migrated backend/.env should remain parse_ini_file-compatible');
+            $this->assertNotFalse($backendParsed, 'migrated backend/.mallbase-env/backend.env should remain parse_ini_file-compatible');
             $this->assertSame(0600, fileperms($root . '/.env') & 0777);
             $this->assertSame($projectUid, fileowner($root . '/.env'));
             $this->assertSame($projectGid, filegroup($root . '/.env'));
-            $this->assertSame(0600, fileperms($root . '/backend/.env') & 0777);
-            $this->assertSame($projectUid, fileowner($root . '/backend/.env'));
-            $this->assertSame($projectGid, filegroup($root . '/backend/.env'));
+            $this->assertSame(0600, fileperms($backendEnvPath) & 0777);
+            $this->assertSame($projectUid, fileowner($backendEnvPath));
+            $this->assertSame($projectGid, filegroup($backendEnvPath));
             $this->assertSame('16379', $rootParsed['REDIS_HOST_PORT'] ?? null);
             $this->assertSame('6379', $rootParsed['REDIS_PORT'] ?? null);
             $this->assertSame('6379', $backendParsed['REDIS_PORT'] ?? null);

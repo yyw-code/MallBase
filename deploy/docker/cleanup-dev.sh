@@ -10,9 +10,10 @@ set -eu
 #   --basic
 #     清理安装运行态和基础生成文件：
 #       - .env
-#       - backend/.env
+#       - backend/.mallbase-env/backend.env 与环境锁
+#       - 旧版 backend/.env 与根目录环境锁
 #       - backend/runtime/install/install.lock
-#       - backend/public/static/demo
+#       - backend/public/static/demo 中除 README.md 外的运行时素材
 #
 #   --frontend
 #     包含 --basic，并清理前端依赖、构建产物和发布产物：
@@ -55,7 +56,7 @@ usage() {
   sh deploy/docker/cleanup-dev.sh [--basic|--frontend|--docker|--images|--all-images]
 
 清理等级：
-  --basic       清理基础安装运行态（默认）：.env、backend/.env、安装锁、演示静态文件
+  --basic       清理基础安装运行态（默认）：.env、后端运行配置、安装锁、演示运行时素材
   --frontend    包含 basic，并清理 Admin / UniApp 前端依赖、构建产物和发布产物
   --docker      包含 frontend，并清理 Docker 开发容器、网络、卷、data/、backend/vendor
   --images      包含 docker，并清理本项目构建镜像 mallbase-backend:dev
@@ -150,6 +151,29 @@ remove_dir() {
     fi
 }
 
+remove_runtime_env_dir() {
+    path="$ROOT_DIR/backend/.mallbase-env"
+    if [ -L "$path" ]; then
+        echo ">>> [cleanup-dev] 删除运行配置目录符号链接：${path#$ROOT_DIR/}"
+        rm -f "$path"
+        return
+    fi
+    remove_dir "$path"
+}
+
+clear_demo_runtime() {
+    path="$ROOT_DIR/backend/public/static/demo"
+    if [ -L "$path" ]; then
+        echo ">>> [cleanup-dev] 删除符号链接：${path#$ROOT_DIR/}"
+        rm -f "$path"
+        return
+    fi
+    if [ -d "$path" ]; then
+        echo ">>> [cleanup-dev] 清理演示运行时素材并保留 README.md：${path#$ROOT_DIR/}"
+        find "$path" -mindepth 1 -maxdepth 1 ! -name README.md -exec rm -rf -- {} +
+    fi
+}
+
 down_compose() {
     file="$1"
     label="$2"
@@ -171,8 +195,10 @@ cd "$ROOT_DIR"
 echo ">>> [cleanup-dev] 执行基础清理"
 remove_file "$ROOT_DIR/.env"
 remove_file "$ROOT_DIR/backend/.env"
+remove_file "$ROOT_DIR/backend/.backend-env.lock"
+remove_runtime_env_dir
 remove_file "$ROOT_DIR/backend/runtime/install/install.lock"
-remove_dir "$ROOT_DIR/backend/public/static/demo"
+clear_demo_runtime
 
 if should_run frontend; then
     echo ">>> [cleanup-dev] 执行前端清理"

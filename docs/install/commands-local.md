@@ -56,7 +56,7 @@ composer --working-dir backend install --no-dev --optimize-autoloader
 
 1. 当前进程 env，例如你手动 `export DB_HOST=...`。
 2. 项目根目录 `.env`。
-3. `backend/.env`，用于生产、仅后端容器或历史环境兜底。
+3. `backend/.env`，用于非 Docker 的宿主机直跑与历史环境兜底；Docker 容器使用独立运行配置路径。
 4. 主机和端口默认值：本地非容器场景下，`DB_HOST` / `REDIS_HOST` 默认 `127.0.0.1`，`DB_PORT` 默认 `3306`，`REDIS_PORT` 默认 `6379`。
 
 本地直跑时，如果项目根 `.env` 里写的是 Docker 服务名 `mysql` / `redis`，命令会自动把它们按本机访问方式转成 `127.0.0.1`。

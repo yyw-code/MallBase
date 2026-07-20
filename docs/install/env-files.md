@@ -1,24 +1,27 @@
-# 项目中的两份 `.env` 文件
+# 根配置与后端运行配置
 
-MallBase 在文件结构上仍然有两份 `.env`，但在 **方式二：Docker 开发（仅后端）**、**方式三：Docker 开发（全套）** 和 **本地命令行安装 `install:auto`** 下，推荐记住一句话：
+在 **方式二：Docker 开发（仅后端）** 和 **方式三：Docker 开发（全套）** 下，推荐记住两句话：
 
 - **项目根目录 `.env` 是唯一主配置源**
-- **`backend/.env` 是派生 / 运行时文件，由 ensure-env 或安装流程写入**
+- **`backend/.mallbase-env/backend.env` 是 Docker 开发派生运行配置**
 
-也就是说，Docker 开发模式和本地命令行安装下，用户优先维护根 `.env`；`backend/.env` 不再作为第二份手工配置入口。
+用户只维护根 `.env`；`ensure-env` 与安装流程负责派生运行配置。非 Docker 的宿主机直跑和 `install:auto` 仍兼容 `backend/.env`，但 Docker 不再把运行配置写在源码根目录。
 
 > 所有命令的"执行目录"都写在注释里，例如 `# 在项目根目录执行` 或 `# 在 backend 目录执行`。不要复制时忽略它们。
 
-## 一、为什么要两份
+## 一、为什么要分开
 
-| 这份 `.env` | 谁在读 | 什么时候读 | 模板 |
-|-------------|--------|-------------|------|
+| 文件 | 谁在读 | 什么时候读 | 模板 |
+|------|--------|-------------|------|
 | **项目根目录 `.env`** | docker compose | 解析 `docker-compose*.yml` 做 `${VAR}` 变量插值时 | `deploy/docker/.example.env` |
-| **`backend/.env`** | ThinkPHP 运行时 | Swoole 服务启动、每次 `env()` 调用 | `backend/.example.env` |
+| **`backend/.mallbase-env/backend.env`** | Docker 开发容器内的 ThinkPHP / Swoole | 容器启动与安装流程 | `backend/.example.env` |
+| **`backend/.env`** | 非 Docker 的宿主机直跑 | 本地 Swoole 或 `install:auto` | `backend/.example.env` |
 
-docker compose 的变量插值**只认项目根目录的 `.env`**，无法改路径。而 ThinkPHP 的 `env()` 函数**只认 `backend/.env`**。两者机制不同，所以文件仍然分开；但在 Docker 开发模式里，我们约定由 `ensure-env` 或后端容器入口脚本负责把根 `.env` 派生为 `backend/.env`，避免用户手工维护两份导致不一致。
+docker compose 的变量插值仍然读取项目根目录 `.env`。Docker 后端容器通过 `MALLBASE_BACKEND_ENV_PATH=/app/.mallbase-env/backend.env` 指向独立运行配置；宿主机对应路径是 `backend/.mallbase-env/backend.env`。这样安装过程只需要写专用运行目录，不需要让整个 `backend/public` 或后端源码根目录对容器用户可写。
 
 本地命令行安装 `install:auto` 不通过 Docker；命令会读取项目根 `.env` 作为安装输入，并在安装完成后把生效配置写入 `backend/.env`。
+
+从旧版本升级时，如果只有 `backend/.env`，`ensure-env` 会将它复制到新路径作为迁移输入，同时保留旧文件供宿主机直跑。若新旧文件同时存在，Docker 以新路径为准并输出提示，不会用旧文件覆盖新文件。
 
 ## 二、字段对照表
 
@@ -28,15 +31,15 @@ docker compose 的变量插值**只认项目根目录的 `.env`**，无法改路
 
 | 字段 | 用途 | 备注 |
 |------|------|------|
-| `SWOOLE_HTTP_PORT` | 宿主 ↔ 容器双向映射（compose 写 `${VAR}:${VAR}`） | 必须与 `backend/.env` 的同名字段一致 |
+| `SWOOLE_HTTP_PORT` | 宿主 ↔ 容器双向映射（compose 写 `${VAR}:${VAR}`） | 必须与后端运行配置的同名字段一致 |
 | `MYSQL_PORT` | **仅**宿主侧暴露端口（compose 写 `${VAR}:3306`） | 容器内端口固定 3306，backend 通过服务名 `mysql:3306` 连接 |
 | `REDIS_HOST_PORT` | **仅**宿主侧暴露端口（compose 写 `${VAR}:6379`） | 容器内端口固定 6379，backend 通过服务名 `redis:6379` 连接 |
 | `MYSQL_ROOT_PASSWORD` | MySQL root 密码（首次初始化 + healthcheck） | 仅**首次**容器初始化有效，之后改值无法覆盖已创建的用户 |
 | `DB_HOST` | ThinkPHP / `install:auto` 连接数据库的主机 | Docker 全套模式默认 `mysql`；本地命令行安装通常改为 `127.0.0.1` |
 | `DB_PORT` | ThinkPHP / `install:auto` 连接数据库的端口 | Docker 全套模式容器内固定 `3306`；本地命令行安装按实际端口填写 |
 | `DB_NAME` | 首次初始化创建的业务库名（`MYSQL_DATABASE`） | |
-| `DB_USER` | 首次初始化创建的业务用户（`MYSQL_USER`） | 必须与 `backend/.env` 同名字段一致 |
-| `DB_PASS` | 首次初始化创建的业务用户密码（`MYSQL_PASSWORD`） | 也会同步到 `backend/.env` |
+| `DB_USER` | 首次初始化创建的业务用户（`MYSQL_USER`） | 必须与后端运行配置同名字段一致 |
+| `DB_PASS` | 首次初始化创建的业务用户密码（`MYSQL_PASSWORD`） | 也会同步到后端运行配置 |
 | `REDIS_HOST` | ThinkPHP / `install:auto` 连接 Redis 的主机 | Docker 全套模式默认 `redis`；本地命令行安装通常改为 `127.0.0.1` |
 | `REDIS_PORT` | ThinkPHP / `install:auto` 连接 Redis 的端口 | Docker 全套模式容器内固定 `6379`；本地命令行安装按实际端口填写 |
 | `REDIS_CACHE_DB` | Redis 缓存 DB | CLI 安装要求该 DB 为空 |
@@ -46,9 +49,9 @@ docker compose 的变量插值**只认项目根目录的 `.env`**，无法改路
 
 如果为了测试副本把 `SWOOLE_HTTP_PORT` 改成了非默认值，例如 `18080`，请同步把 `SITE_URL` 改成对应访问地址，例如 `http://localhost:18080`。CLI 安装没有浏览器 request 上下文，`SITE_URL` 不应继续保留为旧端口。
 
-### `backend/.env`（~40+ 字段）
+### 后端运行配置（约 40 个字段）
 
-模板位置：`backend/.example.env`
+模板位置：`backend/.example.env`。Docker 开发生成到 `backend/.mallbase-env/backend.env`；非 Docker 直跑使用 `backend/.env`。
 
 覆盖 ThinkPHP 所有运行时配置：
 
@@ -71,9 +74,9 @@ docker compose 的变量插值**只认项目根目录的 `.env`**，无法改路
 **⚠️ 容易混淆的点**：
 
 - `MYSQL_PORT` / `REDIS_HOST_PORT` 是宿主机连接容器用的映射端口，只给 Docker Compose 端口映射使用。
-- `DB_PORT` / `REDIS_PORT` 是应用连接数据库和 Redis 的端口，会同步到 `backend/.env`；Docker 全套模式通常保持 `3306` / `6379`。
+- `DB_PORT` / `REDIS_PORT` 是应用连接数据库和 Redis 的端口，会同步到后端运行配置；Docker 全套模式通常保持 `3306` / `6379`。
 - 例如同一台机器跑多套实例时，可以写 `MYSQL_PORT=13306`、`REDIS_HOST_PORT=16379`，但 `DB_PORT=3306`、`REDIS_PORT=6379` 通常不要改。
-- Docker 开发全套模式下，`backend/.env` 文件头会明确写出“请改根 `.env`，不要改 `backend/.env`”
+- Docker 开发全套模式下，`backend/.mallbase-env/backend.env` 文件头会明确它是自动生成文件。
 
 ## 三、两种初始化方式
 
@@ -94,8 +97,8 @@ docker compose -f docker-compose.dev.yml up -d
 - `ensure-env` init 容器启动并运行 `deploy/docker/ensure-env.sh`
 - 如果项目根目录 `.env` 不存在：从 `deploy/docker/.example.env` 复制生成
 - 若根 `.env` 中的 `DB_PASS` / `MYSQL_ROOT_PASSWORD` 仍是占位符，则自动随机化一次
-- 之后根据根 `.env` 重新派生 `backend/.env`
-- `backend/.env` 会写入中文头注释，明确它是自动生成文件
+- 之后根据根 `.env` 重新派生 `backend/.mallbase-env/backend.env`
+- 运行配置会写入中文头注释，明确它是自动生成文件
 - `backend`、`mysql`、`redis` 启动后，用户访问 `/install` 并确认执行安装流程
 
 **查看自动生成 / 当前生效的关键值：**
@@ -105,7 +108,7 @@ grep -E '^(DB_PASS|MYSQL_ROOT_PASSWORD|SITE_URL)=' .env
 ```
 ```bash
 # 在项目根目录执行：派生后的 TP 运行时配置
-grep -E '^(DB_PASS|JWT_SECRET|SITE_URL)=' backend/.env
+grep -E '^(DB_PASS|JWT_SECRET|SITE_URL)=' backend/.mallbase-env/backend.env
 ```
 
 ### 方式 B：手动自定义（指定端口 / 密码）
@@ -125,7 +128,7 @@ cp deploy/docker/.example.env .env
 docker compose -f docker-compose.dev.yml up -d
 ```
 
-**⚠️ 安全红线**：手动 `cp` 模板后，如果你保留了根 `.env` 里的敏感占位符，`ensure-env` 会在首次运行时自动随机化 `DB_PASS` / `MYSQL_ROOT_PASSWORD` / `JWT_SECRET`，并把同一个 `JWT_SECRET` 派生到 `backend/.env`。不要把占位符原样带到长期运行环境。
+**⚠️ 安全红线**：手动 `cp` 模板后，如果你保留了根 `.env` 里的敏感占位符，`ensure-env` 会在首次运行时自动随机化 `DB_PASS` / `MYSQL_ROOT_PASSWORD` / `JWT_SECRET`，并把同一个 `JWT_SECRET` 派生到后端运行配置。不要把占位符原样带到长期运行环境。
 
 **生成强随机值：**
 ```bash
@@ -141,7 +144,7 @@ openssl rand -hex 32
 
 ## 四、字段对齐清单（共享字段）
 
-下面这些字段在 Docker 开发全套模式下，都会由根 `.env` 自动同步到 `backend/.env`：
+下面这些字段在 Docker 开发全套模式下，都会由根 `.env` 自动同步到 `backend/.mallbase-env/backend.env`：
 
 - `DB_HOST`
 - `DB_PORT`
@@ -159,7 +162,7 @@ openssl rand -hex 32
 - `SWOOLE_HTTP_PORT`
 - `SITE_URL`
 
-`MYSQL_PORT` / `REDIS_HOST_PORT` / `MYSQL_ROOT_PASSWORD` 只存在于根 `.env`，不会写进 `backend/.env`。`CRON_ENABLE` / `SWOOLE_QUEUE_ENABLE` 不再由根 `.env` 同步，统一由安装向导高级选项写入。
+`MYSQL_PORT` / `REDIS_HOST_PORT` / `MYSQL_ROOT_PASSWORD` 只存在于根 `.env`，不会写进后端运行配置。`CRON_ENABLE` / `SWOOLE_QUEUE_ENABLE` 不再由根 `.env` 同步，统一由安装向导高级选项写入。
 
 ## 五、常见错误
 
@@ -183,12 +186,12 @@ openssl rand -hex 32
 **解决**：页面应自动显示"系统已安装"卡片（新版本已修复）。强制刷新（Cmd+Shift+R / Ctrl+F5）清缓存。
 
 ### ❌ 改了端口后 `curl http://localhost:9999/` 连不上
-**原因**：只改了一份 `.env`，或未重建容器。
+**原因**：只改了派生运行配置，或未重建容器。
 **解决**：
-1. 两份同时改：
+1. 只修改根 `.env`，并核对派生结果：
    ```bash
    # 在项目根目录执行
-   grep '^SWOOLE_HTTP_PORT=' .env backend/.env
+   grep '^SWOOLE_HTTP_PORT=' .env backend/.mallbase-env/backend.env
    ```
 2. 重建容器（compose 变量插值只在 parse 时发生，无法热加载）：
    ```bash
@@ -219,26 +222,27 @@ docker compose -f docker-compose.dev.yml down -v
 # 在项目根目录执行：清理本地目录
 rm -rf data/
 rm -rf backend/runtime/install/install.lock
+rm -rf backend/.mallbase-env
 rm -f backend/.env
 rm -f .env
 rm -rf backend/public/admin
 rm -rf frontend/admin/apps/web-antd/dist
 ```
 ```bash
-# 在项目根目录执行：重新启动，ensure-env 会从模板生成两份 .env
+# 在项目根目录执行：重新启动，ensure-env 会生成根配置与 Docker 运行配置
 docker compose -f docker-compose.dev.yml up -d
 ```
 
 ## 七、FAQ
 
-**Q：我改了 `backend/.env` 的端口，没改根 `.env`，会怎样？**
-A：容器内 Swoole 监听新端口，但宿主端口映射走旧端口，`curl` 连不上。**两份必须一起改**。
+**Q：我能直接改 `backend/.mallbase-env/backend.env` 的端口吗？**
+A：不建议。下次 `ensure-env` 会按根 `.env` 重新派生共享字段；端口映射也只在 Compose 解析根 `.env` 时确定。请只改根 `.env` 后重建容器。
 
 **Q：`ensure-env` 会覆盖我已设置的值吗？**
-A：对根 `.env`，不会覆盖你已设置的非占位符值；对 `backend/.env`，会按根 `.env` 重新派生共享字段，因为它本来就是派生文件。
+A：对根 `.env`，不会覆盖你已设置的非占位符值；对 Docker 运行配置，会按根 `.env` 重新派生共享字段，因为它本来就是派生文件。
 
-**Q：为什么不做成一份 `.env`？**
-A：docker compose 的变量插值**只读项目根目录 `.env`**，而 ThinkPHP 的 `env()` 又约定读取 `backend/.env`。两边不能直接合并，所以保留两份文件；但在 Docker 开发全套模式里，用户只需要维护根 `.env`，`backend/.env` 交给 `ensure-env` 自动派生。
+**Q：为什么 Docker 还需要一份派生文件？**
+A：docker compose 在创建容器前读取根 `.env` 做变量插值，ThinkPHP 则需要完整运行配置。用户只维护根 `.env`，`backend/.mallbase-env/backend.env` 由 `ensure-env` 自动派生并由安装流程更新。
 
 **Q：修改了端口后如何生效？**
 A：
@@ -253,13 +257,13 @@ docker compose -f docker-compose.dev.yml up -d
 docker compose 变量插值只在 parse yml 时发生，不能热加载。
 
 **Q：生产环境怎么办？**
-A：生产用 `docker-compose.yml`（HTTP、Queue、Cron 三个业务角色），只维护项目根目录 `.env`。根 `.env` 必须存在，Compose 会用它做变量插值，并通过 `env_file: .env` 注入容器；容器入口脚本再派生 `/app/.mallbase-env/backend.env`，对应宿主机 `data/backend/env/backend.env`。数据库、Redis 和站点域名可以在 Web 安装向导里填写，但安装完成后建议把最终生效值同步回根 `.env`，避免容器重新创建后配置回退。不要把 `backend/.env` 当成生产手工配置入口。
+A：生产用 `docker-compose.yml`（HTTP、Queue、Cron 三个业务角色），只维护项目根目录 `.env`。根 `.env` 必须存在，Compose 会用它做变量插值，并通过 `env_file: .env` 注入容器；容器入口脚本再派生 `/app/.mallbase-env/backend.env`，对应宿主机 `data/backend/env/backend.env`。数据库、Redis 和站点域名可以在 Web 安装向导里填写，但安装完成后建议把最终生效值同步回根 `.env`，避免容器重新创建后配置回退。不要把运行配置当成生产手工配置入口。
 
 **Q：`deploy/docker/.example.env` 和 `backend/.example.env` 有啥区别？**
 A：
 - `deploy/docker/.example.env`：**Docker 变量模板**，现在包含端口、数据库和少量运行时兜底字段
 - `backend/.example.env`：**ThinkPHP 运行时模板**，40+ 字段，是应用业务配置
-- 两份模板对应两份 `.env`，职责不重叠
+- 两份模板分别对应 Compose 主配置与 ThinkPHP 运行配置，职责不重叠
 
 ## 八、安装与站点域名静态副本
 
@@ -273,7 +277,7 @@ A：
 
 > CORS 策略不通过环境变量配置。`backend/app/middleware/CorsMiddleware.php` 默认反射请求 `Origin` 头并允许 Credentials；如需收紧成白名单，请直接改该中间件文件。
 
-**这些字段的配置位置**：Docker 开发全套模式下，请直接写到**项目根目录 `.env`**。`ensure-env` 会自动把共享字段同步到 `backend/.env`。最简做法：
+**这些字段的配置位置**：Docker 开发全套模式下，请直接写到**项目根目录 `.env`**。`ensure-env` 会自动把共享字段同步到 `backend/.mallbase-env/backend.env`。最简做法：
 
 ```bash
 # 在项目根目录执行：首次启动前追加到根 .env

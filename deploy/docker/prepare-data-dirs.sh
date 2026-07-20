@@ -7,7 +7,7 @@
 # 本脚本负责：
 #   1. 创建宿主机挂载目录 data/mysql 与 data/redis
 #   2. 创建 upgrade 下 PHP / Agent 共享的运行目录
-#   3. 创建 backend 下开发容器需要的运行目录
+#   3. 创建 backend 下开发容器需要的运行配置、运行态与演示素材目录
 #   4. 将目录权限修复为对应容器用户可写
 #   5. 在容器启动前尽早发现宿主机目录无法写入的问题
 # ============================================================
@@ -125,7 +125,9 @@ prepare_upgrade_dir "upgrade/run/requests"
 prepare_upgrade_dir "upgrade/jobs"
 prepare_upgrade_dir "upgrade/backups"
 prepare_backend_dir "backend/runtime"
+prepare_backend_dir "backend/.mallbase-env"
 prepare_backend_dir "backend/public/uploads"
+prepare_backend_dir "backend/public/static/demo"
 prepare_backend_dir "backend/vendor"
 
 echo ">>> [prepare-data-dirs] 完成"

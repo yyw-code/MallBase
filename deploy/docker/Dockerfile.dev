@@ -9,6 +9,9 @@ WORKDIR /app
 ARG MALLBASE_APP_UID=10000
 ARG MALLBASE_APP_GID=10000
 
+# 开发容器以无特权用户运行；首次自动安装依赖时使用可写的临时 Composer Home。
+ENV COMPOSER_HOME=/tmp/mallbase-composer
+
 RUN apk add --no-cache \
     mariadb-client \
     util-linux \

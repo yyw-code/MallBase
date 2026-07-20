@@ -7,8 +7,8 @@ case "$MALLBASE_RUNTIME_MODE" in
         BACKEND_ENV=${MALLBASE_BACKEND_ENV_PATH:-/app/.mallbase-env/backend.env}
         ;;
     development)
-        BACKEND_ENV=${MALLBASE_BACKEND_ENV_PATH:-/app/.env}
-        mkdir -p /app/runtime /app/public/uploads
+        BACKEND_ENV=${MALLBASE_BACKEND_ENV_PATH:-/app/.mallbase-env/backend.env}
+        mkdir -p /app/runtime /app/public/uploads /app/public/static/demo "$(dirname "$BACKEND_ENV")"
         ;;
     *)
         echo "RUNTIME_MODE_INVALID" >&2
@@ -220,8 +220,8 @@ if [ "$MALLBASE_RUNTIME_MODE" = "production" ]; then
     done
 fi
 
-# backend/.env 是 ThinkPHP / Swoole 运行时派生文件。生产环境把它放在独立、
-# 可原子替换的持久目录，应用代码根目录保持只读；开发环境仍使用 backend/.env。
+# ThinkPHP / Swoole 运行配置放在独立、可原子替换的持久目录；生产环境映射
+# data/backend/env，开发环境使用 backend/.mallbase-env，避免在源码根目录生成 .env。
 # HTTP / Queue / Cron 首次并发启动时只允许一个角色初始化，避免生成不同密钥。
 ensure_backend_env
 

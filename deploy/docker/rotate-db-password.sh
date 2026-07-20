@@ -31,14 +31,14 @@ sql_escape() {
 escaped_user=$(sql_escape "$DB_USER")
 escaped_pass=$(sql_escape "$DB_PASS")
 
-echo ">>> [rotate-db-password] 先按根 .env 重新派生 backend/.env"
+echo ">>> [rotate-db-password] 先按根 .env 重新派生 backend/.mallbase-env/backend.env"
 sh /workdir/deploy/docker/ensure-env.sh
 
 echo ">>> [rotate-db-password] 开始把 MySQL 中的业务账号密码同步为根 .env 的 DB_PASS"
 if mysql --protocol=TCP -hmysql -uroot -p"${MYSQL_ROOT_PASSWORD}" \
     -e "ALTER USER '${escaped_user}'@'%' IDENTIFIED BY '${escaped_pass}'; FLUSH PRIVILEGES;"; then
     echo ">>> [rotate-db-password] 完成：已把 ${DB_USER}@'%' 的密码同步为根 .env 的 DB_PASS"
-    echo ">>> [rotate-db-password] 后续重新执行 docker compose up -d，backend 会直接使用新的 backend/.env 运行。"
+    echo ">>> [rotate-db-password] 后续重新执行 docker compose up -d，backend 会直接使用新的开发运行配置。"
     exit 0
 fi
 

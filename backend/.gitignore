@@ -1,5 +1,7 @@
 *.log
 .env
+/.backend-env.lock
+/.mallbase-env/
 composer.phar
 .DS_Store
 Thumbs.db

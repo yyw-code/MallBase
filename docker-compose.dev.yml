@@ -3,17 +3,18 @@
 #
 # 配置源分工（Docker 开发全套模式）：
 #   - 项目根目录 .env：唯一主配置源；用户只需要维护这一份
-#   - backend/.env：   ThinkPHP/Swoole 运行时派生文件，由 ensure-env 自动生成
+#   - backend/.mallbase-env/backend.env：ThinkPHP/Swoole 运行时派生文件，
+#                                        由 ensure-env 自动生成
 #
-# 两种启动方式（详见 docs/env-files.md）：
+# 两种启动方式（详见 docs/install/env-files.md）：
 #   1. 零配置：docker compose -f docker-compose.dev.yml up -d
-#              （ensure-env 会自动生成根 .env，并派生 backend/.env）
+#              （ensure-env 会自动生成根 .env，并派生开发运行配置）
 #   2. 自定义：cp deploy/docker/.example.env .env && 按需改 && up -d
-#              （ensure-env 会按根 .env 重新派生 backend/.env）
+#              （ensure-env 会按根 .env 重新派生开发运行配置）
 #
 # 仅后端：docker compose -f docker-compose.dev.yml up -d --no-deps backend
 #         （需自备 MySQL + Redis；建议 DB_HOST=host.docker.internal）
-#         若不加 --no-deps，会把 ensure-env / mysql / redis 一并拉起
+#         若不加 --no-deps，会把 prepare-data-dirs / ensure-env / mysql / redis 一并拉起
 # ==========================================
 
 name: ${MALLBASE_COMPOSE_PROJECT_NAME:-mallbase}
@@ -32,7 +33,7 @@ services:
     command: sh /prepare-data-dirs.sh
     restart: "no"
 
-  # 一次性 init 容器：确保根 .env 存在，并据此派生 backend/.env
+  # 一次性 init 容器：确保根 .env 存在，并据此派生开发运行配置。
   ensure-env:
     image: alpine:3.19
     container_name: ${MALLBASE_CONTAINER_PREFIX:-mallbase}-ensure-env
@@ -83,6 +84,7 @@ services:
     environment:
       TZ: Asia/Shanghai
       MALLBASE_RUNTIME_MODE: development
+      MALLBASE_BACKEND_ENV_PATH: /app/.mallbase-env/backend.env
       MALLBASE_UPGRADE_ROOT: /app/upgrade
     volumes:
       - ./backend:/app
@@ -142,6 +144,7 @@ services:
     environment:
       TZ: Asia/Shanghai
       MALLBASE_RUNTIME_MODE: development
+      MALLBASE_BACKEND_ENV_PATH: /app/.mallbase-env/backend.env
       MALLBASE_UPGRADE_ROOT: /app/upgrade
     volumes:
       - ./backend:/app
@@ -236,6 +239,9 @@ services:
     image: mysql:8.0
     pull_policy: always
     container_name: ${MALLBASE_CONTAINER_PREFIX:-mallbase}-rotate-db-password
+    environment:
+      MALLBASE_DEV_UID: "${MALLBASE_DEV_UID:-10000}"
+      MALLBASE_DEV_GID: "${MALLBASE_DEV_GID:-10000}"
     volumes:
       - .:/workdir
       - ./deploy/docker/rotate-db-password.sh:/rotate-db-password.sh:ro

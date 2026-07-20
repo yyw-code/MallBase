@@ -244,7 +244,7 @@ docker exec -it ${PREFIX}-dev php think sync:permissions
 处理：
 
 ```bash
-grep '^SWOOLE_HTTP_PORT=' .env backend/.env
+grep '^SWOOLE_HTTP_PORT=' .env backend/.mallbase-env/backend.env
 docker compose -f docker-compose.dev.yml down
 docker compose -f docker-compose.dev.yml up -d
 ```

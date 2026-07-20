@@ -29,7 +29,7 @@
 | [commands.md](./commands.md) | 安装与部署命令导航，按常用、本地、Docker、前端、清理、维护拆分 |
 | [cli-install.md](./cli-install.md) | 手动安装或本地安装失败时，使用 `php think install:auto` 执行命令行安装 |
 | [troubleshooting.md](./troubleshooting.md) | 安装、Docker、前端静态资源与运行时的故障排查 |
-| [env-files.md](./env-files.md) | 根 `.env`、`backend/.env` 与安装运行时配置职责 |
+| [env-files.md](./env-files.md) | 根 `.env`、Docker 开发运行配置与本地 `backend/.env` 的职责 |
 | [nginx-reverse-proxy.md](./nginx-reverse-proxy.md) | `/`、`/client/`、`/admin/`、`/client/api/`、`/admin/api/` 等路径的代理与静态托管规则 |
 | [upgrade-agent.md](./upgrade-agent.md) | 一次性升级 Agent 的职责、systemd 安装与排障 |
 | [cloud-storage-upload.md](./cloud-storage-upload.md) | 本地存储、阿里云 OSS、腾讯云 COS 上传驱动配置与验证 |

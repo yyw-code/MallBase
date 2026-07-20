@@ -6,7 +6,7 @@
 
 | 场景 | 适用安装方式 | 命令 |
 |------|--------------|------|
-| 基础清理：安装锁、`.env`、`backend/.env`、演示静态文件 | 方式一、方式二、方式三、本地构建后的方式四 | `sh deploy/docker/cleanup-dev.sh` |
+| 基础清理：安装锁、根 `.env`、Docker 运行配置、旧 `backend/.env`、演示运行时素材 | 方式一、方式二、方式三、本地构建后的方式四 | `sh deploy/docker/cleanup-dev.sh` |
 | 前端清理：基础清理 + Admin / UniApp 依赖、构建产物和发布产物 | 方式一、方式二、方式三、本地构建后的方式四 | `sh deploy/docker/cleanup-dev.sh --frontend` |
 | Docker 状态清理：前端清理 + 开发容器、网络、卷、`data/mysql`、`data/redis`、`backend/vendor` | 方式二、方式三 | `sh deploy/docker/cleanup-dev.sh --docker` |
 | 项目镜像清理：Docker 状态清理 + `mallbase-backend:dev` | 方式二、方式三 | `sh deploy/docker/cleanup-dev.sh --images` |
@@ -80,10 +80,15 @@ docker compose -f docker-compose.uniapp-build.yml down -v --remove-orphans
 
 ```bash
 rm -f backend/runtime/install/install.lock
+rm -rf backend/.mallbase-env
+rm -f backend/.backend-env.lock
 rm -f backend/.env
 rm -f .env
-rm -rf backend/public/static/demo
+[ ! -d backend/public/static/demo ] || \
+  find backend/public/static/demo -mindepth 1 -maxdepth 1 ! -name README.md -exec rm -rf -- {} +
 ```
+
+上面的演示素材命令会保留 Git 跟踪的 `backend/public/static/demo/README.md`。不需要逐项操作时，优先使用清理脚本。
 
 ## 手动清理前端文件
 

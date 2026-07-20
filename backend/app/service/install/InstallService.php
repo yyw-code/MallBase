@@ -14,7 +14,6 @@ use Redis;
 use RedisException;
 use think\facade\Cache;
 use think\facade\Config;
-use think\facade\Console;
 use think\facade\Db;
 
 /**
@@ -92,6 +91,8 @@ class InstallService extends BaseService
     private const PLATFORM_APP_CODE = 'mallbase';
     private const PLATFORM_CONNECT_TIMEOUT_MS = 2000;
     private const PLATFORM_TIMEOUT_MS = 5000;
+    private const PERMISSION_SYNC_TIMEOUT_MS = 120_000;
+    private const ENV_SECRET_PLACEHOLDER = 'please-change-or-leave-for-random';
 
     protected string $modelClass = BaseModel::class;
 
@@ -372,8 +373,9 @@ class InstallService extends BaseService
             'pass'     => extension_loaded('mbstring'),
         ];
 
-        $runtimePath = app()->getRuntimePath();
-        $runtimeWritable = is_dir($runtimePath) && is_writable($runtimePath);
+        $paths = $this->installationEnvironmentPaths();
+
+        $runtimeWritable = is_dir($paths['runtime']) && is_writable($paths['runtime']);
         $items[] = [
             'name'     => 'runtime 目录可写',
             'required' => '可写',
@@ -381,13 +383,38 @@ class InstallService extends BaseService
             'pass'     => $runtimeWritable,
         ];
 
-        $publicPath = app()->getRootPath() . 'public';
-        $publicWritable = is_dir($publicPath) && is_writable($publicPath);
+        $envDirectoryWritable = !is_link($paths['backend_env_directory'])
+            && is_dir($paths['backend_env_directory'])
+            && is_writable($paths['backend_env_directory']);
         $items[] = [
-            'name'     => 'public 目录可写',
+            'name'     => 'backend 环境配置目录可写',
             'required' => '可写',
-            'current'  => $publicWritable ? '可写' : '不可写',
-            'pass'     => $publicWritable,
+            'current'  => $envDirectoryWritable ? '可写' : '不可写',
+            'pass'     => $envDirectoryWritable,
+        ];
+
+        $publicReadable = is_dir($paths['public']) && is_readable($paths['public']);
+        $items[] = [
+            'name'     => 'public 目录可读',
+            'required' => '可读',
+            'current'  => $publicReadable ? '可读' : '不可读',
+            'pass'     => $publicReadable,
+        ];
+
+        $uploadsWritable = is_dir($paths['uploads']) && is_writable($paths['uploads']);
+        $items[] = [
+            'name'     => 'public/uploads 目录可写',
+            'required' => '可写',
+            'current'  => $uploadsWritable ? '可写' : '不可写',
+            'pass'     => $uploadsWritable,
+        ];
+
+        $demoWritable = is_dir($paths['demo']) && is_writable($paths['demo']);
+        $items[] = [
+            'name'     => 'public/static/demo 目录可写',
+            'required' => '可写',
+            'current'  => $demoWritable ? '可写' : '不可写',
+            'pass'     => $demoWritable,
         ];
 
         $allPass = true;
@@ -399,6 +426,23 @@ class InstallService extends BaseService
         }
 
         return ['items' => $items, 'pass' => $allPass];
+    }
+
+    /**
+     * @return array{runtime:string,backend_env_directory:string,public:string,uploads:string,demo:string}
+     */
+    protected function installationEnvironmentPaths(): array
+    {
+        $public = rtrim(app()->getRootPath(), DIRECTORY_SEPARATOR)
+            . DIRECTORY_SEPARATOR . 'public';
+
+        return [
+            'runtime' => app()->getRuntimePath(),
+            'backend_env_directory' => dirname($this->resolveBackendEnvPath()),
+            'public' => $public,
+            'uploads' => $public . DIRECTORY_SEPARATOR . 'uploads',
+            'demo' => $public . DIRECTORY_SEPARATOR . 'static' . DIRECTORY_SEPARATOR . 'demo',
+        ];
     }
 
     public function testDatabase(array $config): array
@@ -703,7 +747,7 @@ class InstallService extends BaseService
      */
     private function readBackendEnvFile(): array
     {
-        return $this->parseEnvFile(app()->getRootPath() . '.env');
+        return $this->parseEnvFile($this->resolveBackendEnvPath());
     }
 
     /**
@@ -845,10 +889,7 @@ class InstallService extends BaseService
                 $steps
             );
         }
-        $jwtSecret = trim((string) ($params['jwt_secret'] ?? ''));
-        if ($jwtSecret === '') {
-            $jwtSecret = rtrim(strtr(base64_encode(random_bytes(48)), '+/', '-_'), '=');
-        }
+        $jwtSecret = $this->resolveJwtSecret($params, $this->readEnvFile());
         $runtimeMarker = bin2hex(random_bytes(16));
 
         $emit('db_test', 'running', '正在校验并准备数据库…');
@@ -875,7 +916,7 @@ class InstallService extends BaseService
             'is_empty'  => $redisTest['is_empty'] ?? false,
         ]);
 
-        $emit('write_env', 'running', '正在写入 backend/.env…');
+        $emit('write_env', 'running', '正在写入后端运行配置…');
         try {
             // 注意：
             // - SITE_URL 写入 env 作为 **静态副本**，便于运维通过 grep / docker exec printenv
@@ -993,7 +1034,7 @@ class InstallService extends BaseService
 
         try {
             $emit('sync_permissions', 'running', '正在同步路由权限与菜单…');
-            Console::call('sync:permissions');
+            $this->syncRoutePermissionsInCliProcess();
             $emit('sync_permissions', 'success', '路由权限已同步');
         } catch (\Throwable $e) {
             $message = '权限同步失败：' . $e->getMessage();
@@ -1253,10 +1294,45 @@ class InstallService extends BaseService
      */
     private function writeEnvFile(array $envData): void
     {
-        $configuredPath = trim((string) getenv('MALLBASE_BACKEND_ENV_PATH'));
-        $envPath = $configuredPath !== '' ? $configuredPath : app()->getRootPath() . '.env';
         $templatePath = app()->getRootPath() . '.example.env';
-        (new BackendEnvFileStore())->write($envPath, $templatePath, $envData);
+        (new BackendEnvFileStore())->write($this->resolveBackendEnvPath(), $templatePath, $envData);
+    }
+
+    /**
+     * 安装时沿用当前配置源中的 JWT 密钥，避免 Docker 再次派生运行配置后密钥回退。
+     *
+     * @param array<string, mixed> $params
+     * @param array<string, string> $envValues
+     */
+    private function resolveJwtSecret(array $params, array $envValues): string
+    {
+        $jwtSecret = trim((string) ($params['jwt_secret'] ?? ''));
+        if ($jwtSecret === '') {
+            $jwtSecret = trim((string) ($envValues['JWT_SECRET'] ?? ''));
+        }
+
+        if ($jwtSecret === '' || $jwtSecret === self::ENV_SECRET_PLACEHOLDER) {
+            return rtrim(strtr(base64_encode(random_bytes(48)), '+/', '-_'), '=');
+        }
+
+        return $jwtSecret;
+    }
+
+    protected function resolveBackendEnvPath(): string
+    {
+        $configuredPath = trim((string) getenv('MALLBASE_BACKEND_ENV_PATH'));
+
+        return $configuredPath !== '' ? $configuredPath : app()->getRootPath() . '.env';
+    }
+
+    private function syncRoutePermissionsInCliProcess(): void
+    {
+        $backendRoot = rtrim(app()->getRootPath(), DIRECTORY_SEPARATOR);
+        app()->make(InstallCommandRunner::class)->runThinkCommand(
+            $backendRoot,
+            ['sync:permissions'],
+            self::PERMISSION_SYNC_TIMEOUT_MS,
+        );
     }
 
     /**

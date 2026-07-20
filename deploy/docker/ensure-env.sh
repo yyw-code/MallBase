@@ -6,20 +6,25 @@
 #
 # 设计约束：
 #   - 项目根目录 .env 是 Docker 开发全套模式的唯一主配置源
-#   - backend/.env 是 ThinkPHP / Swoole 运行时派生文件，不作为第二真相源
+#   - backend/.mallbase-env/backend.env 是 Docker 开发运行时派生文件，
+#     不作为第二真相源
 #   - 若用户已经定义了根 .env 中的值，则绝不重新随机化或覆盖
 #
 # 本脚本负责：
 #   1. 根 .env 缺失时从 deploy/docker/.example.env 生成
 #   2. 根 .env 已存在时仅补齐缺失字段；敏感字段只有在占位符状态下才随机化
-#   3. 基于 backend/.example.env 重新派生 backend/.env，并用根 .env 覆盖共享字段
-#   4. 为 backend/.env 写入中文头注释，明确“请改根 .env，不要改 backend/.env”
+#   3. 首次升级时兼容迁移旧 backend/.env
+#   4. 基于 backend/.example.env 重新派生运行配置，并用根 .env 覆盖共享字段
+#   5. 为运行配置写入中文头注释，明确唯一主配置源
 # ============================================================
 set -eu
 umask 077
 
 WORKDIR="${WORKDIR:-/workdir}"
-BACKEND_ENV="${WORKDIR}/backend/.env"
+BACKEND_ENV_DIR="${WORKDIR}/backend/.mallbase-env"
+BACKEND_ENV="${BACKEND_ENV_DIR}/backend.env"
+LEGACY_BACKEND_ENV="${WORKDIR}/backend/.env"
+INSTALL_LOCK="${WORKDIR}/backend/runtime/install/install.lock"
 BACKEND_TPL="${WORKDIR}/backend/.example.env"
 ROOT_ENV="${WORKDIR}/.env"
 ROOT_TPL="${WORKDIR}/deploy/docker/.example.env"
@@ -66,6 +71,20 @@ require_safe_env_path() {
     fi
 }
 
+require_safe_env_dir() {
+    name=$1
+    path=$2
+
+    if [ -L "$path" ]; then
+        echo ">>> [ensure-env] 致命错误：${name} 不允许是符号链接"
+        exit 1
+    fi
+    if [ -e "$path" ] && [ ! -d "$path" ]; then
+        echo ">>> [ensure-env] 致命错误：${name} 必须是目录"
+        exit 1
+    fi
+}
+
 handoff_env_file() {
     name=$1
     path=$2
@@ -108,9 +127,13 @@ require_decimal_id MALLBASE_DEV_GID "$MALLBASE_DEV_GID"
 require_decimal_id PROJECT_ROOT_UID "$PROJECT_ROOT_UID"
 require_decimal_id PROJECT_ROOT_GID "$PROJECT_ROOT_GID"
 require_safe_env_path ".env" "$ROOT_ENV"
-require_safe_env_path "backend/.env" "$BACKEND_ENV"
+require_safe_env_dir "backend/.mallbase-env" "$BACKEND_ENV_DIR"
+mkdir -p "$BACKEND_ENV_DIR"
+require_safe_env_path "backend/.mallbase-env/backend.env" "$BACKEND_ENV"
+require_safe_env_path "backend/.env（旧路径）" "$LEGACY_BACKEND_ENV"
 
 rand24() { LC_ALL=C od -An -N12 -tx1 /dev/urandom | tr -d ' \n'; }
+rand32() { LC_ALL=C od -An -N16 -tx1 /dev/urandom | tr -d ' \n'; }
 rand64() { LC_ALL=C od -An -N32 -tx1 /dev/urandom | tr -d ' \n'; }
 
 has_key() {
@@ -176,6 +199,21 @@ sync_root_from_existing_backend() {
     done
 }
 
+migrate_legacy_backend_env() {
+    [ -f "$LEGACY_BACKEND_ENV" ] || return 0
+
+    if [ -f "$BACKEND_ENV" ]; then
+        echo ">>> [ensure-env] 检测到新旧两份运行配置；保留旧 backend/.env，不覆盖新路径"
+        return 0
+    fi
+
+    tmp_env=$(mktemp "${BACKEND_ENV_DIR}/.backend.env.migrate.XXXXXX")
+    cp "$LEGACY_BACKEND_ENV" "$tmp_env"
+    chmod 0600 "$tmp_env"
+    mv "$tmp_env" "$BACKEND_ENV"
+    echo ">>> [ensure-env] 已将旧 backend/.env 复制迁移到 backend/.mallbase-env/backend.env；旧文件继续保留供宿主机直跑"
+}
+
 randomize_root_if_placeholder() {
     current=$(get_value "$ROOT_ENV" "$1")
     if [ -z "$current" ] || [ "$current" = "$PLACEHOLDER" ]; then
@@ -228,6 +266,12 @@ rebuild_backend_env() {
             value=$(rand64)
         fi
 
+        # 兼容曾被旧版派生脚本删掉运行态标记的已安装开发环境。
+        # ensure-env 完成后 backend 会重新加载该标记，因此可以安全生成新值。
+        if [ "$key" = "INSTALL_RUNTIME_MARKER" ] && [ -z "$value" ] && [ -f "$INSTALL_LOCK" ]; then
+            value=$(rand32)
+        fi
+
         set_value "$tmp_env" "$key" "$value"
     done < "$BACKEND_TPL"
 
@@ -252,6 +296,8 @@ if [ ! -f "$ROOT_TPL" ]; then
     exit 1
 fi
 
+migrate_legacy_backend_env
+
 if [ ! -f "$ROOT_ENV" ]; then
     echo ">>> [ensure-env] 根目录 .env 不存在，从 deploy/docker/.example.env 生成"
     cp "$ROOT_TPL" "$ROOT_ENV"
@@ -264,9 +310,9 @@ randomize_root_if_placeholder "DB_PASS" "$(rand24)"
 randomize_root_if_placeholder "MYSQL_ROOT_PASSWORD" "$(rand24)"
 randomize_root_if_placeholder "JWT_SECRET" "$(rand64)"
 
-echo ">>> [ensure-env] 开始根据根 .env 派生 backend/.env"
+echo ">>> [ensure-env] 开始根据根 .env 派生 backend/.mallbase-env/backend.env"
 rebuild_backend_env
-handoff_env_file "backend/.env" "$BACKEND_ENV" "$MALLBASE_DEV_UID" "$MALLBASE_DEV_GID"
+handoff_env_file "backend/.mallbase-env/backend.env" "$BACKEND_ENV" "$MALLBASE_DEV_UID" "$MALLBASE_DEV_GID"
 handoff_env_file ".env" "$ROOT_ENV" "$PROJECT_ROOT_UID" "$PROJECT_ROOT_GID"
 
 echo ">>> [ensure-env] 完成"

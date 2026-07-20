@@ -12,6 +12,8 @@ backend/vendor
 backend/runtime
 backend/.env
 backend/.env.*
+backend/.backend-env.lock
+backend/.mallbase-env
 backend/install/install.lock
 backend/storage/cert
 backend/public/storage

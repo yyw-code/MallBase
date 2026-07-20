@@ -19,7 +19,7 @@ pwd
 
 ### 2. （可选）自定义端口、密码与站点域名兜底
 
-如果不关心默认值，可以跳过本步；`ensure-env` 会在启动时自动生成根 `.env` 和派生 `backend/.env`。
+如果不关心默认值，可以跳过本步；`ensure-env` 会在启动时自动生成根 `.env`，并派生 Docker 开发运行配置 `backend/.mallbase-env/backend.env`。
 
 如果需要自定义：
 
@@ -40,7 +40,7 @@ cp deploy/docker/.example.env .env
 - `MYSQL_ROOT_PASSWORD`
 - `SITE_URL`
 
-`.env` 与 `backend/.env` 的主从关系见 [env-files.md](./env-files.md)。
+根 `.env` 与 Docker 开发运行配置的主从关系见 [env-files.md](./env-files.md)。
 
 同一台服务器部署多套实例时，建议每套使用不同的 Compose 名称、容器名前缀和宿主机端口。例如演示站：
 
@@ -68,11 +68,14 @@ docker compose -f docker-compose.dev.yml up -d
 
 启动顺序是：
 
-1. `ensure-env` 生成或补齐配置
-2. `mysql` / `redis` 变为健康
-3. `check-db-auth` 校验库账号
-4. `backend` 启动 Swoole
-5. 用户访问 `/install` 并确认执行统一安装主流程
+1. `prepare-data-dirs` 创建并交接数据目录、`backend/.mallbase-env` 和演示素材目录权限
+2. `ensure-env` 生成或补齐根配置，并派生 `backend/.mallbase-env/backend.env`
+3. `mysql` / `redis` 变为健康
+4. `check-db-auth` 校验库账号
+5. `backend` 启动 Swoole
+6. 用户访问 `/install` 并确认执行统一安装主流程
+
+`prepare-data-dirs` 只交接需要容器写入的运行目录，不会递归修改后端源码或已存在的上传文件。这样从 Git 新拉取代码后直接启动，也不依赖把整个 `backend/public` 改成宽松权限。
 
 ### 4. 理解开发目录映射
 
@@ -80,13 +83,14 @@ docker compose -f docker-compose.dev.yml up -d
 
 | 宿主机路径 | 容器路径 | 读写 | 用途 |
 |------------|----------|------|------|
-| `./backend` | `/app` | 读写 | 后端代码、`vendor`、`runtime`、安装锁、上传文件和前端静态产物都在这里，宿主机和容器看到的是同一份文件。 |
-| `./` | `/workspace` | 只读 | 让后端容器读取项目根 `.env`，用于启动时派生 `backend/.env` 和安装页默认值。 |
+| `./backend` | `/app` | 读写 | 后端代码、`vendor`、`runtime`、`backend/.mallbase-env/backend.env`、安装锁、上传文件和前端静态产物都在这里，宿主机和容器看到的是同一份文件。 |
 | `./.version` | `/.version` | 只读 | 给安装页和状态页展示当前版本信息。 |
 | `./data/mysql` | `/var/lib/mysql` | 读写 | MySQL 数据目录，删除后等同于清空开发库。 |
 | `./data/redis` | `/data` | 读写 | Redis 数据目录，删除后等同于清空开发 Redis 数据。 |
 
 开发模式的 `/app` 是 bind mount，所以本地改后端文件，容器里会立即看到；但 PHP 代码在 Swoole 下常驻内存，安装完成或改运行时代码后仍建议重启 backend 容器。
+
+旧版本如果已有 `backend/.env`，首次启动会把它复制为 `backend/.mallbase-env/backend.env`，同时保留旧文件，避免影响宿主机直跑。若新旧文件同时存在，Docker 明确以新路径为准并输出提示，不会覆盖新文件。
 
 ### 5. 单独执行后台前端打包
 
@@ -107,7 +111,7 @@ ls backend/public/admin/index.html
 期望结果：
 
 - 常驻容器：`<prefix>-dev`、`<prefix>-mysql`、`<prefix>-redis`
-- 一次性容器：`<prefix>-ensure-env`、`<prefix>-check-db-auth`、`<prefix>-frontend-build` 最终 `Exited (0)`
+- 一次性容器：`<prefix>-prepare-data-dirs`、`<prefix>-ensure-env`、`<prefix>-check-db-auth`、`<prefix>-frontend-build` 最终 `Exited (0)`
 - `backend/public/admin/index.html` 存在
 
 ### 7. 打开安装向导并确认安装
@@ -164,7 +168,7 @@ redis-cli -h 127.0.0.1 -p 6379
 
 ```bash
 grep -E '^(DB_PASS|MYSQL_ROOT_PASSWORD|SITE_URL)=' .env
-grep -E '^(DB_PASS|JWT_SECRET|SITE_URL)=' backend/.env
+grep -E '^(DB_PASS|JWT_SECRET|SITE_URL)=' backend/.mallbase-env/backend.env
 curl -I http://127.0.0.1:8080/
 ls backend/public/admin/index.html
 ```
