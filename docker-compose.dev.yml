@@ -36,6 +36,9 @@ services:
   ensure-env:
     image: alpine:3.19
     container_name: ${MALLBASE_CONTAINER_PREFIX:-mallbase}-ensure-env
+    environment:
+      MALLBASE_DEV_UID: "${MALLBASE_DEV_UID:-10000}"
+      MALLBASE_DEV_GID: "${MALLBASE_DEV_GID:-10000}"
     volumes:
       - .:/workdir
       - ./deploy/docker/ensure-env.sh:/ensure-env.sh:ro
@@ -71,7 +74,7 @@ services:
       context: .
       dockerfile: deploy/docker/Dockerfile.dev
     image: mallbase-backend:dev
-    pull_policy: never
+    pull_policy: build
     user: "${MALLBASE_DEV_UID:-10000}:${MALLBASE_DEV_GID:-10000}"
     container_name: ${MALLBASE_CONTAINER_PREFIX:-mallbase}-install-auto
     env_file:
@@ -125,7 +128,7 @@ services:
       context: .
       dockerfile: deploy/docker/Dockerfile.dev
     image: mallbase-backend:dev
-    pull_policy: never
+    pull_policy: build
     user: "${MALLBASE_DEV_UID:-10000}:${MALLBASE_DEV_GID:-10000}"
     container_name: ${MALLBASE_CONTAINER_PREFIX:-mallbase}-dev
     restart: unless-stopped
