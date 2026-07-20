@@ -13,6 +13,7 @@ set -eu
 #       - backend/.mallbase-env/backend.env 与环境锁
 #       - 旧版 backend/.env 与根目录环境锁
 #       - backend/runtime/install/install.lock
+#       - backend/runtime/install/.install.lock.guard
 #       - backend/public/static/demo 中除 README.md 外的运行时素材
 #
 #   --frontend
@@ -41,6 +42,7 @@ set -eu
 #
 # 注意：
 #   - --docker 与 --images 会删除数据库、Redis 或镜像状态。
+#   - --basic / --frontend 检测到本项目容器仍在运行时会拒绝清理，避免状态被重新写入。
 #   - 生产服务器不建议直接使用本脚本清理 Docker 资源。
 # ============================================================
 
@@ -183,36 +185,50 @@ down_compose() {
     fi
 }
 
-echo ">>> [cleanup-dev] 项目目录：$ROOT_DIR"
-echo ">>> [cleanup-dev] 容器名前缀：$CONTAINER_PREFIX"
-echo ">>> [cleanup-dev] 清理等级：$LEVEL"
-if [ "$ALL_IMAGES" -eq 1 ]; then
-    echo ">>> [cleanup-dev] 已启用 --all-images：会额外删除共享基础镜像"
-fi
+assert_project_containers_stopped() {
+    if ! command -v docker >/dev/null 2>&1; then
+        return
+    fi
 
-cd "$ROOT_DIR"
+    if ! running_containers=$(docker ps --format '{{.Names}}' 2>/dev/null); then
+        echo ">>> [cleanup-dev] 拒绝清理：无法确认 Docker 容器运行状态" >&2
+        exit 1
+    fi
+    for name in $running_containers; do
+        case "$name" in
+            "$CONTAINER_PREFIX"-*)
+                echo ">>> [cleanup-dev] 拒绝清理：容器 $name 仍在运行" >&2
+                echo ">>> [cleanup-dev] 请先停止项目容器，或使用 --docker 完成停止后再清理" >&2
+                exit 1
+                ;;
+        esac
+    done
+}
 
-echo ">>> [cleanup-dev] 执行基础清理"
-remove_file "$ROOT_DIR/.env"
-remove_file "$ROOT_DIR/backend/.env"
-remove_file "$ROOT_DIR/backend/.backend-env.lock"
-remove_runtime_env_dir
-remove_file "$ROOT_DIR/backend/runtime/install/install.lock"
-clear_demo_runtime
+assert_authoritative_install_path_safe() {
+    for path in \
+        "$ROOT_DIR/backend" \
+        "$ROOT_DIR/backend/runtime" \
+        "$ROOT_DIR/backend/runtime/install"
+    do
+        if [ -L "$path" ]; then
+            echo ">>> [cleanup-dev] 拒绝清理：安装状态父目录不能是符号链接：${path#$ROOT_DIR/}" >&2
+            exit 1
+        fi
+        if [ -e "$path" ] && [ ! -d "$path" ]; then
+            echo ">>> [cleanup-dev] 拒绝清理：安装状态父路径不是目录：${path#$ROOT_DIR/}" >&2
+            exit 1
+        fi
+    done
+}
 
-if should_run frontend; then
-    echo ">>> [cleanup-dev] 执行前端清理"
-    remove_dir "$ROOT_DIR/backend/public/admin"
-    remove_dir "$ROOT_DIR/backend/public/client"
-    remove_dir "$ROOT_DIR/frontend/admin/node_modules"
-    remove_dir "$ROOT_DIR/frontend/admin/apps/web-antd/node_modules"
-    remove_dir "$ROOT_DIR/frontend/admin/apps/web-antd/dist"
-    remove_dir "$ROOT_DIR/frontend/uniapp/node_modules"
-    remove_dir "$ROOT_DIR/frontend/uniapp/dist"
-fi
+stop_docker_resources() {
+    if ! command -v docker >/dev/null 2>&1; then
+        echo ">>> [cleanup-dev] 拒绝清理：未找到 docker 命令，无法确认容器已停止" >&2
+        exit 1
+    fi
 
-if should_run docker; then
-    echo ">>> [cleanup-dev] 执行 Docker 开发资源清理"
+    echo ">>> [cleanup-dev] 先停止 Docker 开发资源，避免运行进程重新写入安装状态"
     down_compose "$COMPOSE_FILE" "Docker 开发全套"
     down_compose "$FRONTEND_COMPOSE_FILE" "Admin 前端打包"
     down_compose "$UNIAPP_COMPOSE_FILE" "UniApp H5 打包"
@@ -233,6 +249,58 @@ if should_run docker; then
         docker rm -f "$name" >/dev/null 2>&1 || true
     done
 
+    if ! running_containers=$(docker ps --format '{{.Names}}' 2>/dev/null); then
+        echo ">>> [cleanup-dev] 拒绝清理：无法读取 Docker 运行状态" >&2
+        exit 1
+    fi
+    for name in $running_containers; do
+        case "$name" in
+            "$CONTAINER_PREFIX"-*)
+                echo ">>> [cleanup-dev] 拒绝清理：容器 $name 停止失败，尚未删除安装状态" >&2
+                exit 1
+                ;;
+        esac
+    done
+}
+
+echo ">>> [cleanup-dev] 项目目录：$ROOT_DIR"
+echo ">>> [cleanup-dev] 容器名前缀：$CONTAINER_PREFIX"
+echo ">>> [cleanup-dev] 清理等级：$LEVEL"
+if [ "$ALL_IMAGES" -eq 1 ]; then
+    echo ">>> [cleanup-dev] 已启用 --all-images：会额外删除共享基础镜像"
+fi
+
+cd "$ROOT_DIR"
+
+if should_run docker; then
+    stop_docker_resources
+else
+    assert_project_containers_stopped
+fi
+assert_authoritative_install_path_safe
+
+echo ">>> [cleanup-dev] 执行基础清理"
+remove_file "$ROOT_DIR/.env"
+remove_file "$ROOT_DIR/backend/.env"
+remove_file "$ROOT_DIR/backend/.backend-env.lock"
+remove_runtime_env_dir
+remove_file "$ROOT_DIR/backend/runtime/install/install.lock"
+remove_file "$ROOT_DIR/backend/runtime/install/.install.lock.guard"
+clear_demo_runtime
+
+if should_run frontend; then
+    echo ">>> [cleanup-dev] 执行前端清理"
+    remove_dir "$ROOT_DIR/backend/public/admin"
+    remove_dir "$ROOT_DIR/backend/public/client"
+    remove_dir "$ROOT_DIR/frontend/admin/node_modules"
+    remove_dir "$ROOT_DIR/frontend/admin/apps/web-antd/node_modules"
+    remove_dir "$ROOT_DIR/frontend/admin/apps/web-antd/dist"
+    remove_dir "$ROOT_DIR/frontend/uniapp/node_modules"
+    remove_dir "$ROOT_DIR/frontend/uniapp/dist"
+fi
+
+if should_run docker; then
+    echo ">>> [cleanup-dev] 执行 Docker 开发资源清理"
     remove_dir "$ROOT_DIR/data/mysql"
     remove_dir "$ROOT_DIR/data/redis"
     remove_dir "$ROOT_DIR/backend/vendor"

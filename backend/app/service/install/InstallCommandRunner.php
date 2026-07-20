@@ -19,13 +19,27 @@ final class InstallCommandRunner
     private const MAX_TIMEOUT_MS = 300_000;
     private const MAX_STDOUT_BYTES = 256 * 1024;
     private const MAX_STDERR_BYTES = 64 * 1024;
+    /** @var array<int, string> */
+    private const REQUIRED_PROCESS_FUNCTIONS = [
+        'proc_open',
+        'proc_get_status',
+        'proc_terminate',
+        'proc_close',
+    ];
 
     /** @var Closure(array<int,string>,string,int):array<string,mixed>|null */
     private readonly ?Closure $executor;
 
-    public function __construct(?Closure $executor = null, private readonly ?string $phpBinary = null)
-    {
+    /** @var Closure(string):bool */
+    private readonly Closure $functionAvailable;
+
+    public function __construct(
+        ?Closure $executor = null,
+        private readonly ?string $phpBinary = null,
+        ?Closure $functionAvailable = null,
+    ) {
         $this->executor = $executor;
+        $this->functionAvailable = $functionAvailable ?? static fn(string $function): bool => function_exists($function);
     }
 
     /**
@@ -68,30 +82,49 @@ final class InstallCommandRunner
         if ($this->phpBinary !== null) {
             $candidates[] = $this->phpBinary;
         } else {
-            $candidates[] = PHP_BINDIR . DIRECTORY_SEPARATOR
-                . (DIRECTORY_SEPARATOR === '\\' ? 'php.exe' : 'php');
             $binaryName = basename(PHP_BINARY);
             if (preg_match('/^php(?:[0-9]+(?:\.[0-9]+)*)?(?:\.exe)?$/iD', $binaryName) === 1) {
                 $candidates[] = PHP_BINARY;
             }
+            $candidates[] = PHP_BINDIR . DIRECTORY_SEPARATOR
+                . (DIRECTORY_SEPARATOR === '\\' ? 'php.exe' : 'php');
         }
 
         foreach (array_unique($candidates) as $candidate) {
-            if ($candidate === '' || str_contains($candidate, "\0")) {
+            if (!$this->trustedPhpCliCandidate($candidate)) {
                 continue;
             }
-            $resolved = realpath($candidate);
-            if (!is_string($resolved) || !is_file($resolved)) {
-                continue;
-            }
-            if (DIRECTORY_SEPARATOR !== '\\' && !is_executable($resolved)) {
-                continue;
+            $resolved = @realpath($candidate);
+            if (is_string($resolved)
+                && is_file($resolved)
+                && (DIRECTORY_SEPARATOR === '\\' || is_executable($resolved))
+            ) {
+                return $resolved;
             }
 
-            return $resolved;
+            // 1Panel 的 open_basedir 可能禁止 Web 进程检查站点目录外的 PHP CLI，
+            // 但数组 argv 的 proc_open 仍可安全执行该可信绝对路径。
+            return $candidate;
         }
 
         throw new RuntimeException('未找到可执行的 PHP CLI');
+    }
+
+    private function trustedPhpCliCandidate(string $candidate): bool
+    {
+        if ($candidate === '' || str_contains($candidate, "\0")) {
+            return false;
+        }
+        if (!str_starts_with($candidate, DIRECTORY_SEPARATOR)
+            && preg_match('/^[A-Za-z]:[\\\\\/]/D', $candidate) !== 1
+        ) {
+            return false;
+        }
+
+        return preg_match(
+            '/^php(?:[0-9]+(?:\.[0-9]+)*)?(?:\.exe)?$/iD',
+            basename($candidate),
+        ) === 1;
     }
 
     /**
@@ -100,9 +133,7 @@ final class InstallCommandRunner
      */
     private function executeNative(array $command, string $workingDirectory, int $timeoutMilliseconds): array
     {
-        if (!function_exists('proc_open')) {
-            throw new RuntimeException('当前 PHP 禁用了 proc_open，无法执行权限同步');
-        }
+        $this->assertProcessFunctionsAvailable();
 
         $descriptors = [
             0 => ['pipe', 'r'],
@@ -226,6 +257,20 @@ final class InstallCommandRunner
             'timed_out' => $timedOut,
             'output_exceeded' => $outputExceeded,
         ];
+    }
+
+    private function assertProcessFunctionsAvailable(): void
+    {
+        $missing = array_values(array_filter(
+            self::REQUIRED_PROCESS_FUNCTIONS,
+            fn(string $function): bool => !($this->functionAvailable)($function),
+        ));
+        if ($missing !== []) {
+            throw new RuntimeException(sprintf(
+                '当前 PHP 缺少子进程函数：%s，无法执行权限同步',
+                implode('、', $missing),
+            ));
+        }
     }
 
     /** @param resource $pipe */

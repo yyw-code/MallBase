@@ -34,6 +34,75 @@ final class InstallProgressContractTest extends TestCase
         $this->assertStringContainsString('installRunning', $installPage);
     }
 
+    public function testInstallProgressListIncludesEnvironmentPreflightBeforeDatabaseSteps(): void
+    {
+        $installPage = (string) file_get_contents(dirname(__DIR__, 3) . '/public/install/index.html');
+        $stepOrder = $this->sectionBetween(
+            $installPage,
+            'const installStepOrder = [',
+            'const validationState =',
+        );
+
+        $this->assertMatchesRegularExpression(
+            "/const installStepOrder = \\[\\s*\\{ step: 'environment', title: '检查安装环境' \\},\\s*\\{ step: 'db_test'/",
+            $stepOrder,
+        );
+    }
+
+    public function testExecuteReportsEnvironmentPreflightRunningSuccessAndFailureStates(): void
+    {
+        $installService = (string) file_get_contents(dirname(__DIR__, 3) . '/app/service/install/InstallService.php');
+        $execute = $this->sectionBetween(
+            $installService,
+            'public function execute(',
+            '$dbConfig = [',
+        );
+
+        $this->assertMatchesRegularExpression(<<<'REGEX'
+/\$emit\('environment',\s*'running',/
+REGEX, $execute);
+        $this->assertMatchesRegularExpression(<<<'REGEX'
+/\$emit\('environment',\s*'success',/
+REGEX, $execute);
+        $this->assertMatchesRegularExpression(<<<'REGEX'
+/\$emit\('environment',\s*'error',/
+REGEX, $execute);
+    }
+
+    public function testFailedCompleteEventKeepsServerMessageAndRestoresRetryButton(): void
+    {
+        $installPage = (string) file_get_contents(dirname(__DIR__, 3) . '/public/install/index.html');
+        $streamHandler = $this->sectionBetween(
+            $installPage,
+            'function handleStreamEvent(',
+            'async function consumeInstallStream(',
+        );
+        $installRequest = $this->sectionBetween(
+            $installPage,
+            'async function doInstall(',
+            'function renderInstallMeta(',
+        );
+        $failureHandler = $this->sectionBetween(
+            $installPage,
+            'function finishInstallFailure(',
+            'function handleStreamEvent(',
+        );
+        $streamState = $this->sectionBetween(
+            $installPage,
+            'const API =',
+            'const agreementState =',
+        );
+
+        $this->assertStringContainsString('let installStreamCompleted = false;', $streamState);
+        $this->assertStringContainsString('installStreamCompleted = true;', $streamHandler);
+        $this->assertStringContainsString("finishInstallFailure(payload.message || '安装失败');", $streamHandler);
+        $this->assertStringContainsString('if (!installStreamCompleted) {', $installRequest);
+        $this->assertStringNotContainsString('if (!installCompleted) {', $installRequest);
+        $this->assertStringContainsString("const btn = document.getElementById('installBtn');", $failureHandler);
+        $this->assertStringContainsString('btn.disabled = false;', $failureHandler);
+        $this->assertStringContainsString("btn.textContent = '开始安装';", $failureHandler);
+    }
+
     public function testInstallPageProvidesHostQuickFillButtons(): void
     {
         $installPage = (string) file_get_contents(dirname(__DIR__, 3) . '/public/install/index.html');
@@ -114,6 +183,45 @@ final class InstallProgressContractTest extends TestCase
         $this->assertStringContainsString('<h2 id="installStateTitle">6. 正在安装</h2>', $installPage);
     }
 
+    public function testAgreementChecksEveryCurlFunctionBeforeCallingCurl(): void
+    {
+        $installService = (string) file_get_contents(dirname(__DIR__, 3) . '/app/service/install/InstallService.php');
+        $agreement = $this->sectionBetween(
+            $installService,
+            'public function getInstallAgreement()',
+            'public function getInstallPageMeta()',
+        );
+        $fetch = $this->sectionBetween(
+            $installService,
+            'private function fetchPlatformInstallAgreement()',
+            'private function platformBoolean(',
+        );
+
+        $this->assertStringContainsString(
+            '$missingCurlFunctions = $this->missingEnvironmentFunctions(self::INSTALL_CURL_FUNCTIONS);',
+            $fetch,
+        );
+        $this->assertMatchesRegularExpression(
+            <<<'REGEX'
+/if \(\$missingCurlFunctions !== \[\]\) \{\s*return\s*\[\s*'success'\s*=>\s*false,/
+REGEX,
+            $fetch,
+        );
+
+        $guardPosition = strpos($fetch, 'missingEnvironmentFunctions(self::INSTALL_CURL_FUNCTIONS)');
+        $firstCurlCallPosition = strpos($fetch, 'curl_init(');
+        $this->assertIsInt($guardPosition);
+        $this->assertIsInt($firstCurlCallPosition);
+        $this->assertLessThan($firstCurlCallPosition, $guardPosition);
+
+        $this->assertMatchesRegularExpression(
+            <<<'REGEX'
+/if \(\(\$response\['success'] \?\? false\) !== true\) \{\s*return \$this->unavailableInstallAgreement/
+REGEX,
+            $agreement,
+        );
+    }
+
     public function testDemoStaticCopyMessageUsesExistingInsteadOfSkippedForInstalledFiles(): void
     {
         $installService = (string) file_get_contents(dirname(__DIR__, 3) . '/app/service/install/InstallService.php');
@@ -122,5 +230,15 @@ final class InstallProgressContractTest extends TestCase
         $this->assertStringContainsString("\$result['existing']++", $installService);
         $this->assertStringContainsString('演示静态资源就绪（新增 %d，已存在 %d）', $installService);
         $this->assertStringNotContainsString('演示静态资源就绪（新增 %d，跳过 %d）', $installService);
+    }
+
+    private function sectionBetween(string $source, string $startMarker, string $endMarker): string
+    {
+        $start = strpos($source, $startMarker);
+        self::assertIsInt($start, '未找到契约起始标记：' . $startMarker);
+        $end = strpos($source, $endMarker, $start + strlen($startMarker));
+        self::assertIsInt($end, '未找到契约结束标记：' . $endMarker);
+
+        return substr($source, $start, $end - $start);
     }
 }
