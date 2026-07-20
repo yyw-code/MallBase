@@ -278,13 +278,13 @@ body.complete-mode .container{max-width:1220px}
       <div class="agreement-panel" id="agreementPanel">
         <div class="agreement-head">
           <div>
-            <div class="agreement-title" id="agreementTitle">MallBase 开源许可</div>
-            <div class="agreement-desc" id="agreementDesc">请阅读 MallBase 开源许可，确认后再继续安装。</div>
+            <div class="agreement-title" id="agreementTitle">MallBase 安装协议</div>
+            <div class="agreement-desc" id="agreementDesc">请阅读平台提供的安装协议，确认后再继续安装。</div>
           </div>
           <button type="button" class="btn btn-outline btn-small" id="agreementRetry" onclick="loadInstallAgreement()">刷新协议</button>
         </div>
         <div class="agreement-loading" id="agreementLoading">正在加载安装协议…</div>
-        <iframe class="agreement-frame" id="agreementFrame" title="MallBase 开源许可" sandbox="" referrerpolicy="no-referrer" hidden></iframe>
+        <iframe class="agreement-frame" id="agreementFrame" title="MallBase 安装协议" sandbox="" referrerpolicy="no-referrer" hidden></iframe>
         <div class="agreement-error" id="agreementError" hidden></div>
         <div class="checkbox-group" id="agreementCheckGroup" hidden>
           <input type="checkbox" id="install_agreement_accept">
@@ -674,7 +674,7 @@ function renderAgreementUnavailable(message) {
   document.getElementById('agreementCheckGroup').hidden = true;
   document.getElementById('install_agreement_accept').checked = false;
   const error = document.getElementById('agreementError');
-  error.textContent = message || 'MallBase 开源许可加载失败，请确认部署包包含可读取的 LICENSE 文件后点击刷新。';
+  error.textContent = message || '安装协议加载失败，请检查服务器网络或平台服务后点击刷新协议。';
   error.hidden = false;
   showMsg('agreementMsg', '安装协议未加载成功，请刷新协议后再继续。', false);
   updateAgreementNextState();
@@ -705,18 +705,15 @@ async function loadInstallAgreement() {
     }
 
     if (data.available === false || !data.content) {
-      const message = data.error === 'license_unavailable'
-        ? 'MallBase 开源许可文件缺失或不可读，请确认部署包完整后重试。'
-        : 'MallBase 开源许可暂时无法加载，请稍后刷新重试。';
-      renderAgreementUnavailable(message);
+      renderAgreementUnavailable('安装协议暂时无法加载，请检查服务器网络或平台服务后点击刷新协议。');
       return;
     }
 
     agreementState.enabled = true;
     agreementState.available = true;
     agreementState.accepted = false;
-    document.getElementById('agreementTitle').textContent = data.title || 'MallBase 开源许可';
-    document.getElementById('agreementDesc').textContent = '请阅读 MallBase 开源许可，确认后再继续安装。';
+    document.getElementById('agreementTitle').textContent = data.title || 'MallBase 安装协议';
+    document.getElementById('agreementDesc').textContent = '请阅读平台提供的安装协议，确认后再继续安装。';
     document.getElementById('agreementLoading').hidden = true;
     document.getElementById('agreementError').hidden = true;
     const frame = document.getElementById('agreementFrame');
