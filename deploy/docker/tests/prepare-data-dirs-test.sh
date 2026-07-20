@@ -67,11 +67,13 @@ assert_mount_policy() {
 }
 
 mkdir -p \
-    "$FIXTURE/backend/public" \
+    "$FIXTURE/backend/public/static/demo" \
     "$FIXTURE/upgrade/config" \
     "$FIXTURE/upgrade/run"
 printf '%s\n' existing-state > "$FIXTURE/upgrade/config/instance.json"
 chmod 0600 "$FIXTURE/upgrade/config/instance.json"
+printf '%s\n' tracked-readme > "$FIXTURE/backend/public/static/demo/README.md"
+chmod 0644 "$FIXTURE/backend/public/static/demo/README.md"
 
 WORKDIR=$FIXTURE \
 DATA_UID=$TEST_UID \
@@ -98,7 +100,9 @@ done
 
 for directory in \
     backend/runtime \
+    backend/.mallbase-env \
     backend/public/uploads \
+    backend/public/static/demo \
     backend/vendor; do
     directory_path=$FIXTURE/$directory
     [ -d "$directory_path" ]
@@ -122,7 +126,9 @@ MALLBASE_DEV_GID=$TEST_GID \
 
 for directory in \
     backend/runtime \
+    backend/.mallbase-env \
     backend/public/uploads \
+    backend/public/static/demo \
     backend/vendor; do
     directory_path=$FIXTURE/$directory
     sentinel=$directory_path/.mallbase-existing-state
@@ -135,6 +141,13 @@ for directory in \
     [ "$(mode_of "$sentinel")" = 600 ]
 done
 
+grep -Fx tracked-readme "$FIXTURE/backend/public/static/demo/README.md" >/dev/null
+[ "$(mode_of "$FIXTURE/backend/public/static/demo/README.md")" = 644 ]
+if grep -F "$FIXTURE/backend/public/static/demo/README.md" "$TRACE_FILE" >/dev/null; then
+    printf '%s\n' DEMO_README_CHOWNED >&2
+    exit 1
+fi
+
 grep -Fx existing-state "$FIXTURE/upgrade/config/instance.json" >/dev/null
 [ "$(mode_of "$FIXTURE/upgrade/config/instance.json")" = 600 ]
 if grep -F "chown -R ${TEST_UID}:${TEST_GID} ${FIXTURE}/upgrade" "$TRACE_FILE" >/dev/null; then
@@ -144,7 +157,9 @@ fi
 
 for directory in \
     backend/runtime \
+    backend/.mallbase-env \
     backend/public/uploads \
+    backend/public/static/demo \
     backend/vendor; do
     label=$(printf '%s' "$directory" | tr '/' '-')
     symlink_fixture=$TEST_ROOT/symlink-$label
@@ -170,6 +185,8 @@ assert_mount_policy upgrade/bin false 2
 
 grep -F 'MALLBASE_DEV_UID: "${MALLBASE_DEV_UID:-10000}"' "$COMPOSE_FILE" >/dev/null
 grep -F 'MALLBASE_DEV_GID: "${MALLBASE_DEV_GID:-10000}"' "$COMPOSE_FILE" >/dev/null
+count=$(grep -F 'MALLBASE_BACKEND_ENV_PATH: /app/.mallbase-env/backend.env' "$COMPOSE_FILE" | wc -l | tr -d ' ')
+[ "$count" -eq 2 ]
 
 if WORKDIR=$FIXTURE MALLBASE_DEV_UID=invalid sh "$PREPARE_SCRIPT" >/dev/null 2>&1; then
     printf '%s\n' INVALID_UID_ACCEPTED >&2

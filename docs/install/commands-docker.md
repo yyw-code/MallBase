@@ -11,8 +11,12 @@
 适用：方式二。
 
 ```bash
+docker compose -f docker-compose.dev.yml run --rm --no-deps prepare-data-dirs
+docker compose -f docker-compose.dev.yml run --rm --no-deps ensure-env
 docker compose -f docker-compose.dev.yml up -d --no-deps backend
 ```
+
+前两条命令负责准备容器可写目录、生成根 `.env`，并派生 `backend/.mallbase-env/backend.env`；不会启动 MySQL 或 Redis。
 
 ## 启动 Docker 开发全套
 

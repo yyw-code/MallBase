@@ -12,10 +12,10 @@
 
 ### 1. 确认是否需要根 `.env`
 
-项目存在两份 `.env` 模板，职责不同：
+项目存在两份配置模板，职责不同：
 
 - `deploy/docker/.example.env`：项目根 `.env` 模板，供 Docker Compose 做端口、容器名等变量插值。
-- `backend/.example.env`：`backend/.env` 派生模板，供容器入口脚本或安装流程生成运行时文件。
+- `backend/.example.env`：后端运行配置模板；Docker 开发生成到 `backend/.mallbase-env/backend.env`。
 
 进入项目根目录：
 
@@ -23,13 +23,13 @@
 cd /path/to/mall-base
 ```
 
-方式二启动命令使用的是：
+方式二最终只启动 backend 服务：
 
 ```bash
 docker compose -f docker-compose.dev.yml up -d --no-deps backend
 ```
 
-由于这里显式带了 `--no-deps`，`ensure-env` 不会一起启动，所以方式二不能依赖 Docker 全套模式里的“自动生成根 `.env` 并派生 `backend/.env`”。
+由于这里显式带了 `--no-deps`，依赖服务不会自动启动。不要直接只执行这一条；启动 backend 前需要按第 2 步单独运行 `prepare-data-dirs` 和 `ensure-env` 两个一次性容器，它们不会启动 MySQL 或 Redis。
 
 默认端口、单套本地环境下，可以不准备根 `.env`，直接进入第 2 步启动后端容器。此时 Compose 会使用默认值：
 
@@ -65,19 +65,23 @@ cp deploy/docker/.example.env .env
 - Docker Desktop：`host.docker.internal`
 - Linux Docker Engine：宿主机网关 IP 或宿主机实际内网 IP
 
-不要手动复制或编辑 `backend/.env`。方式二启动后，如果 `backend/.env` 不存在，后端容器入口脚本会根据根 `.env` 自动派生；安装向导完成后会按表单内容重新写入正式运行配置。
+不要手动复制或编辑 `backend/.mallbase-env/backend.env`。`ensure-env` 会根据根 `.env` 派生；安装向导完成后会按表单内容重新写入该运行配置。
 
-如果仓库里已经存在旧的 `backend/.env`，重新首装前建议删除它，让容器入口脚本按根 `.env` 重新派生：
+如果仓库里已经存在旧的 `backend/.env`，`ensure-env` 会将它复制到新路径作为迁移输入，并保留旧文件供宿主机直跑。重新首装、确定不需要旧配置时，再使用清理脚本统一清理：
 
 ```bash
-rm -f backend/.env
+sh deploy/docker/cleanup-dev.sh --basic
 ```
 
 ### 2. 启动后端容器
 
 ```bash
+docker compose -f docker-compose.dev.yml run --rm --no-deps prepare-data-dirs
+docker compose -f docker-compose.dev.yml run --rm --no-deps ensure-env
 docker compose -f docker-compose.dev.yml up -d --no-deps backend
 ```
+
+第一条命令会创建并交接 `backend/.mallbase-env`、`backend/runtime`、上传目录和演示素材目录权限；第二条命令生成根 `.env` 和 Docker 运行配置。这样即使代码刚从 Git 拉取，backend 也不会因为宿主机目录属于其他 UID 而无法写入。
 
 这里必须带 `--no-deps`，否则 Compose 会顺带把方式三的 `ensure-env`、MySQL、Redis 一并拉起。
 
@@ -87,8 +91,7 @@ docker compose -f docker-compose.dev.yml up -d --no-deps backend
 
 | 宿主机路径 | 容器路径 | 读写 | 用途 |
 |------------|----------|------|------|
-| `./backend` | `/app` | 读写 | 后端代码、PHP 依赖、运行时文件、安装锁、上传文件都在这里；宿主机和容器看到的是同一份。 |
-| `./` | `/workspace` | 只读 | 让后端容器读取项目根 `.env`。如果根 `.env` 不存在，会按默认值派生 `backend/.env`。 |
+| `./backend` | `/app` | 读写 | 后端代码、PHP 依赖、`backend/.mallbase-env/backend.env`、运行时文件、安装锁和上传文件都在这里；宿主机和容器看到的是同一份。 |
 | `./.version` | `/.version` | 只读 | 给安装页和状态页展示当前版本信息。 |
 
 方式二没有 `./data/mysql` 和 `./data/redis` 映射，因为 MySQL / Redis 由宿主机或外部服务提供。
@@ -129,7 +132,7 @@ http://localhost:8080/install
 
 如果没有准备根 `.env`，安装表单可能显示模板默认的 `mysql` / `redis`；方式二连接的是宿主机 MySQL / Redis，请在表单里改成上面的宿主机可达地址。
 
-如果准备了根 `.env`，安装表单会优先使用其中的数据库和 Redis 地址。如果表单里仍显示旧值，通常是旧的 `backend/.env` 或浏览器缓存影响；请先按第 1 步删除旧 `backend/.env` 后重启容器，再强制刷新安装页。
+如果准备了根 `.env`，安装表单会优先使用其中的数据库和 Redis 地址。如果表单里仍显示旧值，先检查 `backend/.mallbase-env/backend.env` 的派生结果和浏览器缓存；需要彻底重测首装时按第 1 步执行清理脚本，再重新运行两个一次性容器。
 
 安装流程完成后会自动执行：
 
@@ -139,7 +142,7 @@ http://localhost:8080/install
 
 ### 6. 重启后端容器
 
-安装向导生成 `backend/.env` 后，需要重启容器：
+安装向导更新 `backend/.mallbase-env/backend.env` 后，需要重启容器：
 
 ```bash
 docker compose -f docker-compose.dev.yml restart backend

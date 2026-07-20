@@ -112,21 +112,21 @@ final class AgentDeploymentContractTest extends TestCase
         );
     }
 
-    public function testDevelopmentComposeRebuildsBackendImageAndPassesOwnershipToEnsureEnv(): void
+    public function testDevelopmentComposeRebuildsBackendImageAndPassesOwnershipToRuntimeInitTools(): void
     {
         $compose = $this->read('docker-compose.dev.yml');
 
         self::assertSame(2, substr_count($compose, 'pull_policy: build'));
         self::assertStringNotContainsString('pull_policy: never', $compose);
         self::assertSame(
-            2,
+            3,
             substr_count($compose, 'MALLBASE_DEV_UID: "${MALLBASE_DEV_UID:-10000}"'),
-            'prepare-data-dirs and ensure-env must receive the backend UID',
+            'prepare-data-dirs, ensure-env and rotate-db-password must receive the backend UID',
         );
         self::assertSame(
-            2,
+            3,
             substr_count($compose, 'MALLBASE_DEV_GID: "${MALLBASE_DEV_GID:-10000}"'),
-            'prepare-data-dirs and ensure-env must receive the backend GID',
+            'prepare-data-dirs, ensure-env and rotate-db-password must receive the backend GID',
         );
         self::assertMatchesRegularExpression(
             '/ensure-env:\s+image: alpine:3\.19\s+container_name:.*?environment:\s+'
@@ -211,6 +211,16 @@ final class AgentDeploymentContractTest extends TestCase
                 $composePath . ' must not shadow the image-owned /LICENSE',
             );
         }
+    }
+
+    public function testDevelopmentDockerfileUsesWritableComposerHome(): void
+    {
+        $dockerfile = $this->read('deploy/docker/Dockerfile.dev');
+
+        self::assertStringContainsString(
+            'ENV COMPOSER_HOME=/tmp/mallbase-composer',
+            $dockerfile,
+        );
     }
 
     public function testHostPreflightOnlyPreparesTheSimpleUpgradeWorkspace(): void

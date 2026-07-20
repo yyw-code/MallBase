@@ -94,7 +94,7 @@ rg -n "会员|积分|余额|装修|充值|成长值" README.md docs
 | [install/docker-production.md](./install/docker-production.md) | 方式四：Docker 生产 |
 | [install/cli-install.md](./install/cli-install.md) | 本地安装失败后的 `php think install:auto` 命令行安装 |
 | [install/troubleshooting.md](./install/troubleshooting.md) | 安装、Docker、静态资源与运行时排障 |
-| [install/env-files.md](./install/env-files.md) | 根 `.env`、`backend/.env` 与运行时配置职责 |
+| [install/env-files.md](./install/env-files.md) | 根 `.env`、Docker 开发运行配置与本地 `backend/.env` 的职责 |
 | [install/nginx-reverse-proxy.md](./install/nginx-reverse-proxy.md) | Nginx 反向代理与静态资源路径规则 |
 | [install/cloud-storage-upload.md](./install/cloud-storage-upload.md) | 本地存储、阿里云 OSS、腾讯云 COS 上传驱动配置与验证 |
 | [install/issues/docker-fullstack-first-run.md](./install/issues/docker-fullstack-first-run.md) | Docker 全套首次启动问题记录 |
