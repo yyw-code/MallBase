@@ -9,30 +9,22 @@ use PHPUnit\Framework\TestCase;
 
 final class InstallLockServiceTest extends TestCase
 {
+    private string $root;
+
     private string $lockPath;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        $dir = sys_get_temp_dir() . '/mallbase-install-lock-' . bin2hex(random_bytes(6));
-        mkdir($dir . '/runtime/install', 0755, true);
-        $this->lockPath = $dir . '/runtime/install/install.lock';
+        $this->root = sys_get_temp_dir() . '/mallbase-install-lock-' . bin2hex(random_bytes(6));
+        mkdir($this->root . '/runtime/install', 0755, true);
+        $this->lockPath = $this->root . '/runtime/install/install.lock';
     }
 
     protected function tearDown(): void
     {
-        if (is_file($this->lockPath)) {
-            unlink($this->lockPath);
-        }
-
-        $directory = dirname($this->lockPath);
-        foreach ([$directory, dirname($directory), dirname(dirname($directory))] as $dir) {
-            if (is_dir($dir)) {
-                rmdir($dir);
-            }
-        }
-
+        $this->removeTree($this->root);
         parent::tearDown();
     }
 
@@ -48,6 +40,257 @@ final class InstallLockServiceTest extends TestCase
         ], $service->getLockInfo());
         clearstatcache(true, $this->lockPath);
         $this->assertSame(0600, fileperms($this->lockPath) & 0777);
+    }
+
+    public function testRejectsLeafSymlinkForReadAndWriteWithoutChangingTarget(): void
+    {
+        $target = $this->root . '/target.lock';
+        $content = json_encode(['installed_at' => '2026-06-19 12:00:00'], JSON_THROW_ON_ERROR);
+        file_put_contents($target, $content);
+        if (!@symlink($target, $this->lockPath)) {
+            self::markTestSkipped('symlink unavailable');
+        }
+        $service = new InstallLockService($this->lockPath);
+
+        foreach ([
+            static fn() => $service->getLockInfo(),
+            static fn() => $service->writeInstalledLock('2026-07-21 12:00:00'),
+        ] as $operation) {
+            try {
+                $operation();
+                self::fail('leaf symlink was accepted');
+            } catch (\RuntimeException $exception) {
+                self::assertStringContainsString('安装锁文件不能是符号链接', $exception->getMessage());
+            }
+        }
+
+        self::assertSame($content, file_get_contents($target));
+    }
+
+    public function testRejectsLockFileWithMultipleHardLinks(): void
+    {
+        $content = json_encode(['installed_at' => '2026-06-19 12:00:00'], JSON_THROW_ON_ERROR);
+        file_put_contents($this->lockPath, $content);
+        $alias = $this->root . '/install-lock-alias';
+        if (!@link($this->lockPath, $alias)) {
+            self::markTestSkipped('hard links unavailable');
+        }
+        $service = new InstallLockService($this->lockPath);
+
+        foreach ([
+            static fn() => $service->getLockInfo(),
+            static fn() => $service->writeInstalledLock('2026-07-21 12:00:00'),
+        ] as $operation) {
+            try {
+                $operation();
+                self::fail('hard-linked lock was accepted');
+            } catch (\RuntimeException $exception) {
+                self::assertStringContainsString('安装锁文件存在硬链接，已拒绝', $exception->getMessage());
+            }
+        }
+
+        self::assertSame($content, file_get_contents($alias));
+    }
+
+    public function testReadRejectsLockPathWhoseIdentityChangesAfterOpen(): void
+    {
+        $original = json_encode(['installed_at' => '2026-06-19 12:00:00'], JSON_THROW_ON_ERROR);
+        $replacement = json_encode(['installed_at' => '2026-07-21 12:00:00'], JSON_THROW_ON_ERROR);
+        file_put_contents($this->lockPath, $original);
+        $swapped = false;
+        $service = new InstallLockService(
+            $this->lockPath,
+            function (string $event, string $path) use (&$swapped, $replacement): void {
+                if ($event !== 'lock_opened' || $swapped) {
+                    return;
+                }
+                $swapped = true;
+                unlink($path);
+                file_put_contents($path, $replacement);
+                chmod($path, 0600);
+            },
+        );
+
+        try {
+            $service->getLockInfo();
+            self::fail('lock path identity race was accepted');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString('安装锁并发读取冲突，请重试', $exception->getMessage());
+        }
+
+        self::assertTrue($swapped);
+        self::assertSame($replacement, file_get_contents($this->lockPath));
+    }
+
+    public function testExistingLockIsUnchangedWhenTemporaryPublishFails(): void
+    {
+        (new InstallLockService($this->lockPath))->writeInstalledLock('2026-06-19 12:00:00');
+        $original = file_get_contents($this->lockPath);
+        $temporaryObserved = false;
+        $service = new InstallLockService(
+            $this->lockPath,
+            function (string $event, string $path) use (&$temporaryObserved, $original): void {
+                if ($event !== 'temporary_flushed') {
+                    return;
+                }
+                $temporaryObserved = true;
+                self::assertSame($original, file_get_contents($this->lockPath));
+                $temporaryData = json_decode((string) file_get_contents($path), true, 512, JSON_THROW_ON_ERROR);
+                self::assertSame('mbt_atomic', $temporaryData['platform']['token'] ?? null);
+                throw new \RuntimeException('模拟临时发布失败');
+            },
+        );
+
+        try {
+            $service->savePlatformState(['token' => 'mbt_atomic']);
+            self::fail('temporary publish failure was ignored');
+        } catch (\RuntimeException $exception) {
+            self::assertSame('模拟临时发布失败', $exception->getMessage());
+        }
+
+        self::assertTrue($temporaryObserved);
+        self::assertSame($original, file_get_contents($this->lockPath));
+        self::assertSame([], $this->temporaryFiles());
+    }
+
+    public function testNewLockIsPublishedOnlyAfterCompleteTemporaryFileIsFlushed(): void
+    {
+        $temporaryObserved = false;
+        $service = new InstallLockService(
+            $this->lockPath,
+            function (string $event, string $path) use (&$temporaryObserved): void {
+                if ($event !== 'temporary_flushed') {
+                    return;
+                }
+                $temporaryObserved = true;
+                self::assertFileDoesNotExist($this->lockPath);
+                $temporaryData = json_decode((string) file_get_contents($path), true, 512, JSON_THROW_ON_ERROR);
+                self::assertSame('2026-07-21 12:00:00', $temporaryData['installed_at'] ?? null);
+                clearstatcache(true, $path);
+                self::assertSame(0600, fileperms($path) & 0777);
+            },
+        );
+
+        $service->writeInstalledLock('2026-07-21 12:00:00');
+
+        self::assertTrue($temporaryObserved);
+        self::assertSame('2026-07-21 12:00:00', $service->getLockInfo()['installed_at'] ?? null);
+        self::assertSame([], $this->temporaryFiles());
+    }
+
+    public function testFailureCleanupDoesNotDeleteReplacementAtOwnedTemporaryPath(): void
+    {
+        if (DIRECTORY_SEPARATOR === '\\') {
+            self::markTestSkipped('open temporary replacement semantics differ on Windows');
+        }
+        $replacementPath = null;
+        $service = new InstallLockService(
+            $this->lockPath,
+            function (string $event, string $path) use (&$replacementPath): void {
+                if ($event !== 'temporary_created') {
+                    return;
+                }
+                $replacementPath = $path;
+                unlink($path);
+                file_put_contents($path, 'foreign temporary file');
+                throw new \RuntimeException('模拟临时文件替换');
+            },
+        );
+
+        try {
+            $service->writeInstalledLock('2026-07-21 12:00:00');
+            self::fail('temporary replacement race was ignored');
+        } catch (\RuntimeException $exception) {
+            self::assertSame('模拟临时文件替换', $exception->getMessage());
+        }
+
+        self::assertFileDoesNotExist($this->lockPath);
+        self::assertIsString($replacementPath);
+        self::assertFileExists($replacementPath);
+        self::assertSame('foreign temporary file', file_get_contents($replacementPath));
+    }
+
+    public function testUpdateRejectsFinalPathReplacementBeforeAtomicPublish(): void
+    {
+        (new InstallLockService($this->lockPath))->writeInstalledLock('2026-06-19 12:00:00');
+        $replacement = json_encode(['installed_at' => 'external replacement'], JSON_THROW_ON_ERROR);
+        $swapped = false;
+        $service = new InstallLockService(
+            $this->lockPath,
+            function (string $event, string $path) use (&$swapped, $replacement): void {
+                if ($event !== 'before_publish' || $swapped) {
+                    return;
+                }
+                $swapped = true;
+                unlink($this->lockPath);
+                file_put_contents($this->lockPath, $replacement);
+                chmod($this->lockPath, 0600);
+            },
+        );
+
+        try {
+            $service->savePlatformState(['token' => 'must-not-overwrite']);
+            self::fail('final path replacement race was accepted');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString('安装锁并发更新冲突，请重试', $exception->getMessage());
+        }
+
+        self::assertTrue($swapped);
+        self::assertSame($replacement, file_get_contents($this->lockPath));
+        self::assertSame([], $this->temporaryFiles());
+    }
+
+    public function testDirectoryHardeningHappensBeforeNewLockFileIsCreated(): void
+    {
+        $installDirectory = dirname($this->lockPath);
+        $externalDirectory = $this->root . '/external-install';
+        rmdir($installDirectory);
+        mkdir($externalDirectory, 0755);
+        if (!@symlink($externalDirectory, $installDirectory)) {
+            self::markTestSkipped('symlink unavailable');
+        }
+
+        try {
+            (new InstallLockService($this->lockPath))->writeInstalledLock('2026-06-19 12:00:00');
+            self::fail('unsafe install directory was accepted');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString('安装锁目录权限收紧失败', $exception->getMessage());
+        }
+
+        self::assertFileDoesNotExist($externalDirectory . '/install.lock');
+    }
+
+    public function testNewLockIsRemovedWhenEncodingFails(): void
+    {
+        $service = new InstallLockService($this->lockPath);
+
+        try {
+            $service->writeInstalledLock("\xB1\x31");
+            self::fail('invalid lock content was accepted');
+        } catch (\RuntimeException $exception) {
+            self::assertSame('安装锁内容编码失败', $exception->getMessage());
+        }
+
+        self::assertFileDoesNotExist($this->lockPath);
+        self::assertFalse($service->isInstalled());
+    }
+
+    public function testExistingLockIsPreservedWhenEncodingFails(): void
+    {
+        $service = new InstallLockService($this->lockPath);
+        $service->writeInstalledLock('2026-06-19 12:00:00');
+        $original = file_get_contents($this->lockPath);
+
+        try {
+            $service->writeInstalledLock("\xB1\x31");
+            self::fail('invalid lock content was accepted');
+        } catch (\RuntimeException $exception) {
+            self::assertSame('安装锁内容编码失败', $exception->getMessage());
+        }
+
+        self::assertFileExists($this->lockPath);
+        self::assertSame($original, file_get_contents($this->lockPath));
+        self::assertSame('2026-06-19 12:00:00', $service->getLockInfo()['installed_at'] ?? null);
     }
 
     public function testReadingPlatformStateHardensExistingLockPermissions(): void
@@ -180,5 +423,32 @@ final class InstallLockServiceTest extends TestCase
         ], $service->getActivePlatformComponents(400, 3600, '1.0.0'));
 
         $this->assertSame([], $service->getActivePlatformComponents(4000, 3600, '1.0.0'));
+    }
+
+    private function removeTree(string $path): void
+    {
+        if (is_file($path) || is_link($path)) {
+            @unlink($path);
+
+            return;
+        }
+        if (!is_dir($path)) {
+            return;
+        }
+        @chmod($path, 0770);
+        foreach (scandir($path) ?: [] as $entry) {
+            if ($entry !== '.' && $entry !== '..') {
+                $this->removeTree($path . DIRECTORY_SEPARATOR . $entry);
+            }
+        }
+        @rmdir($path);
+    }
+
+    /** @return array<int, string> */
+    private function temporaryFiles(): array
+    {
+        return glob(
+            dirname($this->lockPath) . '/.' . basename($this->lockPath) . '.*.tmp',
+        ) ?: [];
     }
 }

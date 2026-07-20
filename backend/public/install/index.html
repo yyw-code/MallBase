@@ -532,6 +532,7 @@ body.complete-mode .container{max-width:1220px}
 const API = '/install/api';
 let currentStep = 1;
 let installCompleted = false;
+let installStreamCompleted = false;
 let installRunning = false;
 let watchersAttached = false;
 let installMeta = null;
@@ -544,6 +545,7 @@ const agreementState = {
   accepted: false,
 };
 const installStepOrder = [
+  { step: 'environment', title: '检查安装环境' },
   { step: 'db_test', title: '校验并准备数据库' },
   { step: 'redis_test', title: '校验 Redis 连接' },
   { step: 'write_env', title: '写入配置文件' },
@@ -1201,6 +1203,7 @@ function buildInstallPayload() {
 
 function resetInstallUI() {
   installCompleted = false;
+  installStreamCompleted = false;
   document.body.classList.remove('complete-mode');
   document.getElementById('installStateTitle').textContent = '6. 正在安装';
   document.getElementById('installStateText').textContent = '正在按顺序执行安装步骤，进度会实时展示在下方。';
@@ -1296,6 +1299,7 @@ function updateProgressStep(event) {
 function finishInstallSuccess(message) {
   const maintenanceEnabled = lastInstallOptions.cron_enable || lastInstallOptions.swoole_queue_enable;
   installCompleted = true;
+  installStreamCompleted = true;
   installRunning = false;
   document.body.classList.add('complete-mode');
   document.getElementById('installStateTitle').textContent = '6. 安装完成';
@@ -1316,7 +1320,11 @@ function finishInstallSuccess(message) {
 }
 
 function finishInstallFailure(message) {
+  installStreamCompleted = true;
   installRunning = false;
+  const btn = document.getElementById('installBtn');
+  btn.disabled = false;
+  btn.textContent = '开始安装';
   document.body.classList.remove('complete-mode');
   document.getElementById('installStateTitle').textContent = '6. 安装未完成';
   document.getElementById('installStateText').textContent = '请根据失败步骤修正配置后重新执行安装。';
@@ -1335,6 +1343,7 @@ function handleStreamEvent(eventName, payload) {
   }
 
   if (eventName === 'complete') {
+    installStreamCompleted = true;
     if (payload.success) {
       finishInstallSuccess(payload.message || '安装完成');
     } else {
@@ -1452,14 +1461,10 @@ async function doInstall() {
 
     await consumeInstallStream(response);
 
-    if (!installCompleted) {
-      btn.disabled = false;
-      btn.textContent = '开始安装';
+    if (!installStreamCompleted) {
       finishInstallFailure('安装连接已断开，请确认服务状态后重新执行安装。');
     }
   } catch (e) {
-    btn.disabled = false;
-    btn.textContent = '开始安装';
     finishInstallFailure(e.message || '安装请求失败');
   }
 }

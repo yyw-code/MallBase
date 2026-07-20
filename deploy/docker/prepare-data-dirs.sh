@@ -117,6 +117,51 @@ prepare_backend_dir() {
     fi
 }
 
+prepare_backend_state_file() {
+    name=$1
+    path="${WORKDIR}/${name}"
+
+    if [ ! -e "$path" ] && [ ! -L "$path" ]; then
+        return
+    fi
+    if [ -L "$path" ] || [ ! -f "$path" ]; then
+        echo ">>> [prepare-data-dirs] 致命错误：${name} 必须是非符号链接普通文件"
+        exit 1
+    fi
+
+    link_count=$(stat -c '%h' "$path" 2>/dev/null || stat -f '%l' "$path")
+    if [ "$link_count" != "1" ]; then
+        echo ">>> [prepare-data-dirs] 致命错误：${name} 存在硬链接，拒绝交接"
+        exit 1
+    fi
+    identity_before=$(stat -c '%d:%i' "$path" 2>/dev/null || stat -f '%d:%i' "$path")
+
+    echo ">>> [prepare-data-dirs] 定点交接 ${name} 权限为 ${MALLBASE_DEV_UID}:${MALLBASE_DEV_GID} / 0600"
+    chown "${MALLBASE_DEV_UID}:${MALLBASE_DEV_GID}" "$path"
+    chmod 0600 "$path"
+
+    if [ -L "$path" ] || [ ! -f "$path" ]; then
+        echo ">>> [prepare-data-dirs] 致命错误：${name} 交接期间文件类型发生变化"
+        exit 1
+    fi
+    link_count=$(stat -c '%h' "$path" 2>/dev/null || stat -f '%l' "$path")
+    identity_after=$(stat -c '%d:%i' "$path" 2>/dev/null || stat -f '%d:%i' "$path")
+    if [ "$link_count" != "1" ] || [ "$identity_after" != "$identity_before" ]; then
+        echo ">>> [prepare-data-dirs] 致命错误：${name} 交接期间文件身份发生变化"
+        exit 1
+    fi
+
+    actual_uid=$(stat -c '%u' "$path" 2>/dev/null || stat -f '%u' "$path")
+    actual_gid=$(stat -c '%g' "$path" 2>/dev/null || stat -f '%g' "$path")
+    actual_mode=$(stat -c '%a' "$path" 2>/dev/null || stat -f '%Lp' "$path")
+    if [ "$actual_uid" != "$MALLBASE_DEV_UID" ] \
+        || [ "$actual_gid" != "$MALLBASE_DEV_GID" ] \
+        || [ "$actual_mode" != "600" ]; then
+        echo ">>> [prepare-data-dirs] 致命错误：${name} owner 或权限校验失败"
+        exit 1
+    fi
+}
+
 prepare_dir "data/mysql"
 prepare_dir "data/redis"
 prepare_upgrade_dir "upgrade/config"
@@ -125,6 +170,9 @@ prepare_upgrade_dir "upgrade/run/requests"
 prepare_upgrade_dir "upgrade/jobs"
 prepare_upgrade_dir "upgrade/backups"
 prepare_backend_dir "backend/runtime"
+prepare_backend_dir "backend/runtime/install"
+prepare_backend_state_file "backend/runtime/install/install.lock"
+prepare_backend_state_file "backend/runtime/install/.install.lock.guard"
 prepare_backend_dir "backend/.mallbase-env"
 prepare_backend_dir "backend/public/uploads"
 prepare_backend_dir "backend/public/static/demo"

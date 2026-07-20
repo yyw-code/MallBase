@@ -9,8 +9,15 @@ UPGRADE_IGNORE=$PROJECT_ROOT/upgrade/.gitignore
 TEST_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/mallbase-prepare-data-dirs-test.XXXXXX")
 TRACE_FILE=$TEST_ROOT/trace.log
 FIXTURE=$TEST_ROOT/project
-TEST_UID=$(id -u)
-TEST_GID=$(id -g)
+CURRENT_UID=$(id -u)
+CURRENT_GID=$(id -g)
+TEST_UID=$CURRENT_UID
+TEST_GID=$CURRENT_GID
+if [ "$CURRENT_UID" -eq 0 ]; then
+    # Root 环境可真实覆盖“旧 root:root 目录 -> 开发容器 UID/GID”的迁移场景。
+    TEST_UID=10001
+    TEST_GID=10001
+fi
 trap 'chmod -R u+rwx "$TEST_ROOT" 2>/dev/null || true; rm -rf "$TEST_ROOT"' 0 HUP INT TERM
 
 mode_of() {
@@ -67,6 +74,7 @@ assert_mount_policy() {
 }
 
 mkdir -p \
+    "$FIXTURE/backend/runtime/install" \
     "$FIXTURE/backend/public/static/demo" \
     "$FIXTURE/upgrade/config" \
     "$FIXTURE/upgrade/run"
@@ -74,6 +82,15 @@ printf '%s\n' existing-state > "$FIXTURE/upgrade/config/instance.json"
 chmod 0600 "$FIXTURE/upgrade/config/instance.json"
 printf '%s\n' tracked-readme > "$FIXTURE/backend/public/static/demo/README.md"
 chmod 0644 "$FIXTURE/backend/public/static/demo/README.md"
+printf '%s\n' existing-install-state > "$FIXTURE/backend/runtime/install/existing-state"
+chmod 0600 "$FIXTURE/backend/runtime/install/existing-state"
+install_state_uid_before=$(uid_of "$FIXTURE/backend/runtime/install/existing-state")
+install_state_gid_before=$(gid_of "$FIXTURE/backend/runtime/install/existing-state")
+printf '%s\n' existing-install-lock > "$FIXTURE/backend/runtime/install/install.lock"
+printf '%s\n' existing-install-guard > "$FIXTURE/backend/runtime/install/.install.lock.guard"
+chmod 0600 \
+    "$FIXTURE/backend/runtime/install/install.lock" \
+    "$FIXTURE/backend/runtime/install/.install.lock.guard"
 
 WORKDIR=$FIXTURE \
 DATA_UID=$TEST_UID \
@@ -100,6 +117,7 @@ done
 
 for directory in \
     backend/runtime \
+    backend/runtime/install \
     backend/.mallbase-env \
     backend/public/uploads \
     backend/public/static/demo \
@@ -126,6 +144,7 @@ MALLBASE_DEV_GID=$TEST_GID \
 
 for directory in \
     backend/runtime \
+    backend/runtime/install \
     backend/.mallbase-env \
     backend/public/uploads \
     backend/public/static/demo \
@@ -139,6 +158,33 @@ for directory in \
     [ "$(mode_of "$directory_path")" = "$expected_mode" ]
     grep -Fx "${directory}-state" "$sentinel" >/dev/null
     [ "$(mode_of "$sentinel")" = 600 ]
+done
+
+grep -Fx existing-install-state "$FIXTURE/backend/runtime/install/existing-state" >/dev/null
+[ "$(mode_of "$FIXTURE/backend/runtime/install/existing-state")" = 600 ]
+[ "$(uid_of "$FIXTURE/backend/runtime/install/existing-state")" = "$install_state_uid_before" ]
+[ "$(gid_of "$FIXTURE/backend/runtime/install/existing-state")" = "$install_state_gid_before" ]
+if grep -F "chown -R ${TEST_UID}:${TEST_GID} ${FIXTURE}/backend/runtime" "$TRACE_FILE" >/dev/null; then
+    printf '%s\n' BACKEND_RUNTIME_RECURSIVE_CHOWNED >&2
+    exit 1
+fi
+if [ "$CURRENT_UID" -eq 0 ]; then
+    [ "$(uid_of "$FIXTURE/backend/runtime/install")" = "$TEST_UID" ]
+    [ "$(gid_of "$FIXTURE/backend/runtime/install")" = "$TEST_GID" ]
+    [ "$install_state_uid_before" = 0 ]
+    [ "$install_state_gid_before" = 0 ]
+fi
+
+grep -Fx existing-install-lock "$FIXTURE/backend/runtime/install/install.lock" >/dev/null
+grep -Fx existing-install-guard "$FIXTURE/backend/runtime/install/.install.lock.guard" >/dev/null
+for state_file in \
+    backend/runtime/install/install.lock \
+    backend/runtime/install/.install.lock.guard; do
+    state_path=$FIXTURE/$state_file
+    [ ! -L "$state_path" ]
+    [ "$(uid_of "$state_path")" = "$TEST_UID" ]
+    [ "$(gid_of "$state_path")" = "$TEST_GID" ]
+    [ "$(mode_of "$state_path")" = 600 ]
 done
 
 grep -Fx tracked-readme "$FIXTURE/backend/public/static/demo/README.md" >/dev/null
@@ -157,6 +203,7 @@ fi
 
 for directory in \
     backend/runtime \
+    backend/runtime/install \
     backend/.mallbase-env \
     backend/public/uploads \
     backend/public/static/demo \
@@ -174,6 +221,42 @@ for directory in \
         sh "$PREPARE_SCRIPT" >/dev/null 2>&1; then
         printf '%s\n' "BACKEND_WRITABLE_SYMLINK_ACCEPTED:${directory}" >&2
         exit 1
+    fi
+done
+
+for state_file in install.lock .install.lock.guard; do
+    symlink_state_fixture=$TEST_ROOT/symlink-state-$state_file
+    mkdir -p "$symlink_state_fixture/backend/runtime/install" "$symlink_state_fixture/outside"
+    printf '%s\n' outside-state > "$symlink_state_fixture/outside/$state_file"
+    ln -s "$symlink_state_fixture/outside/$state_file" \
+        "$symlink_state_fixture/backend/runtime/install/$state_file"
+
+    if WORKDIR=$symlink_state_fixture \
+        DATA_UID=$TEST_UID \
+        DATA_GID=$TEST_GID \
+        MALLBASE_DEV_UID=$TEST_UID \
+        MALLBASE_DEV_GID=$TEST_GID \
+        sh "$PREPARE_SCRIPT" >/dev/null 2>&1; then
+        printf '%s\n' "BACKEND_INSTALL_STATE_SYMLINK_ACCEPTED:${state_file}" >&2
+        exit 1
+    fi
+    grep -Fx outside-state "$symlink_state_fixture/outside/$state_file" >/dev/null
+
+    hardlink_state_fixture=$TEST_ROOT/hardlink-state-$state_file
+    mkdir -p "$hardlink_state_fixture/backend/runtime/install" "$hardlink_state_fixture/outside"
+    printf '%s\n' outside-state > "$hardlink_state_fixture/outside/$state_file"
+    if ln "$hardlink_state_fixture/outside/$state_file" \
+        "$hardlink_state_fixture/backend/runtime/install/$state_file" 2>/dev/null; then
+        if WORKDIR=$hardlink_state_fixture \
+            DATA_UID=$TEST_UID \
+            DATA_GID=$TEST_GID \
+            MALLBASE_DEV_UID=$TEST_UID \
+            MALLBASE_DEV_GID=$TEST_GID \
+            sh "$PREPARE_SCRIPT" >/dev/null 2>&1; then
+            printf '%s\n' "BACKEND_INSTALL_STATE_HARDLINK_ACCEPTED:${state_file}" >&2
+            exit 1
+        fi
+        grep -Fx outside-state "$hardlink_state_fixture/outside/$state_file" >/dev/null
     fi
 done
 

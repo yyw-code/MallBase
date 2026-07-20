@@ -27,6 +27,7 @@ class InstallService extends BaseService
      */
     private array $stepTitles = [
         'db_test'                  => '校验并准备数据库',
+        'environment'              => '检查安装环境',
         'redis_test'               => '校验 Redis 连接',
         'write_env'                => '写入配置文件',
         'create_db'                => '创建数据库',
@@ -93,6 +94,22 @@ class InstallService extends BaseService
     private const PLATFORM_TIMEOUT_MS = 5000;
     private const PERMISSION_SYNC_TIMEOUT_MS = 120_000;
     private const ENV_SECRET_PLACEHOLDER = 'please-change-or-leave-for-random';
+    /** @var array<int, string> */
+    private const INSTALL_CURL_FUNCTIONS = [
+        'curl_init',
+        'curl_setopt_array',
+        'curl_exec',
+        'curl_error',
+        'curl_getinfo',
+        'curl_close',
+    ];
+    /** @var array<int, string> */
+    private const INSTALL_PROCESS_FUNCTIONS = [
+        'proc_open',
+        'proc_get_status',
+        'proc_terminate',
+        'proc_close',
+    ];
 
     protected string $modelClass = BaseModel::class;
 
@@ -256,8 +273,12 @@ class InstallService extends BaseService
      */
     private function fetchPlatformInstallAgreement(): array
     {
-        if (!function_exists('curl_init')) {
-            return ['success' => false, 'message' => 'curl_missing'];
+        $missingCurlFunctions = $this->missingEnvironmentFunctions(self::INSTALL_CURL_FUNCTIONS);
+        if ($missingCurlFunctions !== []) {
+            return [
+                'success' => false,
+                'message' => 'curl_missing:' . implode(',', $missingCurlFunctions),
+            ];
         }
 
         $url = rtrim(self::PLATFORM_BASE_URL, '/')
@@ -373,14 +394,63 @@ class InstallService extends BaseService
             'pass'     => extension_loaded('mbstring'),
         ];
 
+        $missingCurlFunctions = $this->missingEnvironmentFunctions(self::INSTALL_CURL_FUNCTIONS);
+        $items[] = [
+            'name'     => 'cURL 能力',
+            'required' => '可用',
+            'current'  => $missingCurlFunctions === []
+                ? '可用'
+                : '缺失：' . implode('、', $missingCurlFunctions),
+            'pass'     => $missingCurlFunctions === [],
+        ];
+
+        $missingProcessFunctions = $this->missingEnvironmentFunctions(self::INSTALL_PROCESS_FUNCTIONS);
+        $items[] = [
+            'name'     => 'PHP 子进程函数组',
+            'required' => '可用',
+            'current'  => $missingProcessFunctions === []
+                ? '可用'
+                : '缺失：' . implode('、', $missingProcessFunctions),
+            'pass'     => $missingProcessFunctions === [],
+        ];
+
+        $phpCli = $missingProcessFunctions === [] ? $this->resolveExecutablePhpCli() : null;
+        $items[] = [
+            'name'     => 'PHP CLI 可执行',
+            'required' => '可用',
+            'current'  => $phpCli !== null ? '可用' : '不可用',
+            'pass'     => $phpCli !== null,
+        ];
+
         $paths = $this->installationEnvironmentPaths();
 
-        $runtimeWritable = is_dir($paths['runtime']) && is_writable($paths['runtime']);
+        $openBasedir = trim($this->configuredOpenBasedir());
+        $openBasedirPass = $openBasedir === '' || $this->openBasedirCoversPaths($openBasedir, [
+            dirname($paths['public']),
+            $paths['backend_env_directory'],
+        ]);
+        $items[] = [
+            'name'     => 'open_basedir 路径覆盖',
+            'required' => '覆盖后端目录及环境配置目录',
+            'current'  => $openBasedir === '' ? '未限制' : ($openBasedirPass ? '已覆盖' : '未覆盖'),
+            'pass'     => $openBasedirPass,
+        ];
+
+        $runtimeWritable = $this->installLockDirectoryReady($paths['runtime']);
         $items[] = [
             'name'     => 'runtime 目录可写',
-            'required' => '可写',
-            'current'  => $runtimeWritable ? '可写' : '不可写',
+            'required' => '可写且可收紧权限',
+            'current'  => $runtimeWritable ? '可写且可收紧权限' : '不可写或无法收紧权限',
             'pass'     => $runtimeWritable,
+        ];
+
+        $installDirectory = rtrim($paths['runtime'], '/\\') . DIRECTORY_SEPARATOR . 'install';
+        $installDirectoryWritable = $this->prepareInstallLockDirectory($installDirectory, $runtimeWritable);
+        $items[] = [
+            'name'     => 'runtime/install 目录可写',
+            'required' => '可写且可收紧权限',
+            'current'  => $installDirectoryWritable ? '可写且可收紧权限' : '不可写或无法收紧权限',
+            'pass'     => $installDirectoryWritable,
         ];
 
         $envDirectoryWritable = !is_link($paths['backend_env_directory'])
@@ -443,6 +513,223 @@ class InstallService extends BaseService
             'uploads' => $public . DIRECTORY_SEPARATOR . 'uploads',
             'demo' => $public . DIRECTORY_SEPARATOR . 'static' . DIRECTORY_SEPARATOR . 'demo',
         ];
+    }
+
+    protected function environmentFunctionAvailable(string $function): bool
+    {
+        return function_exists($function);
+    }
+
+    /** @return array<int, string> */
+    protected function phpCliCandidates(): array
+    {
+        $candidates = [];
+        $binaryName = basename(PHP_BINARY);
+        if (preg_match('/^php(?:[0-9]+(?:\.[0-9]+)*)?(?:\.exe)?$/iD', $binaryName) === 1) {
+            $candidates[] = PHP_BINARY;
+        }
+        $candidates[] = PHP_BINDIR . DIRECTORY_SEPARATOR
+            . (DIRECTORY_SEPARATOR === '\\' ? 'php.exe' : 'php');
+
+        return array_values(array_unique($candidates));
+    }
+
+    protected function probePhpCliExecution(string $candidate): bool
+    {
+        $pipes = [];
+        $process = null;
+
+        try {
+            $process = @proc_open(
+                [
+                    $candidate,
+                    '-r',
+                    'exit(PHP_SAPI === "cli" && PHP_VERSION_ID >= 80200 ? 0 : 1);',
+                ],
+                [
+                    0 => ['pipe', 'r'],
+                    1 => ['pipe', 'w'],
+                    2 => ['pipe', 'w'],
+                ],
+                $pipes,
+                null,
+                null,
+                ['bypass_shell' => true],
+            );
+            if (!is_resource($process)) {
+                return false;
+            }
+
+            foreach ($pipes as $pipe) {
+                if (is_resource($pipe)) {
+                    fclose($pipe);
+                }
+            }
+            $pipes = [];
+
+            return proc_close($process) === 0;
+        } catch (\Throwable) {
+            return false;
+        } finally {
+            foreach ($pipes as $pipe) {
+                if (is_resource($pipe)) {
+                    fclose($pipe);
+                }
+            }
+            if (is_resource($process)) {
+                @proc_terminate($process);
+                @proc_close($process);
+            }
+        }
+    }
+
+    protected function configuredOpenBasedir(): string
+    {
+        $value = ini_get('open_basedir');
+
+        return is_string($value) ? $value : '';
+    }
+
+    protected function probeDirectoryChmodCapability(string $path): bool
+    {
+        $requiredMode = 0755;
+        if (!@chmod($path, $requiredMode)) {
+            return false;
+        }
+
+        clearstatcache(true, $path);
+        $currentPermissions = @fileperms($path);
+
+        return is_int($currentPermissions) && ($currentPermissions & 0777) === $requiredMode;
+    }
+
+    /**
+     * @param array<int, string> $functions
+     * @return array<int, string>
+     */
+    private function missingEnvironmentFunctions(array $functions): array
+    {
+        return array_values(array_filter(
+            $functions,
+            fn(string $function): bool => !$this->environmentFunctionAvailable($function),
+        ));
+    }
+
+    private function resolveExecutablePhpCli(): ?string
+    {
+        foreach ($this->phpCliCandidates() as $candidate) {
+            if (!$this->trustedPhpCliCandidate($candidate)) {
+                continue;
+            }
+            if ($this->probePhpCliExecution($candidate)) {
+                return $candidate;
+            }
+        }
+
+        return null;
+    }
+
+    private function trustedPhpCliCandidate(string $candidate): bool
+    {
+        if ($candidate === '' || str_contains($candidate, "\0")) {
+            return false;
+        }
+        if (!str_starts_with($candidate, DIRECTORY_SEPARATOR)
+            && preg_match('/^[A-Za-z]:[\\\\\/]/D', $candidate) !== 1
+        ) {
+            return false;
+        }
+
+        return preg_match(
+            '/^php(?:[0-9]+(?:\.[0-9]+)*)?(?:\.exe)?$/iD',
+            basename($candidate),
+        ) === 1;
+    }
+
+    /** @param array<int, string> $paths */
+    private function openBasedirCoversPaths(string $configuration, array $paths): bool
+    {
+        $allowedRoots = [];
+        foreach (explode(PATH_SEPARATOR, $configuration) as $configuredPath) {
+            $configuredPath = trim($configuredPath);
+            if ($configuredPath === '') {
+                continue;
+            }
+            if ($configuredPath === '.') {
+                $configuredPath = getcwd() ?: '';
+            }
+            $resolved = $configuredPath !== '' ? @realpath($configuredPath) : false;
+            if (is_string($resolved)) {
+                $allowedRoots[] = $this->normalizeCanonicalPath($resolved);
+            }
+        }
+        if ($allowedRoots === []) {
+            return false;
+        }
+
+        foreach ($paths as $path) {
+            $resolvedPath = @realpath($path);
+            if (!is_string($resolvedPath)) {
+                return false;
+            }
+            $target = $this->normalizeCanonicalPath($resolvedPath);
+            $covered = false;
+            foreach ($allowedRoots as $allowedRoot) {
+                if ($this->canonicalPathCoveredBy($target, $allowedRoot)) {
+                    $covered = true;
+                    break;
+                }
+            }
+            if (!$covered) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private function normalizeCanonicalPath(string $path): string
+    {
+        $normalized = str_replace('\\', '/', $path);
+        if ($normalized !== '/') {
+            $normalized = rtrim($normalized, '/');
+        }
+
+        return DIRECTORY_SEPARATOR === '\\' ? strtolower($normalized) : $normalized;
+    }
+
+    private function canonicalPathCoveredBy(string $target, string $allowedRoot): bool
+    {
+        if ($target === $allowedRoot) {
+            return true;
+        }
+        if ($allowedRoot === '/') {
+            return str_starts_with($target, '/');
+        }
+
+        return str_starts_with($target, $allowedRoot . '/');
+    }
+
+    private function installLockDirectoryReady(string $path): bool
+    {
+        return !is_link($path)
+            && is_dir($path)
+            && is_writable($path)
+            && $this->probeDirectoryChmodCapability($path);
+    }
+
+    private function prepareInstallLockDirectory(string $path, bool $runtimeReady): bool
+    {
+        if (is_link($path)) {
+            return false;
+        }
+        if (!file_exists($path)) {
+            if (!$runtimeReady || (!@mkdir($path, 0755) && !is_dir($path))) {
+                return false;
+            }
+        }
+
+        return $this->installLockDirectoryReady($path);
     }
 
     public function testDatabase(array $config): array
@@ -854,6 +1141,35 @@ class InstallService extends BaseService
                 $progress($event);
             }
         };
+
+        $emit('environment', 'running', '正在检查安装环境…');
+        try {
+            $environment = $this->checkEnvironment();
+        } catch (\Throwable $e) {
+            $message = '安装环境检查失败：' . $e->getMessage();
+            $emit('environment', 'error', $message);
+
+            return $this->buildFailureResponse('environment', $message, $steps, $e->getMessage());
+        }
+        if (($environment['pass'] ?? false) !== true) {
+            $failedNames = [];
+            foreach (($environment['items'] ?? []) as $item) {
+                if (is_array($item) && ($item['pass'] ?? false) !== true) {
+                    $name = trim((string) ($item['name'] ?? ''));
+                    if ($name !== '') {
+                        $failedNames[] = $name;
+                    }
+                }
+            }
+            $message = '安装环境检查未通过';
+            if ($failedNames !== []) {
+                $message .= '：' . implode('、', $failedNames);
+            }
+            $emit('environment', 'error', $message, ['items' => $environment['items'] ?? []]);
+
+            return $this->buildFailureResponse('environment', $message, $steps);
+        }
+        $emit('environment', 'success', '安装环境检查通过');
 
         $dbConfig = [
             'host' => trim((string) ($params['db_host'] ?? '')),

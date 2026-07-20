@@ -10,6 +10,14 @@ use RuntimeException;
 
 final class InstallCommandRunnerTest extends TestCase
 {
+    /** @var array<int, string> */
+    private const PROCESS_FUNCTIONS = [
+        'proc_open',
+        'proc_get_status',
+        'proc_terminate',
+        'proc_close',
+    ];
+
     private string $root;
 
     private string $thinkPath;
@@ -58,6 +66,28 @@ final class InstallCommandRunnerTest extends TestCase
         self::assertFalse($result['output_exceeded']);
     }
 
+    public function testInjectedPhpCliCanRunWhenWebProcessCannotInspectItsPath(): void
+    {
+        $phpCliOutsideOpenBasedir = '/opt/1panel/php/82/bin/php';
+        $executor = static function (array $command) use ($phpCliOutsideOpenBasedir): array {
+            self::assertSame($phpCliOutsideOpenBasedir, $command[0]);
+
+            return [
+                'exit_code' => 0,
+                'stdout' => '',
+                'stderr' => '',
+            ];
+        };
+
+        $result = (new InstallCommandRunner($executor, $phpCliOutsideOpenBasedir))->runThinkCommand(
+            $this->root,
+            ['sync:permissions'],
+            5_000,
+        );
+
+        self::assertSame(0, $result['exit_code']);
+    }
+
     public function testRejectsNonZeroExitCodeAndSurfacesBoundedError(): void
     {
         $runner = new InstallCommandRunner(
@@ -91,10 +121,32 @@ final class InstallCommandRunnerTest extends TestCase
         $runner->runThinkCommand($this->root, ['sync:permissions'], 100);
     }
 
+    /** @dataProvider missingProcessFunctionProvider */
+    public function testNativeRunnerRejectsEveryMissingProcessFunctionBeforeStartup(string $missingFunction): void
+    {
+        $runner = new InstallCommandRunner(
+            null,
+            PHP_BINARY,
+            static fn(string $function): bool => $function !== $missingFunction,
+        );
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('当前 PHP 缺少子进程函数：' . $missingFunction . '，无法执行权限同步');
+        $runner->runThinkCommand($this->root, ['sync:permissions'], 5_000);
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function missingProcessFunctionProvider(): iterable
+    {
+        foreach (self::PROCESS_FUNCTIONS as $function) {
+            yield $function => [$function];
+        }
+    }
+
     public function testNativeProcessInheritsEnvironmentAndReturnsRealExitCode(): void
     {
-        if (!function_exists('proc_open')) {
-            self::markTestSkipped('proc_open unavailable');
+        if (!$this->nativeProcessFunctionsAvailable()) {
+            self::markTestSkipped('native process functions unavailable');
         }
 
         $previous = getenv('MALLBASE_INSTALL_RUNNER_TEST');
@@ -125,8 +177,8 @@ final class InstallCommandRunnerTest extends TestCase
 
     public function testNativeProcessIsTerminatedAtDeadline(): void
     {
-        if (!function_exists('proc_open')) {
-            self::markTestSkipped('proc_open unavailable');
+        if (!$this->nativeProcessFunctionsAvailable()) {
+            self::markTestSkipped('native process functions unavailable');
         }
 
         file_put_contents($this->thinkPath, "<?php\nusleep(2_000_000);\nexit(0);\n");
@@ -144,6 +196,17 @@ final class InstallCommandRunnerTest extends TestCase
             self::assertSame('权限同步子进程执行超时（0.1 秒）', $exception->getMessage());
             self::assertLessThan(1500, $elapsedMilliseconds);
         }
+    }
+
+    private function nativeProcessFunctionsAvailable(): bool
+    {
+        foreach (self::PROCESS_FUNCTIONS as $function) {
+            if (!function_exists($function)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private function removeTree(string $path): void
