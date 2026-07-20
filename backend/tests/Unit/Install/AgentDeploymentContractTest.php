@@ -112,6 +112,30 @@ final class AgentDeploymentContractTest extends TestCase
         );
     }
 
+    public function testDevelopmentComposeRebuildsBackendImageAndPassesOwnershipToEnsureEnv(): void
+    {
+        $compose = $this->read('docker-compose.dev.yml');
+
+        self::assertSame(2, substr_count($compose, 'pull_policy: build'));
+        self::assertStringNotContainsString('pull_policy: never', $compose);
+        self::assertSame(
+            2,
+            substr_count($compose, 'MALLBASE_DEV_UID: "${MALLBASE_DEV_UID:-10000}"'),
+            'prepare-data-dirs and ensure-env must receive the backend UID',
+        );
+        self::assertSame(
+            2,
+            substr_count($compose, 'MALLBASE_DEV_GID: "${MALLBASE_DEV_GID:-10000}"'),
+            'prepare-data-dirs and ensure-env must receive the backend GID',
+        );
+        self::assertMatchesRegularExpression(
+            '/ensure-env:\s+image: alpine:3\.19\s+container_name:.*?environment:\s+'
+            . 'MALLBASE_DEV_UID: "\$\{MALLBASE_DEV_UID:-10000\}"\s+'
+            . 'MALLBASE_DEV_GID: "\$\{MALLBASE_DEV_GID:-10000\}"/s',
+            $compose,
+        );
+    }
+
     public function testProductionKeepsBusinessDataInPlainNamedVolumes(): void
     {
         $compose = $this->read('docker-compose.yml');

@@ -66,7 +66,10 @@ assert_mount_policy() {
     }
 }
 
-mkdir -p "$FIXTURE/upgrade/config" "$FIXTURE/upgrade/run"
+mkdir -p \
+    "$FIXTURE/backend/public" \
+    "$FIXTURE/upgrade/config" \
+    "$FIXTURE/upgrade/run"
 printf '%s\n' existing-state > "$FIXTURE/upgrade/config/instance.json"
 chmod 0600 "$FIXTURE/upgrade/config/instance.json"
 
@@ -93,12 +96,71 @@ for directory in \
     grep -F "chown ${TEST_UID}:${TEST_GID} ${path}" "$TRACE_FILE" >/dev/null
 done
 
+for directory in \
+    backend/runtime \
+    backend/public/uploads \
+    backend/vendor; do
+    directory_path=$FIXTURE/$directory
+    [ -d "$directory_path" ]
+    [ ! -L "$directory_path" ]
+    [ "$(uid_of "$directory_path")" = "$TEST_UID" ]
+    [ "$(gid_of "$directory_path")" = "$TEST_GID" ]
+    [ "$(mode_of "$directory_path")" = "$expected_mode" ]
+    grep -F "chown ${TEST_UID}:${TEST_GID} ${directory_path}" "$TRACE_FILE" >/dev/null
+
+    sentinel=$directory_path/.mallbase-existing-state
+    printf '%s\n' "${directory}-state" > "$sentinel"
+    chmod 0600 "$sentinel"
+done
+
+WORKDIR=$FIXTURE \
+DATA_UID=$TEST_UID \
+DATA_GID=$TEST_GID \
+MALLBASE_DEV_UID=$TEST_UID \
+MALLBASE_DEV_GID=$TEST_GID \
+    sh -x "$PREPARE_SCRIPT" >>"$TRACE_FILE" 2>&1
+
+for directory in \
+    backend/runtime \
+    backend/public/uploads \
+    backend/vendor; do
+    directory_path=$FIXTURE/$directory
+    sentinel=$directory_path/.mallbase-existing-state
+    [ -d "$directory_path" ]
+    [ ! -L "$directory_path" ]
+    [ "$(uid_of "$directory_path")" = "$TEST_UID" ]
+    [ "$(gid_of "$directory_path")" = "$TEST_GID" ]
+    [ "$(mode_of "$directory_path")" = "$expected_mode" ]
+    grep -Fx "${directory}-state" "$sentinel" >/dev/null
+    [ "$(mode_of "$sentinel")" = 600 ]
+done
+
 grep -Fx existing-state "$FIXTURE/upgrade/config/instance.json" >/dev/null
 [ "$(mode_of "$FIXTURE/upgrade/config/instance.json")" = 600 ]
 if grep -F "chown -R ${TEST_UID}:${TEST_GID} ${FIXTURE}/upgrade" "$TRACE_FILE" >/dev/null; then
     printf '%s\n' UPGRADE_RUNTIME_RECURSIVE_CHOWNED >&2
     exit 1
 fi
+
+for directory in \
+    backend/runtime \
+    backend/public/uploads \
+    backend/vendor; do
+    label=$(printf '%s' "$directory" | tr '/' '-')
+    symlink_fixture=$TEST_ROOT/symlink-$label
+    mkdir -p "$symlink_fixture/$(dirname "$directory")" "$symlink_fixture/outside"
+    ln -s "$symlink_fixture/outside" "$symlink_fixture/$directory"
+
+    if WORKDIR=$symlink_fixture \
+        DATA_UID=$TEST_UID \
+        DATA_GID=$TEST_GID \
+        MALLBASE_DEV_UID=$TEST_UID \
+        MALLBASE_DEV_GID=$TEST_GID \
+        sh "$PREPARE_SCRIPT" >/dev/null 2>&1; then
+        printf '%s\n' "BACKEND_WRITABLE_SYMLINK_ACCEPTED:${directory}" >&2
+        exit 1
+    fi
+done
 
 for directory in config run jobs backups; do
     grep -Fx "/${directory}/" "$UPGRADE_IGNORE" >/dev/null

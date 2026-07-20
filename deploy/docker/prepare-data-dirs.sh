@@ -7,8 +7,9 @@
 # 本脚本负责：
 #   1. 创建宿主机挂载目录 data/mysql 与 data/redis
 #   2. 创建 upgrade 下 PHP / Agent 共享的运行目录
-#   3. 将目录权限修复为对应容器用户可写
-#   4. 在容器启动前尽早发现宿主机目录无法写入的问题
+#   3. 创建 backend 下开发容器需要的运行目录
+#   4. 将目录权限修复为对应容器用户可写
+#   5. 在容器启动前尽早发现宿主机目录无法写入的问题
 # ============================================================
 set -eu
 
@@ -80,6 +81,42 @@ prepare_upgrade_dir() {
     fi
 }
 
+prepare_backend_dir() {
+    name=$1
+    path="${WORKDIR}/${name}"
+
+    echo ">>> [prepare-data-dirs] 准备 ${name}"
+    if [ -L "$path" ]; then
+        echo ">>> [prepare-data-dirs] 致命错误：${name} 不允许是符号链接"
+        exit 1
+    fi
+
+    mkdir -p "$path"
+
+    if [ -L "$path" ] || [ ! -d "$path" ]; then
+        echo ">>> [prepare-data-dirs] 致命错误：${name} 必须是非符号链接目录"
+        exit 1
+    fi
+
+    echo ">>> [prepare-data-dirs] 交接 ${name} 权限为 ${MALLBASE_DEV_UID}:${MALLBASE_DEV_GID} / 2770"
+    # 只交接目标目录本身，不递归改动 backend 源码、运行文件或用户上传文件。
+    chown "${MALLBASE_DEV_UID}:${MALLBASE_DEV_GID}" "$path"
+    chmod 2770 "$path"
+
+    actual_uid=$(stat -c '%u' "$path" 2>/dev/null || stat -f '%u' "$path")
+    actual_gid=$(stat -c '%g' "$path" 2>/dev/null || stat -f '%g' "$path")
+    if [ "$actual_uid" != "$MALLBASE_DEV_UID" ] || [ "$actual_gid" != "$MALLBASE_DEV_GID" ]; then
+        echo ">>> [prepare-data-dirs] 致命错误：${name} owner 校验失败，实际为 ${actual_uid}:${actual_gid}"
+        exit 1
+    fi
+
+    actual_mode=$(stat -c '%a' "$path" 2>/dev/null || stat -f '%Lp' "$path")
+    if [ "$actual_mode" != "2770" ] && { [ "$(uname -s)" != "Darwin" ] || [ "$actual_mode" != "770" ]; }; then
+        echo ">>> [prepare-data-dirs] 致命错误：${name} 权限校验失败，实际为 ${actual_mode}"
+        exit 1
+    fi
+}
+
 prepare_dir "data/mysql"
 prepare_dir "data/redis"
 prepare_upgrade_dir "upgrade/config"
@@ -87,5 +124,8 @@ prepare_upgrade_dir "upgrade/run"
 prepare_upgrade_dir "upgrade/run/requests"
 prepare_upgrade_dir "upgrade/jobs"
 prepare_upgrade_dir "upgrade/backups"
+prepare_backend_dir "backend/runtime"
+prepare_backend_dir "backend/public/uploads"
+prepare_backend_dir "backend/vendor"
 
 echo ">>> [prepare-data-dirs] 完成"

@@ -29,6 +29,87 @@ BACKEND_HEADER_2="# 唯一主配置源：项目根目录 /.env"
 ROOT_TO_BACKEND_KEYS="SWOOLE_HTTP_PORT SWOOLE_WORKER_NUM SWOOLE_MAX_CONN SWOOLE_BACKLOG SWOOLE_DB_POOL_MAX_ACTIVE SWOOLE_CACHE_POOL_MAX_ACTIVE SWOOLE_REDIS_POOL_MAX_ACTIVE DB_HOST DB_PORT DB_NAME DB_USER DB_PASS REDIS_HOST REDIS_PORT REDIS_CACHE_DB REDIS_PASSWORD CACHE_DRIVER JWT_SECRET JWT_EXPIRE JWT_REFRESH_EXPIRE SITE_URL"
 ROOT_INIT_FROM_BACKEND_KEYS="SWOOLE_HTTP_PORT SWOOLE_WORKER_NUM SWOOLE_MAX_CONN SWOOLE_BACKLOG SWOOLE_DB_POOL_MAX_ACTIVE SWOOLE_CACHE_POOL_MAX_ACTIVE SWOOLE_REDIS_POOL_MAX_ACTIVE DB_HOST DB_PORT DB_NAME DB_USER DB_PASS REDIS_HOST REDIS_PORT REDIS_CACHE_DB REDIS_PASSWORD CACHE_DRIVER JWT_SECRET JWT_EXPIRE JWT_REFRESH_EXPIRE"
 
+path_uid() {
+    stat -c '%u' "$1" 2>/dev/null || stat -f '%u' "$1"
+}
+
+path_gid() {
+    stat -c '%g' "$1" 2>/dev/null || stat -f '%g' "$1"
+}
+
+path_mode() {
+    stat -c '%a' "$1" 2>/dev/null || stat -f '%Lp' "$1"
+}
+
+require_decimal_id() {
+    name=$1
+    value=$2
+    case "$value" in
+        ''|*[!0-9]*)
+            echo ">>> [ensure-env] 致命错误：${name} 必须是非负整数"
+            exit 1
+            ;;
+    esac
+}
+
+require_safe_env_path() {
+    name=$1
+    path=$2
+
+    if [ -L "$path" ]; then
+        echo ">>> [ensure-env] 致命错误：${name} 不允许是符号链接"
+        exit 1
+    fi
+    if [ -e "$path" ] && [ ! -f "$path" ]; then
+        echo ">>> [ensure-env] 致命错误：${name} 必须是普通文件"
+        exit 1
+    fi
+}
+
+handoff_env_file() {
+    name=$1
+    path=$2
+    target_uid=$3
+    target_gid=$4
+
+    if [ ! -f "$path" ] || [ -L "$path" ]; then
+        echo ">>> [ensure-env] 致命错误：${name} 必须是非符号链接文件"
+        exit 1
+    fi
+
+    chown "${target_uid}:${target_gid}" "$path"
+    chmod 0600 "$path"
+
+    actual_uid=$(path_uid "$path")
+    actual_gid=$(path_gid "$path")
+    actual_mode=$(path_mode "$path")
+    if [ "$actual_uid" != "$target_uid" ] || [ "$actual_gid" != "$target_gid" ]; then
+        echo ">>> [ensure-env] 致命错误：${name} owner 校验失败，实际为 ${actual_uid}:${actual_gid}"
+        exit 1
+    fi
+    if [ "$actual_mode" != "600" ]; then
+        echo ">>> [ensure-env] 致命错误：${name} 权限校验失败，实际为 ${actual_mode}"
+        exit 1
+    fi
+}
+
+if [ ! -d "$WORKDIR" ]; then
+    echo ">>> [ensure-env] 致命错误：项目根目录不存在：$WORKDIR"
+    exit 1
+fi
+
+PROJECT_ROOT_UID=$(path_uid "$WORKDIR")
+PROJECT_ROOT_GID=$(path_gid "$WORKDIR")
+MALLBASE_DEV_UID="${MALLBASE_DEV_UID:-$PROJECT_ROOT_UID}"
+MALLBASE_DEV_GID="${MALLBASE_DEV_GID:-$PROJECT_ROOT_GID}"
+
+require_decimal_id MALLBASE_DEV_UID "$MALLBASE_DEV_UID"
+require_decimal_id MALLBASE_DEV_GID "$MALLBASE_DEV_GID"
+require_decimal_id PROJECT_ROOT_UID "$PROJECT_ROOT_UID"
+require_decimal_id PROJECT_ROOT_GID "$PROJECT_ROOT_GID"
+require_safe_env_path ".env" "$ROOT_ENV"
+require_safe_env_path "backend/.env" "$BACKEND_ENV"
+
 rand24() { LC_ALL=C od -An -N12 -tx1 /dev/urandom | tr -d ' \n'; }
 rand64() { LC_ALL=C od -An -N32 -tx1 /dev/urandom | tr -d ' \n'; }
 
@@ -185,5 +266,7 @@ randomize_root_if_placeholder "JWT_SECRET" "$(rand64)"
 
 echo ">>> [ensure-env] 开始根据根 .env 派生 backend/.env"
 rebuild_backend_env
+handoff_env_file "backend/.env" "$BACKEND_ENV" "$MALLBASE_DEV_UID" "$MALLBASE_DEV_GID"
+handoff_env_file ".env" "$ROOT_ENV" "$PROJECT_ROOT_UID" "$PROJECT_ROOT_GID"
 
 echo ">>> [ensure-env] 完成"
