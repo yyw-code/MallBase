@@ -3,16 +3,23 @@ declare (strict_types=1);
 
 namespace app\listener\swoole;
 
+use app\service\upgrade\SimpleUpgradeGate;
 use Composer\InstalledVersions;
 use think\facade\Config;
+use think\swoole\Manager;
 
 /**
  * Swoole 启动信息监听器
  */
 class SwooleStartupListener
 {
-    public function handle()
+    public function __construct(private readonly ?SimpleUpgradeGate $simpleGate = null)
     {
+    }
+
+    public function handle(Manager $manager): void
+    {
+        $this->restoreSimpleGateAfterPhpRestart();
         $httpConfig = Config::get('swoole.http', []);
         $swooleConfig = Config::get('swoole', []);
 
@@ -78,4 +85,12 @@ class SwooleStartupListener
         echo "IPC 类型: {$ipcType}\n";
         echo "=========================================\n\n";
     }
+
+    protected function restoreSimpleGateAfterPhpRestart(): void
+    {
+        if ($this->simpleGate !== null && $this->simpleGate->state() === 'awaiting_php_restart') {
+            $this->simpleGate->restoreNormal();
+        }
+    }
+
 }

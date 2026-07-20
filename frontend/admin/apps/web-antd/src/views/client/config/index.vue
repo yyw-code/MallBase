@@ -131,6 +131,7 @@ const form = reactive({
   customer_service_api_base: '',
   customer_service_connector_enabled: false,
   customer_service_connector_secret: '',
+  customer_service_context_key_id: '',
   customer_service_context_secret: '',
   customer_service_context_ttl: 300,
   customer_service_operator_admin_id: 1,
@@ -343,11 +344,7 @@ function generateRandomSecret() {
   return [...bytes].map((byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
-function fillRandomSecret(
-  field:
-    | 'customer_service_connector_secret'
-    | 'customer_service_context_secret',
-) {
+function fillRandomSecret(field: 'customer_service_connector_secret') {
   const secret = generateRandomSecret();
   if (!secret) return;
   form[field] = secret;
@@ -452,6 +449,9 @@ function fillFormFromSettings() {
     false,
   );
   form.customer_service_connector_secret = '';
+  form.customer_service_context_key_id = settingValue(
+    'customer_service_context_key_id',
+  );
   form.customer_service_context_secret = '';
   form.customer_service_context_ttl = settingNumberValue(
     'customer_service_context_ttl',
@@ -617,6 +617,7 @@ function buildPayload(codes?: string[]) {
       ? 1
       : 0,
     customer_service_connector_secret: form.customer_service_connector_secret,
+    customer_service_context_key_id: form.customer_service_context_key_id,
     customer_service_context_secret: form.customer_service_context_secret,
     customer_service_context_ttl: form.customer_service_context_ttl,
     customer_service_operator_admin_id: form.customer_service_operator_admin_id,
@@ -1108,6 +1109,17 @@ onBeforeUnmount(() => {
                     placeholder="mallbase"
                   />
                 </a-form-item>
+                <a-form-item label="上下文 Key ID">
+                  <a-input
+                    v-model:value="form.customer_service_context_key_id"
+                    placeholder="ctx_..."
+                  />
+                  <div class="field-hint">
+                    在 Customer Service 的“对接平台 →
+                    上下文凭证”创建后，一次性复制 Key ID
+                    和密钥；两项必须成对更新。
+                  </div>
+                </a-form-item>
                 <a-form-item label="Widget 地址">
                   <a-input
                     v-model:value="form.customer_service_widget_url"
@@ -1130,7 +1142,7 @@ onBeforeUnmount(() => {
                   <a-input-number
                     v-model:value="form.customer_service_context_ttl"
                     :min="60"
-                    :max="3600"
+                    :max="300"
                     class="w-full"
                   />
                 </a-form-item>
@@ -1151,25 +1163,15 @@ onBeforeUnmount(() => {
                       }}
                     </a-tag>
                   </template>
-                  <div class="secret-input-row">
-                    <a-input-password
-                      v-model:value="form.customer_service_context_secret"
-                      autocomplete="new-password"
-                      :placeholder="
-                        settingHasValue('customer_service_context_secret')
-                          ? '留空保持不变'
-                          : '请输入不少于 32 位的随机密钥'
-                      "
-                    />
-                    <a-button
-                      class="secret-input-row__action"
-                      @click="
-                        fillRandomSecret('customer_service_context_secret')
-                      "
-                    >
-                      生成
-                    </a-button>
-                  </div>
+                  <a-input-password
+                    v-model:value="form.customer_service_context_secret"
+                    autocomplete="new-password"
+                    :placeholder="
+                      settingHasValue('customer_service_context_secret')
+                        ? '留空保持不变'
+                        : '粘贴 Customer Service 一次性显示的密钥'
+                    "
+                  />
                 </a-form-item>
               </a-form>
             </div>

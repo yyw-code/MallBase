@@ -74,15 +74,9 @@ OSS 字段与旧版本保持一致：
 | Endpoint | `oss-cn-hangzhou.aliyuncs.com` | Bucket 所在地域 Endpoint |
 | 访问域名 | `https://mall-base.oss-cn-hangzhou.aliyuncs.com` | 可填写 OSS 公网域名或 CDN 域名 |
 
-## 旧环境升级
+## 部署同步
 
-全新安装会直接带有 COS 可选项和正确占位说明。已部署环境需要同步执行本次升级 SQL，确保后台不再显示「待接入」：
-
-```bash
-mysql --default-character-set=utf8mb4 -h<HOST> -u<USER> -p <DB> < backend/install/data/upgrade/2026_06_08_upload_cos_available.sql
-```
-
-升级 SQL 是幂等的，可以重复执行。执行前建议先备份数据库，并确认当前环境已经更新到包含上传驱动配置的版本。
+COS 选项和占位说明以 `backend/install/data/schema/03_mb_setting.sql` 为真相源。当前阶段不再通过文档分发增量 SQL；需要同步这些初始配置时，请先备份业务数据，再使用当前版本重新部署，并按安装流程基于 schema 初始化数据库。
 
 ## 验证清单
 

@@ -1,0 +1,12 @@
+/config/
+/run/
+/jobs/
+/packages/
+/staging/
+/backups/
+/agent-private/
+!/bin/
+!/bin/mallbase-agent-linux-amd64
+!/bin/mallbase-agent-linux-arm64
+!/bin/checksums.sha256
+/bin/active/

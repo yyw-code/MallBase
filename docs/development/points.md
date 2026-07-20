@@ -16,13 +16,7 @@
 | `mb_points_exchange_order` | 积分兑换单 | `backend/install/data/schema/18_mb_points_exchange.sql` |
 | `mb_points_exchange_order_log` | 积分兑换单操作日志 | `backend/install/data/schema/18_mb_points_exchange.sql` |
 
-相关升级 SQL：
-
-- `backend/install/data/upgrade/2026_06_30_user_points.sql`
-- `backend/install/data/upgrade/2026_07_01_marketing_points_member_config.sql`
-- `backend/install/data/upgrade/2026_07_01_goods_marketing_modes.sql`
-- `backend/install/data/upgrade/2026_07_01_points_exchange.sql`
-- `backend/install/data/upgrade/2026_07_05_delivery_type.sql`
+数据库结构和初始数据以 `backend/install/data/schema/` 为唯一真相源。当前阶段不维护模块级增量 SQL 列表；需要同步数据库结构时，请使用当前版本重新部署，并按安装流程基于 schema 初始化数据库。
 
 ## 后端入口
 

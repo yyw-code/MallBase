@@ -5,10 +5,8 @@ declare(strict_types=1);
 namespace app\service\client\payment;
 
 use app\common\enum\PayMethod;
-use app\model\order\Order;
 use app\model\order\PaymentLog;
 use app\service\admin\order\RefundOrderAdminService;
-use app\service\client\order\OrderService;
 use EasyWeChat\Kernel\Message as EasyWechatMessage;
 use EasyWeChat\Pay\Application as PayApplication;
 use mall_base\base\BaseService;
@@ -46,7 +44,7 @@ class NotifyService extends BaseService
 
     public function __construct(
         private readonly WechatPayFactory $factory,
-        private readonly OrderService $orderService,
+        private readonly WechatPaymentResultService $paymentResults,
     ) {
     }
 
@@ -151,71 +149,23 @@ class NotifyService extends BaseService
             return $this->respond(200, 'SUCCESS', '成功'); // 已收到，不要求微信重试
         }
 
-        // Step 4: 查 prepay 行 + 金额比对
-        /** @var PaymentLog|null $prepay */
-        $prepay = PaymentLog::where('out_trade_no', $outTradeNo)
-            ->where('event_type', PaymentLog::EVENT_PREPAY)
-            ->find();
-        if ($prepay === null) {
-            /** @var PaymentLog|null $matched */
-            $matched = PaymentLog::where('out_trade_no', $outTradeNo)->order('id', 'desc')->find();
-            Logger::instance()->critical('微信支付回调命中非活跃预支付流水', [
-                'out_trade_no' => $outTradeNo,
-                'event_type'   => $matched !== null ? (string) $matched->event_type : 'UNKNOWN',
-                'order_id'     => $matched !== null ? (int) $matched->order_id : 0,
-            ]);
-            return $this->respond(500, 'FAIL', '支付流水已关闭或被顶替');
-        }
-
-        if ((int) $prepay->amount_cents !== $amountTotal) {
-            Logger::instance()->critical('微信支付回调金额校验失败', [
-                'out_trade_no' => $outTradeNo,
-                'expected'     => (int) $prepay->amount_cents,
-                'actual'       => $amountTotal,
-            ]);
-            $this->fireAlert(self::EVENT_AMOUNT_MISMATCH, [
-                'out_trade_no' => $outTradeNo,
-                'expected'     => (int) $prepay->amount_cents,
-                'actual'       => $amountTotal,
-            ]);
-            return $this->respond(500, 'FAIL', '金额校验失败');
-        }
-
-        // Step 5: 幂等落库 + 转单（事务内）
+        // Step 4/5: 回调与主动查单共用同一个幂等结果应用服务。
+        // 唯一键冲突由共享结果服务识别，仍继续幂等确认订单状态。
         try {
-            $this->transaction(function () use ($prepay, $transactionId, $tradeState, $attributes, $successTime, $payerOpenid): void {
-                // 插入 PAID 日志，依赖 (transaction_id, event_type) 唯一索引兜底幂等
-                try {
-                    $paidLog = new PaymentLog();
-                    $paidLog->order_id      = (int) $prepay->order_id;
-                    $paidLog->order_sn      = (string) $prepay->order_sn;
-                    $paidLog->out_trade_no  = $this->derivedPaidOutTradeNo((string) $prepay->out_trade_no);
-                    $paidLog->transaction_id = $transactionId;
-                    $paidLog->pay_method    = (int) $prepay->pay_method;
-                    $paidLog->scene         = (int) $prepay->scene;
-                    $paidLog->event_type    = PaymentLog::EVENT_PAID;
-                    $paidLog->trade_state   = $tradeState;
-                    $paidLog->amount_cents  = (int) $prepay->amount_cents;
-                    $paidLog->payer_openid  = $payerOpenid !== '' ? $payerOpenid : $prepay->payer_openid;
-                    $paidLog->raw_notify    = $attributes;
-                    $paidLog->paid_at       = $successTime !== '' ? date('Y-m-d H:i:s', strtotime($successTime)) : date('Y-m-d H:i:s');
-                    $paidLog->save();
-                } catch (Throwable $e) {
-                    // 唯一索引冲突 = 已处理过的回调，仍继续幂等确认订单状态
-                    if (!$this->isDuplicateKey($e)) {
-                        throw $e;
-                    }
-                }
-
-                // 状态机转 PAID（OrderStatusMachine 内部对「已 PAID 重复流转」是幂等的）
-                $this->orderService->confirmPaid(
-                    sn: (string) $prepay->order_sn,
-                    transactionId: $transactionId,
-                    payMethod: (int) $prepay->pay_method,
-                    payScene: (int) $prepay->scene,
-                );
-            });
+            $merchantId = trim((string) getSystemSetting('pay_wechat_mchid', ''));
+            $this->paymentResults->applyVerifiedSuccess($attributes, $merchantId, $outTradeNo);
         } catch (Throwable $e) {
+            if ($e->getMessage() === 'WECHAT_PAYMENT_PREPAY_NOT_ACTIVE') {
+                Logger::instance()->critical('微信支付回调命中非活跃预支付流水', [
+                    'out_trade_no' => $outTradeNo,
+                ]);
+            }
+            if ($e->getMessage() === 'WECHAT_PAYMENT_AMOUNT_MISMATCH') {
+                $this->fireAlert(self::EVENT_AMOUNT_MISMATCH, [
+                    'out_trade_no' => $outTradeNo,
+                    'actual' => $amountTotal,
+                ]);
+            }
             Logger::instance()->critical('微信支付回调落库失败', [
                 'out_trade_no'   => $outTradeNo,
                 'transaction_id' => $transactionId,
@@ -388,12 +338,6 @@ class NotifyService extends BaseService
     {
         $candidate = $original . '#' . $suffix;
         return mb_substr($candidate, 0, 32);
-    }
-
-    private function isDuplicateKey(Throwable $e): bool
-    {
-        $msg = $e->getMessage();
-        return str_contains($msg, '1062') || str_contains($msg, 'Duplicate entry');
     }
 
     private function headerValue(PsrServerRequest $request, string $name): string

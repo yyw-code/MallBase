@@ -1,68 +1,55 @@
 ---
 name: dev-schema-upgrade-sql
-description: MallBase schema 真相源与幂等升级 SQL 规则；升级 SQL 仅在用户明确要求已有库升级时使用。
+description: MallBase 数据库真相源、正式字段与升级 SQL 规则；修改 backend/install/data/schema 或 demo seed、新增/改名字段、移除运行时字段探测，或用户明确要求已有库升级、本地 upgrade SQL、发布迁移和 SimpleSqlMigrationService 时使用。
 ---
 
-# Skill: dev-schema-upgrade-sql
+# Schema、正式字段与升级 SQL
 
-## 适用场景
+## 真相源
 
-- 在 `deploy/install/data/schema/*.sql` 增加/修改字段、表、初始数据
-- 在 `deploy/install/data/demo/*.sql` 增加/修改演示数据
-- 任何 `mb_setting` / `mb_goods` / `mb_user` 等表的 seed 调整
+1. 全新安装的表结构和初始配置以 `backend/install/data/schema/*.sql` 为真相源；演示数据放在 `backend/install/data/demo/*.sql`。
+2. 修改字段或 seed 时先更新真相源，并同步 Controller 参数、Validate 场景、Model、Service、前端类型和测试中实际受影响的契约。
+3. `schema/*.sql` 面向全新安装，可能包含 `DROP TABLE`；不要把整份安装 schema 直接用于已有业务库。
 
-## 边界
+## 正式字段
 
-已有库升级 SQL 只有在用户明确要求考虑“已有库升级”“升级 SQL”
-“测试服/线上升级”或等价场景时才纳入任务。未明确要求时，
-不要主动规划、创建或提醒 `deploy/install/data/upgrade/` / `backend/install/data/upgrade/`
-升级 SQL；先按当前任务真相源收口。
+字段结构定型后，业务代码直接依赖正式 schema。不要为了绕过未执行迁移而增加以下长期兼容：
 
-如需判断是否应该考虑升级 SQL，先读取并遵循
-`thinkPHP/upgrade-sql-explicit-request`。
+- `SHOW COLUMNS`、`DESCRIBE` 或 `information_schema` 运行时探测。
+- `has*Column()`、`filter*Data()` 一类按列存在性静默丢字段。
+- “有新字段就写，没有就降级”的双轨持久化。
 
-## 背景
+若真实数据库缺字段，修复部署或迁移，不在请求链路隐藏结构不一致。仅输入/输出归一化且不探测数据库结构的协议兼容可以保留，并应有清晰边界。
 
-全新安装会按顺序执行 `schema/*.sql`。但**已部署环境**（测试服 / 线上）不会重装，
-新增的 schema 文件不会自动补到这些库上 —— 典型故障：代码引用了新表，
-线上报 `Base table or view not found`。但这类已有库升级只在用户明确要求时纳入任务。
+## 已有库边界
 
-## 强制规则
+只有用户明确要求“已有库升级”“升级 SQL”“测试服/线上迁移”或等价目标时，才规划和生成增量 SQL。普通功能、schema、seed 或 UI 任务不要主动扩大到已有库升级，也不要把它列成默认风险项。
 
-1. **schema 文件是唯一真相源**：所有表/字段/seed 变更**必须**直接改
-   `deploy/install/data/schema/*.sql`，保证全新安装即正确。
-2. **按需产出增量升级 SQL**：只有用户明确要求处理已有库升级时，才在
-   `deploy/install/data/upgrade/` 下新增一个对应的增量文件，
-   命名 `YYYY_MM_DD_<简述>.sql`（如 `2026_05_20_payment_log.sql`）。
-3. **升级 SQL 必须幂等**，可重复执行无副作用：
-   - 建表用 `CREATE TABLE IF NOT EXISTS`，**禁止** `DROP TABLE`。
-   - 加字段 / 加索引前先判断是否已存在再 `ALTER`，或用等效幂等写法。
-   - seed 用 `INSERT ... ON DUPLICATE KEY UPDATE` 或先 `DELETE` 再 `INSERT`。
-4. **升级文件不入库**：`deploy/install/data/upgrade/` 已在 `.gitignore`，
-   增量 SQL 属于按环境手动执行的运维产物，不提交 git。
-5. 升级文件结构须与对应 schema 文件保持一致（同一张表的定义两边不能漂移）。
+### 本地手工 SQL
 
-## 暂不做
+`backend/install/data/upgrade/` 是 `.gitignore` 中的本地运维目录，不是发布迁移真相源：
 
-- **不写统一升级脚本**：升级动作可能不止 SQL（静态文件、配置等），
-  暂由人工按需执行，不强行抽象成一个脚本。
-- **不建升级追踪表**：靠 SQL 自身幂等保证可重复执行，不维护 `mb_schema_upgrade` 之类的记录表。
+1. 仅在用户明确要求本地或指定环境升级 SQL 时创建。
+2. 使用 `YYYY_MM_DD_<summary>.sql` 一类可识别名称。
+3. 写成可安全重复执行的目标 MySQL SQL；建表、加列、加索引和 seed 都要使用目标版本支持的合法幂等方式，并在对应 MySQL 版本验证。
+4. 不提交该目录，不把它与正式发布迁移混为一谈。
 
-## 标准动作
+### 发布升级迁移
 
-1. 改结构：编辑 `deploy/install/data/schema/<对应>.sql`（真相源）。
-2. 若用户明确要求已有库升级：在 `deploy/install/data/upgrade/` 新增幂等的 `YYYY_MM_DD_<简述>.sql`。
-3. 若产出了升级 SQL，再通知用户两件事：
-   - 本地 / 全新环境：清库重装即可拿到新结构。
-   - 已部署环境（测试服 / 线上）：手动执行对应升级 SQL，例如
-     `mysql -h<HOST> -u<USER> -p <DB> < deploy/install/data/upgrade/<文件>.sql`
-4. commit / PR / 文档只提及 schema 改动，不提及 upgrade 文件（其不入库）。
+`backend/app/service/upgrade/SimpleSqlMigrationService.php` 执行发布流程已经暂存到升级根目录的迁移：
 
-## 反例
+- 运行时路径必须是 `upgrade/staging/<jobId>/migrations/<migrationId>.sql` 对应的 `migrations/<migrationId>.sql`。
+- 服务校验 migration ID、版本、SHA-256，并在 `upgrade/run/simple-migrations.json` 记录语句级检查点。
+- 多条语句用独占行 `-- mallbase:statement-breakpoint` 分隔；每段只能是一条 SQL。
+- 不在迁移文件中使用 `DELIMITER`、`SOURCE`、`LOAD DATA LOCAL` 或自行控制 `BEGIN/COMMIT/ROLLBACK/AUTOCOMMIT`。
+- 迁移语句仍应可安全重试，不能依赖本地 `backend/install/data/upgrade/` 被发布系统自动发现。
 
-```
-❌ 用户明确要求已有库升级时，只改 schema/10_xxx.sql，不补 upgrade 增量
-❌ upgrade 文件里写 DROP TABLE                  ← 重复执行会丢数据，非幂等
-❌ 把 deploy/install/data/upgrade/*.sql 提交 git ← 属于运维产物，不入库
-✅ schema/10_mb_payment_log.sql + upgrade/2026_05_20_payment_log.sql（CREATE TABLE IF NOT EXISTS）
-```
+只有任务明确涉及发布包或升级平台时，才把变更接入这条发布迁移链路。
+
+## 自检
+
+- [ ] 全新安装 schema 已包含最终结构。
+- [ ] 请求链路没有运行时字段探测或静默丢字段。
+- [ ] 已有库 SQL 确实来自用户明确要求。
+- [ ] 本地手工 SQL 与发布迁移的来源、路径和提交边界没有混用。
+- [ ] SQL 已在目标 MySQL 版本验证语法与幂等性。

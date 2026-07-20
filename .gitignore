@@ -5,7 +5,7 @@
 .vscode/
 .claude/
 
-# Docker dev data（MySQL / Redis 宿主挂载目录，仅项目根的 /data/）
+# 宿主机持久数据（开发 MySQL / Redis 与生产后端业务数据）
 /data/
 
 
@@ -13,11 +13,15 @@
 .env
 backend/.env
 
+# Agent 生成的发布清单（随部署变化，不属于源码）
+/.mallbase-release-inventory.json
+
 # 部署脚本的本地配置（含真实主机 / 私钥 / 远程目录，不入库）
 deploy/upload-frontend.local.sh
 
 # 工作过程产生的临时目录（截图中转、调试输出等）
 .tmp/
+/.codex/work/
 
 
 .playwright-cli/

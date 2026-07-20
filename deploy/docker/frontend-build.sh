@@ -27,7 +27,7 @@ echo ">>> [frontend-build] 1/5 启用 corepack"
 corepack enable
 
 echo ">>> [frontend-build] 2/5 激活 pnpm"
-corepack prepare pnpm@latest --activate
+corepack prepare pnpm@10.28.2 --activate
 
 run_with_heartbeat "3/5 安装前端依赖" pnpm install --frozen-lockfile
 run_with_heartbeat "4/5 构建后台前端资源" pnpm run build:antd

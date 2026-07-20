@@ -1,6 +1,6 @@
 # 验证与维护命令
 
-本页收录运行状态检查、安装后补同步、旧环境升级和测试准备命令。
+本页收录运行状态检查、安装后补同步和测试准备命令。
 
 ## 检查后台前端产物是否存在
 
@@ -33,26 +33,8 @@ curl -I http://127.0.0.1:8080/
 Docker 执行：
 
 ```bash
-PREFIX=${MALLBASE_CONTAINER_PREFIX:-mallbase}
-docker exec ${PREFIX}-dev php think region:import
-docker exec ${PREFIX} php think region:import
-```
-
-## 升级旧环境的 `password_changed_at` 列
-
-适用：方式一、方式三、方式四。
-
-本地执行：
-
-```bash
-(cd backend && php think upgrade:admin-schema)
-```
-
-Docker 执行：
-
-```bash
-docker compose -f docker-compose.dev.yml exec -T backend php think upgrade:admin-schema
-docker compose exec -T backend php think upgrade:admin-schema
+docker compose -f docker-compose.dev.yml exec -T backend php think region:import
+docker compose exec -T backend php think region:import
 ```
 
 ## 初始化 Playwright 浏览器

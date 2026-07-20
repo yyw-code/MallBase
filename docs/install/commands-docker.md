@@ -27,6 +27,7 @@ docker compose -f docker-compose.dev.yml up -d
 适用：方式四。
 
 ```bash
+sh deploy/docker/host-preflight.sh
 docker compose up -d --build
 ```
 
@@ -44,9 +45,8 @@ docker compose -f docker-compose.frontend-build.yml up frontend-build
 适用：方式二、方式三、方式四。
 
 ```bash
-PREFIX=${MALLBASE_CONTAINER_PREFIX:-mallbase}
-docker logs ${PREFIX}-dev
-docker logs ${PREFIX}
+docker compose -f docker-compose.dev.yml logs -f backend
+docker compose logs -f backend queue cron
 ```
 
 ## 查看 `frontend-build` 日志
@@ -100,4 +100,10 @@ docker compose -f docker-compose.dev.yml restart backend
 
 ```bash
 docker compose restart
+```
+
+生产升级或回滚后需重新构建镜像并重建三个业务角色，单纯重启不会加载宿主机的新源码：
+
+```bash
+docker compose up -d --build backend queue cron
 ```

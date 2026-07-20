@@ -36,6 +36,12 @@
       "style": {
         "navigationStyle": "custom"
       }
+    },
+    {
+      "path": "pages/system/maintenance",
+      "style": {
+        "navigationStyle": "custom"
+      }
     }
   ],
   "subPackages": [

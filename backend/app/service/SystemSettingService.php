@@ -17,7 +17,7 @@ use mall_base\base\BaseService;
  * - 本类只负责"读取"与"缓存"，Admin 展示 logo/版权、Client 公开 API 都调本类。
  * - 写入 / 验证 / 表单结构仍由 {@see \app\service\admin\setting\SettingService} 负责。
  *
- * 设计要点（遵守 service-stateless-swoole）：
+ * 设计要点（遵守 architecture-layering 的无状态规则）：
  * - 无状态：Model 每次通过 $this->model() 动态获取，不缓存实例。
  * - 缓存：直接复用 {@see SettingCacheService}（Redis 层），与 SettingService 写入路径同 key，读写一致。
  * - 图片字段：通过 AssetHydrator 批量补全 full_url，兼容素材 ID 与旧路径。

@@ -1,112 +1,66 @@
 ---
 name: route-permission-system
-description: MallBase ThinkPHP 后台路由与权限元数据规范；新增或调整 System 路由、菜单、权限字段时使用。
+description: MallBase ThinkPHP 后台路由与权限元数据规则；新增或调整 backend/route/api/admin 路由、System 权限码、菜单元数据、/:id 路径参数、共享 _permission 或 sync:permissions 同步时使用。
 ---
 
-# ThinkPHP 规则：后台路由与权限元数据
+# 后台路由与权限元数据
 
-## 适用范围
+## 当前入口
 
-`backend/route/admin/*.php` 的新增与修改。
+后台业务路由放在 `backend/route/api/admin/*.php`。它们由 `backend/route/admin.php` 加载，并继承后台 API 组的鉴权、权限、请求锁和操作日志中间件。
 
-## 标准模板
+新增路由前先查看同领域文件；通用 CRUD 可参考 `backend/route/api/admin/admin.php`、`goods.php`。
+
+## 路由契约
+
+1. 需要 ID 的资源路由使用 `info/:id`、`update/:id`、`delete/:id`，Controller 从路径参数读取 `id`。
+2. 参与后台授权的路由名使用 `System{Domain}{Action}`；分组 `_group_code` 使用稳定的 `System{Domain}`。
+3. 分组通过 `_group_name`、`_group_code`、`_path`、`_component`、`_parent` 等元数据生成后端驱动菜单。
+4. 写操作显式使用 `Permission::TYPE_BUTTON`；独立的列表、详情等读权限使用 `Permission::TYPE_MENU`。
+5. 不参与授权的路由显式设置 `_auth => false`，并按现有路由组规则移除不需要的中间件。
+6. `prefix()` 使用当前 Controller 命名空间，例如 `admin.goods.GoodsController/`。
 
 ```php
-<?php
-
-use think\facade\Route;
-use app\admin\model\auth\Permission;
-
-Route::group('module', function () {
-    // 列表（菜单类型）
-    Route::get('list', 'getList')->name('SystemModuleList')
+Route::group('goods/brand', function () {
+    Route::get('list', 'list')
+        ->name('SystemGoodsBrandList')
         ->option([
-            '_alias' => '模块列表',
-            '_desc'  => '获取模块列表',
-            '_auth'  => true,
-            '_type'  => Permission::TYPE_MENU,
+            '_alias' => '品牌列表',
+            '_auth' => true,
+            '_type' => Permission::TYPE_MENU,
         ]);
-
-    // 详情（菜单类型）
-    Route::get('info/:id', 'getInfo')->name('SystemModuleInfo')
+    Route::put('update/:id', 'update')
+        ->name('SystemGoodsBrandUpdate')
         ->option([
-            '_alias' => '模块详情',
-            '_auth'  => true,
-            '_type'  => Permission::TYPE_MENU,
+            '_alias' => '更新品牌',
+            '_auth' => true,
+            '_type' => Permission::TYPE_BUTTON,
         ]);
-
-    // 创建（按钮类型）
-    Route::post('create', 'create')->name('SystemModuleCreate')
-        ->option([
-            '_alias' => '创建模块',
-            '_auth'  => true,
-            '_type'  => Permission::TYPE_BUTTON,
-        ]);
-
-    // 更新（按钮类型，路径参数）
-    Route::put('update/:id', 'update')->name('SystemModuleUpdate')
-        ->option([
-            '_alias' => '更新模块',
-            '_auth'  => true,
-            '_type'  => Permission::TYPE_BUTTON,
-        ]);
-
-    // 删除（按钮类型，路径参数）
-    Route::delete('delete/:id', 'delete')->name('SystemModuleDelete')
-        ->option([
-            '_alias' => '删除模块',
-            '_auth'  => true,
-            '_type'  => Permission::TYPE_BUTTON,
-        ]);
-})->prefix('module/')->option([
-    '_alias'      => '模块管理',
-    '_group_name' => '模块管理',
-    '_group_code' => 'SystemModule',
-    '_desc'       => '模块管理',
-    '_auth'       => true,
-    '_type'       => Permission::TYPE_MENU,
-]);
+})->prefix('admin.goods.GoodsBrandController/')
+    ->option([
+        '_group_name' => '商品品牌',
+        '_group_code' => 'SystemGoodsBrand',
+        '_path' => '/goods/brand',
+        '_component' => '/goods/brand/index',
+        '_parent' => 'SystemGoodsManagement',
+        '_auth' => true,
+    ]);
 ```
 
-## 强制规则
+## 共享权限
 
-1. 路由风格对齐 `backend/route/admin/admin.php`。
-2. 带 ID 的路由使用 `/:id`，不使用 query id。
-3. `name()` 使用 `System{Module}{Action}` 命名（必须以 `System` 开头）。
-4. 分组 `_group_code` 使用 `System{Module}`（如 `SystemAdmin`、`SystemGoodsCategory`）。
-5. 写操作 `_type` 使用 `Permission::TYPE_BUTTON`，读操作使用 `Permission::TYPE_MENU`。
-6. 路由与分组都要带权限元数据（至少 `_alias`、`_auth`）。
-7. 必须导入：`use app\admin\model\auth\Permission;`
+多个接口共用一个权限码时使用 `_permission`。代表路由保留 `_alias` 并生成权限节点；仅复用该权限的辅助路由可省略 `_alias`，避免同步出重复节点。不要用 `_permission` 掩盖本应独立授权的写操作。
 
-### 权限类型对应
+## 同步与自检
 
-| 操作 | `_type` |
-|------|---------|
-| `list`、`info`、`all` | `Permission::TYPE_MENU` |
-| `create`、`update`、`delete`、`updateStatus` | `Permission::TYPE_BUTTON` |
+从 `backend/` 目录先预览，再同步：
 
-### 命名示例
-
-```
-SystemAdminList          SystemAdminCreate
-SystemGoodsCategoryList  SystemGoodsCategoryCreate
-SystemUserGroupCreate    SystemClientUserGroupCreate
+```bash
+php think sync:permissions --preview
+php think sync:permissions
 ```
 
-## 禁止项
-
-- ❌ 缺少 `name()`。
-- ❌ `_type` 使用字符串 `'api'`。
-- ❌ 新路由未同步权限命令。
-- ❌ 路由命名不加 `System` 前缀。
-- ❌ 使用查询参数传递 ID（如 `?id=`）。
-
-## 自检清单
-
-- [ ] 路由命名、分组编码符合 `System` 前缀约定。
-- [ ] 新增路由后执行 `php think SyncPermissions`。
-
-## Related
-
-- `backend/route/admin/admin.php` — 权威参考实现
-- `backend/route/admin/goods.php` — 已对齐的示例
+- [ ] 文件位于 `backend/route/api/admin/`。
+- [ ] 路由名、分组码和父级权限码稳定且唯一。
+- [ ] ID 使用 `/:id`，前后端 API 契约一致。
+- [ ] `--preview` 输出符合预期后再执行同步。

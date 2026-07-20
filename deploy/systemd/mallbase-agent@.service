@@ -1,0 +1,28 @@
+[Unit]
+Description=Run one MallBase upgrade job for %f
+Wants=network-online.target
+After=network-online.target
+ConditionPathIsDirectory=%f
+
+[Service]
+Type=oneshot
+User=mallbase-agent
+Group=mallbase-upgrade
+WorkingDirectory=%f
+Environment=MALLBASE_AGENT_UPGRADE_ADDR=127.0.0.1:18081
+ExecStart=%f/upgrade/bin/active/mallbase-agent run-job
+UMask=0007
+NoNewPrivileges=true
+PrivateDevices=true
+PrivateTmp=true
+ProtectControlGroups=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectSystem=strict
+ReadWritePaths=%f
+ReadOnlyPaths=%f/upgrade/bin
+ReadWritePaths=%f/upgrade/bin/active
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictSUIDSGID=true
+LockPersonality=true
+TimeoutStartSec=infinity

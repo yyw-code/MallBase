@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace app\service\install;
 
+use app\service\upgrade\UpgradeSharedFileStore;
 use Closure;
 use mall_base\log\Logger;
 use Throwable;
@@ -11,314 +12,158 @@ use Throwable;
 /**
  * 平台实例低频上报服务。
  *
- * 只上报安装实例、版本、环境摘要和心跳，不读取商家业务数据。
+ * PHP 不直接访问平台；所有网络请求都由固定 Agent 子进程完成，
+ * instance.json 是唯一凭据与调度真相源。
  */
 final class PlatformReporter
 {
-    private const BASE_URL = 'https://platform.gosowong.cn';
-    private const APP_CODE = 'mallbase';
-    private const REPORT_INTERVAL = 86400;
-    private const RETRY_INTERVAL = 300;
-    private const COMPONENT_ACTIVE_WINDOW = 1296000;
-    private const CONNECT_TIMEOUT_MS = 2000;
-    private const TIMEOUT_MS = 5000;
+    private ?UpgradeSharedFileStore $files = null;
+    private ?AgentInstanceStateStore $instanceStore = null;
+    private ?AgentHeartbeatClient $heartbeatClient = null;
+    private ?AgentHeartbeatPayloadFactory $payloadFactory = null;
+    private ?AgentPlatformBootstrapService $bootstrapService = null;
 
+    /** @var Closure():int */
+    private readonly Closure $clock;
+
+    /** @param array<string,int>|null $settings */
     public function __construct(
         private readonly ?InstallLockService $lockService = null,
-        private readonly ?Closure $transport = null,
+        ?AgentInstanceStateStore $instances = null,
+        ?AgentHeartbeatClient $heartbeat = null,
+        ?AgentHeartbeatPayloadFactory $payloads = null,
+        ?AgentPlatformBootstrapService $bootstrap = null,
+        ?Closure $clock = null,
+        private readonly ?array $settings = null,
     ) {
+        $this->instanceStore = $instances;
+        $this->heartbeatClient = $heartbeat;
+        $this->payloadFactory = $payloads;
+        $this->bootstrapService = $bootstrap;
+        $this->clock = $clock ?? static fn(): int => time();
     }
 
     public function tick(string $componentType = 'backend_php'): void
     {
         try {
-            $lock = $this->lockService();
-            if (!$lock->isInstalled()) {
+            $legacy = $this->legacyLock();
+            if (!$legacy->isInstalled()) {
+                return;
+            }
+            $clock = $this->clock;
+            $now = $clock();
+            if (!is_int($now) || $now < 0 || $now > 4_102_444_800) {
                 return;
             }
 
-            $state = $lock->getPlatformState();
-            if (($state['disabled'] ?? false) === true) {
+            $instances = $this->instances();
+            $instance = $instances->load() ?? $instances->initializeFromLegacy($legacy, $now);
+            if (($instance['disabled'] ?? null) === true) {
                 return;
             }
+            if (($instance['activation_state'] ?? null) !== 'confirmed') {
+                $this->bootstrap()->ensureConnected($componentType);
 
-            $now = time();
-            $state = $this->repairPendingWindow($lock, $state, $now);
-            $lock->markPlatformComponentSeen($componentType, $now);
-
-            if (!$lock->reservePlatformReportWindow($now, self::RETRY_INTERVAL)) {
                 return;
             }
-
-            $state = $lock->getPlatformState();
-            if (empty($state['instance_id']) || empty($state['token'])) {
-                $this->activate($lock, $state, $now);
+            $reservation = $instances->reserveReportWindow(
+                $componentType,
+                $now,
+                $this->setting('reservation_interval', 60),
+            );
+            if ($reservation === null) {
                 return;
             }
-
-            $this->heartbeat($lock, (string) $state['token'], $componentType, $now);
-        } catch (Throwable $e) {
+            $result = $this->heartbeat()->run(
+                $this->payloads()->create($reservation['instance'], $componentType, $now),
+            );
+            $success = $result->ok && ($result->skipped === 'heartbeat_active'
+                || $result->instanceId === (string) ($reservation['instance']['instance_id'] ?? ''));
+            $error = $success ? '' : $this->stableError($result->error);
+            $instances->recordReportResult(
+                $reservation['reservation_id'],
+                $reservation['reservation_revision'],
+                $success,
+                $now,
+                $success
+                    ? $this->setting('report_interval', 86400)
+                    : $this->setting('retry_interval', 300),
+                $error,
+            );
+        } catch (Throwable) {
             Logger::instance()->debug('平台实例统计跳过', [
-                'error' => $e->getMessage(),
+                'code' => 'PLATFORM_REPORT_SKIPPED',
             ]);
         }
     }
 
-    /**
-     * @param array<string, mixed> $state
-     */
-    private function activate(InstallLockService $lock, array $state, int $now): void
+    private function stableError(string $error): string
     {
-        $payload = [
-            'app_code' => self::APP_CODE,
-            'app_version' => $this->appVersion(),
-            'environment' => $this->environment('github'),
-        ];
-
-        if (!empty($state['instance_id'])) {
-            $payload['instance_id'] = (string) $state['instance_id'];
-        }
-
-        $response = $this->post('/api/v1/telemetry/activate', $payload);
-        $data = is_array($response['data'] ?? null) ? $response['data'] : [];
-        if (empty($data['instance_id'])) {
-            $this->recordFailure($lock, 'activate_failed', $response, $now);
-            return;
-        }
-
-        if (empty($data['token'])) {
-            $lock->savePlatformState([
-                'instance_id' => (string) $data['instance_id'],
-            ]);
-            $this->recordFailure($lock, 'activate_token_missing', $response, $now);
-            return;
-        }
-
-        $next = [
-            'instance_id' => (string) $data['instance_id'],
-            'token' => (string) $data['token'],
-            'last_report_at' => $now,
-            'next_report_after' => $now + self::REPORT_INTERVAL,
-            'last_report_error' => '',
-            'last_report_error_at' => 0,
-        ];
-
-        $lock->savePlatformState($next);
+        return preg_match('/^[A-Z][A-Z0-9_]{0,127}$/D', $error) === 1
+            ? $error
+            : 'AGENT_HEARTBEAT_FAILED';
     }
 
-    private function heartbeat(InstallLockService $lock, string $token, string $componentType, int $now): void
+    private function setting(string $name, int $default): int
     {
-        $version = $this->appVersion();
-        $components = $lock->getActivePlatformComponents($now, self::COMPONENT_ACTIVE_WINDOW, $version);
-        if ($components === []) {
-            $components = [
-                [
-                    'type' => $componentType,
-                    'version' => $version,
-                ],
-            ];
-        }
+        $value = $this->settings[$name] ?? config('agent.' . $name, $default);
 
-        $response = $this->post('/api/v1/telemetry/heartbeat', [
-            'heartbeat_id' => $this->heartbeatId($now),
-            'app_version' => $version,
-            'environment' => $this->environment(),
-            'components' => $components,
-        ], [
-            'Authorization' => 'Bearer ' . $token,
-        ]);
-
-        if (($response['data']['accepted'] ?? false) !== true) {
-            $this->recordFailure($lock, 'heartbeat_rejected', $response, $now);
-            return;
-        }
-
-        $lock->savePlatformState([
-            'last_report_at' => $now,
-            'next_report_after' => $now + self::REPORT_INTERVAL,
-            'last_report_error' => '',
-            'last_report_error_at' => 0,
-        ]);
+        return is_int($value) && $value > 0 && $value <= 4_102_444_800 ? $value : $default;
     }
 
-    /**
-     * @param array<string, mixed> $response
-     */
-    private function recordFailure(
-        InstallLockService $lock,
-        string $fallbackReason,
-        array $response,
-        int $now,
-    ): void {
-        $reason = trim((string) ($response['_error'] ?? $fallbackReason));
-
-        $lock->savePlatformState([
-            'last_report_error' => $reason !== '' ? $reason : $fallbackReason,
-            'last_report_error_at' => $now,
-            'next_report_after' => $now + self::RETRY_INTERVAL,
-        ]);
+    private function legacyLock(): InstallLockService
+    {
+        return $this->lockService ?? app()->make(InstallLockService::class);
     }
 
-    /**
-     * @param array<string, mixed> $state
-     * @return array<string, mixed>
-     */
-    private function repairPendingWindow(InstallLockService $lock, array $state, int $now): array
+    private function instances(): AgentInstanceStateStore
     {
-        $nextReportAfter = (int) ($state['next_report_after'] ?? 0);
-        if ($nextReportAfter <= $now + self::RETRY_INTERVAL) {
-            return $state;
+        if ($this->instanceStore === null) {
+            $this->instanceStore = new AgentInstanceConfigStore(
+                $this->sharedFiles(),
+                (int) config('agent.activation_proof_lifetime', -1),
+                (int) config('agent.component_seen_throttle', -1),
+                (int) config('agent.instance_lock_timeout_milliseconds', -1),
+            );
         }
 
-        $hasCredentials = !empty($state['instance_id']) && !empty($state['token']);
-        $hasSuccessfulReport = !empty($state['last_report_at']);
-        if ($hasCredentials && $hasSuccessfulReport) {
-            return $state;
-        }
-
-        return $lock->savePlatformState([
-            'next_report_after' => 0,
-        ]);
+        return $this->instanceStore;
     }
 
-    /**
-     * @param array<string, mixed> $payload
-     * @param array<array-key, string> $headers
-     * @return array<string, mixed>
-     */
-    private function post(string $path, array $payload, array $headers = []): array
+    private function heartbeat(): AgentHeartbeatClient
     {
-        if ($this->transport !== null) {
-            $transport = $this->transport;
-            $response = $transport($path, $payload, $headers);
-
-            return is_array($response) ? $response : [];
-        }
-
-        if (!function_exists('curl_init')) {
-            return ['_error' => 'curl_missing'];
-        }
-
-        $body = json_encode($payload, JSON_UNESCAPED_UNICODE);
-        if ($body === false) {
-            return ['_error' => 'payload_encode_failed'];
-        }
-
-        $requestHeaders = array_merge([
-            'Content-Type: application/json',
-            'Accept: application/json',
-        ], $this->formatHeaders($headers));
-
-        $ch = curl_init(rtrim(self::BASE_URL, '/') . $path);
-        if ($ch === false) {
-            return ['_error' => 'curl_init_failed'];
-        }
-
-        curl_setopt_array($ch, [
-            CURLOPT_POST => true,
-            CURLOPT_POSTFIELDS => $body,
-            CURLOPT_HTTPHEADER => $requestHeaders,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_CONNECTTIMEOUT_MS => self::CONNECT_TIMEOUT_MS,
-            CURLOPT_TIMEOUT_MS => self::TIMEOUT_MS,
-        ]);
-
-        $raw = curl_exec($ch);
-        $curlError = curl_error($ch);
-        $status = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
-        curl_close($ch);
-
-        if (!is_string($raw)) {
-            return ['_error' => $curlError !== '' ? $curlError : 'request_failed'];
-        }
-
-        if ($raw === '') {
-            return ['_error' => 'empty_response', '_status' => $status];
-        }
-
-        if ($status < 200 || $status >= 300) {
-            return ['_error' => 'http_' . $status, '_status' => $status];
-        }
-
-        $decoded = json_decode($raw, true);
-
-        return is_array($decoded) ? $decoded : ['_error' => 'invalid_json', '_status' => $status];
-    }
-
-    /**
-     * @param array<array-key, string> $headers
-     * @return array<int, string>
-     */
-    private function formatHeaders(array $headers): array
-    {
-        $formatted = [];
-        foreach ($headers as $key => $value) {
-            $value = trim((string) $value);
-            if ($value === '') {
-                continue;
-            }
-
-            if (is_string($key)) {
-                $formatted[] = $key . ': ' . $value;
-                continue;
-            }
-
-            $formatted[] = $value;
-        }
-
-        return $formatted;
-    }
-
-    /**
-     * @return array<string, string>
-     */
-    private function environment(?string $installSource = null): array
-    {
-        $environment = [
-            'php_version' => PHP_VERSION,
-            'db_driver' => (string) config('database.default', 'mysql'),
-            'os' => PHP_OS_FAMILY,
-            'arch' => php_uname('m') ?: '',
-            'timezone' => date_default_timezone_get(),
-        ];
-
-        if ($installSource !== null) {
-            $environment['install_source'] = $installSource;
-        }
-
-        return $environment;
-    }
-
-    private function appVersion(): string
-    {
-        $path = dirname(rtrim(root_path(), DIRECTORY_SEPARATOR)) . DIRECTORY_SEPARATOR . '.version';
-        if (is_file($path)) {
-            $version = trim((string) file_get_contents($path));
-            if ($version !== '') {
-                return $version;
-            }
-        }
-
-        return '1.0.0';
-    }
-
-    private function heartbeatId(int $now): string
-    {
-        $day = gmdate('Y-m-d', $now);
-        $hash = md5(self::APP_CODE . ':' . $day);
-
-        return sprintf(
-            '%s-%s-%s-%s-%s',
-            substr($hash, 0, 8),
-            substr($hash, 8, 4),
-            substr($hash, 12, 4),
-            substr($hash, 16, 4),
-            substr($hash, 20, 12),
+        return $this->heartbeatClient ??= new AgentHeartbeatRunner(
+            null,
+            null,
+            (int) config('agent.heartbeat_timeout_milliseconds', 5000),
         );
     }
 
-    private function lockService(): InstallLockService
+    private function payloads(): AgentHeartbeatPayloadFactory
     {
-        return $this->lockService ?? app()->make(InstallLockService::class);
+        return $this->payloadFactory ??= AgentHeartbeatPayloadFactory::fromProjectRoot();
+    }
+
+    private function bootstrap(): AgentPlatformBootstrapService
+    {
+        return $this->bootstrapService ??= new AgentPlatformBootstrapService(
+            $this->instances(),
+            $this->heartbeat(),
+            $this->payloads(),
+            $this->legacyLock(),
+            $this->clock,
+        );
+    }
+
+    private function sharedFiles(): UpgradeSharedFileStore
+    {
+        return $this->files ??= new UpgradeSharedFileStore(
+            (string) config('agent.upgrade_root', ''),
+            (int) config('agent.agent_uid', -1),
+            (int) config('agent.expected_gid', -1),
+            (int) config('agent.php_euid', -1),
+            (int) config('agent.max_json_bytes', 65536),
+            (int) config('agent.instance_lock_timeout_milliseconds', 2000),
+        );
     }
 }

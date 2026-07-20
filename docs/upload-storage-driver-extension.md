@@ -15,7 +15,7 @@
 | 驱动注册 | 是 | 在 `backend/app/AppService.php` 注册到 `DriverManager` |
 | 上传业务服务 | 是 | 在 `backend/app/service/UploadService.php` 加标签、域名、白名单、配置分组映射 |
 | 系统设置 seed | 是 | 在 `backend/install/data/schema/03_mb_setting.sql` 增加驱动选项和配置项 |
-| 旧环境升级 SQL | 是 | 在 `backend/install/data/upgrade/` 补幂等 SQL，供已部署环境手动执行 |
+| 部署同步 | 是 | 以 `backend/install/data/schema/` 为真相源，使用当前版本重新部署 |
 | 素材 URL 解析 | 需要素材库时 | 在 `AssetResolver` 中补默认访问域名 |
 | 素材删除/迁移 | 需要素材库迁移时 | 在素材管理、迁移服务、迁移 Job 中补驱动映射 |
 | 后台页面 | 视情况 | 动态设置页、素材迁移页如有固定驱动列表，需要同步 |
@@ -310,28 +310,11 @@ INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`
 
 配置项 code 建议统一使用 `<driver>_` 前缀。`UploadService` 会把 `qiniu_access_key` 归一化为驱动配置里的 `access_key`。
 
-## 6. 补旧环境升级 SQL
+## 6. 保持 schema 真相源完整
 
-凡是修改 `schema/*.sql` seed，都要在 `backend/install/data/upgrade/` 下补幂等升级 SQL。该目录被 git 忽略，用于部署环境手动执行。
+修改上传驱动的表结构或初始配置时，直接更新 `backend/install/data/schema/` 中的对应 schema，并使全新安装在不依赖额外脚本的情况下得到完整结构和 seed。
 
-示例：
-
-```sql
--- MallBase 升级：新增七牛云上传驱动配置。
--- 本脚本可重复执行。
-
-INSERT INTO `mb_setting_group` (`id`, `pid`, `is_system`, `name`, `code`, `icon`, `description`, `sort`, `display_type`, `status`) VALUES
-(1025, 102, 0, '七牛云存储', 'UploadQiniu', NULL, '七牛云 Bucket、区域与访问凭证', 50, 'page', 1)
-ON DUPLICATE KEY UPDATE
-  `name` = VALUES(`name`),
-  `description` = VALUES(`description`),
-  `sort` = VALUES(`sort`),
-  `status` = VALUES(`status`);
-
-UPDATE `mb_setting`
-SET `options` = '[{"label":"本地存储","value":"local"},{"label":"阿里云 OSS","value":"oss"},{"label":"腾讯云 COS","value":"cos"},{"label":"七牛云","value":"qiniu"}]'
-WHERE `code` = 'upload_driver';
-```
+当前阶段不维护模块级增量 SQL 产物。需要同步数据库结构的环境，应先备份业务数据，再使用当前版本重新部署，并按安装流程基于 schema 初始化数据库。
 
 ## 7. 更新素材解析与迁移
 
@@ -425,7 +408,7 @@ pnpm --dir frontend/admin run test:e2e
 - [ ] `AppService` 已注册新驱动。
 - [ ] `UploadService` 已补标签、域名、白名单、配置分组。
 - [ ] `03_mb_setting.sql` 已补全新安装 seed。
-- [ ] `backend/install/data/upgrade/` 已补旧环境幂等升级 SQL。
+- [ ] `backend/install/data/schema/` 已完整覆盖新驱动的表结构和初始配置。
 - [ ] 素材解析、删除、迁移和后台迁移页已按支持范围同步。
 - [ ] 后台动态设置页已识别新配置前缀。
 - [ ] 已新增 fake client 单元测试。

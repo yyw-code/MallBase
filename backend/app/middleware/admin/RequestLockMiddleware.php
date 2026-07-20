@@ -43,6 +43,10 @@ class RequestLockMiddleware
         if (!$this->enable) {
             return $next($request);
         }
+        $rule = $request->rule();
+        if ($rule !== null && (($rule->getOption()['_request_lock'] ?? true) === false)) {
+            return $next($request);
+        }
 
         // 只对 POST/PUT/DELETE 请求进行锁定
         if (!in_array($request->method(), ['POST', 'PUT', 'DELETE'])) {

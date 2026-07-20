@@ -1,27 +1,28 @@
 ---
 name: thinkphp
-description: MallBase ThinkPHP 后端规则索引；仅在需要浏览或选择后端规则、且无法确定具体 ThinkPHP skill 时使用。
+description: MallBase ThinkPHP 后端规则导航；仅在后端任务涉及多个场景、需要查找项目规则，或无法确定应读取哪个更具体的 ThinkPHP skill 时使用。
 ---
 
-# ThinkPHP Skills 索引（MallBase）
+# MallBase ThinkPHP 规则导航
 
-后端规则按子目录拆分，请按场景选用：
+优先读取与任务直接匹配的具体 skill，不要把本文件当成后端规则全集。
 
-1. `architecture-layering`：三层架构与调用边界
-2. `service-stateless-swoole`：Swoole 协程安全与 Service 无状态
-3. `validate-then-transact`：先校验再事务
-4. `list-query-sync`：分页 list/total 条件同源
-5. `list-return-compact`：分页返回 compact 规范
-6. `route-permission-system`：后台路由、命名和权限字段规范
-7. `ide-generic-annotation`：Controller/Service 泛型注释与 IDE 跳转规范
-8. `goods-image-main-sync`：商品主图与轮播图一致性规则
-9. `backend-test-baseline`：后端测试基线与执行约束
-10. `schema-first-no-transition-compat`：正式字段优先，禁止长期过渡兼容
-11. `model-field-accessor-first`：正式字段优先走模型访问器/修改器
-12. `goods-sku-unified-sales-unit`：商品统一售卖单元必须落 SKU
-13. `build-list-query-only`：列表查询统一使用 Service::buildListQuery
-14. `region-snapshot-invalid-on-change`：地区业务双存快照，更新后标记失效不自动迁移
-15. `mall-base-boundary`：mall_base 框架边界，禁止在框架底层放业务逻辑
-16. `wechat-pay-stateless`：微信支付 SDK 在 Swoole 下的无状态构造规则
-17. `payment-notify-idempotency`：支付回调验签、幂等、防重放与金额校验规则
-18. `upgrade-sql-explicit-request`：已有库升级 SQL 仅在用户明确要求时考虑
+## 快速选择
+
+- 处理 Controller、Service、Model、Swoole 状态或 IDE 泛型时，读取 `architecture-layering`。
+- 处理写操作、事务、行锁或并发校验时，读取 `validate-then-transact`。
+- 处理分页、筛选、统计、导出或 `{total, list}` 返回时，读取 `list-query-sync`。
+- 处理后台菜单、路由名、路径参数或权限同步时，读取 `route-permission-system`。
+- 处理 schema、正式字段、已有库升级或发布迁移时，读取 `dev-schema-upgrade-sql`。
+
+## 高风险与领域规则
+
+支付、商品媒体、SKU、地区快照和 `backend/mall_base/` 边界都有独立 skill。先根据 frontmatter 的 `description` 选择，不要只套通用规则。
+
+需要查看当前可用规则时，从项目根目录执行：
+
+```bash
+rg -n '^description:' .codex/skills/thinkPHP/*/SKILL.md
+```
+
+任务同时命中多个场景时，读取所有直接相关的 skill，并以更具体、风险更高的规则为准。

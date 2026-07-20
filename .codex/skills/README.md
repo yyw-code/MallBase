@@ -1,81 +1,37 @@
 # MallBase 项目本地 Skills 说明
 
-本目录是 **项目私有技能库**，仅服务当前仓库，不依赖全局环境。
+本目录是项目私有 Skill 库，仅服务当前仓库。常驻协作规则由根目录
+`AGENTS.md` 维护，具体技术规则由各 `SKILL.md` 维护。
 
 ## 目录约定
 
-- 一级按技术栈或项目治理域分组：`thinkPHP` / `vbenAdmin` / `uniapp` / 通用治理规则
-- 二级按规则命名：`<rule-name>/SKILL.md`
-- 每个 `SKILL.md` 只描述一条核心规则，避免耦合
+- `thinkPHP/`：后端架构、数据一致性、路由、领域与支付规则
+- `vbenAdmin/`：后台 UI、上传、路由 API、商品表单与 E2E 规则
+- `uniapp/`：移动端请求、认证和模块结构核心规则
+- 根级目录：跨端扩展、文档与 preview 分支等治理规则
 
-## 触发建议
+规则目录使用 `<rule-name>/SKILL.md`；仅当技术栈需要独立的场景决策入口时，
+才在技术栈目录保留 `SKILL.md`。
 
-- 修改后端分层、事务、路由：优先看 `thinkPHP/*`
-- 修改后台前端页面与 API：优先看 `vbenAdmin/*`
-- 修改移动端（后续接入）：优先看 `uniapp/*`
-- 执行后端回归：优先看 `thinkPHP/backend-test-baseline`
-- 执行后台真实链路 E2E：优先看 `vbenAdmin/e2e-webantd-realapi`
-- 涉及演示站分支、preview 合并或反向合并：必须看 `preview-branch-boundary`
+## 触发与合并原则
 
-## 治理分层
+1. 按完整工作流边界划分 Skill，不按单条编码规则拆分。
+2. 同一任务通常需要同时加载的规则，应合并到同一 Skill 的不同章节。
+3. 低频但高风险、具有独立触发条件的规则继续独立保留。
+4. 纯导航文件只有在能帮助选择规则时才保留，不复制完整文件清单。
+5. 合并 Skill 时必须扩大目标 frontmatter 的 `description`，覆盖原 Skill 的触发场景。
+6. 删除或改名后同步检查 `AGENTS.md`、模块 README 和其它 Skill 的引用。
 
-项目本地 skills 当前按「高频核心 / 条件触发 / 预留」三层维护，避免规则数量增加后误触发。
+## 内容要求
 
-### 高频核心
+- 规则必须可执行，并以当前代码、命令和目录为真相源。
+- 强制约束要说明适用范围和必要例外，避免无法成立的绝对表述。
+- 示例只保留稳定契约和真实参考位置，避免复制大段易漂移实现。
+- 每个 Skill 应包含足够的自检项，但不重复 `AGENTS.md` 的 Git、团队和通用测试规则。
 
-日常开发中优先独立触发，保持为单独 skill：
+## 维护检查
 
-- `thinkPHP/architecture-layering`
-- `thinkPHP/service-stateless-swoole`
-- `thinkPHP/validate-then-transact`
-- `thinkPHP/list-query-sync`
-- `thinkPHP/list-return-compact`
-- `thinkPHP/route-permission-system`
-- `vbenAdmin/backend-driven-routing`
-- `vbenAdmin/api-path-param`
-- `vbenAdmin/upload-component-first`
-- `vbenAdmin/upload-field-normalize`
-- `vbenAdmin/format-after-change`
-
-### 条件触发
-
-仅在任务明确涉及对应领域时触发，不作为默认背景规则：
-
-- `thinkPHP/build-list-query-only`
-- `thinkPHP/ide-generic-annotation`
-- `thinkPHP/goods-image-main-sync`
-- `thinkPHP/goods-media-contract`
-- `thinkPHP/goods-sku-unified-sales-unit`
-- `thinkPHP/model-field-accessor-first`
-- `thinkPHP/schema-first-no-transition-compat`
-- `thinkPHP/region-snapshot-invalid-on-change`
-- `thinkPHP/mall-base-boundary`
-- `thinkPHP/backend-test-baseline`
-- `vbenAdmin/admin-theme-consistency`
-- `vbenAdmin/iconpicker-standard`
-- `vbenAdmin/modal-form-layout`
-- `vbenAdmin/goods-spec-toggle-state`
-- `vbenAdmin/e2e-webantd-realapi`
-- `docs-linking`
-- `open-source-wording`
-- `preview-branch-boundary`
-
-### 预留
-
-UniApp 规则仅在明确涉及 `frontend/uniapp` 时触发：
-
-- `uniapp/api-contract`
-- `uniapp/auth-token-flow`
-- `uniapp/module-structure`
-
-## 索引类 skill
-
-- `thinkPHP/SKILL.md`、`vbenAdmin/SKILL.md`、`uniapp/SKILL.md` 只作为规则导航入口。
-- 能确定具体规则时，优先使用子目录 skill，不加载父级索引。
-- 新增规则前，先判断是否能并入现有条件触发规则，避免规则碎片化。
-
-## 设计原则
-
-1. 一条规则一个 skill，方便按需启用
-2. 规则必须可落地并有自检清单
-3. 与 `CLAUDE.md`、`.claude/skills/learned` 保持一致
+- 新增前先搜索是否已有相同工作流 Skill。
+- 修改后检查 frontmatter、内部链接、旧名称和不存在的路径。
+- 代码结构或接口契约变化时，及时校正关联 Skill，不能让历史示例覆盖当前实现。
+- 项目不维护手工逐文件总清单，实际 Skill 以 `.codex/skills/**/SKILL.md` 为准。

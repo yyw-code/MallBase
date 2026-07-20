@@ -5,7 +5,8 @@ use app\middleware\admin\{
     JwtAuth,
     CheckPermission,
     AdminOperationLogMiddleware,
-    RequestLockMiddleware
+    RequestLockMiddleware,
+    UpgradeAdminGateMiddleware,
 };
 
 Route::group('admin', function () {
@@ -36,6 +37,7 @@ Route::group('admin', function () {
             '_group_name' => '后台管理'
         ])
         ->middleware([
+            UpgradeAdminGateMiddleware::class,
             JwtAuth::class,
             CheckPermission::class,
             RequestLockMiddleware::class,

@@ -29,7 +29,12 @@ class CustomerServiceSettingService
 
     public function platformCode(): string
     {
-        return $this->string('customer_service_platform_code', 'mallbase');
+        return strtolower($this->string('customer_service_platform_code', 'mallbase'));
+    }
+
+    public function contextKeyId(): string
+    {
+        return $this->string('customer_service_context_key_id');
     }
 
     public function contextSecret(): string
@@ -39,7 +44,7 @@ class CustomerServiceSettingService
 
     public function contextTtl(): int
     {
-        return max(60, $this->int('customer_service_context_ttl', 300));
+        return max(60, min(300, $this->int('customer_service_context_ttl', 300)));
     }
 
     public function connectorEnabled(): bool
@@ -69,12 +74,12 @@ class CustomerServiceSettingService
 
     private function string(string $code, string $default = ''): string
     {
-        return trim((string) getSystemSetting($code, $default));
+        return trim((string) $this->setting($code, $default));
     }
 
     private function int(string $code, int $default = 0): int
     {
-        $value = getSystemSetting($code, (string) $default);
+        $value = $this->setting($code, (string) $default);
         if ($value === null || $value === '') {
             return $default;
         }
@@ -84,7 +89,12 @@ class CustomerServiceSettingService
 
     private function bool(string $code, bool $default = false): bool
     {
-        $value = getSystemSetting($code, $default ? '1' : '0');
+        $value = $this->setting($code, $default ? '1' : '0');
         return in_array((string) $value, ['1', 'true', 'on', 'yes'], true);
+    }
+
+    protected function setting(string $code, mixed $default = null): mixed
+    {
+        return getSystemSetting($code, $default);
     }
 }

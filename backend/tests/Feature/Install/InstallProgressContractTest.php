@@ -59,10 +59,10 @@ final class InstallProgressContractTest extends TestCase
         $this->assertStringContainsString('public function agreement(): Response', $installController);
         $this->assertStringContainsString('getInstallAgreement()', $installController);
 
-        $this->assertStringContainsString("private const PLATFORM_BASE_URL = 'https://platform.gosowong.cn';", $installService);
-        $this->assertStringContainsString("private const PLATFORM_APP_CODE = 'mallbase';", $installService);
-        $this->assertStringContainsString("'/api/v1/install/agreement?'", $installService);
-        $this->assertStringContainsString("http_build_query(['app_code' => self::PLATFORM_APP_CODE])", $installService);
+        $this->assertStringNotContainsString('PLATFORM_BASE_URL', $installService);
+        $this->assertStringNotContainsString('platform.gosowong.cn', $installService);
+        $this->assertStringNotContainsString('/api/v1/install/agreement', $installService);
+        $this->assertMatchesRegularExpression("/'source'\\s*=>\\s*'local'/", $installService);
 
         $this->assertStringContainsString('id="agreementPanel"', $installPage);
         $this->assertStringContainsString('id="install_agreement_accept"', $installPage);

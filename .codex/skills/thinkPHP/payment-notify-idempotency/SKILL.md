@@ -1,116 +1,61 @@
 ---
 name: payment-notify-idempotency
-description: MallBase 支付回调（notify）验签、幂等、防重放与金额校验规则；处理任意支付渠道（微信 / 支付宝 / 银联）回调链路时使用。
+description: MallBase 支付与退款回调安全规则；修改 backend/route/notify.php、PayNotifyController、NotifyService、WechatPaymentResultService、mb_payment_log，或处理微信/其它渠道 webhook 的验签、解密、防重放、金额校验、幂等、事务与 HTTP 应答时使用。
 ---
 
-# ThinkPHP 规则：支付回调幂等与验签
+# 支付回调验签与幂等
 
-## 适用范围
+## 当前入口
 
-- `backend/app/service/client/payment/NotifyService.php`
-- `backend/app/controller/client/order/PayNotifyController.php`
-- 任何接收外部支付平台 webhook 的入口
+- 白名单路由：`backend/route/notify.php`
+- 支付：`POST /api/notify/wechat/pay`
+- 退款：`POST /api/notify/wechat/refund`
+- Controller：`backend/app/controller/client/order/PayNotifyController.php`
+- Service：`NotifyService`、`WechatPaymentResultService`
 
-跨渠道通用，新增支付宝 / 银联回调时同样适用。
+两个回调入口不挂 JWT/CSRF 中间件，支付与退款保持独立路由。网关必须透传 `Wechatpay-Signature`、`Wechatpay-Serial`、`Wechatpay-Timestamp`、`Wechatpay-Nonce` 和未经改写的原始请求体。
 
-## 强制规则
+## 支付处理顺序
 
-### 1. 路由层
+1. 用原始 headers/body 构造 PSR-7 Request。
+2. 用 EasyWeChat Validator 验签，不自行实现微信签名算法。
+3. 通过 SDK Server 解密 `resource`，业务只使用解密后的 attributes。
+4. 用微信 nonce 做 300 秒短窗口防重放。
+5. 校验 `mchid`、`out_trade_no`、`transaction_id`、`trade_state` 和整数分金额。
+6. 以活动 PREPAY 流水的 `amount_cents` 对比回调 `amount.total`，不使用浮点元金额。
+7. 在同一事务内追加 PAID 流水并通过订单 Service/状态机确认支付。
+8. 成功或已幂等处理返回微信 V3 JSON 成功应答；验签、重放和处理异常按当前协议返回失败状态。
 
-- notify 入口必须放在**白名单路由**（无 JWT / 无登录态校验），位于 `backend/route/api/notify.php`
-- 不同渠道**不复用**同一回调入口；按渠道独立路由（如 `/api/notify/wechat/pay`、`/api/notify/wechat/refund`），避免单点故障扩散
-- nginx / OpenResty 必须保留原始请求头：`Wechatpay-Signature / Wechatpay-Serial / Wechatpay-Timestamp / Wechatpay-Nonce` 等签名相关头不能被滤掉
+`WechatPaymentResultService::applyVerifiedSuccess()` 同时供回调和主动查单复用。不要在另一条路径复制金额、商户号或订单状态校验。
 
-### 2. 验签前置（顺序敏感）
+## 持久幂等
 
-处理顺序**严格**按下面来，不能调换：
+`mb_payment_log` 使用合法的 MySQL 联合唯一索引：
 
-1. **验签**：用 SDK 内置（如 EasyWeChat `ServerRequest::handlePaid()`），禁止自己写签名验证
-2. **解密**：V3 `resource.ciphertext` 用 `api_v3_key` AES-GCM 解密
-3. **防重放**：Redis `setNX wxpay:nonce:{nonce} TTL=300`，已存在即拒
-4. **金额校验**：`amount.total`（分）逐分比对 `mb_order.pay_amount * 100`，不等即拒并 dispatch 告警事件
-5. **幂等落库**：写 `mb_payment_log`，唯一索引兜底
-6. **业务转单**：调 `OrderService::confirmPaid()` 转 PAID
+```sql
+UNIQUE KEY `uk_txn_event` (`transaction_id`, `event_type`)
+```
 
-### 3. 幂等键设计
+不要写 PostgreSQL 风格的 `... WHERE transaction_id IS NOT NULL` 部分唯一索引。MySQL 唯一索引允许多行 `NULL`，同一非空交易号与事件类型仍会被唯一约束拦截。
 
-- `mb_payment_log` 必须建唯一索引：`uk_txn_event(transaction_id, event_type) WHERE transaction_id IS NOT NULL`
-- 同一订单允许多条 `prepay` 记录（场景切换 / 超时重发），但只能有一条 `paid` 终态
-- INSERT 失败（违反唯一键）即视为重复回调，**直接返回成功应答**，不抛异常
+应用层先查 `(transaction_id, PAID)`，数据库唯一键处理并发竞争；命中重复键时按幂等结果处理，不重复推进业务。`out_trade_no` 的唯一约束继续保护预支付流水。
 
-### 4. 金额校验（防篡改主战场）
+Redis nonce 是短期减压与重放告警层，数据库唯一键是持久防线。当前 Redis 异常采用可用性优先的放行策略；如要改为失败关闭，必须先评估支付回调可用性，不能顺手改变。
 
-- 用分（int）比对，不用元（float / string）
-- 比对源：`amount.total`（回调报文）vs `mb_order.pay_amount`（库内订单）
-- 不等：先 `Logger::critical` 落地完整报文 → dispatch `payment.amount_mismatch` 事件 → 返回 FAIL 应答给微信触发重试 → **不转单**
+## 应答与副作用
 
-### 5. HTTP 应答
+- 验签失败或重放：返回带 V3 JSON body 的 401。
+- 金额、商户、订单或落库处理失败：返回 5xx，让微信按协议重试。
+- `trade_state` 非 `SUCCESS` 且已完成审计处理：按当前实现返回成功，不推进订单。
+- 成功：返回 200 和 `{"code":"SUCCESS","message":"成功"}`。
 
-| 场景 | HTTP | Body |
-|---|---|---|
-| 处理成功 | 200 | `{"code":"SUCCESS","message":"成功"}` |
-| 验签失败 | 401 | `{"code":"FAIL","message":"签名错误"}` |
-| 金额不一致 | 500 | `{"code":"FAIL","message":"金额校验失败"}` |
-| 业务异常 | 500 | `{"code":"FAIL","message":"..."}` |
+事务内只做支付流水和订单状态的原子持久化，不调用短信、Webhook 等外部服务。当前支付告警监听器只落日志并预留运维通道；新增真实通知时放到事务外并做队列、限时和异常隔离。
 
-- 验签失败必须返回 401 + V3 JSON 体，**纯 401 不带 body** 微信会一直重投
-- 业务异常返回 5xx 让微信走指数退避重试（最多 15 次）
+## 自检
 
-### 6. 事务边界
-
-- 写 `mb_payment_log` + 转单状态可以同事务，但**任何外部调用禁止入事务**
-- 短信通知、推送、积分、邮件等副作用走 ThinkPHP `event()` 派发，监听器入队列异步处理
-- `Logger::critical` 可以同步（写文件不阻塞）
-
-### 7. 防重放双保险
-
-- DB 唯一索引：兜底 + 持久化
-- Redis nonce：5min 短期窗口，应对高频回调打穿 DB
-
-两者**都要有**，不能只靠其一。
-
-### 8. 告警钩子
-
-通过 `event()` 派发（在 `backend/app/event.php` 注册）：
-
-- `payment.verify_failed` — 验签失败
-- `payment.amount_mismatch` — 金额不一致
-- `payment.replay_attack` — Redis nonce 命中
-- 监听器 `PaymentAlertListener` 入队，调 `SmsProviderService` 通知运维
-
-## 禁止项
-
-- ❌ 在 notify 入口加 JWT / CSRF 中间件
-- ❌ 自己用 openssl 实现验签
-- ❌ 仅靠 DB 唯一索引做幂等（必须加 Redis nonce）
-- ❌ 用元（float）比对金额
-- ❌ 在事务内发短信 / 推送 / 调外部 API
-- ❌ 验签失败返回 200（微信认为已处理，不会重试 → 资金漏单）
-- ❌ 业务异常返回 200（同上）
-- ❌ 把支付回调和退款回调合并到同一入口靠 event_type 分发
-
-## 自检清单
-
-- [ ] 路由在白名单，无鉴权中间件
-- [ ] 验签调用 SDK 内置方法，未自实现
-- [ ] Redis nonce 防重放已加，TTL 300s
-- [ ] 金额用分（int）比对，源是 `mb_order.pay_amount`
-- [ ] `mb_payment_log` 有 `(transaction_id, event_type)` 唯一索引
-- [ ] 外部调用全部走 event 异步派发
-- [ ] HTTP 应答严格匹配状态码与 JSON 体
-- [ ] 支付与退款回调路由独立
-
-## When to Use
-
-在以下场景触发此模式：
-- 编写或修改支付回调 Controller / Service
-- 排查「订单未转 PAID」「重复扣款 / 重复发货」「金额对不上」类事故
-- 新增支付宝 / 银联回调链路
-- 接入退款回调
-
-## Related
-
-- `.codex/skills/thinkPHP/wechat-pay-stateless/SKILL.md` — 支付 SDK 无状态姊妹规则
-- `.codex/skills/thinkPHP/validate-then-transact/SKILL.md` — 事务边界上位规则
-- `backend/app/service/order/OrderStatusMachine.php` — `confirmPaid` 状态机入口
-- `backend/app/event.php` — 告警事件注册点
+- [ ] 路由无登录鉴权，支付与退款入口分离。
+- [ ] 验签、解密、重放、金额和幂等顺序未被打乱。
+- [ ] 金额以整数分和 PREPAY 流水为基准。
+- [ ] 唯一索引是目标 MySQL 可执行语法。
+- [ ] 重试不会重复写 PAID 流水或重复推进订单。
+- [ ] 外部通知不会进入数据库事务。

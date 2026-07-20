@@ -48,9 +48,8 @@ docker compose -f docker-compose.dev.yml up -d
 适用：方式二、方式三、方式四。
 
 ```bash
-PREFIX=${MALLBASE_CONTAINER_PREFIX:-mallbase}
-docker logs ${PREFIX}-dev
-docker logs ${PREFIX}
+docker compose -f docker-compose.dev.yml logs -f backend
+docker compose logs -f backend queue cron
 ```
 
 ## 后台前端 Admin 构建

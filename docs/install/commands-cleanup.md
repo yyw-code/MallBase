@@ -8,7 +8,7 @@
 |------|--------------|------|
 | 基础清理：安装锁、`.env`、`backend/.env`、演示静态文件 | 方式一、方式二、方式三、本地构建后的方式四 | `sh deploy/docker/cleanup-dev.sh` |
 | 前端清理：基础清理 + Admin / UniApp 依赖、构建产物和发布产物 | 方式一、方式二、方式三、本地构建后的方式四 | `sh deploy/docker/cleanup-dev.sh --frontend` |
-| Docker 状态清理：前端清理 + 开发容器、网络、卷、`data/`、`backend/vendor` | 方式二、方式三 | `sh deploy/docker/cleanup-dev.sh --docker` |
+| Docker 状态清理：前端清理 + 开发容器、网络、卷、`data/mysql`、`data/redis`、`backend/vendor` | 方式二、方式三 | `sh deploy/docker/cleanup-dev.sh --docker` |
 | 项目镜像清理：Docker 状态清理 + `mallbase-backend:dev` | 方式二、方式三 | `sh deploy/docker/cleanup-dev.sh --images` |
 | 共享基础镜像清理：项目镜像清理 + MySQL / Redis / Node / Alpine 基础镜像 | 方式二、方式三 | `sh deploy/docker/cleanup-dev.sh --all-images` |
 
@@ -104,9 +104,12 @@ rm -rf frontend/uniapp/dist
 适用：方式三；方式二仅在本地确实存在这些目录时使用。
 
 ```bash
-rm -rf data/
+rm -rf data/mysql
+rm -rf data/redis
 rm -rf backend/vendor
 ```
+
+不要删除 `data/backend`；该目录保存生产后端环境配置、证书和业务素材。
 
 ## 手动清理镜像
 

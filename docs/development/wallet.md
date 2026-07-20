@@ -10,9 +10,7 @@
 | `mb_user_wallet_log` | 用户余额流水 | `backend/install/data/schema/11_mb_user_wallet.sql` |
 | `mb_recharge_package` | 充值套餐 | `backend/install/data/schema/12_mb_recharge.sql` |
 
-相关升级 SQL：
-
-- `backend/install/data/upgrade/2026_05_31_balance_payment.sql`
+数据库结构和初始数据以 `backend/install/data/schema/` 为唯一真相源。当前阶段不维护模块级增量 SQL 列表；需要同步数据库结构时，请使用当前版本重新部署，并按安装流程基于 schema 初始化数据库。
 
 ## 配置项
 

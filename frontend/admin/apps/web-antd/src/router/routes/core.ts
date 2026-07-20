@@ -92,6 +92,17 @@ const coreRoutes: RouteRecordRaw[] = [
       },
     ],
   },
+  {
+    component: () => import('#/views/_core/maintenance/index.vue'),
+    meta: {
+      hideInBreadcrumb: true,
+      hideInMenu: true,
+      hideInTab: true,
+      title: '系统维护',
+    },
+    name: 'Maintenance',
+    path: '/maintenance',
+  },
 ];
 
 export { coreRoutes, fallbackNotFoundRoute };

@@ -1,0 +1,9 @@
+[Unit]
+Description=Watch MallBase one-shot upgrade requests for %f
+
+[Path]
+PathExistsGlob=%f/upgrade/run/requests/*.json
+Unit=mallbase-agent@%i.service
+
+[Install]
+WantedBy=multi-user.target

@@ -16,6 +16,7 @@
 #   4. 为 backend/.env 写入中文头注释，明确“请改根 .env，不要改 backend/.env”
 # ============================================================
 set -eu
+umask 077
 
 WORKDIR="${WORKDIR:-/workdir}"
 BACKEND_ENV="${WORKDIR}/backend/.env"
@@ -155,6 +156,7 @@ rebuild_backend_env() {
         printf '\n'
         cat "$tmp_env"
     } > "$BACKEND_ENV"
+    chmod 0600 "$BACKEND_ENV"
 
     rm -f "$tmp_env"
 }

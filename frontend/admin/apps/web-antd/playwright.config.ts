@@ -31,9 +31,9 @@ const config: PlaywrightTestConfig = {
   },
   webServer: {
     command:
-      'VITE_E2E=true VITE_NITRO_MOCK=false pnpm dev --host 127.0.0.1 --port 5666',
+      'VITE_E2E=true VITE_NITRO_MOCK=false VITE_GLOB_API_URL=/admin/api MALLBASE_E2E_BACKEND_ORIGIN=${MALLBASE_E2E_BACKEND_ORIGIN:-http://127.0.0.1:8080} pnpm dev --host 127.0.0.1 --port 5666',
     port: 5666,
-    reuseExistingServer: true,
+    reuseExistingServer: false,
   },
   workers: 1,
 };

@@ -1,63 +1,41 @@
 ---
 name: mall-base-boundary
-description: MallBase ThinkPHP 框架边界规则；涉及 mall_base 底层、业务服务放置或跨层职责判断时使用。
+description: MallBase ThinkPHP 框架边界规则；新增或修改 backend/mall_base 基类、驱动、日志、队列、框架服务，判断业务服务放置位置或扩展 DriverManager 驱动时使用。
 ---
 
-# ThinkPHP 规则：mall_base 框架边界
+# `backend/mall_base` 边界
 
-## 适用范围
+`backend/mall_base/` 放跨业务域可复用的框架基础设施；依赖具体业务表、状态机、场景配置或后台规则的逻辑放在 `backend/app/`。
 
-涉及 `backend/mall_base/` 目录的任何新增或修改。
+## 目录判断
 
-## 定位
+| 内容 | 位置 |
+|---|---|
+| Controller、领域 Service、Model、业务事件 | `backend/app/` |
+| 通用基类 | `backend/mall_base/base/` |
+| 第三方供应商驱动及驱动管理 | `backend/mall_base/drivers/` |
+| 通用日志、队列、框架异常 | `backend/mall_base/{log,queue,exception}/` |
+| 与具体用户、订单、商品、设置表有关的服务 | `backend/app/service/` |
 
-`mall_base/` 是项目的**框架底层**，提供通用基础设施，不包含任何业务逻辑。  
-业务逻辑统一放在 `backend/app/` 层。
+不要仅因一个类“可能复用”就下沉到 `mall_base`。若它需要读取 `mb_*` 业务表、识别业务状态或组织业务流程，默认属于 `backend/app/`。
 
-## 目录职责
+## 驱动扩展
 
-| 目录 | 定位 | 允许放什么 | 禁止放什么 |
-|------|------|-----------|-----------|
-| `mall_base/base/` | 基类 | BaseDriver、BaseModel、BaseException 等抽象基类 | 业务服务、具体实现 |
-| `mall_base/drivers/` | 驱动 | 通过 DriverManager 管理的驱动实现（SMS、Upload 等） | 业务编排、频控、缓存策略 |
-| `mall_base/exception/` | 异常 | 统一异常类（BusinessException、SmsException 等） | 业务逻辑 |
-| `mall_base/enum/` | 枚举 | 框架级枚举与常量 | 业务场景枚举 |
-
-## 业务逻辑归属
-
-| 组件类型 | 正确位置 | 示例 |
-|----------|---------|------|
-| 业务服务 | `app/service/` | SmsService、UploadService |
-| 业务编排 | `app/service/client/` 或 `app/service/admin/` | SmsAuthService、UserService |
-| 频控/缓存策略 | `app/service/<domain>/` | SmsRateLimiter、SmsCache |
-| 控制器 | `app/controller/` | UserController |
-| 场景常量 | `app/service/<domain>/` 或 `app/enum/` | SmsScene |
-
-## 驱动开发规范
-
-新增驱动时遵循 Upload 驱动的已有模式：
-
-1. 在 `mall_base/drivers/<type>/` 下新建 `Base<Type>Driver`（继承 BaseDriver）和具体驱动类。
-2. 在 `app/AppService.php` 的 `register()` 中注册驱动并设置默认值。
-3. 在 `app/provider.php` 中通过 `DriverManager::driver()` 获取实例注入业务服务。
-4. 驱动只负责底层调用（SDK、API），返回 `bool` + `getError()`，不做业务判断。
-5. 业务服务（在 `app/service/`）负责编排逻辑、频控、缓存、异常转换。
+1. 在 `backend/mall_base/drivers/<type>/` 复用现有 `Base<Type>Driver` 和具体实现结构。
+2. 在 `backend/app/AppService.php` 注册可用驱动和启动默认值。
+3. 让驱动只封装供应商协议、SDK 和底层请求；把驱动选择、场景绑定、频控、缓存和异常转换留给 `backend/app/service/`。
+4. 按当前调用场景选择 `DriverManager::create()` 或 `driver()`；不要把带请求配置或可变上下文的驱动无条件缓存到常驻进程。
+5. 只有确有容器替换或构造依赖时才在 `backend/app/provider.php` 增加绑定。
 
 ## 禁止项
 
-- ❌ 在 `mall_base/` 下新建业务模块目录（如 ~~`mall_base/sms/`~~、~~`mall_base/order/`~~）。
-- ❌ 在 `mall_base/` 中编写业务编排、频控策略、缓存策略等业务逻辑。
-- ❌ 绕过 DriverManager 自行在 `mall_base/` 中定义 Adapter/Interface 做驱动选择。
-- ❌ 把异常类散放在业务目录，不归入 `mall_base/exception/`。
+- 不在 `backend/mall_base/` 新建订单、商品、会员等业务模块。
+- 不把业务 Service、状态机、频控或设置表读取放入驱动。
+- 不绕开现有 `DriverManager` 再造一套并行驱动注册机制。
+- 不为移动目录而大范围重构现有框架基础设施。
 
-## 自检清单
+## 自检
 
-- [ ] 新增的类是否属于框架基础设施？不是则放 `app/`。
-- [ ] 新增的驱动是否在 AppService 中注册？
-- [ ] 异常类是否放在 `mall_base/exception/` 下？
-- [ ] 驱动类是否只做底层调用，不含业务判断？
-- [ ] 业务服务是否在 `app/service/` 下？
-
-## 事故参考
-
-SMS 子系统曾在 `mall_base/sms/` 下放置了 SmsService、SmsRateLimiter、SmsAdapter 等业务组件，同时与 `mall_base/drivers/sms/` 的已有驱动形成重复架构。此 skill 确保不再出现类似的分层混乱。
+- [ ] 新类是否真正跨领域且不依赖业务数据。
+- [ ] 驱动是否只处理供应商能力，业务策略仍在 `backend/app/`。
+- [ ] 注册位置和实例生命周期与 Swoole 常驻进程兼容。

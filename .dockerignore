@@ -11,7 +11,24 @@ test
 backend/vendor
 backend/runtime
 backend/.env
+backend/.env.*
 backend/install/install.lock
+backend/storage/cert
+backend/public/storage
+backend/public/uploads
+/data/
+
+# Host-only Agent state and deployment credentials never enter a Docker build
+# context.
+upgrade
+.env
+.env.*
+**/*.key
+**/*.pem
+**/*.p12
+**/*.pfx
+**/*.jks
+**/*.keystore
 
 # Frontend
 frontend/admin/node_modules

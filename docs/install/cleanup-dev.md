@@ -14,7 +14,7 @@
 |------|------|----------|--------------|
 | 基础清理 | `sh deploy/docker/cleanup-dev.sh` 或 `--basic` | 安装锁、`.env`、`backend/.env`、演示静态文件 | 方式一、方式二、方式三、本地构建后的方式四 |
 | 前端清理 | `sh deploy/docker/cleanup-dev.sh --frontend` | 基础清理 + Admin / UniApp 依赖、构建产物和发布产物 | 方式一、方式二、方式三、本地构建后的方式四 |
-| Docker 状态清理 | `sh deploy/docker/cleanup-dev.sh --docker` | 前端清理 + 开发容器、网络、卷、`data/`、`backend/vendor` | 方式二、方式三 |
+| Docker 状态清理 | `sh deploy/docker/cleanup-dev.sh --docker` | 前端清理 + 开发容器、网络、卷、`data/mysql`、`data/redis`、`backend/vendor` | 方式二、方式三 |
 | 项目镜像清理 | `sh deploy/docker/cleanup-dev.sh --images` | Docker 状态清理 + `mallbase-backend:dev` | 方式二、方式三 |
 
 `--all-images` 是额外清理档，包含 `--images`，并删除 MySQL、Redis、Node、Alpine 等共享基础镜像。它可能影响本机其他项目，不确定时不要使用。
@@ -82,8 +82,11 @@ sh deploy/docker/cleanup-dev.sh --docker
 - `docker-compose.frontend-build.yml` 创建的前端打包容器和卷
 - `docker-compose.uniapp-build.yml` 创建的 UniApp 打包容器和卷
 - 可能残留的开发容器
-- `data/`
+- `data/mysql`
+- `data/redis`
 - `backend/vendor`
+
+`data/backend` 保存生产后端环境配置、证书和业务素材，清理脚本不会删除该目录。
 
 适用场景：
 
@@ -127,7 +130,7 @@ sh deploy/docker/cleanup-dev.sh --all-images
 |----------|--------------|------|
 | 方式一：手动安装（无 Docker） | `--basic`、`--frontend` | 不涉及 Docker 容器；数据库和 Redis 需要按实际部署单独处理 |
 | 方式二：Docker 开发（仅后端） | `--basic`、`--frontend`、`--docker`、`--images` | `--docker` 会删除后端开发容器和本地生成文件，不会清理外部 MySQL / Redis |
-| 方式三：Docker 开发（全套） | 四个等级都适用 | `--docker` 会删除本地 `data/`，相当于清空开发 MySQL / Redis 数据 |
+| 方式三：Docker 开发（全套） | 四个等级都适用 | `--docker` 会删除本地 `data/mysql` 和 `data/redis`，相当于清空开发 MySQL / Redis 数据 |
 | 方式四：Docker 生产 | 本地构建机可用 `--basic`、`--frontend` | 生产服务器上的容器、卷和数据不要用本脚本清理，需按部署方案单独确认 |
 
 ## 查看帮助

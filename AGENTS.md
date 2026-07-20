@@ -10,65 +10,32 @@
 
 ## 2. 当前项目私有 skills（主入口）
 
-`/Users/gosowong/code/OpenSource/mall-base/.codex/skills`
+项目 Skill 位于 `.codex/skills/`，按 `thinkPHP`、`vbenAdmin`、`uniapp`
+和通用治理规则分组。具体 Skill 以目录中的 `SKILL.md` 及其 frontmatter
+为准，本文件不再维护逐文件清单，避免新增、合并后出现多份索引漂移。
 
-### 2.1 ThinkPHP
-
-- `thinkPHP/architecture-layering`
-- `thinkPHP/service-stateless-swoole`
-- `thinkPHP/validate-then-transact`
-- `thinkPHP/list-query-sync`
-- `thinkPHP/list-return-compact`
-- `thinkPHP/route-permission-system`
-- `thinkPHP/ide-generic-annotation`
-- `thinkPHP/goods-image-main-sync`
-- `thinkPHP/goods-media-contract`
-- `thinkPHP/backend-test-baseline`
-- `thinkPHP/dev-schema-upgrade-sql`
-- `thinkPHP/wechat-pay-stateless`
-- `thinkPHP/payment-notify-idempotency`
-
-### 2.2 Vben Admin
-
-- `vbenAdmin/backend-driven-routing`
-- `vbenAdmin/upload-component-first`
-- `vbenAdmin/iconpicker-standard`
-- `vbenAdmin/modal-form-layout`
-- `vbenAdmin/admin-theme-consistency`
-- `vbenAdmin/api-path-param`
-- `vbenAdmin/upload-field-normalize`
-- `vbenAdmin/e2e-webantd-realapi`
-- `vbenAdmin/goods-spec-toggle-state`
-
-### 2.3 UniApp（预留）
-
-- `uniapp/api-contract`
-- `uniapp/auth-token-flow`
-- `uniapp/module-structure`
-
-### 2.4 通用
-
-- `extension-slots`
-- `docs-linking`
-- `open-source-wording`
-- `preview-branch-boundary`
+- 能确定任务场景时，直接读取对应 Skill。
+- 无法确定后端规则时，可使用 `thinkPHP/SKILL.md` 做场景导航。
+- Skill 目录约定与合并原则见 `.codex/skills/README.md`。
 
 ## 3. 执行约束（硬规则）
 
 1. 后端严格三层：`Controller -> Service -> Model`
 2. Swoole 下 Service 必须无状态
-3. 事务遵循“先校验再事务”
-4. 分页查询 `list/total` 条件同源，返回 `compact('total', 'list')`
-5. 后台路由遵循 `System*` 命名、`/:id` 路径参数与权限字段规范
+3. 可前置的业务校验先于事务；依赖行锁或并发状态的校验必须留在事务内
+4. 分页查询 `list/total` 条件同源；纯 `{total, list}` 契约返回 `compact('total', 'list')`
+5. 后台路由与权限元数据遵循项目约定，前端 API 参数严格匹配真实后端定义
 6. 前端优先复用 Upload/IconPicker，路由后端驱动，API 参数与后端一致
-7. 开源仓库中的提交、文档、注释、备注、提示文案禁止使用带标签化、轻视性、冒犯性或不适合公开传播的词汇
+7. 开源仓库中的提交、文档、注释、备注、提示文案保持中性、专业、包容；描述功能和场景，不给用户贴标签，不使用带轻视性、冒犯性或不适合公开传播的词汇
 8. `preview` 是公开演示站部署分支，演示站专用能力禁止反向合并回 `main`
 
 ## 4. 维护策略
 
-- 新增规则：在 `.codex/skills/<stack>/<rule-name>/SKILL.md` 增加
-- 修改规则：优先修改 skill，不直接扩写本文件
-- 本文件作用：索引、执行入口、硬约束摘要
+- 新增规则前先判断能否并入同一工作流的现有 Skill，避免按单条规则继续拆碎。
+- 新增规则：在 `.codex/skills/<stack>/<rule-name>/SKILL.md` 增加。
+- 修改规则：优先修改 Skill，不在 `AGENTS.md`、`CLAUDE.md`、README 中复制正文。
+- 纯导航 Skill 只有在提供独立决策价值时才保留；普通文件清单由目录结构表达。
+- 本文件只保留执行入口、常驻硬约束、Git、团队和测试规则。
 
 ## 5. Git 提交策略（默认行为）
 
@@ -81,14 +48,14 @@
 - 只有用户明确要求“提交 / commit / push / 发版 / 提交到远端”时，才执行对应 Git 操作。
 - 日常修复 bug、临时排查、文档调整、实验性修改，默认只保留工作区改动，不自动提交。
 - `git commit` 提交信息必须使用中文（包含 `type(scope):` 前缀时，冒号后说明也必须中文）。
-- `git commit`、文档标题、脚本输出、变更备注等公开文本，必须遵循 `open-source-wording` 规范，避免出现如“`小白`”“`傻瓜式`”“`无脑`”等标签化或不专业词汇。
+- `git commit`、文档标题、脚本输出、变更备注等公开文本必须保持中性、专业，避免出现如“`小白`”“`傻瓜式`”“`无脑`”等标签化或不专业词汇。
 - 禁止把多个无关功能点混在同一个提交里。
 - 若用户明确要求“批量执行/一次性处理”，按用户要求合并为一个提交或按指定粒度拆分提交。
 - 若用户只要求提交、但未指定粒度，默认按当前已完成且相互相关的改动整理提交，不自动把无关改动一并提交。
 
-## 6. 智能团队指令（唯一执行入口）
+## 6. 智能团队指令（团队模式的唯一执行入口）
 
-当前项目只有一套可执行团队入口：`t1-t6`。  
+本节仅约束团队模式。普通问答、文档说明、轻量排查和单文件查看按普通任务处理；需要团队协作时，唯一可执行入口是 `t1-t6`。
 `code-reviewer`、`tdd-guide`、`security-review`、`build-fix`、`e2e-check` 仅作为团队内部职责阶段，不是新的独立命令入口。
 
 ### 6.1 团队短命令（固定）
@@ -143,7 +110,8 @@
 
 ### 6.5 默认执行规则
 
-- 未指定命令时，默认按 `t1` 执行。
+- 未指定命令时，按 6.4 场景矩阵判断：普通任务不启用团队模式；开发、修复、改造按对应 `t*` 执行；场景模糊但确定需要开发时默认 `t1`。
+- 命中 9.2 高风险操作时，强制使用对应团队，不得降级为普通任务。
 - 所有 `t` 开头命令（`t1/t2/t3/t4/t5/t6` 及后续新增 `t*`）均为**强制多 agent 模式**，禁止单 agent 直接完成。
 - `t1` 最少并行 2 个 agent（程序员 + 测试）。
 - `t2` 最少并行 3 个 agent（程序员 + 测试 + 运维）。
@@ -231,43 +199,19 @@
 
 ## 10. 团队职责到 skills 的映射
 
-- 架构检查：
-  - `thinkPHP/architecture-layering`
-  - `thinkPHP/service-stateless-swoole`
-- 事务与数据一致性：
-  - `thinkPHP/validate-then-transact`
-- 列表与分页规范：
-  - `thinkPHP/list-query-sync`
-  - `thinkPHP/list-return-compact`
-- 后台路由与权限：
-  - `thinkPHP/route-permission-system`
-- 控制器/服务 IDE 规范：
-  - `thinkPHP/ide-generic-annotation`
-- 商品图片与媒体规则：
-  - `thinkPHP/goods-image-main-sync`
-  - `thinkPHP/goods-media-contract`
-- 支付链路（出账 / 回调）：
-  - `thinkPHP/wechat-pay-stateless`
-  - `thinkPHP/payment-notify-idempotency`
-- 后端测试基线：
-  - `thinkPHP/backend-test-baseline`
-- 数据库 seed 与升级策略：
-  - `thinkPHP/dev-schema-upgrade-sql`
-- 后台 UI 与表单规范：
-  - `vbenAdmin/modal-form-layout`
-  - `vbenAdmin/admin-theme-consistency`
-  - `vbenAdmin/upload-component-first`
-  - `vbenAdmin/iconpicker-standard`
-- 后端驱动路由与 API 约束：
-  - `vbenAdmin/backend-driven-routing`
-  - `vbenAdmin/api-path-param`
-  - `vbenAdmin/upload-field-normalize`
-- 前端 E2E：
-  - `vbenAdmin/e2e-webantd-realapi`
+- 架构、Swoole 与 IDE 类型：`thinkPHP/architecture-layering`
+- 事务与并发一致性：`thinkPHP/validate-then-transact`
+- 列表查询、导出与分页返回：`thinkPHP/list-query-sync`
+- 后台路由与权限：`thinkPHP/route-permission-system`
+- 商品媒体：`thinkPHP/goods-media-contract`
+- 数据库真相源与升级边界：`thinkPHP/dev-schema-upgrade-sql`
+- 支付构造与回调：`thinkPHP/wechat-pay-stateless`、`thinkPHP/payment-notify-idempotency`
+- 后台 UI、上传、路由 API 与验证：读取 `vbenAdmin/` 下对应场景 Skill
+- UniApp 请求、认证与模块结构：`uniapp/SKILL.md`
 
-## 11. 团队默认测试流程（开发测试一体化）
+## 11. 默认测试流程（开发测试一体化）
 
-所有 `t*` 团队任务，除非用户明确跳过测试，否则默认按以下流程执行并在结论中汇报：
+以下基线适用于所有行为改动；`t*` 团队任务除非用户明确跳过测试，必须执行适用项并在结论中汇报：
 
 1. 后端改动：
    - 先确认依赖：`composer install --working-dir backend`（仅首次或依赖变更时）
@@ -275,8 +219,9 @@
 2. 前端 `web-antd` 改动：
    - 先确认浏览器：`pnpm --dir frontend/admin run test:e2e:install`（首次）
    - 执行：`pnpm --dir frontend/admin run test:e2e`
-3. 纯文档/纯配置且无行为变化：
-   - 可降级为抽样测试，但必须在汇报中写清“未全量执行”的理由。
+3. 纯文档、Skill 或无行为变化的配置：
+   - 执行链接、路径、引用、格式或配置解析等针对性检查。
+   - 可不执行全量业务测试，但必须说明原因。
 4. 测试角色输出要求：
-   - 必须给出“已执行命令 + 结果 + 失败定位（如有）”。
+   - 必须给出“已执行命令 + 结果 + 首个失败定位（如有）+ 剩余风险”。
    - 不允许只写“已测试通过”。

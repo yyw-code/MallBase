@@ -14,12 +14,7 @@
 
 主题策略当前会优先读写 `mb_setting` 中的 `client_theme_*` 配置项，`mb_client_theme_policy` 主要作为历史兼容来源。
 
-相关升级 SQL：
-
-- `backend/install/data/upgrade/2026_06_03_client_diy.sql`
-- `backend/install/data/upgrade/2026_06_26_client_config_settings.sql`
-- `backend/install/data/upgrade/2026_06_26_client_theme_setting.sql`
-- `backend/install/data/upgrade/2026_07_05_client_decoration_system_assets.sql`
+数据库结构和初始数据以 `backend/install/data/schema/` 为唯一真相源。当前阶段不维护模块级增量 SQL 列表；需要同步数据库结构时，请使用当前版本重新部署，并按安装流程基于 schema 初始化数据库。
 
 ## 后端入口
 

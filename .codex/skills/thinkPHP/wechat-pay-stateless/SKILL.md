@@ -1,85 +1,52 @@
 ---
 name: wechat-pay-stateless
-description: MallBase 微信支付 SDK 在 Swoole 常驻进程下的无状态构造规则；接入或重构微信支付 / 公众号 / 小程序 SDK 调用时使用。
+description: MallBase EasyWeChat 6.x 支付 SDK 无状态构造规则；修改 WechatPayFactory、WechatPayClient、支付/退款 Adapter、商户证书、平台公钥、AppID 场景选择，或排查 Swoole 下签名与凭据复用问题时使用。
 ---
 
-# ThinkPHP 规则：微信支付 SDK 无状态（Swoole）
+# EasyWeChat 支付无状态构造
 
-## 适用范围
+## 实例生命周期
 
-- `backend/app/service/client/payment/WechatPayFactory.php`
-- `backend/app/service/client/payment/WechatPayClient.php`
-- 任何 `new EasyWeChat\Pay\Application(...)` 或同类 SDK 实例化点
+1. 每次支付、退款、查单或回调处理通过 `WechatPayFactory::build()` 获取新的 `EasyWeChat\Pay\Application`。
+2. 不把 Application、Validator、Server、HTTP Client 或签名上下文缓存到属性、`static` 或容器单例。
+3. `WechatPayClient` 继续接收 Application 参数并做薄包装，不在内部持有 SDK 实例。
+4. 允许 Factory/Client 作为无请求态的只读依赖被注入；请求态只存在于方法局部变量。
 
-属于 `service-stateless-swoole` 的子规则，针对支付 SDK 特殊点单独沉淀。
+## 当前 Factory 契约
 
-## 强制规则
+`WechatPayFactory::build()` 每次从 `mb_setting` 读取：
 
-1. Factory 每次调用返回**新实例**：
-   - 禁止把 `Pay\Application` 缓存到类属性、static、容器单例
-   - 禁止把已构造的 SDK Application 跨请求/跨协程复用
-   - EasyWeChat 内部的 HTTP Client、签名上下文、解密缓存均为请求级状态，复用会串数据
+- `pay_wechat_mchid`
+- `pay_wechat_api_v3_key`
+- `pay_wechat_cert_serial_no`
+- `pay_wechat_private_key`
+- `pay_wechat_merchant_cert`
+- `pay_wechat_platform_public_key`
+- `pay_wechat_platform_public_key_id`
 
-2. 配置必须**每次重新读取**：
-   - `mchid / api_v3_key / cert_serial_no / private_key 路径 / platform_public_key 路径 / platform_public_key_id` 全部通过 `getSystemSetting()` 读取
-   - 不读 `.env`、不读 `config/wechat.php`
-   - 后台改完即时生效，不依赖重启
+EasyWeChat 6.x V3 构造参数保持当前含义：
 
-3. AppID 按 scene 切换，**Factory 不缓存 scene**：
-   - scene=mini → `wechat_mini_appid`
-   - scene=offi → `wechat_offi_appid`
-   - scene=h5  → 不需要 appid，但需 `payer_client_ip`
-   - 任一渠道凭据缺失立即抛 `BusinessException`，不让 SDK 用空字符串发请求
+- `private_key` 指向商户 API 私钥。
+- `certificate` 指向商户 API 证书 `apiclient_cert.pem`，不是平台公钥。
+- `platform_certs` 使用 `[$platformPublicKeyId => $platformPublicKeyPath]` 关联数组。
+- `public_key_id` 使用平台公钥 ID。
 
-4. 证书文件读取规则：
-   - 路径必须落在 `backend/storage/cert/`，权限 0600
-   - 读到的证书内容用 readonly DTO 在**请求生命周期内**传递
-   - 禁止用 `static` 缓存证书内容，避免凭据轮换后旧 worker 仍持有旧证书
+不要把平台公钥以普通证书列表传入；SDK 会按 X.509 证书解析并导致构造失败。配置路径可以是后端根目录下的相对路径或现有受控绝对路径，必须是可读文件；证书上传仍应使用私有的 cert 存储模块，不放入公开静态目录。
 
-5. 凭据校验前置：
-   - Factory 构造前先 `assertCredentials()`，缺一项即抛业务异常
-   - 错误信息引导到「后台 → 设置 → 支付配置」，不暴露字段细节
+## 场景 AppID
 
-## 范式
+SDK 构造与场景 AppID 分开：
 
-参考 `backend/app/service/client/WechatAppFactory.php`，等价模式：
+- 小程序：`appIdOf(PayScene::MINI)` 读取 `wechat_mini_appid`。
+- 公众号：`appIdOf(PayScene::OFFI)` 读取 `wechat_offi_appid`。
+- 外部浏览器 H5：不走 `appIdOf(PayScene::H5)`；`WechatH5Adapter` 仍必须向 MWEB 下单参数传入商户号关联的 AppID，当前优先读取 `wechat_mini_appid`，为空时回退 `wechat_offi_appid`，并同时校验客户端 IP。
 
-```php
-class WechatPayFactory
-{
-    public function jsapi(int $scene): Application
-    {
-        $config = $this->loadConfig($scene); // 每次读 mb_setting
-        $this->assertCredentials($config);
-        return new Application($config);     // 每次 new
-    }
-}
-```
+缺少凭据或文件不可读时抛 `BusinessException`，不要用空值继续请求微信。健康检查沿用 `WechatPayFactory::diagnose()`，不要另造一套配置来源。
 
-## 禁止项
+## 自检
 
-- ❌ `private static ?Application $app = null;`
-- ❌ `bind(Application::class, fn() => new Application(...))`（容器单例）
-- ❌ 在 Factory 构造函数里加载证书
-- ❌ 跨方法复用同一个 `Application` 实例
-
-## 自检清单
-
-- [ ] Factory 类无 SDK 实例属性
-- [ ] Factory 类无 `static` 缓存
-- [ ] 证书读取在请求生命周期内完成且不写类静态
-- [ ] AppID 按 scene 动态选择，无硬编码
-- [ ] 缺凭据时抛 `BusinessException`，不传空字符串给 SDK
-
-## When to Use
-
-在以下场景触发此模式：
-- 编写或修改任何支付 SDK Factory / Client
-- 新增支付渠道（支付宝、银联）的 Factory
-- 排查 Swoole 下「第一次请求正常、后续请求签名错」类问题
-
-## Related
-
-- `.codex/skills/thinkPHP/service-stateless-swoole/SKILL.md` — 上位通用规则
-- `backend/app/service/client/WechatAppFactory.php` — 范式参考
-- `.codex/skills/thinkPHP/payment-notify-idempotency/SKILL.md` — 支付回调幂等姊妹规则
+- [ ] 每次操作创建新的 Application。
+- [ ] Factory 没有 SDK 或请求态缓存。
+- [ ] 商户证书与平台公钥没有互换。
+- [ ] `platform_certs` 是以公钥 ID 为 key 的关联数组。
+- [ ] AppID 按支付场景读取，H5 使用当前 Adapter 约定的可用 AppID 和客户端 IP。

@@ -1,48 +1,41 @@
 ---
 name: goods-sku-unified-sales-unit
-description: MallBase ThinkPHP 商品统一售卖单元规则；处理商品 SKU、规格、价格、库存或销售单元逻辑时使用。
+description: MallBase ThinkPHP 商品统一售卖单元规则；处理 spec_type、spec_meta、单规格默认 SKU、多规格组合 SKU、价格库存汇总、SKU 图片、订单销售单元或商品规格兼容时使用。
 ---
 
-# ThinkPHP 规则：商品统一售卖单元必须落 SKU
+# 商品统一售卖单元
 
-## 适用范围
+## 正式契约
 
-- 商品模块：`backend/app/admin/controller/goods/**`
-- 商品模块：`backend/app/admin/service/goods/**`
-- 商品模块：`backend/app/admin/model/goods/**`
-- 商品编辑页：`frontend/admin/apps/web-antd/src/views/goods/goods/**`
+1. 单规格和多规格商品都以 `mb_goods_sku` 作为售卖单元。
+2. `mb_goods.spec_type` 的正式语义是 `1 = 单规格`、`2 = 多规格`；新增或修改调用方应显式提交该字段。
+3. `spec_meta` 只服务规格设计器回显，不替代 SKU，也不应成为新代码判断规格类型的真相源。
+4. `mb_goods.price`、`market_price`、`stock` 是从 SKU 汇总的商品级展示值，不是绕过 SKU 的独立库存来源。
 
-## 强制规则
+当前 `GoodsService::normalizeSpecType()` 仍会对缺失 `spec_type` 的旧输入按 `spec_meta`/SKU 形态归一化。把它视为已有输入兼容边界，不要在新模块继续复制推断逻辑。
 
-1. 商品底层售卖单元统一为 SKU，单规格和多规格都必须落 `mb_goods_sku`。
-2. `mb_goods` 只作为商品主表和汇总表，不再作为“单规格唯一库存真相来源”。
-3. `mb_goods.spec_type` 是正式字段，固定语义：
-   - `1 = 单规格`
-   - `2 = 多规格`
-4. 禁止再通过 `skus.length`、`spec_meta` 是否为空推断商品规格形态。
-5. 单规格商品必须生成 1 条默认 SKU，固定规则：
-   - `spec_values = ''`
-   - `spec_meta = []`
-   - `price/market_price/stock/image/status` 与商品主表保持同步
-6. 多规格商品继续使用组合 SKU，`spec_meta` 只用于规格设计器回显，不替代 SKU。
+## 单规格
 
-## 推荐做法
+保存单规格商品时生成且只保留一条默认 SKU：
 
-1. 前端提交时始终带 `spec_type`。
-2. 后端保存前先按 `spec_type` 归一化 `spec_meta` 和 `skus`。
-3. 读取详情和列表时直接返回 `spec_type`，前端不要猜测。
-4. 历史数据迁移时，先补 `spec_type`，再为单规格商品补默认 SKU。
+- `spec_values = ''`
+- 价格、市场价、库存来自商品表单输入
+- 图片使用归一化后的 `main_image` 素材 ID
+- 状态与商品状态保持一致
 
-## 反例
+保存完成后，以该 SKU 回写商品级价格和库存汇总。
 
-- 单规格只存 `mb_goods.price/stock`，不落 SKU
-- 用 `detail.skus.length > 0` 判断多规格
-- 用 `spec_meta` 是否为空判断单规格
+## 多规格
 
-## 自检清单
+1. 按组合 SKU 保存 `spec_values`、价格、库存、图片和状态。
+2. 商品价格取可用 SKU 汇总逻辑的最低值，库存取 SKU 合计；沿用 `GoodsService::updatePriceAndStock()`，不要在旁路重写口径。
+3. 订单、购物车、权益和库存的新逻辑应携带明确 SKU，不用“第一条 SKU”代替用户选择。
+4. 切换规格类型时通过现有归一化链路清理不适用的 `spec_meta`、SKU 和独立详情状态。
 
-- [ ] `mb_goods` 已存在正式字段 `spec_type`
-- [ ] 单规格商品保存后存在 1 条默认 SKU
-- [ ] 多规格商品保存后保持组合 SKU
-- [ ] 编辑页以 `spec_type` 判断规格形态
-- [ ] 订单/客户端后续可统一按 SKU 建模
+## 自检
+
+- [ ] 单规格保存后存在一条默认 SKU。
+- [ ] 多规格没有被首条 SKU 或 `spec_meta` 冒充售卖单元。
+- [ ] 商品级价格与库存由 SKU 汇总。
+- [ ] 新接口直接读取和提交 `spec_type`。
+- [ ] 回归覆盖 `backend/tests/Feature/Goods/GoodsSingleSpecDefaultSkuApiTest.php`。

@@ -79,6 +79,7 @@ class CustomerServiceContextService extends BaseService
     {
         $settings = $this->customerServiceSettings();
         return $settings->clientMode() === 'system'
+            && $settings->contextKeyId() !== ''
             && $settings->contextSecret() !== ''
             && $settings->widgetUrl() !== '';
     }

@@ -29,6 +29,7 @@ class CustomerServiceSignature
         if ($secret === '') {
             throw new BusinessException('客服连接器密钥未配置', 503);
         }
+        $this->assertConnectorSecret($secret);
 
         $this->assertIpAllowed($request, $settings);
 
@@ -61,7 +62,7 @@ class CustomerServiceSignature
             throw new BusinessException('客服连接器身份头摘要不匹配', 401);
         }
 
-        $path = '/' . trim($request->pathinfo(), '/');
+        $path = $this->canonicalRequestPath($request);
         $canonicalParts = [
             strtoupper($request->method()),
             $path,
@@ -108,6 +109,25 @@ class CustomerServiceSignature
         }
 
         return trim((string) $value);
+    }
+
+    private function canonicalRequestPath(Request $request): string
+    {
+        $rawUrl = $request->url(false);
+        $path = parse_url($rawUrl, PHP_URL_PATH);
+        if (!is_string($path) || $path === '' || !str_starts_with($path, '/')) {
+            throw new BusinessException('客服连接器请求路径无效', 401);
+        }
+
+        $query = parse_url($rawUrl, PHP_URL_QUERY);
+        return is_string($query) && $query !== '' ? $path . '?' . $query : $path;
+    }
+
+    private function assertConnectorSecret(string $secret): void
+    {
+        if (strlen($secret) < 32) {
+            throw new BusinessException('客服连接器密钥长度不足', 503);
+        }
     }
 
     private function signedHeadersHash(Request $request): string

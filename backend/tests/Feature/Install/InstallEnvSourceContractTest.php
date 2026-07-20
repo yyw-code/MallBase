@@ -8,14 +8,15 @@ use PHPUnit\Framework\TestCase;
 
 final class InstallEnvSourceContractTest extends TestCase
 {
-    public function testDockerBackendOnlyUsesRootEnvAsManualSource(): void
+    public function testDockerBackendUsesRootEnvFileWithoutWorkspaceAlias(): void
     {
         $root = dirname(__DIR__, 4);
         $compose = (string) file_get_contents($root . '/docker-compose.dev.yml');
         $entrypoint = (string) file_get_contents($root . '/deploy/docker/docker-entrypoint.sh');
         $docs = (string) file_get_contents($root . '/docs/install/docker-backend-only.md');
 
-        $this->assertStringContainsString('- .:/workspace:ro', $compose);
+        $this->assertStringNotContainsString('- .:/workspace:ro', $compose);
+        $this->assertGreaterThanOrEqual(2, substr_count($compose, "env_file:\n      - .env"));
         $this->assertStringContainsString('"${REDIS_HOST_PORT:-6379}:6379"', $compose);
         $this->assertStringNotContainsString('"${REDIS_PORT:-6379}:6379"', $compose);
         $this->assertStringContainsString('ROOT_ENV="/workspace/.env"', $entrypoint);
@@ -54,7 +55,7 @@ final class InstallEnvSourceContractTest extends TestCase
         $entrypoint = (string) file_get_contents($root . '/deploy/docker/docker-entrypoint.sh');
         $docs = (string) file_get_contents($root . '/docs/install/docker-production.md');
 
-        $this->assertStringContainsString("env_file:\n      - .env", $compose);
+        $this->assertMatchesRegularExpression('/env_file:\s+- \.env/s', $compose);
         $this->assertStringNotContainsString('/workspace', $compose);
         $this->assertStringNotContainsString('backend/.env', $compose);
         $this->assertStringContainsString('COPY .version /.version', $dockerfile);
@@ -66,7 +67,7 @@ final class InstallEnvSourceContractTest extends TestCase
         $this->assertStringContainsString('安装完成后请把最终生效值同步回项目根目录 `.env`', $docs);
         $this->assertStringContainsString('不要手动复制或编辑 `backend/.env`', $docs);
         $this->assertStringContainsString('生产 compose 不挂载 `/workspace`', $docs);
-        $this->assertStringContainsString('生产单后端容器不启动 MySQL / Redis 容器，所以不需要配置 `MYSQL_PORT` / `REDIS_HOST_PORT`', $docs);
+        $this->assertStringContainsString('生产的三个业务角色不启动 MySQL / Redis 容器，所以不需要配置 `MYSQL_PORT` / `REDIS_HOST_PORT`', $docs);
         $this->assertStringContainsString('`backend_runtime` volume', $docs);
         $this->assertStringContainsString('`backend_uploads` volume', $docs);
     }

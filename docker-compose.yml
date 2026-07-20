@@ -1,33 +1,133 @@
 # ==========================================
-# 生产环境：单后端容器
+# 生产环境：HTTP + Queue + Cron 独立业务角色
 #
-# 配置源：项目根目录 .env；Compose 读取它做变量插值，并通过 env_file 注入容器
-# 容器入口脚本会根据注入的环境变量派生 /app/.env
-# 用法: cp deploy/docker/.example.env .env && 按生产环境修改后 docker compose up -d --build
+# 首次启动或干净检出后：
+#   sh deploy/docker/host-preflight.sh
+#   docker compose up -d --build
+# 升级或回滚修改宿主机源码后：
+#   docker compose up -d --build backend queue cron
+#
+# runtime/uploads 默认使用 mallbase_runtime / mallbase_uploads；需要复用
+# 既有卷时显式配置 MALLBASE_RUNTIME_VOLUME_NAME / MALLBASE_UPLOADS_VOLUME_NAME。
+# 环境配置、证书、演示素材和 public storage 统一位于 data/backend。
 # 需要：外部 MySQL 8.0+ / Redis 6.0+
 # ==========================================
 
 name: ${MALLBASE_COMPOSE_PROJECT_NAME:-mallbase}
 
+x-mallbase-environment: &mallbase-environment
+  TZ: Asia/Shanghai
+  MALLBASE_RUNTIME_MODE: production
+  MALLBASE_BACKEND_ENV_PATH: /app/.mallbase-env/backend.env
+  MALLBASE_UPGRADE_ROOT: /app/upgrade
+
+x-mallbase-runtime: &mallbase-runtime
+  build:
+    context: .
+    dockerfile: deploy/docker/Dockerfile
+  image: ${MALLBASE_BACKEND_IMAGE:-mallbase-backend:latest}
+  pull_policy: never
+  restart: unless-stopped
+  user: "10000:${MALLBASE_UPGRADE_SHARED_GID:-10000}"
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+  env_file:
+    - .env
+  read_only: true
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  tmpfs:
+    - /tmp:rw,nosuid,nodev,noexec,size=64m,mode=1777
+  volumes:
+    - type: volume
+      source: backend_runtime
+      target: /app/runtime
+    - type: volume
+      source: backend_uploads
+      target: /app/public/uploads
+    - type: bind
+      source: ./upgrade/bin
+      target: /app/upgrade/bin
+      read_only: true
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ./upgrade/config
+      target: /app/upgrade/config
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ./upgrade/run
+      target: /app/upgrade/run
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ./upgrade/jobs
+      target: /app/upgrade/jobs
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ./upgrade/backups
+      target: /app/upgrade/backups
+      bind:
+        create_host_path: false
+    # 宿主机持久化的后端业务数据。
+    - type: bind
+      source: ./data/backend/env
+      target: /app/.mallbase-env
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ./data/backend/cert
+      target: /app/storage/cert
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ./data/backend/demo
+      target: /app/public/static/demo
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ./data/backend/public-storage
+      target: /app/public/storage
+      bind:
+        create_host_path: false
+
 services:
   backend:
-    build:
-      context: .
-      dockerfile: deploy/docker/Dockerfile
-    container_name: ${MALLBASE_CONTAINER_PREFIX:-mallbase}
-    restart: unless-stopped
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    env_file:
-      - .env
+    <<: *mallbase-runtime
     ports:
-      - "${SWOOLE_HTTP_PORT:-8080}:${SWOOLE_HTTP_PORT:-8080}"
+      - "127.0.0.1:${SWOOLE_HTTP_PORT:-8080}:${SWOOLE_HTTP_PORT:-8080}"
     environment:
-      TZ: Asia/Shanghai
-    volumes:
-      - backend_runtime:/app/runtime
-      - backend_uploads:/app/public/uploads
+      <<: *mallbase-environment
+      MALLBASE_RUNTIME_ROLE: http
+      CRON_ENABLE: "false"
+      SWOOLE_QUEUE_ENABLE: "false"
+    command: ["php", "think", "swoole"]
+
+  queue:
+    <<: *mallbase-runtime
+    environment:
+      <<: *mallbase-environment
+      MALLBASE_RUNTIME_ROLE: queue
+      CRON_ENABLE: "false"
+      SWOOLE_QUEUE_ENABLE: "false"
+    command: ["php", "think", "queue:work", "redis", "--queue=default", "--tries=3"]
+
+  cron:
+    <<: *mallbase-runtime
+    environment:
+      <<: *mallbase-environment
+      MALLBASE_RUNTIME_ROLE: cron
+      CRON_ENABLE: "true"
+      SWOOLE_QUEUE_ENABLE: "false"
+      SWOOLE_WORKER_NUM: "1"
+    command: ["php", "think", "swoole"]
 
 volumes:
   backend_runtime:
+    name: "${MALLBASE_RUNTIME_VOLUME_NAME:-mallbase_runtime}"
   backend_uploads:
+    name: "${MALLBASE_UPLOADS_VOLUME_NAME:-mallbase_uploads}"

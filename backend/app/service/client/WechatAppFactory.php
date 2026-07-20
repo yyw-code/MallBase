@@ -12,7 +12,7 @@ use mall_base\exception\BusinessException;
  * EasyWeChat Application 工厂
  *
  * 设计要点:
- *  - 每次调用返回一个 **新实例**,严格遵守 thinkPHP/service-stateless-swoole 规范,
+ *  - 每次调用返回一个 **新实例**，遵守 thinkPHP/architecture-layering 的无状态规范。
  *    避免 Swoole 常驻进程下 SDK 内部状态(如 token、http client)跨请求污染
  *  - 配置来源:mb_setting(数据库),通过全局 getSystemSetting() 读取并经 Redis 缓存,
  *    后台改完即时生效;不读 .env / config/wechat.php

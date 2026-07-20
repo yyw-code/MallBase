@@ -66,16 +66,46 @@ services:
     profiles: ["tools"]
     build:
       context: .
-      dockerfile: deploy/docker/Dockerfile
+      dockerfile: deploy/docker/Dockerfile.dev
     image: mallbase-backend:dev
     pull_policy: never
+    user: "${MALLBASE_DEV_UID:-10000}:${MALLBASE_DEV_GID:-10000}"
     container_name: ${MALLBASE_CONTAINER_PREFIX:-mallbase}-install-auto
+    env_file:
+      - .env
     environment:
       TZ: Asia/Shanghai
+      MALLBASE_RUNTIME_MODE: development
+      MALLBASE_UPGRADE_ROOT: /app/upgrade
     volumes:
       - ./backend:/app
-      - .:/workspace:ro
       - ./.version:/.version:ro
+      - type: bind
+        source: ./upgrade/bin
+        target: /app/upgrade/bin
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./upgrade/config
+        target: /app/upgrade/config
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./upgrade/run
+        target: /app/upgrade/run
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./upgrade/jobs
+        target: /app/upgrade/jobs
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./upgrade/backups
+        target: /app/upgrade/backups
+        bind:
+          create_host_path: false
     command: php think install:auto
     restart: "no"
     depends_on:
@@ -89,21 +119,51 @@ services:
   backend:
     build:
       context: .
-      dockerfile: deploy/docker/Dockerfile
+      dockerfile: deploy/docker/Dockerfile.dev
     image: mallbase-backend:dev
     pull_policy: never
+    user: "${MALLBASE_DEV_UID:-10000}:${MALLBASE_DEV_GID:-10000}"
     container_name: ${MALLBASE_CONTAINER_PREFIX:-mallbase}-dev
     restart: unless-stopped
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    env_file:
+      - .env
     ports:
       - "${SWOOLE_HTTP_PORT:-8080}:${SWOOLE_HTTP_PORT:-8080}"
     environment:
       TZ: Asia/Shanghai
+      MALLBASE_RUNTIME_MODE: development
+      MALLBASE_UPGRADE_ROOT: /app/upgrade
     volumes:
       - ./backend:/app
-      - .:/workspace:ro
       - ./.version:/.version:ro
+      - type: bind
+        source: ./upgrade/bin
+        target: /app/upgrade/bin
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./upgrade/config
+        target: /app/upgrade/config
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./upgrade/run
+        target: /app/upgrade/run
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./upgrade/jobs
+        target: /app/upgrade/jobs
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./upgrade/backups
+        target: /app/upgrade/backups
+        bind:
+          create_host_path: false
     depends_on:
       ensure-env:
         condition: service_completed_successfully

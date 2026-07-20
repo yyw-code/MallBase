@@ -88,10 +88,7 @@ class InstallService extends BaseService
      */
     private const DEFAULT_AVATAR_PATH = '/static/admin/logo.png';
 
-    private const PLATFORM_BASE_URL = 'https://platform.gosowong.cn';
-    private const PLATFORM_APP_CODE = 'mallbase';
-    private const PLATFORM_CONNECT_TIMEOUT_MS = 2000;
-    private const PLATFORM_TIMEOUT_MS = 5000;
+    private const APP_CODE = 'mallbase';
 
     protected string $modelClass = BaseModel::class;
 
@@ -159,38 +156,20 @@ class InstallService extends BaseService
 
     public function getInstallAgreement(): array
     {
-        $response = $this->fetchPlatformInstallAgreement();
-        if (($response['success'] ?? false) !== true) {
-            return $this->unavailableInstallAgreement((string) ($response['message'] ?? 'request_failed'));
-        }
-
-        $data = is_array($response['data'] ?? null) ? $response['data'] : [];
-        $enabled = $this->platformBoolean($data['enabled'] ?? true, true);
-        $title = trim((string) ($data['title'] ?? 'MallBase 安装协议')) ?: 'MallBase 安装协议';
-        $content = trim((string) ($data['content'] ?? ''));
-
-        if (!$enabled) {
-            return [
-                'app_code' => self::PLATFORM_APP_CODE,
-                'enabled'  => false,
-                'available' => true,
-                'title'    => $title,
-                'content'  => '',
-                'source'   => 'platform',
-            ];
-        }
-
-        if ($content === '') {
-            return $this->unavailableInstallAgreement('empty_content');
-        }
+        $licensePath = dirname(rtrim((string) root_path(), DIRECTORY_SEPARATOR)) . DIRECTORY_SEPARATOR . 'LICENSE';
+        $license = @file_get_contents($licensePath);
+        $available = is_string($license) && trim($license) !== '';
 
         return [
-            'app_code' => self::PLATFORM_APP_CODE,
+            'app_code' => self::APP_CODE,
             'enabled'  => true,
-            'available' => true,
-            'title'    => $title,
-            'content'  => $content,
-            'source'   => 'platform',
+            'available' => $available,
+            'title'    => 'MallBase 开源许可',
+            'content'  => $available
+                ? '<pre>' . htmlspecialchars($license, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</pre>'
+                : '',
+            'source'   => 'local',
+            'error'    => $available ? '' : 'license_unavailable',
         ];
     }
 
@@ -233,92 +212,6 @@ class InstallService extends BaseService
         $text = strtolower(trim((string) $value));
 
         return in_array($text, ['1', 'true', 'on', 'yes'], true) ? 'true' : 'false';
-    }
-
-    private function unavailableInstallAgreement(string $reason): array
-    {
-        return [
-            'app_code' => self::PLATFORM_APP_CODE,
-            'enabled'  => true,
-            'available' => false,
-            'title'    => 'MallBase 安装协议',
-            'content'  => '',
-            'source'   => 'platform',
-            'error'    => $reason !== '' ? $reason : 'request_failed',
-        ];
-    }
-
-    /**
-     * @return array{success: bool, data?: array<string, mixed>, message?: string}
-     */
-    private function fetchPlatformInstallAgreement(): array
-    {
-        if (!function_exists('curl_init')) {
-            return ['success' => false, 'message' => 'curl_missing'];
-        }
-
-        $url = rtrim(self::PLATFORM_BASE_URL, '/')
-            . '/api/v1/install/agreement?'
-            . http_build_query(['app_code' => self::PLATFORM_APP_CODE]);
-
-        $ch = curl_init($url);
-        if ($ch === false) {
-            return ['success' => false, 'message' => 'curl_init_failed'];
-        }
-
-        curl_setopt_array($ch, [
-            CURLOPT_HTTPGET => true,
-            CURLOPT_HTTPHEADER => ['Accept: application/json'],
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_CONNECTTIMEOUT_MS => self::PLATFORM_CONNECT_TIMEOUT_MS,
-            CURLOPT_TIMEOUT_MS => self::PLATFORM_TIMEOUT_MS,
-        ]);
-
-        $raw = curl_exec($ch);
-        $curlError = curl_error($ch);
-        $status = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
-        curl_close($ch);
-
-        if (!is_string($raw)) {
-            return ['success' => false, 'message' => $curlError !== '' ? $curlError : 'request_failed'];
-        }
-
-        if ($status < 200 || $status >= 300) {
-            return ['success' => false, 'message' => 'http_' . $status];
-        }
-
-        $decoded = json_decode($raw, true);
-        if (!is_array($decoded)) {
-            return ['success' => false, 'message' => 'invalid_json'];
-        }
-
-        if (!is_array($decoded['data'] ?? null)) {
-            return ['success' => false, 'message' => 'invalid_payload'];
-        }
-
-        return ['success' => true, 'data' => $decoded['data']];
-    }
-
-    private function platformBoolean(mixed $value, bool $default): bool
-    {
-        if (is_bool($value)) {
-            return $value;
-        }
-
-        $text = strtolower(trim((string) $value));
-        if ($text === '') {
-            return $default;
-        }
-
-        if (in_array($text, ['1', 'true', 'on', 'yes', 'enabled'], true)) {
-            return true;
-        }
-
-        if (in_array($text, ['0', 'false', 'off', 'no', 'disabled'], true)) {
-            return false;
-        }
-
-        return $default;
     }
 
     public function checkEnvironment(): array
@@ -1248,31 +1141,10 @@ class InstallService extends BaseService
      */
     private function writeEnvFile(array $envData): void
     {
-        $envPath = app()->getRootPath() . '.env';
+        $configuredPath = trim((string) getenv('MALLBASE_BACKEND_ENV_PATH'));
+        $envPath = $configuredPath !== '' ? $configuredPath : app()->getRootPath() . '.env';
         $templatePath = app()->getRootPath() . '.example.env';
-        $baseContent = '';
-
-        if (is_file($envPath)) {
-            $baseContent = (string) file_get_contents($envPath);
-        } elseif (is_file($templatePath)) {
-            $baseContent = (string) file_get_contents($templatePath);
-        }
-
-        if ($baseContent === '') {
-            throw new \RuntimeException('找不到可写入的环境配置模板');
-        }
-
-        foreach ($envData as $key => $value) {
-            $quoted = $this->formatEnvValue($value);
-            $pattern = '/^' . preg_quote($key, '/') . '\s*=.*$/m';
-            if (preg_match($pattern, $baseContent) === 1) {
-                $baseContent = (string) preg_replace($pattern, $key . '=' . $quoted, $baseContent, 1);
-            } else {
-                $baseContent = rtrim($baseContent, "\n") . PHP_EOL . $key . '=' . $quoted . PHP_EOL;
-            }
-        }
-
-        file_put_contents($envPath, $baseContent);
+        (new BackendEnvFileStore())->write($envPath, $templatePath, $envData);
     }
 
     /**
@@ -1297,10 +1169,6 @@ class InstallService extends BaseService
             return;
         }
 
-        $baseContent = is_file($envPath)
-            ? (string) file_get_contents($envPath)
-            : (string) file_get_contents($templatePath);
-
         $rootKeys = [
             'DB_HOST',
             'DB_PORT',
@@ -1318,21 +1186,11 @@ class InstallService extends BaseService
             'SITE_URL',
         ];
 
-        foreach ($rootKeys as $key) {
-            if (!array_key_exists($key, $envData)) {
-                continue;
-            }
-
-            $quoted = $this->formatEnvValue($envData[$key]);
-            $pattern = '/^' . preg_quote($key, '/') . '\s*=.*$/m';
-            if (preg_match($pattern, $baseContent) === 1) {
-                $baseContent = (string) preg_replace($pattern, $key . '=' . $quoted, $baseContent, 1);
-            } else {
-                $baseContent = rtrim($baseContent, "\n") . PHP_EOL . $key . '=' . $quoted . PHP_EOL;
-            }
-        }
-
-        file_put_contents($envPath, $baseContent);
+        (new BackendEnvFileStore())->write(
+            $envPath,
+            $templatePath,
+            array_intersect_key($envData, array_flip($rootKeys)),
+        );
     }
 
     /**
@@ -1754,19 +1612,6 @@ class InstallService extends BaseService
         }
 
         return 'Redis 连接失败：' . $message;
-    }
-
-    private function formatEnvValue(string $value): string
-    {
-        if ($value === '') {
-            return '';
-        }
-
-        if (preg_match('/\s|#|=|,|"|\'/', $value) === 1) {
-            return '"' . addcslashes($value, "\"\\") . '"';
-        }
-
-        return $value;
     }
 
     /**

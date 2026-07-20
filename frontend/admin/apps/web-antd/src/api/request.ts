@@ -16,6 +16,7 @@ import { message } from 'ant-design-vue';
 
 import { useAccessStore } from '#/modules/access';
 import { useAuthStore } from '#/store';
+import { handleMaintenanceResponse } from '#/utils/maintenance-redirect';
 
 import { refreshTokenApi } from './core';
 
@@ -95,11 +96,23 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
   client.addResponseInterceptor({
     fulfilled: (response) => {
       const responseData = response.data;
+      if (handleMaintenanceResponse(responseData)) {
+        const error: any = new Error('SYSTEM_MAINTENANCE');
+        error.isMaintenanceResponse = true;
+        error.response = response;
+        return Promise.reject(error);
+      }
       if (responseData && responseData.code) {
         // 修改 response.status 为 401，让后续拦截器按 HTTP 401 处理
         response.status = responseData.code;
       }
       return response;
+    },
+    rejected: (error: any) => {
+      if (handleMaintenanceResponse(error?.response?.data)) {
+        error.isMaintenanceResponse = true;
+      }
+      return Promise.reject(error);
     },
   });
 
@@ -128,6 +141,12 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
   // 通用的错误处理
   client.addResponseInterceptor(
     errorMessageResponseInterceptor((msg: string, error) => {
+      if (
+        error?.isMaintenanceResponse ||
+        handleMaintenanceResponse(error?.response?.data)
+      ) {
+        return;
+      }
       // 刷新 token 失败时，显示后端返回的错误消息（跳转登录页已由 doReAuthenticate 处理）
       if (error?.message === 'REFRESH_TOKEN_FAILED') {
         message.error(error.backendMessage || '刷新令牌无效或已过期');

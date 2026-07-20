@@ -11,14 +11,7 @@
 | `mb_user_member_growth_log` | 用户成长值流水 | `backend/install/data/schema/17_mb_user_member.sql` |
 | `mb_order_member_discount` | 订单会员优惠快照 | `backend/install/data/schema/17_mb_user_member.sql` |
 
-相关升级 SQL：
-
-- `backend/install/data/upgrade/2026_07_01_member_level_account.sql`
-- `backend/install/data/upgrade/2026_07_01_marketing_points_member_config.sql`
-- `backend/install/data/upgrade/2026_07_01_goods_marketing_modes.sql`
-- `backend/install/data/upgrade/2026_07_02_member_manual_level.sql`
-- `backend/install/data/upgrade/2026_07_02_remove_member_sub_switches.sql`
-- `backend/install/data/upgrade/2026_07_05_member_client_page.sql`
+数据库结构和初始数据以 `backend/install/data/schema/` 为唯一真相源。当前阶段不维护模块级增量 SQL 列表；需要同步数据库结构时，请使用当前版本重新部署，并按安装流程基于 schema 初始化数据库。
 
 ## 配置项
 
@@ -176,7 +169,7 @@ UserController::setMember()
 2. 如果影响订单金额，优先扩展 `UserMemberService::pricingQuote()`。
 3. 同步订单项折扣分摊和订单快照字段。
 4. 同步商品编辑页、商品详情页和确认订单页展示。
-5. 如果新增字段，补 schema、upgrade SQL、模型字段、验证器和后台表单。
+5. 如果新增字段，同步 schema 真相源、模型字段、验证器和后台表单。
 6. 补充测试，覆盖关闭会员、重复触发、手动锁定、历史快照不回算。
 7. 更新 [../operation/member.md](../operation/member.md) 和 [../logic/member.md](../logic/member.md)。
 

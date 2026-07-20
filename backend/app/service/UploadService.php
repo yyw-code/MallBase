@@ -7,10 +7,12 @@ namespace app\service;
 use app\model\setting\Setting;
 use app\service\client\WechatService;
 use app\service\upload\AssetService;
+use app\support\upload\LocalUploadRootPolicy;
 use mall_base\base\BaseService;
 use mall_base\drivers\DriverManager;
 use mall_base\drivers\upload\LocalUploadDriver;
 use mall_base\exception\BusinessException;
+use Throwable;
 
 /**
  * 上传公共服务
@@ -568,6 +570,8 @@ class UploadService extends BaseService
             throw new BusinessException('文件不存在');
         }
 
+        $this->assertCanonicalLocalUploadRoot();
+
         // cert 模块走专用私有上传分支（不进 public/uploads，不暴露外网 URL）
         if ($module === self::MODULE_CERT) {
             return $this->uploadCert($file, $rules);
@@ -1120,6 +1124,28 @@ class UploadService extends BaseService
 
         // 上传配置来自后台系统设置，Swoole 常驻进程下不缓存实例，避免切换凭证或域名后沿用旧客户端。
         return DriverManager::driver('upload', $driverName, $driverConfig, false);
+    }
+
+    protected function assertCanonicalLocalUploadRoot(): string
+    {
+        try {
+            return (new LocalUploadRootPolicy())->assertSupported(
+                $this->configuredLocalUploadRoot(),
+                $this->localUploadPublicRoot(),
+            );
+        } catch (Throwable) {
+            throw new BusinessException(LocalUploadRootPolicy::MIGRATION_REQUIRED_MESSAGE);
+        }
+    }
+
+    protected function configuredLocalUploadRoot(): mixed
+    {
+        return getSystemSetting('local_root_path', LocalUploadRootPolicy::CANONICAL_ROOT);
+    }
+
+    protected function localUploadPublicRoot(): string
+    {
+        return rtrim(public_path(), DIRECTORY_SEPARATOR);
     }
 
     /**

@@ -253,7 +253,7 @@ docker compose -f docker-compose.dev.yml up -d
 docker compose 变量插值只在 parse yml 时发生，不能热加载。
 
 **Q：生产环境怎么办？**
-A：生产用 `docker-compose.yml`（单后端容器），只维护项目根目录 `.env`。根 `.env` 必须存在，Compose 会用它做变量插值，并通过 `env_file: .env` 注入后端容器；容器入口脚本再派生 `/app/.env`。数据库、Redis 和站点域名可以在 Web 安装向导里填写，但安装完成后建议把最终生效值同步回根 `.env`，避免容器重新创建后配置回退。不要把 `backend/.env` 当成生产手工配置入口。
+A：生产用 `docker-compose.yml`（HTTP、Queue、Cron 三个业务角色），只维护项目根目录 `.env`。根 `.env` 必须存在，Compose 会用它做变量插值，并通过 `env_file: .env` 注入容器；容器入口脚本再派生 `/app/.mallbase-env/backend.env`，对应宿主机 `data/backend/env/backend.env`。数据库、Redis 和站点域名可以在 Web 安装向导里填写，但安装完成后建议把最终生效值同步回根 `.env`，避免容器重新创建后配置回退。不要把 `backend/.env` 当成生产手工配置入口。
 
 **Q：`deploy/docker/.example.env` 和 `backend/.example.env` 有啥区别？**
 A：

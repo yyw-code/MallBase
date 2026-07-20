@@ -48,16 +48,26 @@ final class ClientPageRoutePermissionContractTest extends TestCase
         $this->assertStringContainsString('v-access:code="\'SystemClientPageCategoryUpdateStatus\'"', $categoryView);
     }
 
-    public function testClientPageRoleUpgradeGrantsSuperAdmin(): void
+    public function testClientPagePermissionsAreGrantedToSuperAdminDuringInstall(): void
     {
-        $path = dirname(__DIR__, 3) . '/install/data/upgrade/2026_07_05_client_page_role_permissions.sql';
-        if (!is_file($path)) {
-            $this->markTestSkipped('本地升级 SQL 未生成，跳过 git-ignored 运维产物校验。');
-        }
+        $root = dirname(__DIR__, 3);
+        $permissions = (string) file_get_contents($root . '/config/permissions.php');
+        $route = (string) file_get_contents($root . '/route/api/admin/client.php');
+        $installService = (string) file_get_contents($root . '/app/service/install/InstallService.php');
 
-        $upgrade = (string) file_get_contents($path);
-        $this->assertStringContainsString("`r`.`code` = 'super_admin'", $upgrade);
-        $this->assertStringContainsString("`p`.`code` LIKE 'SystemClientPage%'", $upgrade);
-        $this->assertStringContainsString('INSERT IGNORE INTO `mb_role_permission`', $upgrade);
+        $this->assertStringContainsString("'code' => 'SystemClientPageManagement'", $permissions);
+        $this->assertStringContainsString("name('SystemClientPageList')", $route);
+        $this->assertStringContainsString("name('SystemClientPageCategoryList')", $route);
+
+        $grantStart = strpos($installService, 'private function seedDefaultRolePermissions');
+        $grantEnd = strpos($installService, 'private function writeEnvFile', (int) $grantStart);
+        $this->assertIsInt($grantStart);
+        $this->assertIsInt($grantEnd);
+        $grant = substr($installService, $grantStart, $grantEnd - $grantStart);
+        $this->assertStringContainsString("where('code', 'super_admin')", $grant);
+        $this->assertStringContainsString('INSERT IGNORE INTO `{$rolePermissionTable}`', $grant);
+        $this->assertStringContainsString("`p`.`type` IN (1, 2)", $grant);
+        $this->assertStringContainsString("`p`.`status` = 1", $grant);
+        $this->assertStringNotContainsString("where('code', 'admin')", $grant);
     }
 }

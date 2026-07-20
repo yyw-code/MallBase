@@ -264,7 +264,10 @@ MallBase 后续会新增以下前端端，同样约定产物落到 `backend/publ
 - 安装与部署导航：`../../docs/install/index.md`
 - 后台前端打包：`../../docs/install/admin-build.md`
 - `.env` 文件职责：`../../docs/install/env-files.md`
-- 后端驱动路由规范：`../../.codex/skills/vbenAdmin/backend-driven-routing/SKILL.md`
+- 后端驱动路由与 API 契约：`../../.codex/skills/vbenAdmin/backend-driven-routing/SKILL.md`
+- 上传组件与字段契约：`../../.codex/skills/vbenAdmin/upload-component-first/SKILL.md`
+- 主题与 Modal 表单规范：`../../.codex/skills/vbenAdmin/admin-theme-consistency/SKILL.md`
+- 局部格式化与真实后端 E2E：`../../.codex/skills/vbenAdmin/e2e-webantd-realapi/SKILL.md`
 
 ## 上游参考
 

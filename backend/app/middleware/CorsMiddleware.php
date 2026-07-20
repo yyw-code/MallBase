@@ -9,15 +9,13 @@ use think\Request;
 /**
  * 跨域中间件（极简实现）
  *
- * 默认策略：反射请求 Origin 到 Access-Control-Allow-Origin，附带 Credentials: true。
+ * 默认策略：只为 Authorization JWT API 反射请求 Origin，不允许跨域 Cookie 凭据。
  * 适用场景：前后端通过 Authorization: Bearer <JWT> 鉴权的 API 项目（本项目即是）。
  *
  * 重要约束：
  * 1. 本中间件必须是 backend/app/middleware.php 全局链的第一个。
  *    否则 InstallCheckMiddleware 会把 OPTIONS 预检重定向到 /install，导致所有跨域请求被挂起。
- * 2. 本项目不依赖 Cookie / Session（前端 request.ts 未设 withCredentials），
- *    Credentials: true 在当前代码里是 no-op。若后续引入 Cookie 鉴权，"反射任意 Origin + Credentials"
- *    将变成经典的"任意站点带凭据跨域调用"漏洞 —— 此时必须改为 Origin 白名单或要求签名。
+ * 2. 升级页面使用 HttpOnly Cookie，但只接受服务端同源校验，不提供 credentialed CORS。
  * 3. 非跨域请求（无 Origin 头）不写任何 Access-Control-* 响应头，避免污染 CDN / 代理缓存。
  */
 class CorsMiddleware
@@ -42,7 +40,6 @@ class CorsMiddleware
 
         return $response->header([
             'Access-Control-Allow-Origin'      => $origin,
-            'Access-Control-Allow-Credentials' => 'true',
             'Access-Control-Allow-Methods'     => self::ALLOW_METHODS,
             'Access-Control-Allow-Headers'     => self::ALLOW_HEADERS,
             'Access-Control-Max-Age'           => self::MAX_AGE,

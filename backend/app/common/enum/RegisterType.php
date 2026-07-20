@@ -15,10 +15,6 @@ namespace app\common\enum;
  *  - wechat_miniapp   微信小程序登录注册
  *  - wechat_official  微信公众号 OAuth 注册
  *  - h5              纯网页（非微信内嵌）注册
- *
- * 历史值兼容：
- *  - legacy 'wechat' 经 upgrade:user-register-type 迁移命令统一升级为 'wechat_miniapp'
- *    （历史阶段微信注册仅来自小程序，迁移语义安全）
  */
 class RegisterType
 {
@@ -33,13 +29,6 @@ class RegisterType
 
     /** 纯网页 */
     public const H5 = 'h5';
-
-    /**
-     * 历史遗留值，仅用于数据迁移阶段识别,新写入禁止使用
-     *
-     * @internal
-     */
-    public const LEGACY_WECHAT = 'wechat';
 
     private const TEXTS = [
         self::MOBILE          => '手机号',

@@ -207,7 +207,8 @@ if should_run docker; then
         docker rm -f "$name" >/dev/null 2>&1 || true
     done
 
-    remove_dir "$ROOT_DIR/data"
+    remove_dir "$ROOT_DIR/data/mysql"
+    remove_dir "$ROOT_DIR/data/redis"
     remove_dir "$ROOT_DIR/backend/vendor"
 fi
 

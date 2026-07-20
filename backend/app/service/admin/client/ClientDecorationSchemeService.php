@@ -225,44 +225,6 @@ class ClientDecorationSchemeService extends BaseService
         ];
     }
 
-    /**
-     * 批量收敛历史个人中心 customMenu 数据。
-     *
-     * @return array{scanned:int, updated:int, skipped:int}
-     */
-    public function migrateLegacyProfileCustomMenu(bool $dryRun = true): array
-    {
-        $schemes = $this->model()
-            ->where('type', ClientDecorationScheme::TYPE_PROFILE)
-            ->whereRaw('CAST(`schema` AS CHAR) LIKE ?', ['%customMenu%'])
-            ->whereNull('delete_time')
-            ->select();
-
-        $scanned = 0;
-        $updated = 0;
-        $skipped = 0;
-
-        foreach ($schemes as $scheme) {
-            $scanned++;
-            $schema = $this->normalizeSchemaByType(
-                ClientDecorationScheme::TYPE_PROFILE,
-                $scheme->schema ?? []
-            );
-            $encoded = json_encode($schema, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-            if ($encoded !== false && str_contains($encoded, 'customMenu')) {
-                $skipped++;
-                continue;
-            }
-
-            if (!$dryRun) {
-                $scheme->save(['schema' => $schema]);
-            }
-            $updated++;
-        }
-
-        return compact('scanned', 'updated', 'skipped');
-    }
-
     public function create(array $data): int
     {
         $payload = $this->normalizePayload($data);

@@ -15,7 +15,7 @@ use mall_base\exception\BusinessException;
  *  1. 使用乐观锁：UPDATE mb_goods_sku SET stock = stock - :qty WHERE id = :id AND stock >= :qty
  *  2. affected_rows = 0 代表库存不足（或 SKU 不存在），统一抛 BusinessException，禁止返回 false
  *  3. 不在方法内部开启事务，交由调用方（OrderService）串联事务
- *     —— 符合 thinkPHP/service-stateless-swoole 与 validate-then-transact 规范
+ *     —— 符合 thinkPHP/architecture-layering 与 validate-then-transact 规范
  *  4. 为秒杀预留接口：本 Service 不引入 Redis 预扣，MVP 以数据库乐观锁即可保证不超卖
  *
  * @extends BaseService<GoodsSku>

@@ -40,6 +40,7 @@ final class InstallLockService
         if (!is_file($path)) {
             return null;
         }
+        $this->hardenPermissions($path);
 
         $raw = file_get_contents($path);
         if ($raw === false || trim($raw) === '') {
@@ -216,6 +217,7 @@ final class InstallLockService
         }
 
         try {
+            $this->hardenPermissions($path);
             if (!flock($handle, LOCK_EX)) {
                 throw new \RuntimeException('安装锁文件加锁失败：' . $path);
             }
@@ -302,5 +304,35 @@ final class InstallLockService
         }
 
         return $normalized;
+    }
+
+    private function hardenPermissions(string $path): void
+    {
+        $installDirectory = dirname($path);
+        $runtimeDirectory = dirname($installDirectory);
+        $directories = basename($path) === 'install.lock'
+            && basename($installDirectory) === 'install'
+            && basename($runtimeDirectory) === 'runtime'
+            ? [$runtimeDirectory, $installDirectory]
+            : [];
+
+        foreach ($directories as $directory) {
+            if (!is_dir($directory) || is_link($directory) || !@chmod($directory, 0755)) {
+                throw new \RuntimeException('安装锁目录权限收紧失败：' . $directory);
+            }
+            clearstatcache(true, $directory);
+            $directoryPermissions = @fileperms($directory);
+            if (!is_int($directoryPermissions) || ($directoryPermissions & 0777) !== 0755) {
+                throw new \RuntimeException('安装锁目录权限校验失败：' . $directory);
+            }
+        }
+        if (!@chmod($path, 0600)) {
+            throw new \RuntimeException('安装锁权限收紧失败：' . $path);
+        }
+        clearstatcache(true, $path);
+        $permissions = @fileperms($path);
+        if (!is_int($permissions) || ($permissions & 0777) !== 0600) {
+            throw new \RuntimeException('安装锁权限校验失败：' . $path);
+        }
     }
 }

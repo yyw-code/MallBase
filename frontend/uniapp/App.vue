@@ -1,10 +1,12 @@
 <script setup>
-import { onLaunch } from '@dcloudio/uni-app'
+import { onLaunch, onShow } from '@dcloudio/uni-app'
+import { fetchMaintenanceStatus } from '@/api/maintenance'
 import { useAppStore } from '@/store/app'
 import { useDecorateStore } from '@/store/decorate'
 import { useUserStore } from '@/store/user'
 import { captureDistributionAttribution } from '@/utils/distribution-attribution'
 import { setupRouterGuard } from '@/utils/router'
+import { handleMaintenanceBody } from '@/utils/maintenance'
 
 onLaunch((options) => {
   const appStore = useAppStore()
@@ -15,6 +17,15 @@ onLaunch((options) => {
   decorateStore.init()
   appStore.fetchBasicConfig()
   setupRouterGuard()
+})
+
+onShow(async () => {
+  try {
+    const status = await fetchMaintenanceStatus()
+    handleMaintenanceBody({ data: status })
+  } catch (_) {
+    // 旧版本后端或瞬时网络异常不阻断应用恢复，业务请求仍会执行统一维护判断。
+  }
 })
 </script>
 

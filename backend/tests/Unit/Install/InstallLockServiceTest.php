@@ -16,8 +16,8 @@ final class InstallLockServiceTest extends TestCase
         parent::setUp();
 
         $dir = sys_get_temp_dir() . '/mallbase-install-lock-' . bin2hex(random_bytes(6));
-        mkdir($dir, 0755, true);
-        $this->lockPath = $dir . '/install.lock';
+        mkdir($dir . '/runtime/install', 0755, true);
+        $this->lockPath = $dir . '/runtime/install/install.lock';
     }
 
     protected function tearDown(): void
@@ -26,9 +26,11 @@ final class InstallLockServiceTest extends TestCase
             unlink($this->lockPath);
         }
 
-        $dir = dirname($this->lockPath);
-        if (is_dir($dir)) {
-            rmdir($dir);
+        $directory = dirname($this->lockPath);
+        foreach ([$directory, dirname($directory), dirname(dirname($directory))] as $dir) {
+            if (is_dir($dir)) {
+                rmdir($dir);
+            }
         }
 
         parent::tearDown();
@@ -44,6 +46,51 @@ final class InstallLockServiceTest extends TestCase
         $this->assertSame([
             'installed_at' => '2026-06-19 12:00:00',
         ], $service->getLockInfo());
+        clearstatcache(true, $this->lockPath);
+        $this->assertSame(0600, fileperms($this->lockPath) & 0777);
+    }
+
+    public function testReadingPlatformStateHardensExistingLockPermissions(): void
+    {
+        file_put_contents($this->lockPath, json_encode([
+            'installed_at' => '2026-06-19 12:00:00',
+            'platform' => ['token' => 'mbt_token', 'disabled' => false],
+        ], JSON_THROW_ON_ERROR));
+        chmod($this->lockPath, 0777);
+        chmod(dirname($this->lockPath), 0777);
+        chmod(dirname(dirname($this->lockPath)), 0777);
+        $service = new InstallLockService($this->lockPath);
+
+        self::assertSame('mbt_token', $service->getPlatformState()['token'] ?? null);
+        clearstatcache(true, $this->lockPath);
+        self::assertSame(0600, fileperms($this->lockPath) & 0777);
+        self::assertSame(0755, fileperms(dirname($this->lockPath)) & 0777);
+        self::assertSame(0755, fileperms(dirname(dirname($this->lockPath))) & 0777);
+    }
+
+    public function testCustomLockPathDoesNotChangeUnrelatedAncestorPermissions(): void
+    {
+        $base = dirname(dirname(dirname($this->lockPath)));
+        $parent = $base . '/custom-parent';
+        $directory = $parent . '/custom-leaf';
+        mkdir($directory, 0777, true);
+        chmod($parent, 0777);
+        chmod($directory, 0777);
+        $path = $directory . '/custom.lock';
+
+        (new InstallLockService($path))->writeInstalledLock('2026-06-19 12:00:00');
+
+        clearstatcache(true, $parent);
+        clearstatcache(true, $directory);
+        self::assertSame(0777, fileperms($parent) & 0777);
+        self::assertSame(0777, fileperms($directory) & 0777);
+        self::assertSame(0600, fileperms($path) & 0777);
+
+        @unlink($path);
+        @chmod($directory, 0777);
+        @rmdir($directory);
+        @chmod($parent, 0777);
+        @rmdir($parent);
     }
 
     public function testSavePlatformStateMergesIntoExistingLock(): void
