@@ -40,14 +40,20 @@ final class SimpleUpgradeBoundaryContractTest extends TestCase
         self::assertStringContainsString('use app\\command\\UpgradeRuntimeCommand;', $console);
     }
 
-    public function testPhpProductionCodeDoesNotOwnAPlatformDomain(): void
+    public function testOnlyInstallAgreementMayOwnAPlatformDomain(): void
     {
+        $platformDomainAllowlist = [
+            $this->root . '/app/service/install/InstallService.php',
+        ];
         $paths = [
             ...glob($this->root . '/app/**/*.php') ?: [],
             ...glob($this->root . '/app/**/**/*.php') ?: [],
             ...glob($this->root . '/config/*.php') ?: [],
         ];
         foreach (array_unique($paths) as $path) {
+            if (in_array($path, $platformDomainAllowlist, true)) {
+                continue;
+            }
             $source = (string) file_get_contents($path);
             self::assertStringNotContainsString('platform.gosowong.cn', $source, $path);
             self::assertStringNotContainsString('PLATFORM_BASE_URL', $source, $path);
