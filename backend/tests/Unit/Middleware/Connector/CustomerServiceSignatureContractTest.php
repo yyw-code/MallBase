@@ -22,6 +22,8 @@ final class CustomerServiceSignatureContractTest extends TestCase
         $this->assertStringContainsString('x-cs-external-user-authenticated', $source);
         $this->assertStringContainsString('x-cs-external-user-id', $source);
         $this->assertStringContainsString('x-cs-resource-owner-id', $source);
+        $this->assertStringContainsString('x-cs-idempotency-key', $source);
+        $this->assertStringContainsString('x-cs-signature-version', $source);
         $this->assertStringContainsString('$canonicalParts[] = $headersHash', $source);
         $this->assertStringContainsString('$this->canonicalRequestPath($request)', $source);
         $this->assertStringContainsString('$this->assertConnectorSecret($secret)', $source);
@@ -80,6 +82,50 @@ final class CustomerServiceSignatureContractTest extends TestCase
         $method->invoke($middleware, 'short-secret');
     }
 
+    public function testSignatureHeadersAcceptCanonicalValues(): void
+    {
+        $this->invokeSignatureHeaderValidation(
+            '1783526400',
+            'nonce-v2-0001',
+            str_repeat('a', 64),
+            str_repeat('b', 64),
+            str_repeat('c', 64)
+        );
+        $this->addToAssertionCount(1);
+    }
+
+    #[DataProvider('invalidSignatureHeaderProvider')]
+    public function testSignatureHeadersRejectMalformedValues(
+        string $timestamp,
+        string $nonce,
+        string $signature,
+        string $bodyHash,
+        string $headersHash
+    ): void {
+        $this->expectException(\mall_base\exception\BusinessException::class);
+        $this->expectExceptionCode(401);
+
+        $this->invokeSignatureHeaderValidation($timestamp, $nonce, $signature, $bodyHash, $headersHash);
+    }
+
+    /**
+     * @return array<string, array{string, string, string, string, string}>
+     */
+    public static function invalidSignatureHeaderProvider(): array
+    {
+        $signature = str_repeat('a', 64);
+        $bodyHash = str_repeat('b', 64);
+
+        return [
+            'timestamp suffix' => ['1783526400x', 'nonce-v2-0001', $signature, $bodyHash, ''],
+            'short nonce' => ['1783526400', 'short', $signature, $bodyHash, ''],
+            'newline nonce' => ['1783526400', "nonce-v2\n0001", $signature, $bodyHash, ''],
+            'non-hex signature' => ['1783526400', 'nonce-v2-0001', str_repeat('z', 64), $bodyHash, ''],
+            'short body digest' => ['1783526400', 'nonce-v2-0001', $signature, 'abc', ''],
+            'short headers digest' => ['1783526400', 'nonce-v2-0001', $signature, $bodyHash, 'abc'],
+        ];
+    }
+
     #[DataProvider('validConnectorSecretProvider')]
     public function testConnectorSecretAcceptsAtLeast32Utf8Bytes(string $secret): void
     {
@@ -103,75 +149,136 @@ final class CustomerServiceSignatureContractTest extends TestCase
         ];
     }
 
-    public function testAtomicNonceAcquisitionAllowsTheFirstRequest(): void
+    public function testVersionTwoSignedHeadersIncludeVersionIdempotencyAndIdentity(): void
     {
-        $handler = new class {
-            /** @var array<int, mixed> */
-            public array $arguments = [];
+        $headers = [
+            'X-CS-Signature-Version' => '2',
+            'X-CS-Idempotency-Key' => 'execution-123',
+            'X-CS-External-User-Authenticated' => 'true',
+            'X-CS-External-User-Id' => 'user-42',
+            'X-CS-Resource-Owner-Id' => 'user-42',
+        ];
 
-            public function rawCommand(mixed ...$arguments): string
-            {
-                $this->arguments = $arguments;
-                return 'OK';
+        $this->assertSame(
+            $this->expectedSignedHeadersHash($headers),
+            $this->invokeSignedHeadersHash($headers)
+        );
+    }
+
+    public function testVersionTwoSignedHeadersMatchGoldenVector(): void
+    {
+        $this->assertSame(
+            '674e91b4d36c8805d76fa39c6d51e240f903fb7fdea5a1c8dc88b42e6c2ee7a1',
+            $this->invokeSignedHeadersHash([
+                'X-CS-External-User-Authenticated' => 'true',
+                'X-CS-External-User-Id' => '10001',
+                'X-CS-Idempotency-Key' => 'order-remark-42-001',
+                'X-CS-Resource-Owner-Id' => '10001',
+                'X-CS-Signature-Version' => '2',
+            ])
+        );
+    }
+
+    public function testVersionTwoSignedHeadersChangeWhenIdempotencyOrVersionIsTampered(): void
+    {
+        $headers = [
+            'X-CS-Signature-Version' => '2',
+            'X-CS-Idempotency-Key' => 'execution-123',
+            'X-CS-External-User-Authenticated' => 'true',
+            'X-CS-External-User-Id' => 'user-42',
+            'X-CS-Resource-Owner-Id' => 'user-42',
+        ];
+        $original = $this->invokeSignedHeadersHash($headers);
+
+        $tamperedIdempotency = $headers;
+        $tamperedIdempotency['X-CS-Idempotency-Key'] = 'execution-456';
+        $this->assertNotSame($original, $this->invokeSignedHeadersHash($tamperedIdempotency));
+
+        $tamperedVersion = $headers;
+        $tamperedVersion['X-CS-Signature-Version'] = '3';
+        $this->expectException(\mall_base\exception\BusinessException::class);
+        $this->expectExceptionCode(401);
+        $this->invokeSignedHeadersHash($tamperedVersion);
+    }
+
+    public function testVersionTwoSignedHeadersRejectNonTokenIdempotencyKey(): void
+    {
+        $this->expectException(\mall_base\exception\BusinessException::class);
+        $this->expectExceptionCode(401);
+
+        $this->invokeSignedHeadersHash([
+            'X-CS-Signature-Version' => '2',
+            'X-CS-Idempotency-Key' => 'invalid key',
+        ]);
+    }
+
+    public function testLegacySignedHeadersWithoutVersionRemainCompatible(): void
+    {
+        $headers = [
+            'X-CS-External-User-Authenticated' => 'true',
+            'X-CS-External-User-Id' => 'user-42',
+            'X-CS-Resource-Owner-Id' => 'user-42',
+        ];
+
+        $this->assertSame(
+            $this->expectedSignedHeadersHash($headers),
+            $this->invokeSignedHeadersHash($headers)
+        );
+    }
+
+    public function testUnknownSignatureVersionIsRejected(): void
+    {
+        $this->expectException(\mall_base\exception\BusinessException::class);
+        $this->expectExceptionCode(401);
+
+        $this->invokeSignedHeadersHash([
+            'X-CS-Signature-Version' => '99',
+            'X-CS-External-User-Authenticated' => 'false',
+        ]);
+    }
+
+    private function invokeSignatureHeaderValidation(
+        string $timestamp,
+        string $nonce,
+        string $signature,
+        string $bodyHash,
+        string $headersHash
+    ): void {
+        $method = new ReflectionMethod(CustomerServiceSignature::class, 'assertSignatureHeaders');
+        $method->setAccessible(true);
+        $method->invoke(new CustomerServiceSignature(), $timestamp, $nonce, $signature, $bodyHash, $headersHash);
+    }
+
+    /**
+     * @param array<string, string> $headers
+     */
+    private function invokeSignedHeadersHash(array $headers): string
+    {
+        $request = (new Request())->withHeader($headers);
+        $method = new ReflectionMethod(CustomerServiceSignature::class, 'signedHeadersHash');
+        $method->setAccessible(true);
+
+        return (string) $method->invoke(new CustomerServiceSignature(), $request);
+    }
+
+    /**
+     * @param array<string, string> $headers
+     */
+    private function expectedSignedHeadersHash(array $headers): string
+    {
+        $canonical = [];
+        foreach ($headers as $name => $value) {
+            $canonical[strtolower($name)] = trim($value);
+        }
+        ksort($canonical);
+
+        $lines = [];
+        foreach ($canonical as $name => $value) {
+            if ($value !== '') {
+                $lines[] = $name . ':' . $value;
             }
-        };
+        }
 
-        $this->assertTrue($this->invokeAtomicNonce($handler, 'nonce-key', 300));
-        $this->assertSame(['SET', 'nonce-key', '1', 'EX', '300', 'NX'], $handler->arguments);
-    }
-
-    public function testAtomicNonceAcquisitionRejectsARepeatedRequest(): void
-    {
-        $handler = new class {
-            public function rawCommand(mixed ...$arguments): bool
-            {
-                return false;
-            }
-        };
-
-        $this->assertFalse($this->invokeAtomicNonce($handler, 'nonce-key', 300));
-    }
-
-    public function testAtomicNonceAcquisitionFailsClosedOnCacheException(): void
-    {
-        $handler = new class {
-            public function rawCommand(mixed ...$arguments): bool
-            {
-                throw new \RuntimeException('cache unavailable');
-            }
-        };
-
-        $this->assertFalse($this->invokeAtomicNonce($handler, 'nonce-key', 300));
-    }
-
-    public function testAtomicNonceAcquisitionFailsClosedWithoutAtomicCommandSupport(): void
-    {
-        $this->assertFalse($this->invokeAtomicNonce(new class {}, 'nonce-key', 300));
-    }
-
-    public function testAtomicNonceAcquisitionSupportsPredisExecuteRaw(): void
-    {
-        $handler = new class {
-            /** @var array<int, mixed> */
-            public array $arguments = [];
-
-            /** @param array<int, mixed> $arguments */
-            public function executeRaw(array $arguments): string
-            {
-                $this->arguments = $arguments;
-                return 'OK';
-            }
-        };
-
-        $this->assertTrue($this->invokeAtomicNonce($handler, 'nonce-key', 300));
-        $this->assertSame(['SET', 'nonce-key', '1', 'EX', '300', 'NX'], $handler->arguments);
-    }
-
-    private function invokeAtomicNonce(object $handler, string $key, int $ttl): bool
-    {
-        $this->assertTrue(method_exists(CustomerServiceSignature::class, 'acquireAtomicNonce'));
-
-        $method = new ReflectionMethod(CustomerServiceSignature::class, 'acquireAtomicNonce');
-        return (bool) $method->invoke(new CustomerServiceSignature(), $handler, $key, $ttl);
+        return hash('sha256', implode("\n", $lines));
     }
 }

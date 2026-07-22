@@ -323,100 +323,206 @@ class CustomerServiceConnectorService extends BaseService
     /**
      * @return array<string, mixed>
      */
-    public function addOrderRemark(int $orderId, string $remark, string $actorName = ''): array
+    public function addOrderRemark(
+        int $orderId,
+        string $remark,
+        string $actorName,
+        string $idempotencyKey
+    ): array
     {
         $remark = mb_substr(trim($remark), 0, 200);
         if ($remark === '') {
             throw new BusinessException('备注内容不能为空');
         }
-
-        /** @var Order|null $order */
-        $order = $this->model(Order::class)
-            ->where('id', $orderId)
-            ->whereNull('delete_time')
-            ->find();
-        if ($order === null) {
-            throw new BusinessException('订单不存在', 404);
-        }
-
+        $actorName = mb_substr($actorName, 0, 30);
         $adminId = $this->operatorAdminId();
-        $prefix = $actorName !== '' ? '客服备注(' . mb_substr($actorName, 0, 30) . ')：' : '客服备注：';
-        $message = mb_substr($prefix . $remark, 0, 255);
 
-        $this->transaction(function () use ($order, $adminId, $message): void {
-            $oldRemark = trim((string) ($order->admin_remark ?? ''));
-            $order->admin_remark = mb_substr($oldRemark !== '' ? $oldRemark . "\n" . $message : $message, 0, 255);
-            $order->save();
+        return $this->executeIdempotentWrite(
+            'customer-service:order-remark:' . $orderId,
+            $idempotencyKey,
+            [
+                'remark' => $remark,
+                'actor_name' => $actorName,
+            ],
+            function () use ($orderId, $remark, $actorName, $adminId): array {
+                /** @var Order|null $order */
+                $order = $this->model(Order::class)
+                    ->where('id', $orderId)
+                    ->whereNull('delete_time')
+                    ->find();
+                if ($order === null) {
+                    throw new BusinessException('订单不存在', 404);
+                }
 
-            $this->model(OrderLog::class)->save([
-                'order_id' => (int) $order->id,
-                'from_status' => (int) $order->status,
-                'to_status' => (int) $order->status,
-                'operator_type' => OperatorType::ADMIN,
-                'operator_id' => $adminId,
-                'remark' => $message,
-                'ip' => request()->ip(),
-            ]);
-        });
+                $prefix = $actorName !== '' ? '客服备注(' . $actorName . ')：' : '客服备注：';
+                $message = mb_substr($prefix . $remark, 0, 255);
 
-        return [
-            'id' => $orderId,
-            'remark' => $message,
+                $this->transaction(function () use ($order, $adminId, $message): void {
+                    $oldRemark = trim((string) ($order->admin_remark ?? ''));
+                    $order->admin_remark = mb_substr($oldRemark !== '' ? $oldRemark . "\n" . $message : $message, 0, 255);
+                    $order->save();
+
+                    $this->model(OrderLog::class)->save([
+                        'order_id' => (int) $order->id,
+                        'from_status' => (int) $order->status,
+                        'to_status' => (int) $order->status,
+                        'operator_type' => OperatorType::ADMIN,
+                        'operator_id' => $adminId,
+                        'remark' => $message,
+                        'ip' => request()->ip(),
+                    ]);
+                });
+
+                return [
+                    'id' => $orderId,
+                    'remark' => $message,
+                ];
+            }
+        );
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @return array<string, mixed>
+     */
+    public function shipOrder(int $orderId, array $payload, string $idempotencyKey): array
+    {
+        $deliveryType = (string) ($payload['delivery_type'] ?? '');
+        $companyId = max(0, (int) ($payload['logistics_company_id'] ?? 0));
+        $companyCode = trim((string) ($payload['logistics_company_code'] ?? ''));
+        $companyName = trim((string) ($payload['logistics_company'] ?? ''));
+        $input = [
+            'logistics_platform' => trim((string) ($payload['logistics_platform'] ?? '')),
+            'logistics_company_id' => $companyId,
+            'logistics_company_code' => $companyId > 0 ? '' : $companyCode,
+            'logistics_company' => $companyId > 0 || $companyCode !== '' ? '' : $companyName,
+            'logistics_sn' => trim((string) ($payload['logistics_sn'] ?? '')),
+            'delivery_type' => $deliveryType === Order::DELIVERY_TYPE_VIRTUAL
+                ? Order::DELIVERY_TYPE_VIRTUAL
+                : Order::DELIVERY_TYPE_PHYSICAL,
+            'delivery_note' => mb_substr(trim((string) ($payload['delivery_note'] ?? '')), 0, 255),
         ];
+        if ($input['delivery_type'] === Order::DELIVERY_TYPE_VIRTUAL) {
+            $input['logistics_platform'] = '';
+            $input['logistics_company_id'] = 0;
+            $input['logistics_company_code'] = '';
+            $input['logistics_company'] = '';
+            $input['logistics_sn'] = '';
+        } else {
+            $input['delivery_note'] = '';
+        }
+        if ($input['delivery_type'] === Order::DELIVERY_TYPE_PHYSICAL
+            && (($input['logistics_company_id'] <= 0
+                    && $input['logistics_company_code'] === ''
+                    && $input['logistics_company'] === '')
+                || $input['logistics_sn'] === '')) {
+            throw new BusinessException('物流公司和运单号必填');
+        }
+        if ($input['delivery_type'] === Order::DELIVERY_TYPE_VIRTUAL
+            && $input['delivery_note'] === '') {
+            throw new BusinessException('请填写虚拟发货说明');
+        }
+        $adminId = $this->operatorAdminId();
+
+        return $this->executeIdempotentWrite(
+            'customer-service:order-ship:' . $orderId,
+            $idempotencyKey,
+            $input,
+            function () use ($orderId, $input, $adminId): array {
+                $message = app()->make(OrderAdminService::class)->ship(
+                    orderId: $orderId,
+                    logisticsPlatform: $input['logistics_platform'],
+                    logisticsCompanyId: $input['logistics_company_id'],
+                    logisticsCompanyCode: $input['logistics_company_code'],
+                    logisticsCompany: $input['logistics_company'],
+                    logisticsSn: $input['logistics_sn'],
+                    adminId: $adminId,
+                    deliveryType: $input['delivery_type'],
+                    deliveryNote: $input['delivery_note'],
+                );
+
+                return [
+                    'id' => $orderId,
+                    'message' => $message,
+                ];
+            }
+        );
     }
 
     /**
      * @param array<string, mixed> $payload
      * @return array<string, mixed>
      */
-    public function shipOrder(int $orderId, array $payload): array
+    public function approveRefund(int $refundId, array $payload, string $idempotencyKey): array
     {
-        $message = app()->make(OrderAdminService::class)->ship(
-            orderId: $orderId,
-            logisticsPlatform: (string) ($payload['logistics_platform'] ?? ''),
-            logisticsCompanyId: (int) ($payload['logistics_company_id'] ?? 0),
-            logisticsCompanyCode: (string) ($payload['logistics_company_code'] ?? ''),
-            logisticsCompany: (string) ($payload['logistics_company'] ?? ''),
-            logisticsSn: (string) ($payload['logistics_sn'] ?? ''),
-            adminId: $this->operatorAdminId(),
-            deliveryType: (string) ($payload['delivery_type'] ?? ''),
-            deliveryNote: (string) ($payload['delivery_note'] ?? ''),
-        );
-
-        return [
-            'id' => $orderId,
-            'message' => $message,
+        $input = [
+            'admin_remark' => mb_substr((string) ($payload['admin_remark'] ?? ''), 0, 255),
         ];
+        $adminId = $this->operatorAdminId();
+
+        return $this->executeIdempotentWrite(
+            'customer-service:refund-approve:' . $refundId,
+            $idempotencyKey,
+            $input,
+            function () use ($refundId, $input, $adminId): array {
+                app()->make(RefundOrderAdminService::class)->approve(
+                    refundId: $refundId,
+                    adminId: $adminId,
+                    adminRemark: $input['admin_remark'],
+                );
+
+                return ['id' => $refundId, 'message' => '审核通过'];
+            }
+        );
     }
 
     /**
      * @param array<string, mixed> $payload
      * @return array<string, mixed>
      */
-    public function approveRefund(int $refundId, array $payload): array
+    public function rejectRefund(int $refundId, array $payload, string $idempotencyKey): array
     {
-        app()->make(RefundOrderAdminService::class)->approve(
-            refundId: $refundId,
-            adminId: $this->operatorAdminId(),
-            adminRemark: (string) ($payload['admin_remark'] ?? ''),
-        );
+        $input = [
+            'admin_remark' => mb_substr(trim((string) ($payload['admin_remark'] ?? '')), 0, 255),
+        ];
+        if ($input['admin_remark'] === '') {
+            throw new BusinessException('驳回原因必填');
+        }
+        $adminId = $this->operatorAdminId();
 
-        return ['id' => $refundId, 'message' => '审核通过'];
+        return $this->executeIdempotentWrite(
+            'customer-service:refund-reject:' . $refundId,
+            $idempotencyKey,
+            $input,
+            function () use ($refundId, $input, $adminId): array {
+                app()->make(RefundOrderAdminService::class)->reject(
+                    refundId: $refundId,
+                    adminId: $adminId,
+                    adminRemark: $input['admin_remark'],
+                );
+
+                return ['id' => $refundId, 'message' => '已驳回'];
+            }
+        );
     }
 
     /**
-     * @param array<string, mixed> $payload
+     * @param array<string, mixed> $normalizedInput
+     * @param callable(): array<string, mixed> $operation
      * @return array<string, mixed>
      */
-    public function rejectRefund(int $refundId, array $payload): array
-    {
-        app()->make(RefundOrderAdminService::class)->reject(
-            refundId: $refundId,
-            adminId: $this->operatorAdminId(),
-            adminRemark: (string) ($payload['admin_remark'] ?? ''),
+    private function executeIdempotentWrite(
+        string $scope,
+        string $idempotencyKey,
+        array $normalizedInput,
+        callable $operation
+    ): array {
+        return app()->make(CustomerServiceIdempotencyService::class)->execute(
+            $scope,
+            $idempotencyKey,
+            $normalizedInput,
+            $operation
         );
-
-        return ['id' => $refundId, 'message' => '已驳回'];
     }
 
     private function operatorAdminId(): int

@@ -56,28 +56,47 @@ class CustomerServiceController extends BaseController
 
     public function addOrderRemark($id): Response
     {
-        $result = $this->service()->addOrderRemark(
-            (int) $id,
-            (string) $this->request->param('remark', ''),
-            (string) $this->request->param('actor_name', '')
-        );
+        $orderId = (int) $id;
+        $remark = (string) $this->request->param('remark', '');
+        $actorName = (string) $this->request->param('actor_name', '');
+        $idempotencyKey = (string) $this->request->header('X-CS-Idempotency-Key', '');
 
-        return $this->connectorSuccess($result);
+        return $this->connectorSuccess(
+            $this->service()->addOrderRemark($orderId, $remark, $actorName, $idempotencyKey)
+        );
     }
 
     public function shipOrder($id): Response
     {
-        return $this->connectorSuccess($this->service()->shipOrder((int) $id, (array) $this->request->param()));
+        $orderId = (int) $id;
+        $payload = (array) $this->request->param();
+        $idempotencyKey = (string) $this->request->header('X-CS-Idempotency-Key', '');
+
+        return $this->connectorSuccess(
+            $this->service()->shipOrder($orderId, $payload, $idempotencyKey)
+        );
     }
 
     public function approveRefund($id): Response
     {
-        return $this->connectorSuccess($this->service()->approveRefund((int) $id, (array) $this->request->param()));
+        $refundId = (int) $id;
+        $payload = (array) $this->request->param();
+        $idempotencyKey = (string) $this->request->header('X-CS-Idempotency-Key', '');
+
+        return $this->connectorSuccess(
+            $this->service()->approveRefund($refundId, $payload, $idempotencyKey)
+        );
     }
 
     public function rejectRefund($id): Response
     {
-        return $this->connectorSuccess($this->service()->rejectRefund((int) $id, (array) $this->request->param()));
+        $refundId = (int) $id;
+        $payload = (array) $this->request->param();
+        $idempotencyKey = (string) $this->request->header('X-CS-Idempotency-Key', '');
+
+        return $this->connectorSuccess(
+            $this->service()->rejectRefund($refundId, $payload, $idempotencyKey)
+        );
     }
 
     /**

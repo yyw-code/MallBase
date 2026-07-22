@@ -4,9 +4,9 @@ declare(strict_types=1);
 namespace app\middleware\connector;
 
 use Closure;
+use app\service\connector\CustomerServiceIdempotencyStore;
 use app\service\connector\CustomerServiceSettingService;
 use mall_base\exception\BusinessException;
-use think\facade\Cache;
 use think\Request;
 use think\Response;
 
@@ -38,10 +38,12 @@ class CustomerServiceSignature
         $signature = strtolower($this->header($request, 'X-CS-Signature'));
         $bodyHash = strtolower($this->header($request, 'X-CS-Body-SHA256'));
         $headersHash = strtolower($this->header($request, 'X-CS-Headers-SHA256'));
+        $signatureVersion = $this->header($request, 'X-CS-Signature-Version');
 
         if ($timestamp === '' || $nonce === '' || $signature === '' || $bodyHash === '') {
             throw new BusinessException('客服连接器签名头缺失', 401);
         }
+        $this->assertSignatureHeaders($timestamp, $nonce, $signature, $bodyHash, $headersHash);
 
         $timestampValue = (int) $timestamp;
         $window = $settings->timestampWindow();
@@ -49,16 +51,16 @@ class CustomerServiceSignature
             throw new BusinessException('客服连接器签名已过期', 401);
         }
 
-        if (!$this->acquireNonce($nonce, $window)) {
-            throw new BusinessException('客服连接器请求已重复', 409);
-        }
-
         $rawBody = (string) $request->getContent();
         $actualBodyHash = hash('sha256', $rawBody);
         if (!hash_equals($actualBodyHash, $bodyHash)) {
             throw new BusinessException('客服连接器请求体摘要不匹配', 401);
         }
-        if ($headersHash !== '' && !hash_equals($this->signedHeadersHash($request), $headersHash)) {
+        $actualHeadersHash = $this->signedHeadersHash($request);
+        if ($signatureVersion === '2' && $headersHash === '') {
+            throw new BusinessException('客服连接器签名头缺失', 401);
+        }
+        if ($headersHash !== '' && !hash_equals($actualHeadersHash, $headersHash)) {
             throw new BusinessException('客服连接器身份头摘要不匹配', 401);
         }
 
@@ -78,6 +80,10 @@ class CustomerServiceSignature
         $expected = hash_hmac('sha256', $canonical, $secret);
         if (!hash_equals($expected, $signature)) {
             throw new BusinessException('客服连接器签名无效', 401);
+        }
+
+        if (!$this->acquireNonce($nonce, $window)) {
+            throw new BusinessException('客服连接器请求已重复', 409);
         }
 
         return $next($request);
@@ -130,16 +136,52 @@ class CustomerServiceSignature
         }
     }
 
+    private function assertSignatureHeaders(
+        string $timestamp,
+        string $nonce,
+        string $signature,
+        string $bodyHash,
+        string $headersHash
+    ): void {
+        if (!preg_match('/^[1-9][0-9]{0,18}$/D', $timestamp)) {
+            throw new BusinessException('客服连接器时间戳无效', 401);
+        }
+        if (!preg_match('/^[\x21-\x7E]{8,128}$/D', $nonce)) {
+            throw new BusinessException('客服连接器随机数无效', 401);
+        }
+        foreach ([$signature, $bodyHash] as $digest) {
+            if (!preg_match('/^[a-f0-9]{64}$/D', $digest)) {
+                throw new BusinessException('客服连接器摘要无效', 401);
+            }
+        }
+        if ($headersHash !== '' && !preg_match('/^[a-f0-9]{64}$/D', $headersHash)) {
+            throw new BusinessException('客服连接器身份头摘要无效', 401);
+        }
+    }
+
     private function signedHeadersHash(Request $request): string
     {
+        $signatureVersion = $this->header($request, 'x-cs-signature-version');
+        if ($signatureVersion !== '' && $signatureVersion !== '2') {
+            throw new BusinessException('客服连接器签名版本不支持', 401);
+        }
+
         $headers = [];
-        foreach ([
+        $signedHeaderNames = [
             'x-cs-external-user-authenticated',
             'x-cs-external-user-id',
             'x-cs-resource-owner-id',
-        ] as $name) {
+        ];
+        if ($signatureVersion === '2') {
+            $signedHeaderNames[] = 'x-cs-idempotency-key';
+            $signedHeaderNames[] = 'x-cs-signature-version';
+        }
+        foreach ($signedHeaderNames as $name) {
             $value = $this->header($request, $name);
             if ($value !== '') {
+                if ($name === 'x-cs-idempotency-key' && !preg_match('/^[\x21-\x7E]{1,120}$/D', $value)) {
+                    throw new BusinessException('客服连接器幂等键无效', 401);
+                }
                 $headers[$name] = $value;
             }
         }
@@ -157,29 +199,9 @@ class CustomerServiceSignature
     {
         $key = 'customer_service_connector_nonce:' . sha1($nonce);
         try {
-            $handler = Cache::handler();
-            return is_object($handler) && $this->acquireAtomicNonce($handler, $key, $ttl);
-        } catch (\Throwable $e) {
-            return false;
-        }
-    }
-
-    private function acquireAtomicNonce(object $handler, string $key, int $ttl): bool
-    {
-        $command = ['SET', $key, '1', 'EX', (string) $ttl, 'NX'];
-
-        try {
-            if (method_exists($handler, 'rawCommand')) {
-                $result = $handler->rawCommand(...$command);
-            } elseif (method_exists($handler, 'executeRaw')) {
-                $result = $handler->executeRaw($command);
-            } else {
-                return false;
-            }
-
-            return $result === true || strtoupper((string) $result) === 'OK';
-        } catch (\Throwable $e) {
-            return false;
+            return app()->make(CustomerServiceIdempotencyStore::class)->claim($key, '1', $ttl);
+        } catch (\Throwable $error) {
+            throw new BusinessException('客服连接器防重存储不可用，请稍后重试', 503);
         }
     }
 }
