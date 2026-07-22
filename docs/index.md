@@ -81,7 +81,7 @@ rg -n "会员|积分|余额|装修|充值|成长值" README.md docs
 | [development/points.md](./development/points.md) | 积分账户、积分规则、积分抵扣、积分商城和兑换单开发入口 |
 | [development/wallet.md](./development/wallet.md) | 余额账户、余额流水、余额支付、余额退款和充值套餐开发入口 |
 | [development/client-diy.md](./development/client-diy.md) | 页面库、装修方案、主题、配置读取和 UniApp 渲染开发入口 |
-| [客服 H5 资源跳转设计](./development/customer-service-h5-resource-action.md) | 客服 Widget 商品与订单资源地址模板，以及 H5 顶层跳转的安全边界 |
+| [UniApp 原生客服页接入](./development/customer-service-native-page.md) | H5/微信小程序原生会话页、REST/Socket.IO 协议与安全边界 |
 
 ## 安装与部署
 

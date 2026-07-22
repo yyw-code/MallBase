@@ -138,7 +138,6 @@ const form = reactive({
   customer_service_platform_code: 'mallbase',
   customer_service_socket_base: '',
   customer_service_timestamp_window: 300,
-  customer_service_widget_url: '',
 });
 
 const quickFilterOptions: Array<{
@@ -472,9 +471,6 @@ function fillFormFromSettings() {
     'customer_service_timestamp_window',
     300,
   );
-  form.customer_service_widget_url = settingValue(
-    'customer_service_widget_url',
-  );
   imageValues.client_logo = imageValue('client_logo');
   imageValues.client_launch_image = imageValue('client_launch_image');
   imageValues.client_share_cover = imageValue('client_share_cover');
@@ -624,7 +620,6 @@ function buildPayload(codes?: string[]) {
     customer_service_platform_code: form.customer_service_platform_code,
     customer_service_socket_base: form.customer_service_socket_base,
     customer_service_timestamp_window: form.customer_service_timestamp_window,
-    customer_service_widget_url: form.customer_service_widget_url,
   };
 
   if (!codes) return payload;
@@ -1100,7 +1095,10 @@ onBeforeUnmount(() => {
             >
               <div class="setting-block__head">
                 <h3>在线客服接入</h3>
-                <p>配置 MallBase 进入客服系统所需的前端地址和上下文签名。</p>
+                <p>
+                  配置 MallBase 原生客服页连接 Customer Service 所需的
+                  API、实时通信地址和上下文凭证。
+                </p>
               </div>
               <a-form layout="vertical" class="config-form-grid">
                 <a-form-item label="平台标识">
@@ -1120,23 +1118,25 @@ onBeforeUnmount(() => {
                     和密钥；两项必须成对更新。
                   </div>
                 </a-form-item>
-                <a-form-item label="Widget 地址">
-                  <a-input
-                    v-model:value="form.customer_service_widget_url"
-                    placeholder="https://customer.example.com/widget"
-                  />
-                </a-form-item>
-                <a-form-item label="API 地址">
+                <a-form-item label="客服 API 基础地址">
                   <a-input
                     v-model:value="form.customer_service_api_base"
-                    placeholder="https://customer.example.com"
+                    placeholder="https://customer.example.com/api"
                   />
+                  <div class="field-hint">
+                    小程序需将该 HTTPS 域名配置为 request 和 uploadFile
+                    合法域名。
+                  </div>
                 </a-form-item>
-                <a-form-item label="Socket 地址">
+                <a-form-item label="Socket.IO 服务地址">
                   <a-input
                     v-model:value="form.customer_service_socket_base"
-                    placeholder="wss://customer.example.com"
+                    placeholder="https://customer.example.com"
                   />
+                  <div class="field-hint">
+                    填写服务 Origin，不要带 /api 或 /socket.io；小程序
+                    还需配置对应的 socket 合法域名。
+                  </div>
                 </a-form-item>
                 <a-form-item label="Token 有效期(秒)">
                   <a-input-number

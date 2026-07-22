@@ -102,7 +102,7 @@
       "root": "pages-sub/customer-service",
       "pages": [
         {
-          "path": "webview",
+          "path": "index",
           "style": {
             "navigationStyle": "custom"
           }

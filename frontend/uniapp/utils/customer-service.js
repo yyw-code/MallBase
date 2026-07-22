@@ -1,32 +1,23 @@
 import { useAppStore } from '@/store/app'
 import { createCustomerServiceContextToken } from '@/api/customer-service'
+import { isLoggedIn, requireLogin } from '@/utils/auth'
 
-const CUSTOMER_SERVICE_URL_CACHE_KEY = 'mallbase_customer_service_url:current'
+const CUSTOMER_SERVICE_LAUNCH_KEY = 'mallbase_customer_service_launch:current'
+const LEGACY_CUSTOMER_SERVICE_URL_KEY = 'mallbase_customer_service_url:current'
+const CUSTOMER_SERVICE_LAUNCH_MAX_AGE = 5 * 60 * 1000
 
 function normalizePhone(phone) {
   return String(phone || '').replace(/[\s-]/g, '')
 }
 
-function currentPageUrl() {
+function currentRouteUrl() {
   const pages = getCurrentPages()
   const current = pages[pages.length - 1]
   if (!current?.route) return ''
   const query = Object.entries(current.options || {})
     .map(([key, value]) => `${key}=${encodeURIComponent(value)}`)
     .join('&')
-  return normalizePageUrl(query ? `/${current.route}?${query}` : `/${current.route}`)
-}
-
-function normalizePageUrl(url) {
-  const value = String(url || '')
-  if (!value || /^https?:\/\//i.test(value)) return value
-  // #ifdef H5
-  if (typeof window !== 'undefined') {
-    const path = value.startsWith('/') ? value : `/${value}`
-    return `${window.location.origin}${window.location.pathname}#${path}`
-  }
-  // #endif
-  return value
+  return query ? `/${current.route}?${query}` : `/${current.route}`
 }
 
 function normalizeResource(resource) {
@@ -36,10 +27,6 @@ function normalizeResource(resource) {
   return {
     type: String(resource.type),
     id: String(resource.id),
-    title: String(resource.title || resource.name || ''),
-    url: normalizePageUrl(resource.url || currentPageUrl()),
-    summary: String(resource.summary || ''),
-    metadata: resource.metadata && typeof resource.metadata === 'object' ? resource.metadata : {},
   }
 }
 
@@ -75,54 +62,65 @@ function buildContextPayload(options = {}) {
   }
 
   return {
-    source: options.source || 'mallbase',
-    conversation_key: options.conversationKey || '',
     resources,
   }
 }
 
-function appendQuery(url, query) {
-  const params = Object.entries(query)
-    .filter(([, value]) => value !== undefined && value !== null && value !== '')
-    .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
-    .join('&')
-  if (!params) return url
-  return `${url}${url.includes('?') ? '&' : '?'}${params}`
-}
+function requireCustomerServiceLogin() {
+  if (isLoggedIn()) return true
 
-function buildCustomerServiceUrl(payload) {
-  if (!payload?.widget_url || !payload?.context_token) return ''
-  const query = {
-    embed: '1',
-    contextToken: payload.context_token,
-    platform: payload.platform_code || 'mallbase',
+  const redirectUrl = currentRouteUrl()
+  if (redirectUrl.startsWith('/pages-sub/user/login')) {
+    uni.showToast({ title: '请先完成登录', icon: 'none' })
+    return false
   }
-  // #ifdef H5
-  query.resourceUrlTemplates = JSON.stringify(buildHostResourceUrlTemplates())
-  // #endif
-  return appendQuery(payload.widget_url, query)
+  return requireLogin(redirectUrl)
 }
 
-// #ifdef H5
-function buildHostResourceUrlTemplates() {
-  const clientBaseUrl = `${window.location.origin}${window.location.pathname}`
+function buildLaunchPayload(payload) {
+  const contextToken = String(payload?.context_token || '').trim()
+  const apiBase = String(payload?.api_base || '').trim().replace(/\/+$/, '')
+  const socketBase = String(payload?.socket_base || '').trim().replace(/\/+$/, '')
+  if (!contextToken || !apiBase || !socketBase) return null
+
+  const createdAt = Date.now()
+  const rawExpiresIn = Number(payload?.expires_in || 300)
+  const expiresIn = Number.isFinite(rawExpiresIn)
+    ? Math.max(60, Math.min(300, rawExpiresIn))
+    : 300
   return {
-    product: `${clientBaseUrl}#/pages-sub/goods/detail?id={externalId}`,
-    order: `${clientBaseUrl}#/pages-sub/order/detail?id={externalId}`,
+    context_token: contextToken,
+    api_base: apiBase,
+    socket_base: socketBase,
+    platform_code: String(payload?.platform_code || 'mallbase'),
+    created_at: createdAt,
+    expires_at: createdAt + expiresIn * 1000,
   }
 }
-// #endif
 
-function openOnlineCustomerService(url) {
-  if (!url) return false
-  uni.setStorageSync(CUSTOMER_SERVICE_URL_CACHE_KEY, {
-    url,
-    created_at: Date.now(),
+function openOnlineCustomerService(payload) {
+  const launch = buildLaunchPayload(payload)
+  if (!launch) return Promise.resolve(false)
+
+  try {
+    uni.removeStorageSync(LEGACY_CUSTOMER_SERVICE_URL_KEY)
+    uni.setStorageSync(CUSTOMER_SERVICE_LAUNCH_KEY, launch)
+  } catch {
+    return Promise.resolve(false)
+  }
+
+  return new Promise((resolve) => {
+    uni.navigateTo({
+      url: '/pages-sub/customer-service/index',
+      success() {
+        resolve(true)
+      },
+      fail() {
+        clearCustomerServiceLaunch()
+        resolve(false)
+      },
+    })
   })
-  uni.navigateTo({
-    url: '/pages-sub/customer-service/webview',
-  })
-  return true
 }
 
 function callPhoneCustomerService(phone) {
@@ -144,6 +142,48 @@ function showOnlineCustomerServiceUnavailable() {
   uni.showToast({ title: '客服暂不可用', icon: 'none' })
 }
 
+export function consumeCustomerServiceLaunch() {
+  try {
+    const launch = uni.getStorageSync(CUSTOMER_SERVICE_LAUNCH_KEY)
+    uni.removeStorageSync(CUSTOMER_SERVICE_LAUNCH_KEY)
+    if (!launch || typeof launch !== 'object') return null
+
+    const createdAt = Number(launch.created_at || 0)
+    const expiresAt = Number(launch.expires_at || 0)
+    const now = Date.now()
+    if (
+      !createdAt
+      || now - createdAt > CUSTOMER_SERVICE_LAUNCH_MAX_AGE
+      || !expiresAt
+      || expiresAt <= now
+    ) {
+      return null
+    }
+
+    const contextToken = String(launch.context_token || '').trim()
+    const apiBase = String(launch.api_base || '').trim()
+    const socketBase = String(launch.socket_base || '').trim()
+    if (!contextToken || !apiBase || !socketBase) return null
+
+    return {
+      contextToken,
+      apiBase,
+      socketBase,
+      platformCode: String(launch.platform_code || 'mallbase'),
+    }
+  } catch {
+    clearCustomerServiceLaunch()
+    return null
+  }
+}
+
+export function clearCustomerServiceLaunch() {
+  try {
+    uni.removeStorageSync(CUSTOMER_SERVICE_LAUNCH_KEY)
+    uni.removeStorageSync(LEGACY_CUSTOMER_SERVICE_URL_KEY)
+  } catch {}
+}
+
 export async function openCustomerService(options = {}) {
   const appStore = useAppStore()
   const config = await appStore.fetchBasicConfig({ force: true }) || appStore.siteConfig || {}
@@ -154,11 +194,14 @@ export async function openCustomerService(options = {}) {
     return callPhoneCustomerService(phone)
   }
 
+  clearCustomerServiceLaunch()
+  if (!requireCustomerServiceLogin()) return false
+
   try {
     const payload = await createCustomerServiceContextToken(buildContextPayload(options))
-    const url = payload?.enabled ? buildCustomerServiceUrl(payload) : ''
-    if (openOnlineCustomerService(url)) return true
+    if (payload?.enabled && await openOnlineCustomerService(payload)) return true
   } catch (error) {
+    if (!isLoggedIn()) return false
     console.warn('[customer-service] online entry unavailable', error)
   }
 
