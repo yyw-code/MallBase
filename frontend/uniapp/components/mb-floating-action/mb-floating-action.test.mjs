@@ -10,7 +10,7 @@ test('drag handle owns pointer gestures', () => {
     source,
     /\.mb-floating-action__main\s*\{[^}]*touch-action:\s*none;/s,
   )
-  assert.match(
+  assert.doesNotMatch(
     source,
     /\.mb-floating-action__icon\s*\{[^}]*pointer-events:\s*none;/s,
   )
@@ -45,7 +45,6 @@ test('pointer drag continues on window when crossing swiper', () => {
     source,
     /function handlePointerMove\(event\)[\s\S]*?event\.stopPropagation\?\.\(\)[\s\S]*?moveDrag/,
   )
-  assert.doesNotMatch(source, /endDrag\(\)\s*ignoreNextTap\.value = false/)
   assert.match(
     source,
     /addEventListener\('pointermove',\s*handlePointerMove,\s*\{[^}]*capture:\s*true[^}]*\}\)/s,
@@ -76,7 +75,25 @@ test('pointer drag continues on window when crossing swiper', () => {
   )
   assert.match(
     source,
-    /if \(event\.type === 'pointerup' && !wasMoved\) \{\s*ignoreNextTap\.value = true\s*activateMainAction\(\)/,
+    /if \(event\.type === 'pointerup' && !wasMoved\) \{\s*activateMainAction\(\)/,
+  )
+})
+
+test('mini-program touchend owns activation without a competing tap path', () => {
+  assert.doesNotMatch(source, /@tap\.stop="handleMainTap"/)
+  assert.doesNotMatch(source, /ignoreNextTap/)
+  assert.match(source, /@touchcancel\.stop="handleTouchCancel"/)
+  assert.match(
+    source,
+    /function handleTouchStart\(event\)[\s\S]*?startDrag\(touch\.clientX, touch\.clientY\)/,
+  )
+  assert.match(
+    source,
+    /function handleTouchEnd\(\) \{[\s\S]*?if \(!dragging\.value\) return[\s\S]*?const wasMoved = dragMoved\.value[\s\S]*?endDrag\(\)[\s\S]*?if \(!wasMoved\) \{[\s\S]*?activateMainAction\(\)/,
+  )
+  assert.match(
+    source,
+    /function handleTouchCancel\(\) \{[\s\S]*?endDrag\(\)\s*\}/,
   )
 })
 
@@ -88,6 +105,8 @@ test('drag transform preserves subpixel coordinates', () => {
 })
 
 test('H5 does not derive safe bottom from screen coordinates', () => {
+  assert.match(source, /const info = uni\.getWindowInfo\(\)/)
+  assert.doesNotMatch(source, /uni\.getSystemInfoSync\(\)/)
   assert.match(
     source,
     /let safeBottom = Number\(info\.safeAreaInsets\?\.bottom \|\| 0\)[\s\S]*?\/\/ #ifndef H5[\s\S]*?info\.screenHeight[\s\S]*?info\.safeArea\?\.bottom[\s\S]*?\/\/ #endif/,
