@@ -208,7 +208,7 @@
         :style="moduleStyle(module)"
       >
         <view v-if="hasProductHead(module)" class="decorate-section-head">
-          <view>
+          <view class="decorate-section-head__content">
             <text
               v-if="module.props.title"
               class="decorate-section-head__title"
@@ -1420,7 +1420,7 @@ defineExpose({ refresh, loadMore });
   margin-bottom: 22rpx;
 }
 
-.decorate-section-head > view:first-child {
+.decorate-section-head__content {
   min-width: 0;
   flex: 1;
 }
