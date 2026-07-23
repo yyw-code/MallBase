@@ -1,3 +1,5 @@
+import { getUniAppBaseInfo } from '@/utils/system-info'
+
 export const DEFAULT_LIGHT_THEME = {
   colorPrimary: '#0d50d5',
   colorPrimaryLight: '#386bef',
@@ -277,12 +279,8 @@ export function withDerivedThemeTokens(tokens = {}) {
 }
 
 export function canDetectSystemTheme() {
-  try {
-    const info = uni.getSystemInfoSync()
-    if (['light', 'dark'].includes(info?.theme)) return true
-  } catch (_) {
-    // ignore and try H5 fallback
-  }
+  const info = getUniAppBaseInfo()
+  if (['light', 'dark'].includes(info?.theme)) return true
 
   // #ifdef H5
   if (
@@ -297,13 +295,9 @@ export function canDetectSystemTheme() {
 }
 
 export function getSystemThemeMode() {
-  try {
-    const info = uni.getSystemInfoSync()
-    if (info?.theme === 'dark') return 'dark'
-    if (info?.theme === 'light') return 'light'
-  } catch (_) {
-    // ignore and try H5 fallback
-  }
+  const info = getUniAppBaseInfo()
+  if (info?.theme === 'dark') return 'dark'
+  if (info?.theme === 'light') return 'light'
 
   // #ifdef H5
   if (

@@ -125,7 +125,8 @@ function computeSkipPosition() {
     const rect = uni.getMenuButtonBoundingClientRect && uni.getMenuButtonBoundingClientRect()
     if (rect && rect.bottom) {
       const top = rect.bottom + 8
-      const right = uni.getSystemInfoSync().windowWidth - rect.right
+      const windowInfo = typeof uni.getWindowInfo === 'function' ? uni.getWindowInfo() : {}
+      const right = Number(windowInfo.windowWidth || 0) - rect.right
       skipStyle.value = `top: ${top}px; right: ${right}px;`
       return
     }
