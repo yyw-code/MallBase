@@ -44,9 +44,26 @@ class CustomerServiceController extends BaseController
         return $this->connectorSuccess($this->service()->productSearch((array) $this->request->param()));
     }
 
+    public function orderSearch(): Response
+    {
+        [$externalUserId, $authenticated] = $this->signedExternalUser();
+
+        return $this->connectorSuccess(
+            $this->service()->orderSearch(
+                (array) $this->request->param(),
+                $externalUserId,
+                $authenticated
+            )
+        );
+    }
+
     public function orderSummary($id): Response
     {
-        return $this->connectorSuccess($this->service()->orderSummary((int) $id));
+        [$externalUserId, $authenticated] = $this->signedExternalUser();
+
+        return $this->connectorSuccess(
+            $this->service()->orderSummary((int) $id, $externalUserId, $authenticated)
+        );
     }
 
     public function userSummary($id): Response
@@ -109,5 +126,19 @@ class CustomerServiceController extends BaseController
             'data' => $data,
             'error' => null,
         ]);
+    }
+
+    /**
+     * @return array{0: string, 1: bool}
+     */
+    private function signedExternalUser(): array
+    {
+        $externalUserId = trim((string) $this->request->header('X-CS-External-User-Id', ''));
+        $authenticated = strtolower(trim((string) $this->request->header(
+            'X-CS-External-User-Authenticated',
+            ''
+        ))) === 'true';
+
+        return [$externalUserId, $authenticated];
     }
 }

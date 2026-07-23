@@ -10,6 +10,7 @@ Route::group('customer-service/api/v1', function () {
 
     Route::post('products/search', 'productSearch');
     Route::get('products/:id/summary', 'productSummary');
+    Route::post('orders/search', 'orderSearch');
     Route::get('orders/:id/summary', 'orderSummary');
     Route::get('users/:id/summary', 'userSummary');
 
