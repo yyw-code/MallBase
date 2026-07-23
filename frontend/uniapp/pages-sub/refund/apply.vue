@@ -4,6 +4,7 @@ import { ref, computed } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { applyRefundBatch, getRefundReasonOptions } from '@/api/order/refund'
 import { getOrderDetail } from '@/api/order/order'
+import { chooseImageFiles } from '@/utils/image-picker'
 const decorateStore = useDecorateStore()
 
 const orderId = ref('')
@@ -272,20 +273,18 @@ function onPickReason() {
   })
 }
 
-function onChooseImage() {
+async function onChooseImage() {
   const remaining = MAX_IMAGES - images.value.length
   if (remaining <= 0) {
     uni.showToast({ title: `最多上传${MAX_IMAGES}张`, icon: 'none' })
     return
   }
-  uni.chooseImage({
+  const files = await chooseImageFiles({
     count: remaining,
     sizeType: ['compressed'],
     sourceType: ['album', 'camera'],
-    success(res) {
-      images.value = [...images.value, ...res.tempFilePaths].slice(0, MAX_IMAGES)
-    },
   })
+  images.value = [...images.value, ...files.map((file) => file.path)].slice(0, MAX_IMAGES)
 }
 
 function onRemoveImage(idx) {

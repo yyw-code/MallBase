@@ -5,13 +5,13 @@ import { useAppStore } from '@/store/app'
 import { useDecorateStore } from '@/store/decorate'
 import { normalizeAssetPath } from '@/utils/decorate'
 import { appendDistributionParams, captureDistributionAttribution } from '@/utils/distribution-attribution'
+import { getUniWindowInfo } from '@/utils/system-info'
 
 const appStore = useAppStore()
 const decorateStore = useDecorateStore()
 
 const rendererRef = ref(null)
-const systemInfo = uni.getSystemInfoSync()
-const statusBarHeight = systemInfo.statusBarHeight || 0
+const statusBarHeight = Number(getUniWindowInfo().statusBarHeight) || 0
 
 const homeModules = computed(() => decorateStore.homeModules)
 

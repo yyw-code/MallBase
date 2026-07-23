@@ -27,11 +27,4 @@ function copyProjectStatic() {
 export default defineConfig({
   base: '/client/',
   plugins: [uni(), copyProjectStatic()],
-  css: {
-    preprocessorOptions: {
-      scss: {
-        additionalData: `@import "@/uni.scss";`,
-      },
-    },
-  },
 })

@@ -33,11 +33,14 @@ test('request and upload inspect the same maintenance contract before generic br
   )
 })
 
-test('public status request opts out of recursive maintenance redirect', () => {
-  assert.match(apiSource, /\/upgrade\/api\/maintenance/)
-  assert.match(apiSource, /allowMaintenanceResponse: true/)
+test('maintenance polling uses a real public route and keeps the traffic gate active', () => {
+  assert.match(apiSource, /\/client\/api\/setting\/basic/)
+  assert.doesNotMatch(apiSource, /\/upgrade\/api\/maintenance/)
+  assert.doesNotMatch(apiSource, /allowMaintenanceResponse: true/)
   assert.match(apiSource, /redirectOnUnauthorized: false/)
   assert.match(apiSource, /showErrorToast: false/)
+  assert.match(apiSource, /maintenance: false/)
+  assert.match(apiSource, /state: 'normal'/)
 })
 
 test('page polls and app onShow silently checks maintenance state', () => {

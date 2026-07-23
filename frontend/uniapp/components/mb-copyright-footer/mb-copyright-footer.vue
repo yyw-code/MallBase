@@ -81,8 +81,6 @@ function openLink(url) {
 </script>
 
 <style lang="scss" scoped>
-@import '@/uni.scss';
-
 .mb-copyright-footer {
   display: flex;
   flex-direction: column;

@@ -111,7 +111,7 @@ mall-base/
 | [变更触发测试矩阵](docs/testing/change-trigger-test-matrix.md) | 根据改动范围选择必要测试。 |
 | [Swoole 并发配置指南](docs/testing/swoole-concurrency-config-guide.md) | 查看 worker、连接池与并发参数建议。 |
 | [隐私说明](docs/privacy.md) | 了解实例统计的数据范围与关闭方式。 |
-| [客服 H5 资源跳转设计](docs/development/customer-service-h5-resource-action.md) | 了解客服 Widget 的资源动作与 H5 跳转协议。 |
+| [UniApp 原生客服页接入](docs/development/customer-service-native-page.md) | 了解 H5/微信小程序原生客服会话协议与安全边界。 |
 
 ## 交流与反馈
 

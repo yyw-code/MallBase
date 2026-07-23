@@ -113,6 +113,7 @@ import { onShow } from '@dcloudio/uni-app'
 import { useUserStore } from '@/store/user'
 import { updateMyInfo } from '@/api/user/user'
 import { getUploadedAssetValue, getUploadedPreviewUrl, uploadImage } from '@/api/upload'
+import { chooseImageFiles } from '@/utils/image-picker'
 const decorateStore = useDecorateStore()
 
 const userStore = useUserStore()
@@ -194,16 +195,13 @@ async function uploadAvatarPath(tempPath) {
   }
 }
 
-function chooseLocalAvatar() {
-  uni.chooseImage({
+async function chooseLocalAvatar() {
+  const [image] = await chooseImageFiles({
     count: 1,
     sizeType: ['compressed'],
     sourceType: ['album', 'camera'],
-    success(res) {
-      const tempPath = res.tempFilePaths[0]
-      uploadAvatarPath(tempPath)
-    }
   })
+  if (image?.path) uploadAvatarPath(image.path)
 }
 
 function chooseWechatAvatar(e) {

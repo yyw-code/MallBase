@@ -16,6 +16,7 @@ import {
   withdrawDistributionApply,
 } from "@/api/distribution/distribution";
 import { getUploadConfig, getUploadedAssetValue, uploadImage } from "@/api/upload";
+import { chooseImageFiles } from "@/utils/image-picker";
 import {
   appendDistributionParams,
   captureDistributionAttribution,
@@ -218,23 +219,19 @@ async function submitInvite() {
   await fetchSummary();
 }
 
-function chooseApplyProofImage() {
-  uni.chooseImage({
+async function chooseApplyProofImage() {
+  const [image] = await chooseImageFiles({
     count: 1,
     sizeType: ["compressed"],
     sourceType: ["album", "camera"],
-    success(res) {
-      const filePath = res.tempFilePaths?.[0] || "";
-      const file = Array.isArray(res.tempFiles) ? res.tempFiles[0] : null;
-      if (!filePath) return;
-      if (!isUploadFileSizeAllowed(Number(file?.size || 0))) {
-        uni.showToast({ title: uploadSizeLimitText(), icon: "none" });
-        return;
-      }
-      applyProofImage.value = filePath;
-      applyProofImageAsset.value = "";
-    },
   });
+  if (!image?.path) return;
+  if (!isUploadFileSizeAllowed(image.size)) {
+    uni.showToast({ title: uploadSizeLimitText(), icon: "none" });
+    return;
+  }
+  applyProofImage.value = image.path;
+  applyProofImageAsset.value = "";
 }
 
 function previewApplyProofImage() {

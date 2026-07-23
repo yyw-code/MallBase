@@ -29,6 +29,7 @@
 
 <script setup>
 import { computed } from 'vue'
+import { getUniWindowInfo } from '@/utils/system-info'
 
 const props = defineProps({
   title: { type: String, default: '' },
@@ -41,7 +42,7 @@ const props = defineProps({
 
 const emit = defineEmits(['back'])
 
-const systemInfo = uni.getSystemInfoSync()
+const systemInfo = getUniWindowInfo()
 const statusBarHeight = systemInfo.statusBarHeight || 0
 const windowWidth = systemInfo.windowWidth || 375
 const sidePaddingPx = uni.upx2px(24)

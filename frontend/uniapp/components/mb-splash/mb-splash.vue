@@ -33,6 +33,7 @@
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useAppStore } from '@/store/app'
 import { useDecorateStore } from '@/store/decorate'
+import { getUniWindowInfo } from '@/utils/system-info'
 
 let shownThisRun = false
 
@@ -125,7 +126,10 @@ function computeSkipPosition() {
     const rect = uni.getMenuButtonBoundingClientRect && uni.getMenuButtonBoundingClientRect()
     if (rect && rect.bottom) {
       const top = rect.bottom + 8
-      const right = uni.getSystemInfoSync().windowWidth - rect.right
+      const windowWidth = Number(getUniWindowInfo().windowWidth) || 0
+      const right = windowWidth > 0
+        ? Math.max(12, windowWidth - Number(rect.right || 0))
+        : 12
       skipStyle.value = `top: ${top}px; right: ${right}px;`
       return
     }
@@ -207,8 +211,6 @@ onBeforeUnmount(() => {
 </script>
 
 <style lang="scss" scoped>
-@import '@/uni.scss';
-
 .mb-splash {
   position: fixed;
   top: 0;

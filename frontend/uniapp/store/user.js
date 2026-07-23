@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { get, post } from '@/api/request'
+import { notifyAuthCleared, rotateAuthSessionId } from '@/utils/auth'
 
 const TOKEN_KEY = 'mb_access_token'
 const REFRESH_KEY = 'mb_refresh_token'
@@ -23,6 +24,7 @@ export const useUserStore = defineStore('user', {
       this.isLoggedIn = true
       uni.setStorageSync(TOKEN_KEY, accessToken)
       uni.setStorageSync(REFRESH_KEY, refreshToken)
+      rotateAuthSessionId()
     },
     clearAuth() {
       this.token = ''
@@ -31,6 +33,7 @@ export const useUserStore = defineStore('user', {
       this.isLoggedIn = false
       uni.removeStorageSync(TOKEN_KEY)
       uni.removeStorageSync(REFRESH_KEY)
+      notifyAuthCleared()
     },
     async fetchUserInfo() {
       if (!this.token) {

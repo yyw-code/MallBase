@@ -5,6 +5,7 @@ import { onLoad } from '@dcloudio/uni-app'
 import { postReview, uploadReviewImage } from '@/api/goods/review'
 import { getOrderDetail } from '@/api/order/order'
 import { getUploadConfig, getUploadedAssetValue } from '@/api/upload'
+import { chooseImageFiles } from '@/utils/image-picker'
 const decorateStore = useDecorateStore()
 
 // ---------- query params ----------
@@ -145,22 +146,19 @@ function setRating(star) {
 }
 
 // ---------- image upload ----------
-function chooseImage() {
+async function chooseImage() {
   const remaining = MAX_IMAGES - images.value.length
   if (remaining <= 0) {
     uni.showToast({ title: `最多上传${MAX_IMAGES}张图片`, icon: 'none' })
     return
   }
 
-  uni.chooseImage({
+  const files = await chooseImageFiles({
     count: remaining,
     sizeType: ['compressed'],
     sourceType: ['album', 'camera'],
-    success(res) {
-      const newImages = [...images.value, ...res.tempFilePaths].slice(0, MAX_IMAGES)
-      images.value = newImages
-    }
   })
+  images.value = [...images.value, ...files.map((file) => file.path)].slice(0, MAX_IMAGES)
 }
 
 function removeImage(index) {

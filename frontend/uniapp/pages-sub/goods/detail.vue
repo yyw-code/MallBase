@@ -422,6 +422,7 @@ import { useCartStore } from '@/store/cart'
 import { useAppStore } from '@/store/app'
 import { openCustomerService } from '@/utils/customer-service'
 import { appendDistributionParams, captureDistributionAttribution } from '@/utils/distribution-attribution'
+import { getUniWindowInfo } from '@/utils/system-info'
 import {
   buildGoodsDetailBenefitItems,
   formatExtensionAmount,
@@ -901,7 +902,10 @@ function syncSpecPreviewScroll(index) {
   const itemWidth = uni.upx2px(SPEC_PREVIEW_ITEM_WIDTH)
   const itemGap = uni.upx2px(SPEC_PREVIEW_ITEM_GAP)
   const sectionPadding = uni.upx2px(SPEC_PREVIEW_SECTION_PADDING)
-  const viewportWidth = Math.max(0, Number(uni.getSystemInfoSync().windowWidth || 0) - sectionPadding)
+  const viewportWidth = Math.max(
+    0,
+    Number(getUniWindowInfo().windowWidth || 0) - sectionPadding,
+  )
   const itemOffset = currentIndex * (itemWidth + itemGap)
   const centeredOffset = viewportWidth > itemWidth
     ? itemOffset - (viewportWidth - itemWidth) / 2

@@ -39,14 +39,11 @@ class CustomerServiceContextService extends BaseService
             throw new BusinessException('用户不存在');
         }
 
-        $source = $this->normalizeText($input['source'] ?? 'mallbase', 40);
         $businessResources = $this->businessResources($userId, (array) ($input['resources'] ?? []));
         $resources = array_merge($businessResources, [$this->userResource($user)]);
         $primary = $businessResources[0] ?? $resources[0];
-        $conversationKey = $this->normalizeText($input['conversation_key'] ?? '', 160);
-        if ($conversationKey === '') {
-            $conversationKey = 'mallbase:' . $userId . ':' . $source . ':' . $primary['type'] . ':' . $primary['id'];
-        }
+        $source = $this->sourceForPrimary($primary);
+        $conversationKey = $this->conversationKey($userId, $source, $primary);
 
         $payload = [
             'visitor' => [
@@ -81,7 +78,8 @@ class CustomerServiceContextService extends BaseService
         return $settings->clientMode() === 'system'
             && $settings->contextKeyId() !== ''
             && $settings->contextSecret() !== ''
-            && $settings->widgetUrl() !== '';
+            && $settings->apiBase() !== ''
+            && $settings->socketBase() !== '';
     }
 
     /**
@@ -148,6 +146,8 @@ class CustomerServiceContextService extends BaseService
         /** @var Goods|null $goods */
         $goods = $this->model(Goods::class)
             ->where('id', $goodsId)
+            ->where('status', 1)
+            ->where('is_on_sale', 1)
             ->whereNull('delete_time')
             ->find();
         if ($goods === null) {
@@ -157,9 +157,9 @@ class CustomerServiceContextService extends BaseService
         return [
             'type' => 'product',
             'id' => (string) $goodsId,
-            'title' => $this->normalizeText($row['title'] ?? $goods->name ?? '', 160),
-            'url' => $this->normalizeUrl($row['url'] ?? ''),
-            'summary' => $this->normalizeText($row['summary'] ?? $goods->subtitle ?? '', 300),
+            'title' => $this->normalizeText($goods->name ?? '', 160),
+            'url' => '',
+            'summary' => $this->normalizeText($goods->subtitle ?? '', 300),
             'metadata' => [
                 'source' => 'mallbase',
             ],
@@ -190,9 +190,9 @@ class CustomerServiceContextService extends BaseService
         return [
             'type' => 'order',
             'id' => (string) $orderId,
-            'title' => $this->normalizeText($row['title'] ?? ('订单 ' . (string) $order->sn), 160),
-            'url' => $this->normalizeUrl($row['url'] ?? ''),
-            'summary' => $this->normalizeText($row['summary'] ?? (string) $order->status_text, 300),
+            'title' => $this->normalizeText('订单 ' . (string) $order->sn, 160),
+            'url' => '',
+            'summary' => $this->normalizeText((string) $order->status_text, 300),
             'metadata' => [
                 'sn' => (string) $order->sn,
                 'source' => 'mallbase',
@@ -241,7 +241,48 @@ class CustomerServiceContextService extends BaseService
      */
     private function resourceId(array $row): int
     {
-        return (int) ($row['id'] ?? $row['external_id'] ?? $row['externalId'] ?? 0);
+        $value = $row['id'] ?? $row['external_id'] ?? $row['externalId'] ?? null;
+        if (is_int($value)) {
+            return $value > 0 ? $value : 0;
+        }
+        if (!is_string($value)) {
+            return 0;
+        }
+
+        $value = trim($value);
+        if (preg_match('/^[1-9]\d*$/D', $value) !== 1) {
+            return 0;
+        }
+
+        $validated = filter_var($value, FILTER_VALIDATE_INT, [
+            'options' => ['min_range' => 1],
+        ]);
+
+        return is_int($validated) ? $validated : 0;
+    }
+
+    /**
+     * @param array<string, mixed> $primary
+     */
+    private function sourceForPrimary(array $primary): string
+    {
+        return match ((string) ($primary['type'] ?? '')) {
+            'product' => 'goods',
+            'order' => 'order',
+            default => 'mallbase',
+        };
+    }
+
+    /**
+     * @param array<string, mixed> $primary
+     */
+    private function conversationKey(int $userId, string $source, array $primary): string
+    {
+        return 'mallbase:'
+            . $userId
+            . ':' . $source
+            . ':' . (string) ($primary['type'] ?? 'user')
+            . ':' . (string) ($primary['id'] ?? $userId);
     }
 
     /**
@@ -293,12 +334,4 @@ class CustomerServiceContextService extends BaseService
         return mb_substr(trim((string) $value), 0, $limit);
     }
 
-    private function normalizeUrl(mixed $value): string
-    {
-        $url = $this->normalizeText($value, 300);
-        if ($url === '') {
-            return '';
-        }
-        return preg_match('#^https?://#i', $url) === 1 ? $url : '';
-    }
 }

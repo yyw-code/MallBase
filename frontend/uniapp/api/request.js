@@ -1,12 +1,15 @@
 import config from '@/config/index'
 import { handleMaintenanceBody } from '@/utils/maintenance'
+import { notifyAuthCleared } from '@/utils/auth'
 
 const TOKEN_KEY = 'mb_access_token'
 const REFRESH_KEY = 'mb_refresh_token'
 const REQUEST_TIMEOUT = 15000
 const REFRESH_URL = '/client/api/user/auth/refreshToken'
+const UNAUTHORIZED_REDIRECT_DEDUP_MS = 1500
 
 let refreshingPromise = null
+let lastUnauthorizedRedirectAt = 0
 
 function getToken() {
   return uni.getStorageSync(TOKEN_KEY) || ''
@@ -65,20 +68,35 @@ function rejectInvalidResponse(reject, context, showErrorToast = true) {
 function handleUnauthorized(message = '请重新登录') {
   uni.removeStorageSync(TOKEN_KEY)
   uni.removeStorageSync(REFRESH_KEY)
+  notifyAuthCleared()
   let loginUrl = '/pages-sub/user/login'
   const pages = getCurrentPages()
   const current = pages[pages.length - 1]
   if (current?.route === 'pages-sub/user/login') {
     return new Error(message)
   }
-  if (current && current.route.startsWith('pages-sub/')) {
+  const now = Date.now()
+  if (now - lastUnauthorizedRedirectAt < UNAUTHORIZED_REDIRECT_DEDUP_MS) {
+    return new Error(message)
+  }
+  if (
+    current
+    && current.route.startsWith('pages-sub/')
+    && current.route !== 'pages-sub/customer-service/index'
+  ) {
     const query = Object.entries(current.options || {})
       .map(([k, v]) => `${k}=${encodeURIComponent(v)}`)
       .join('&')
     const fullUrl = query ? `/${current.route}?${query}` : `/${current.route}`
     loginUrl += `?redirect=${encodeURIComponent(fullUrl)}`
   }
-  uni.navigateTo({ url: loginUrl })
+  lastUnauthorizedRedirectAt = now
+  uni.navigateTo({
+    url: loginUrl,
+    fail() {
+      lastUnauthorizedRedirectAt = 0
+    },
+  })
   return new Error(message)
 }
 
@@ -278,5 +296,185 @@ export function uploadFile(url, filePath, name = 'file', formData = {}, allowRef
         reject(err)
       },
     })
+  })
+}
+
+function normalizeExternalBaseUrl(baseUrl) {
+  const value = String(baseUrl || '').trim().replace(/\/+$/, '')
+  if (!/^https?:\/\/[^/\s?#]+(?:\/[^\s?#]*)?$/i.test(value)) {
+    return ''
+  }
+  return value
+}
+
+function externalRequestUrl(baseUrl, url) {
+  const normalizedBaseUrl = normalizeExternalBaseUrl(baseUrl)
+  if (!normalizedBaseUrl) return ''
+  const path = String(url || '').trim()
+  if (!path || /^https?:\/\//i.test(path)) return ''
+  return `${normalizedBaseUrl}${path.startsWith('/') ? path : `/${path}`}`
+}
+
+function externalResponseMessage(body, fallback) {
+  const message = body && typeof body === 'object' ? body.message : ''
+  if (Array.isArray(message)) {
+    return String(message[0] || fallback)
+  }
+  return String(message || fallback)
+}
+
+function rejectExternalResponse(reject, context, message, showErrorToast, responseBody = null) {
+  console.error('[request:external-invalid-response]', context)
+  if (showErrorToast) {
+    uni.showToast({ title: message, icon: 'none' })
+  }
+  const error = new Error(message)
+  error.statusCode = Number(context?.statusCode) || 0
+  error.responseBody = responseBody
+  reject(error)
+}
+
+/**
+ * 请求已配置的外部服务 JSON 接口。
+ *
+ * 外部协议不会注入 MallBase Token，也不会套用 `{code,message,data}` 解包；
+ * 调用方必须提供 DTO 校验函数，HTML、空响应和字段不完整的对象都会被拒绝。
+ */
+export function requestExternalJson(options) {
+  const {
+    baseUrl,
+    url,
+    method = 'GET',
+    data,
+    header = {},
+    validate,
+    showErrorToast = false,
+  } = options || {}
+  const requestUrl = externalRequestUrl(baseUrl, url)
+  if (!requestUrl || typeof validate !== 'function') {
+    const message = '外部服务配置无效'
+    if (showErrorToast) {
+      uni.showToast({ title: message, icon: 'none' })
+    }
+    return Promise.reject(new Error(message))
+  }
+
+  return new Promise((resolve, reject) => {
+    uni.request({
+      url: requestUrl,
+      method,
+      data,
+      timeout: REQUEST_TIMEOUT,
+      header: {
+        'Content-Type': 'application/json',
+        ...header,
+      },
+      success(res) {
+        const body = parseResponseBody(res.data)
+        const success = res.statusCode >= 200 && res.statusCode < 300
+        if (!success) {
+          rejectExternalResponse(
+            reject,
+            { url: requestUrl, method, statusCode: res.statusCode },
+            externalResponseMessage(body, '客服服务请求失败'),
+            showErrorToast,
+            body,
+          )
+          return
+        }
+        if (!validate(body)) {
+          rejectExternalResponse(
+            reject,
+            { url: requestUrl, method, statusCode: res.statusCode },
+            '客服服务响应异常',
+            showErrorToast,
+            body,
+          )
+          return
+        }
+        resolve(body)
+      },
+      fail(err) {
+        console.error('[request:external-fail]', { url: requestUrl, method, err })
+        if (showErrorToast) {
+          uni.showToast({ title: '客服网络异常', icon: 'none' })
+        }
+        reject(err)
+      },
+    })
+  })
+}
+
+/**
+ * 上传文件到已配置的外部服务。
+ *
+ * 与 `requestExternalJson` 一样，调用方负责校验外部 DTO，且不会携带
+ * MallBase 登录 Token。
+ */
+export function uploadExternalFile(options) {
+  const {
+    baseUrl,
+    url,
+    file,
+    filePath,
+    name = 'file',
+    formData = {},
+    header = {},
+    validate,
+    showErrorToast = false,
+  } = options || {}
+  const requestUrl = externalRequestUrl(baseUrl, url)
+  const hasUploadFile = Boolean(filePath || file)
+  if (!requestUrl || !hasUploadFile || typeof validate !== 'function') {
+    const message = '外部上传配置无效'
+    if (showErrorToast) {
+      uni.showToast({ title: message, icon: 'none' })
+    }
+    return Promise.reject(new Error(message))
+  }
+
+  return new Promise((resolve, reject) => {
+    const uploadOptions = {
+      url: requestUrl,
+      name,
+      formData,
+      timeout: REQUEST_TIMEOUT,
+      header,
+      success(res) {
+        const body = parseResponseBody(res.data)
+        const success = res.statusCode >= 200 && res.statusCode < 300
+        if (!success) {
+          rejectExternalResponse(
+            reject,
+            { url: requestUrl, method: 'UPLOAD', statusCode: res.statusCode },
+            externalResponseMessage(body, '客服文件上传失败'),
+            showErrorToast,
+            body,
+          )
+          return
+        }
+        if (!validate(body)) {
+          rejectExternalResponse(
+            reject,
+            { url: requestUrl, method: 'UPLOAD', statusCode: res.statusCode },
+            '客服上传响应异常',
+            showErrorToast,
+            body,
+          )
+          return
+        }
+        resolve(body)
+      },
+      fail(err) {
+        console.error('[request:external-upload-fail]', { url: requestUrl, err })
+        if (showErrorToast) {
+          uni.showToast({ title: '客服文件上传失败', icon: 'none' })
+        }
+        reject(err)
+      },
+    }
+    if (file) uploadOptions.file = file
+    if (filePath) uploadOptions.filePath = filePath
+    uni.uploadFile(uploadOptions)
   })
 }

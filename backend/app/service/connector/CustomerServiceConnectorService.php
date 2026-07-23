@@ -87,11 +87,15 @@ class CustomerServiceConnectorService extends BaseService
         /** @var Goods|null $goods */
         $goods = $this->model(Goods::class)
             ->where('id', $goodsId)
+            ->where('status', 1)
+            ->where('is_on_sale', 1)
             ->whereNull('delete_time')
             ->find();
         if ($goods === null) {
             throw new BusinessException('商品不存在', 404);
         }
+        $hydratedGoods = app()->make(AssetHydrator::class)
+            ->hydrateGoodsDetail($goods->toArray());
 
         $skus = $this->model(GoodsSku::class)
             ->where('goods_id', $goodsId)
@@ -113,6 +117,7 @@ class CustomerServiceConnectorService extends BaseService
             'is_on_sale' => (int) $goods->is_on_sale === 1,
             'status' => (int) $goods->status,
             'main_image' => $goods->main_image !== null ? (int) $goods->main_image : null,
+            'image' => (string) ($hydratedGoods['main_image_full_url'] ?? ''),
             'skus' => array_map(static function (array $sku): array {
                 return [
                     'id' => (int) $sku['id'],
@@ -162,10 +167,84 @@ class CustomerServiceConnectorService extends BaseService
     }
 
     /**
+     * @return array{items: array<int, array<string, mixed>>}
+     */
+    public function orderSearch(array $input, string $externalUserId, bool $authenticated): array
+    {
+        $userId = $this->requireExternalUserId($externalUserId, $authenticated);
+        $keyword = trim((string) ($input['keyword'] ?? ''));
+        $limit = max(1, min((int) ($input['limit'] ?? 10), 20));
+        $itemOrderIds = $keyword !== '' ? $this->searchOrderItemOrderIds($keyword) : [];
+
+        $query = $this->model(Order::class)
+            ->where('user_id', $userId)
+            ->whereNull('delete_time');
+
+        if ($keyword !== '') {
+            $query->where(function ($q) use ($keyword, $itemOrderIds): void {
+                $q->whereLike('sn', '%' . $keyword . '%');
+                if (ctype_digit($keyword)) {
+                    $q->whereOr('id', (int) $keyword);
+                }
+                if ($itemOrderIds !== []) {
+                    $q->whereOr('id', 'in', $itemOrderIds);
+                }
+            });
+        }
+
+        $rows = $query
+            ->order('id', 'desc')
+            ->limit($limit)
+            ->select()
+            ->toArray();
+
+        return [
+            'items' => array_map([$this, 'mapOrderSearchItem'], $rows),
+        ];
+    }
+
+    /**
+     * @return array<int, int>
+     */
+    private function searchOrderItemOrderIds(string $keyword): array
+    {
+        $rows = $this->model(OrderItem::class)
+            ->whereLike('goods_name|sku_spec', '%' . $keyword . '%')
+            ->limit(100)
+            ->column('order_id');
+
+        return array_values(array_unique(array_filter(
+            array_map('intval', $rows),
+            static fn(int $id): bool => $id > 0
+        )));
+    }
+
+    /**
+     * @param array<string, mixed> $order
      * @return array<string, mixed>
      */
-    public function orderSummary(int $orderId): array
+    private function mapOrderSearchItem(array $order): array
     {
+        return [
+            'id' => (int) ($order['id'] ?? 0),
+            'sn' => (string) ($order['sn'] ?? ''),
+            'status' => (int) ($order['status'] ?? 0),
+            'status_text' => (string) ($order['status_text'] ?? ''),
+            'pay_amount' => isset($order['pay_amount']) ? (string) $order['pay_amount'] : '',
+            'create_time' => $order['create_time'] ?? null,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function orderSummary(
+        int $orderId,
+        string $externalUserId,
+        bool $authenticated
+    ): array
+    {
+        $userId = $this->requireExternalUserId($externalUserId, $authenticated);
         /** @var Order|null $order */
         $order = $this->model(Order::class)
             ->with([
@@ -175,6 +254,7 @@ class CustomerServiceConnectorService extends BaseService
                 },
             ])
             ->where('id', $orderId)
+            ->where('user_id', $userId)
             ->whereNull('delete_time')
             ->find();
         if ($order === null) {
@@ -523,6 +603,23 @@ class CustomerServiceConnectorService extends BaseService
             $normalizedInput,
             $operation
         );
+    }
+
+    private function requireExternalUserId(string $externalUserId, bool $authenticated): int
+    {
+        $externalUserId = trim($externalUserId);
+        if (!$authenticated || preg_match('/^[1-9][0-9]{0,18}$/D', $externalUserId) !== 1) {
+            throw new BusinessException('客服访客身份无效', 403);
+        }
+
+        $userId = filter_var($externalUserId, FILTER_VALIDATE_INT, [
+            'options' => ['min_range' => 1],
+        ]);
+        if ($userId === false) {
+            throw new BusinessException('客服访客身份无效', 403);
+        }
+
+        return (int) $userId;
     }
 
     private function operatorAdminId(): int

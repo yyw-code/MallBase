@@ -1,11 +1,14 @@
 import { request } from '@/api/request'
 
-export function fetchMaintenanceStatus() {
-  return request({
-    url: '/upgrade/api/maintenance',
+export async function fetchMaintenanceStatus() {
+  await request({
+    url: '/client/api/setting/basic',
     method: 'GET',
-    allowMaintenanceResponse: true,
     redirectOnUnauthorized: false,
     showErrorToast: false,
   })
+  return {
+    maintenance: false,
+    state: 'normal',
+  }
 }

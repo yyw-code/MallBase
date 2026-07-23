@@ -254,8 +254,6 @@ function formatTime(input) {
 </script>
 
 <style lang="scss" scoped>
-@import '@/uni.scss';
-
 .goods-comments {
   display: flex;
   flex-direction: column;

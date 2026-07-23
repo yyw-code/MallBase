@@ -37,11 +37,10 @@
 
     <view
       class="mb-floating-action__main"
-      @tap.stop="handleMainTap"
       @touchstart.stop="handleTouchStart"
       @touchmove.stop.prevent="handleTouchMove"
       @touchend.stop="handleTouchEnd"
-      @touchcancel.stop="handleTouchEnd"
+      @touchcancel.stop="handleTouchCancel"
     >
       <template v-if="isSingleMode && mainItem">
         <image
@@ -93,7 +92,6 @@ const currentPath = ref('')
 const currentSide = ref('right')
 const dragging = ref(false)
 const dragMoved = ref(false)
-const ignoreNextTap = ref(false)
 const positionReady = ref(false)
 const positionSettled = ref(false)
 const dragPosition = ref({ x: 0, y: 0 })
@@ -229,7 +227,7 @@ function syncCurrentPath() {
 }
 
 function syncViewport() {
-  const info = uni.getSystemInfoSync()
+  const info = uni.getWindowInfo()
   const width = Number(info.windowWidth || info.screenWidth || 375)
   const height = Number(info.windowHeight || info.screenHeight || 667)
   let safeBottom = Number(info.safeAreaInsets?.bottom || 0)
@@ -489,6 +487,16 @@ function handleTouchMove(event) {
 
 function handleTouchEnd() {
   if (activePointerId !== null) return
+  if (!dragging.value) return
+  const wasMoved = dragMoved.value
+  endDrag()
+  if (!wasMoved) {
+    activateMainAction()
+  }
+}
+
+function handleTouchCancel() {
+  if (activePointerId !== null) return
   endDrag()
 }
 
@@ -556,7 +564,6 @@ function handlePointerEnd(event) {
   removePointerListeners()
   endDrag()
   if (event.type === 'pointerup' && !wasMoved) {
-    ignoreNextTap.value = true
     activateMainAction()
   }
 }
@@ -597,7 +604,6 @@ function endDrag() {
   dragging.value = false
   if (dragMoved.value) {
     snapToEdge()
-    ignoreNextTap.value = true
   }
 }
 
@@ -662,14 +668,6 @@ function requestDragFrame(callback) {
     return requestAnimationFrame(callback)
   }
   return setTimeout(callback, 16)
-}
-
-function handleMainTap() {
-  if (ignoreNextTap.value) {
-    ignoreNextTap.value = false
-    return
-  }
-  activateMainAction()
 }
 
 function activateMainAction() {
@@ -782,7 +780,6 @@ async function handleItemTap(item) {
 .mb-floating-action__icon {
   width: 48%;
   height: 48%;
-  pointer-events: none;
 }
 
 .mb-floating-action__icon--preset {

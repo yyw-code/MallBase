@@ -38,8 +38,6 @@ function onTap(e) {
 </script>
 
 <style lang="scss" scoped>
-@import '@/uni.scss';
-
 .mb-btn {
   display: inline-flex;
   align-items: center;
